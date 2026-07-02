@@ -1,0 +1,15 @@
+{
+  "folders": [
+    {
+      "name": "智营获客 (ai-content-marketing)",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/.venv": true,
+      "**/__pycache__": true
+    }
+  }
+}
