@@ -1,17 +1,20 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { contentApi } from '../api/client'
 
 const router = useRouter()
+const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001'
 
 const statusMap = {
   draft: { label: '草稿', type: 'info' },
   pending_review: { label: '待审核', type: 'warning' },
   approved: { label: '已通过', type: 'success' },
   scheduled: { label: '已排期', type: '' },
+  publishing: { label: '发布中', type: 'warning' },
   published: { label: '已发布', type: 'success' },
+  failed: { label: '发布失败', type: 'danger' },
   exported: { label: '已导出', type: 'info' },
 }
 
@@ -36,6 +39,9 @@ const pageSize = ref(10)
 const searchQ = ref('')
 const filterPlatform = ref('')
 const filterStatus = ref('')
+const scheduleVisible = ref(false)
+const scheduleRow = ref(null)
+const scheduleAt = ref(null)
 
 function formatTime(iso) {
   if (!iso) return ''
@@ -59,6 +65,7 @@ async function loadContents() {
       status: item.status,
       author: item.author_name || '—',
       updated: formatTime(item.updated_at || item.created_at),
+      previewUrl: item.preview_url ? `${apiBase}${item.preview_url}` : '',
     }))
     total.value = data.total
   } catch (e) {
@@ -75,6 +82,65 @@ async function handleSubmitReview(row) {
     loadContents()
   } catch (e) {
     ElMessage.error(e.message || '提交失败')
+  }
+}
+
+async function handlePublish(row) {
+  try {
+    await ElMessageBox.confirm(`确定立即发布「${row.title}」？`, 'Mock 发布', {
+      type: 'info',
+    })
+    const { data } = await contentApi.publish(row.id)
+    ElMessage.success('Mock 发布成功')
+    if (data.preview_url) {
+      window.open(`${apiBase}${data.preview_url}`, '_blank')
+    }
+    loadContents()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.message || '发布失败')
+  }
+}
+
+function openSchedule(row) {
+  scheduleRow.value = row
+  const tomorrow = new Date(Date.now() + 86400000)
+  tomorrow.setMinutes(0, 0, 0)
+  scheduleAt.value = tomorrow
+  scheduleVisible.value = true
+}
+
+async function confirmSchedule() {
+  if (!scheduleRow.value || !scheduleAt.value) return
+  try {
+    await contentApi.schedule(scheduleRow.value.id, scheduleAt.value.toISOString())
+    ElMessage.success('已排期，到点自动 Mock 发布')
+    scheduleVisible.value = false
+    loadContents()
+  } catch (e) {
+    ElMessage.error(e.message || '排期失败')
+  }
+}
+
+async function handleRetry(row) {
+  try {
+    const { data } = await contentApi.retryPublish(row.id)
+    ElMessage.success('重试发布成功')
+    if (data.preview_url) window.open(`${apiBase}${data.preview_url}`, '_blank')
+    loadContents()
+  } catch (e) {
+    ElMessage.error(e.message || '重试失败')
+  }
+}
+
+async function handleExport(row, type) {
+  try {
+    const api = type === 'xhs' ? contentApi.exportXhs : contentApi.exportDouyin
+    const { data } = await api(row.id)
+    ElMessage.success('导出成功')
+    window.open(`${apiBase}${data.download_url}`, '_blank')
+    loadContents()
+  } catch (e) {
+    ElMessage.error(e.message || '导出失败')
   }
 }
 
@@ -105,7 +171,9 @@ onMounted(loadContents)
           <el-option label="草稿" value="draft" />
           <el-option label="待审核" value="pending_review" />
           <el-option label="已通过" value="approved" />
+          <el-option label="已排期" value="scheduled" />
           <el-option label="已发布" value="published" />
+          <el-option label="发布失败" value="failed" />
         </el-select>
         <el-button type="primary" icon="Plus" @click="router.push('/create')">新建内容</el-button>
       </div>
@@ -128,7 +196,7 @@ onMounted(loadContents)
         </el-table-column>
         <el-table-column prop="author" label="创建人" width="100" />
         <el-table-column prop="updated" label="更新时间" width="160" />
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="row.status === 'draft'"
@@ -139,7 +207,50 @@ onMounted(loadContents)
             >
               提交审核
             </el-button>
-            <el-button type="primary" link size="small" disabled>导出</el-button>
+            <template v-if="row.platformCode === 'wechat' && row.status === 'approved'">
+              <el-button type="primary" link size="small" @click="handlePublish(row)">
+                立即发布
+              </el-button>
+              <el-button type="primary" link size="small" @click="openSchedule(row)">
+                排期
+              </el-button>
+            </template>
+            <el-button
+              v-if="row.previewUrl"
+              type="primary"
+              link
+              size="small"
+              @click="window.open(row.previewUrl, '_blank')"
+            >
+              预览
+            </el-button>
+            <el-button
+              v-if="row.status === 'failed'"
+              type="warning"
+              link
+              size="small"
+              @click="handleRetry(row)"
+            >
+              重试
+            </el-button>
+            <el-button
+              v-if="row.platformCode === 'xhs'"
+              type="primary"
+              link
+              size="small"
+              @click="handleExport(row, 'xhs')"
+            >
+              导出 ZIP
+            </el-button>
+            <el-button
+              v-if="row.platformCode === 'douyin'"
+              type="primary"
+              link
+              size="small"
+              @click="handleExport(row, 'douyin')"
+            >
+              导出脚本
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -154,6 +265,19 @@ onMounted(loadContents)
         />
       </div>
     </div>
+
+    <el-dialog v-model="scheduleVisible" title="排期发布" width="420px">
+      <el-date-picker
+        v-model="scheduleAt"
+        type="datetime"
+        placeholder="选择发布时间"
+        style="width: 100%"
+      />
+      <template #footer>
+        <el-button @click="scheduleVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmSchedule">确认排期</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

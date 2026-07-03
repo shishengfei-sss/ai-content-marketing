@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,7 +24,15 @@ class Settings(BaseSettings):
 
     LLM_TIMEOUT_SEC: int = 60
 
+    WECHAT_PUBLISHER: str = "mock"
+    STORAGE_DIR: str = "./storage"
+    PUBLISH_POLL_SEC: int = 30
+
     CORS_ORIGINS: str = "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174"
+
+    @property
+    def storage_published_dir(self) -> Path:
+        return Path(self.STORAGE_DIR) / "published"
 
 
 settings = Settings()

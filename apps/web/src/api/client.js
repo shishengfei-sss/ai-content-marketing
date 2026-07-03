@@ -38,9 +38,51 @@ export const llmApi = {
 export const contentApi = {
   list: (params) => api.get('/api/v1/content', { params }),
   get: (id) => api.get(`/api/v1/content/${id}`),
+  calendar: () => api.get('/api/v1/content/calendar'),
   generate: (data) => api.post('/api/v1/content/generate', data),
   submitReview: (id, comment = '') =>
     api.post(`/api/v1/content/${id}/submit-review`, { comment }),
   approve: (id, comment = '') => api.post(`/api/v1/content/${id}/approve`, { comment }),
   reject: (id, comment = '') => api.post(`/api/v1/content/${id}/reject`, { comment }),
+  schedule: (id, scheduledAt) =>
+    api.post(`/api/v1/content/${id}/schedule`, { scheduled_at: scheduledAt }),
+  publish: (id) => api.post(`/api/v1/content/${id}/publish`),
+  retryPublish: (id) => api.post(`/api/v1/content/${id}/retry-publish`),
+  exportXhs: (id) => api.post(`/api/v1/content/${id}/export/xhs`),
+  exportDouyin: (id) => api.post(`/api/v1/content/${id}/export/douyin`),
+}
+
+export const dashboardApi = {
+  stats: () => api.get('/api/v1/dashboard/stats'),
+}
+
+export const analyticsApi = {
+  stats: () => api.get('/api/v1/analytics/stats'),
+}
+
+export const knowledgeApi = {
+  list: () => api.get('/api/v1/knowledge/documents'),
+  uploadText: (data) => api.post('/api/v1/knowledge/documents/text', data),
+  uploadFile: (formData) =>
+    api.post('/api/v1/knowledge/documents/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  remove: (id) => api.delete(`/api/v1/knowledge/documents/${id}`),
+}
+
+export const templatesApi = {
+  list: (params) => api.get('/api/v1/templates', { params }),
+}
+
+export const brandApi = {
+  get: () => api.get('/api/v1/settings/brand'),
+  update: (data) => api.put('/api/v1/settings/brand', data),
+  getUserPrompt: () => api.get('/api/v1/settings/user-prompt'),
+  updateUserPrompt: (data) => api.put('/api/v1/settings/user-prompt', data),
+}
+
+export const wechatApi = {
+  get: () => api.get('/api/v1/settings/wechat'),
+  bindMock: (accountName) =>
+    api.post('/api/v1/settings/wechat/bind-mock', { account_name: accountName }),
 }

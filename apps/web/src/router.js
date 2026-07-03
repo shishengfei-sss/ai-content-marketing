@@ -67,6 +67,24 @@ const routes = [
         component: () => import('./views/SettingsLlm.vue'),
         meta: { title: 'AI 模型' },
       },
+      {
+        path: 'settings/wechat',
+        name: 'SettingsWechat',
+        component: () => import('./views/SettingsWechat.vue'),
+        meta: { title: '公众号绑定' },
+      },
+      {
+        path: 'settings/brand',
+        name: 'SettingsBrand',
+        component: () => import('./views/SettingsBrand.vue'),
+        meta: { title: '品牌设置' },
+      },
+      {
+        path: 'settings/preference',
+        name: 'SettingsPreference',
+        component: () => import('./views/SettingsPreference.vue'),
+        meta: { title: '我的偏好' },
+      },
     ],
   },
 ]

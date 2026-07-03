@@ -4,13 +4,6 @@ PLATFORM_LABELS = {
     "douyin": "抖音",
 }
 
-SCENE_LABELS = {
-    "tax_deadline_reminder": "报税截止提醒",
-    "bookkeeping_intro": "代理记账介绍",
-    "small_company_register": "新公司注册指南",
-    "case_penalty_story": "税务处罚案例",
-}
-
 
 def build_system_prompt(platform: str) -> str:
     label = PLATFORM_LABELS.get(platform, platform)
@@ -28,15 +21,40 @@ def build_user_prompt(
     platform: str,
     scene: str,
     topic: str,
+    scene_name: str = "",
+    template_hint: str = "",
+    rag_snippets: list[str] | None = None,
+    brand_name: str = "",
+    brand_tone: str = "",
+    brand_cta: str = "",
+    brand_sample: str = "",
+    user_instructions: str = "",
     ephemeral_instruction: str = "",
 ) -> str:
-    scene_label = SCENE_LABELS.get(scene, scene or "通用营销")
+    scene_label = scene_name or scene or "通用营销"
     platform_label = PLATFORM_LABELS.get(platform, platform)
 
     parts = [
         f"请为{platform_label}创作一篇「{scene_label}」主题的内容。",
         f"选题：{topic}",
     ]
+
+    if template_hint:
+        parts.append(f"场景写作要点：{template_hint}")
+
+    if brand_name:
+        parts.append(f"品牌/公司名：{brand_name}，语气：{brand_tone or '专业亲切'}")
+    if brand_cta:
+        parts.append(f"行动号召（CTA）：{brand_cta}")
+    if brand_sample:
+        parts.append(f"品牌范文参考（模仿风格，勿照抄）：\n{brand_sample}")
+
+    if rag_snippets:
+        joined = "\n---\n".join(rag_snippets)
+        parts.append(f"以下知识库片段供参考（请自然融入，不要生硬堆砌）：\n{joined}")
+
+    if user_instructions:
+        parts.append(f"用户个人写作偏好：{user_instructions}")
 
     if platform == "wechat":
         parts.append("格式：适合公众号发布的 HTML 友好纯文本，含标题、分段、要点列表。")

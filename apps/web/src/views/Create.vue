@@ -2,7 +2,7 @@
 import { nextTick, onMounted, ref } from 'vue'
 import { Promotion, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { contentApi, llmApi } from '../api/client'
+import { contentApi, llmApi, templatesApi } from '../api/client'
 
 const platform = ref('')
 const scene = ref('')
@@ -17,12 +17,20 @@ const platformMap = {
   douyin: '抖音',
 }
 
-const scenes = [
+const scenes = ref([
   { value: 'tax_deadline_reminder', label: '报税截止提醒' },
   { value: 'bookkeeping_intro', label: '代理记账介绍' },
-  { value: 'small_company_register', label: '新公司注册指南' },
-  { value: 'case_penalty_story', label: '税务处罚案例' },
-]
+])
+
+const filteredScenes = ref([])
+
+function updateFilteredScenes() {
+  if (!platform.value) {
+    filteredScenes.value = scenes.value
+    return
+  }
+  filteredScenes.value = scenes.value.filter((s) => s.platform === platform.value || !s.platform)
+}
 
 const quickStarts = [
   { text: '写一篇公众号报税提醒', platform: 'wechat', scene: 'tax_deadline_reminder' },
@@ -54,6 +62,17 @@ onMounted(async () => {
   } catch {
     modelTag.value = '未配置模型'
   }
+  try {
+    const { data } = await templatesApi.list({ industry_code: 'finance' })
+    scenes.value = data.map((t) => ({
+      value: t.scene,
+      label: t.name,
+      platform: t.platform,
+    }))
+    updateFilteredScenes()
+  } catch {
+    /* keep defaults */
+  }
 })
 
 async function scrollToBottom() {
@@ -63,6 +82,7 @@ async function scrollToBottom() {
 
 function pickPlatform(p) {
   platform.value = p
+  updateFilteredScenes()
 }
 
 function pickScene(s) {
@@ -80,7 +100,7 @@ function buildUserPrompt(text) {
   const parts = [text]
   if (platform.value) parts.unshift(`[平台：${platformMap[platform.value]}]`)
   if (scene.value) {
-    const label = scenes.find((s) => s.value === scene.value)?.label
+    const label = scenes.value.find((s) => s.value === scene.value)?.label
     if (label) parts.unshift(`[场景：${label}]`)
   }
   return parts.join(' ')
@@ -114,7 +134,7 @@ async function handleSend() {
       status: data.status,
       meta: {
         platform: platformMap[usePlatform] || usePlatform,
-        scene: scenes.find((s) => s.value === useScene)?.label || '自定义',
+        scene: scenes.value.find((s) => s.value === useScene)?.label || '自定义',
         model: `${data.llm_provider} · ${data.llm_model}`,
       },
     })
@@ -296,7 +316,7 @@ function handleCopy(text) {
           <span class="toolbar-divider" />
           <span class="toolbar-label">场景</span>
           <button
-            v-for="s in scenes"
+            v-for="s in filteredScenes"
             :key="s.value"
             class="toolbar-chip toolbar-chip--sm"
             :class="{ 'toolbar-chip--active': scene === s.value }"

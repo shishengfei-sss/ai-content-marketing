@@ -33,6 +33,11 @@ export async function request(options) {
 export const authApi = {
   login: (email, password) =>
     request({ url: '/api/v1/auth/login', method: 'POST', data: { email, password } }),
+  me: () => request({ url: '/api/v1/auth/me' }),
+}
+
+export const dashboardApi = {
+  stats: () => request({ url: '/api/v1/dashboard/stats' }),
 }
 
 export const contentApi = {
@@ -40,6 +45,7 @@ export const contentApi = {
     const query = new URLSearchParams(params).toString()
     return request({ url: `/api/v1/content${query ? `?${query}` : ''}` })
   },
+  calendar: () => request({ url: '/api/v1/content/calendar' }),
   generate: (payload) =>
     request({ url: '/api/v1/content/generate', method: 'POST', data: payload }),
   submitReview: (id, comment = '') =>

@@ -1,70 +1,98 @@
 <script setup>
-const events = [
-  { date: '2026-03-28', title: '3月报税提醒', time: '09:00', status: 'scheduled' },
-  { date: '2026-03-29', title: '代理记账优势', time: '10:30', status: 'scheduled' },
-  { date: '2026-03-30', title: '发票管理技巧', time: '14:00', status: 'draft' },
-]
+import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { contentApi } from '../api/client'
+
+const loading = ref(true)
+const events = ref([])
+
+const platformMap = {
+  wechat: '公众号',
+  xhs: '小红书',
+  douyin: '抖音',
+}
+
+function formatDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return d.toLocaleDateString('zh-CN')
+}
+
+function formatTime(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+onMounted(async () => {
+  try {
+    const { data } = await contentApi.calendar()
+    events.value = data.map((item) => ({
+      id: item.id,
+      date: formatDate(item.scheduled_at),
+      title: item.title,
+      time: formatTime(item.scheduled_at),
+      status: item.status,
+      platform: platformMap[item.platform] || item.platform,
+    }))
+  } catch (e) {
+    ElMessage.error(e.message || '加载失败')
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <template>
   <div class="calendar-page">
-    <el-row :gutter="16">
-      <el-col :span="16">
-        <div class="page-card">
-          <div class="page-title">发布日历</div>
-          <el-calendar />
-        </div>
-      </el-col>
-      <el-col :span="8">
-        <div class="page-card">
-          <div class="page-title">近期排期</div>
-          <div v-for="ev in events" :key="ev.title" class="schedule-item">
-            <div class="schedule-item__date">{{ ev.date }}</div>
-            <div class="schedule-item__body">
-              <div class="schedule-item__title">{{ ev.title }}</div>
-              <div class="schedule-item__meta">
-                {{ ev.time }}
-                <el-tag
-                  :type="ev.status === 'scheduled' ? 'success' : 'info'"
-                  size="small"
-                >
-                  {{ ev.status === 'scheduled' ? '已排期' : '草稿' }}
-                </el-tag>
-              </div>
+    <div class="page-card">
+      <el-empty v-if="!loading && !events.length" description="暂无排期内容" />
+      <div v-else v-loading="loading">
+        <div v-for="ev in events" :key="ev.id" class="schedule-item">
+          <div class="schedule-item__date">{{ ev.date }}</div>
+          <div class="schedule-item__body">
+            <div class="schedule-item__title">{{ ev.title }}</div>
+            <div class="schedule-item__meta">
+              <span>{{ ev.time }} · {{ ev.platform }}</span>
+              <el-tag
+                size="small"
+                :type="ev.status === 'published' ? 'success' : ev.status === 'scheduled' ? 'warning' : 'info'"
+              >
+                {{ ev.status === 'scheduled' ? '已排期' : ev.status === 'published' ? '已发布' : ev.status }}
+              </el-tag>
             </div>
           </div>
         </div>
-      </el-col>
-    </el-row>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .schedule-item {
   display: flex;
-  gap: 12px;
-  padding: 12px 0;
+  gap: 16px;
+  padding: 16px 0;
   border-bottom: 1px solid var(--color-border);
 }
 
 .schedule-item__date {
-  font-size: 13px;
-  color: var(--color-primary);
+  width: 100px;
   font-weight: 600;
-  width: 90px;
+  color: var(--color-primary);
   flex-shrink: 0;
 }
 
 .schedule-item__title {
-  font-weight: 500;
-  margin-bottom: 4px;
+  font-size: 15px;
+  margin-bottom: 6px;
 }
 
 .schedule-item__meta {
-  font-size: 12px;
-  color: var(--color-text-secondary);
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
 }
 </style>

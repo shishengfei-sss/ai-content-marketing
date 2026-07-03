@@ -2,18 +2,18 @@
   <view class="page">
     <view class="banner">
       <text class="banner__title">智营获客</text>
-      <text class="banner__sub">AI 内容营销 · 静态预览</text>
+      <text class="banner__sub">AI 内容营销</text>
     </view>
 
     <view class="cards">
-      <view class="card card--primary">
+      <view class="card card--primary" @click="goTodo">
         <text class="card__label">待审核</text>
-        <text class="card__value">5</text>
+        <text class="card__value">{{ stats.pending }}</text>
         <text class="card__hint">点击查看待办</text>
       </view>
       <view class="card">
         <text class="card__label">今日排期</text>
-        <text class="card__value">2</text>
+        <text class="card__value">{{ stats.scheduled }}</text>
         <text class="card__hint">公众号自动发布</text>
       </view>
     </view>
@@ -22,7 +22,8 @@
       <view class="section__header">
         <text class="section__title">今日排期</text>
       </view>
-      <view v-for="item in schedule" :key="item.title" class="list-item">
+      <view v-if="!schedule.length" class="empty">暂无排期</view>
+      <view v-for="item in schedule" :key="item.id" class="list-item">
         <view class="list-item__main">
           <text class="list-item__title">{{ item.title }}</text>
           <text class="list-item__sub">{{ item.time }} · {{ item.platform }}</text>
@@ -36,18 +37,59 @@
         <text class="section__title">快捷操作</text>
       </view>
       <view class="actions">
-        <view class="action-btn">新建创作</view>
-        <view class="action-btn action-btn--outline">导出小红书</view>
+        <view class="action-btn" @click="goCreate">新建创作</view>
+        <view class="action-btn action-btn--outline" @click="goContents">内容库</view>
       </view>
     </view>
   </view>
 </template>
 
 <script setup>
-const schedule = [
-  { title: '3月报税截止提醒', time: '09:00', platform: '公众号', status: '已排期' },
-  { title: '代理记账服务介绍', time: '10:30', platform: '公众号', status: '已排期' },
-]
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
+
+import { contentApi, dashboardApi } from '@/utils/api'
+import { getToken } from '@/utils/auth'
+
+const stats = ref({ pending: 0, scheduled: 0 })
+const schedule = ref([])
+
+const platformMap = { wechat: '公众号', xhs: '小红书', douyin: '抖音' }
+const statusMap = { scheduled: '已排期', published: '已发布' }
+
+function formatTime(iso) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+async function loadData() {
+  if (!getToken()) return
+  try {
+    const [dash, cal] = await Promise.all([dashboardApi.stats(), contentApi.calendar()])
+    stats.value = { pending: dash.pending_review, scheduled: dash.today_scheduled }
+    schedule.value = cal.slice(0, 5).map((item) => ({
+      id: item.id,
+      title: item.title,
+      time: formatTime(item.scheduled_at),
+      platform: platformMap[item.platform] || item.platform,
+      status: statusMap[item.status] || item.status,
+    }))
+  } catch {
+    /* ignore */
+  }
+}
+
+function goTodo() {
+  uni.switchTab({ url: '/pages/todo/todo' })
+}
+function goCreate() {
+  uni.switchTab({ url: '/pages/create/create' })
+}
+function goContents() {
+  uni.showToast({ title: '请使用 Web 内容库', icon: 'none' })
+}
+
+onShow(loadData)
 </script>
 
 <style scoped>
@@ -128,6 +170,12 @@ const schedule = [
 .section__title {
   font-size: 30rpx;
   font-weight: 600;
+}
+
+.empty {
+  color: #999;
+  font-size: 26rpx;
+  padding: 16rpx 0;
 }
 
 .list-item {

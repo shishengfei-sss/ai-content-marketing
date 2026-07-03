@@ -1,12 +1,28 @@
 <script setup>
-import { clearToken } from '@/utils/auth'
+import { onShow } from '@dcloudio/uni-app'
+import { ref } from 'vue'
 
-const menus = [
-  { title: '个人提示词' },
-  { title: '风格偏好' },
-  { title: '账号与安全' },
-  { title: '关于智营获客' },
-]
+import { authApi } from '@/utils/api'
+import { clearToken, getToken } from '@/utils/auth'
+
+const profile = ref({ name: '未登录', company: '', initial: '?' })
+
+async function loadProfile() {
+  if (!getToken()) {
+    profile.value = { name: '未登录', company: '', initial: '?' }
+    return
+  }
+  try {
+    const data = await authApi.me()
+    profile.value = {
+      name: data.display_name || data.email,
+      company: data.tenant?.name || '',
+      initial: (data.display_name || data.email || '?').slice(0, 1),
+    }
+  } catch {
+    profile.value = { name: '加载失败', company: '', initial: '?' }
+  }
+}
 
 function handleLogout() {
   uni.showModal({
@@ -24,30 +40,23 @@ function handleLogout() {
     },
   })
 }
+
+onShow(loadProfile)
 </script>
 
 <template>
   <view class="page">
     <view class="profile">
-      <view class="avatar">张</view>
+      <view class="avatar">{{ profile.initial }}</view>
       <view>
-        <text class="profile__name">张会计</text>
-        <text class="profile__company">某某财务咨询有限公司</text>
-      </view>
-    </view>
-
-    <view class="menu">
-      <view v-for="item in menus" :key="item.title" class="menu-item">
-        <text class="menu-item__title">{{ item.title }}</text>
-        <text class="menu-item__arrow">›</text>
+        <text class="profile__name">{{ profile.name }}</text>
+        <text class="profile__company">{{ profile.company }}</text>
       </view>
     </view>
 
     <view class="logout-wrap">
       <button class="btn-logout" @click="handleLogout">退出登录</button>
     </view>
-
-    <view class="preview-tag">静态预览 · 待确认 UI</view>
   </view>
 </template>
 

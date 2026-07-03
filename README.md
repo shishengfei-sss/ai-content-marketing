@@ -8,11 +8,18 @@
 | 实现步骤计划 | [docs/实现步骤计划.md](docs/实现步骤计划.md) |
 | LLM 与 UI 计划 | [docs/LLM与UI计划.md](docs/LLM与UI计划.md) |
 
-## 当前进度
+## 当前进度（MVP 功能闭环）
 
-- Web 管理端（Vue 3 + Element Plus）— 已接 API
-- uni-app 移动端 H5 — 已接 API
-- FastAPI 后端 — 认证、LLM 配置、内容生成、审核流
+- ✅ 注册登录 / JWT / 租户隔离
+- ✅ 可插拔 LLM + 设置页配置
+- ✅ 行业模板（22 个 finance 场景）+ RAG 知识库检索
+- ✅ 租户知识库上传 / 粘贴 / 删除
+- ✅ 品牌设置 + 个人提示词
+- ✅ 内容生成 → 审核 → Mock 公众号发布 / 排期
+- ✅ 小红书 ZIP 导出（文案 + 封面）/ 抖音脚本导出
+- ✅ Web 工作台 / 内容库 / 日历 / 数据看板
+- ✅ uni-app H5：首页 / 待办 / 创作 / 我的
+- ⏳ 部署上线 + 真实微信 API（第 11 步，需备案与 service 号）
 
 ## 快速启动（本地开发）
 
@@ -75,6 +82,19 @@ npm.cmd run dev:h5 -- --port 5174
 | POST | `/api/v1/content/{id}/submit-review` | 提交审核 |
 | POST | `/api/v1/content/{id}/approve` | 审核通过 |
 | POST | `/api/v1/content/{id}/reject` | 审核驳回 |
+| POST | `/api/v1/content/{id}/schedule` | 排期发布 |
+| POST | `/api/v1/content/{id}/publish` | 立即 Mock 发布 |
+| POST | `/api/v1/content/{id}/retry-publish` | 重试发布 |
+| GET | `/api/v1/content/calendar` | 发布日历 |
+| GET | `/api/v1/dashboard/stats` | 工作台统计 |
+| GET/POST | `/api/v1/settings/wechat` | 公众号绑定（Mock） |
+| GET/POST | `/api/v1/knowledge/documents` | 知识库列表 / 上传 |
+| GET | `/api/v1/templates` | 场景模板列表 |
+| GET/PUT | `/api/v1/settings/brand` | 品牌设置 |
+| GET/PUT | `/api/v1/settings/user-prompt` | 个人提示词 |
+| GET | `/api/v1/analytics/stats` | 数据看板统计 |
+| POST | `/api/v1/content/{id}/export/xhs` | 小红书 ZIP 导出 |
+| POST | `/api/v1/content/{id}/export/douyin` | 抖音脚本导出 |
 
 ## LLM 架构
 

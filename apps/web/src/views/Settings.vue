@@ -4,9 +4,9 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 
 const settingsMenu = [
-  { title: '品牌设置', desc: '公司名、人设、语气、CTA', icon: 'Shop', path: '/settings' },
-  { title: '我的偏好', desc: '个人风格与提示词', icon: 'User', path: '/settings' },
-  { title: '公众号绑定', desc: '服务号 OAuth（部署后可用）', icon: 'ChatLineRound', path: '/settings' },
+  { title: '品牌设置', desc: '公司名、人设、语气、CTA', icon: 'Shop', path: '/settings/brand' },
+  { title: '我的偏好', desc: '个人风格与提示词', icon: 'User', path: '/settings/preference' },
+  { title: '公众号绑定', desc: 'Mock / 服务号 OAuth', icon: 'ChatLineRound', path: '/settings/wechat' },
   { title: 'AI 模型', desc: 'DeepSeek / 其他大模型配置', icon: 'Cpu', path: '/settings/llm' },
 ]
 </script>

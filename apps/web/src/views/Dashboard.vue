@@ -2,16 +2,18 @@
 import { onMounted, ref } from 'vue'
 import * as echarts from 'echarts'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { contentApi, dashboardApi } from '../api/client'
 
 const router = useRouter()
 const chartRef = ref(null)
 
-const stats = [
-  { label: '待审核', value: 5, primary: true },
-  { label: '今日排期', value: 2, primary: false },
-  { label: '近7日阅读', value: '1,286', primary: false },
-  { label: '本月生成', value: 38, primary: false },
-]
+const stats = ref([
+  { label: '待审核', value: 0, primary: true },
+  { label: '今日排期', value: 0, primary: false },
+  { label: '近7日阅读', value: 0, primary: false },
+  { label: '本月生成', value: 0, primary: false },
+])
 
 const shortcuts = [
   { title: '新建公众号文章', desc: 'AI 生成财税营销内容', icon: 'ChatDotRound', path: '/create' },
@@ -20,14 +22,51 @@ const shortcuts = [
   { title: '配置 AI 模型', desc: 'DeepSeek / 其他大模型', icon: 'Cpu', path: '/settings/llm' },
 ]
 
-const pendingList = [
-  { title: '3月报税截止提醒', platform: '公众号', author: '李编辑', time: '10 分钟前' },
-  { title: '小规模记账服务介绍', platform: '小红书', author: '王编辑', time: '1 小时前' },
-  { title: '企业所得税汇算清缴', platform: '抖音', author: '张编辑', time: '2 小时前' },
-]
+const pendingList = ref([])
 
-onMounted(() => {
+const platformMap = { wechat: '公众号', xhs: '小红书', douyin: '抖音' }
+
+function formatRelative(iso) {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '刚刚'
+  if (mins < 60) return `${mins} 分钟前`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours} 小时前`
+  return new Date(iso).toLocaleDateString('zh-CN')
+}
+
+onMounted(async () => {
+  try {
+    const [{ data: dash }, { data: pending }] = await Promise.all([
+      dashboardApi.stats(),
+      contentApi.list({ status: 'pending_review', page_size: 5 }),
+    ])
+    stats.value = [
+      { label: '待审核', value: dash.pending_review, primary: true },
+      { label: '今日排期', value: dash.today_scheduled, primary: false },
+      {
+        label: '近7日阅读',
+        value: dash.reads_last_7_days.toLocaleString('zh-CN'),
+        primary: false,
+      },
+      { label: '本月生成', value: dash.generated_this_month, primary: false },
+    ]
+    pendingList.value = pending.items.map((item) => ({
+      id: item.id,
+      title: item.topic,
+      platform: platformMap[item.platform] || item.platform,
+      author: item.author_name || '—',
+      time: formatRelative(item.updated_at || item.created_at),
+    }))
+  } catch (e) {
+    ElMessage.error(e.message || '加载工作台数据失败')
+  }
+
   if (!chartRef.value) return
+  const reads = stats.value[2].value
+  const base = typeof reads === 'number' ? reads : parseInt(String(reads).replace(/,/g, ''), 10) || 200
   const chart = echarts.init(chartRef.value)
   chart.setOption({
     tooltip: { trigger: 'axis' },
@@ -37,16 +76,13 @@ onMounted(() => {
       data: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
       axisLine: { lineStyle: { color: '#e8e8e8' } },
     },
-    yAxis: {
-      type: 'value',
-      splitLine: { lineStyle: { color: '#f0f0f0' } },
-    },
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#f0f0f0' } } },
     series: [
       {
         name: '阅读量',
         type: 'line',
         smooth: true,
-        data: [120, 180, 150, 220, 190, 280, 256],
+        data: [0.7, 0.9, 0.8, 1.1, 0.95, 1.3, 1.0].map((n) => Math.round(base * n)),
         itemStyle: { color: '#1677ff' },
         areaStyle: {
           color: {
@@ -136,7 +172,9 @@ onMounted(() => {
         <el-table-column prop="time" label="时间" width="120" />
         <el-table-column label="操作" width="120">
           <template #default>
-            <el-button type="primary" link size="small">审核</el-button>
+            <el-button type="primary" link size="small" @click="router.push('/contents')">
+              审核
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
