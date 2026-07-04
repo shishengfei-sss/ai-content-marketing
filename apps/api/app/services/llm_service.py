@@ -1,3 +1,9 @@
+"""LLM 业务统一入口。
+
+配置解析优先级：租户 llm_configs（有 Key）→ 环境变量（DEEPSEEK_* / LLM_*）。
+业务层应经此服务调用模型，不直接访问各 Provider。
+"""
+
 from dataclasses import dataclass
 from uuid import UUID
 

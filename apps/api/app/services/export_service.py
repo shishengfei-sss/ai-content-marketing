@@ -1,3 +1,9 @@
+"""小红书 / 抖音内容导出。
+
+小红书：打包 文案.txt + cover.svg（1080×1440，可转 PNG）为 ZIP。
+抖音：输出 Markdown 分镜脚本。导出后内容状态记为 exported。
+"""
+
 import io
 import zipfile
 from pathlib import Path
@@ -11,10 +17,15 @@ from app.models import Content, ExportRecord
 
 
 def assert_exportable(content: Content, export_type: str) -> None:
+    fmt = getattr(content, "content_format", "article")
     if export_type == "xhs" and content.platform != "xhs":
         raise HTTPException(status_code=400, detail="仅小红书内容可导出 zip")
+    if export_type == "xhs" and fmt == "video_script":
+        raise HTTPException(status_code=400, detail="小红书视频脚本请使用「导出脚本」")
     if export_type == "douyin" and content.platform != "douyin":
         raise HTTPException(status_code=400, detail="仅抖音内容可导出脚本")
+    if export_type == "script" and fmt != "video_script":
+        raise HTTPException(status_code=400, detail="仅视频脚本形态可导出脚本")
     if not content.body.strip():
         raise HTTPException(status_code=400, detail="内容正文为空，无法导出")
 
@@ -79,8 +90,18 @@ def export_xhs_zip(db: Session, content: Content) -> tuple[ExportRecord, Path]:
 
 def export_douyin_markdown(db: Session, content: Content) -> tuple[ExportRecord, Path]:
     assert_exportable(content, "douyin")
+    return _write_script_markdown(db, content, export_type="douyin")
+
+
+def export_video_script_markdown(db: Session, content: Content) -> tuple[ExportRecord, Path]:
+    assert_exportable(content, "script")
+    export_type = f"{content.platform}_script"
+    return _write_script_markdown(db, content, export_type=export_type)
+
+
+def _write_script_markdown(db: Session, content: Content, *, export_type: str) -> tuple[ExportRecord, Path]:
     export_dir = _exports_dir()
-    file_name = f"{content.id}_douyin.md"
+    file_name = f"{content.id}_{export_type}.md"
     file_path = export_dir / file_name
 
     md = f"""# {content.topic}
@@ -98,7 +119,7 @@ def export_douyin_markdown(db: Session, content: Content) -> tuple[ExportRecord,
     record = ExportRecord(
         content_id=content.id,
         tenant_id=content.tenant_id,
-        export_type="douyin",
+        export_type=export_type,
         file_name=file_name,
     )
     db.add(record)

@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from './layouts/AppLayout.vue'
+import AdminLayout from './layouts/AdminLayout.vue'
 import { useAuthStore } from './stores/auth'
+
 const routes = [
   {
     path: '/login',
@@ -13,6 +15,38 @@ const routes = [
     name: 'Register',
     component: () => import('./views/Register.vue'),
     meta: { public: true },
+  },
+  {
+    path: '/admin',
+    component: AdminLayout,
+    meta: { platformAdmin: true },
+    redirect: '/admin/contents',
+    children: [
+      {
+        path: 'contents',
+        name: 'AdminContents',
+        component: () => import('./views/admin/AdminContents.vue'),
+        meta: { title: '全站内容', platformAdmin: true },
+      },
+      {
+        path: 'assistants',
+        name: 'AdminAssistants',
+        component: () => import('./views/admin/AdminAssistants.vue'),
+        meta: { title: 'AI 助手', platformAdmin: true },
+      },
+      {
+        path: 'knowledge',
+        name: 'AdminKnowledge',
+        component: () => import('./views/admin/AdminKnowledge.vue'),
+        meta: { title: '公共知识库', platformAdmin: true },
+      },
+      {
+        path: 'users',
+        name: 'AdminUsers',
+        component: () => import('./views/admin/AdminUsers.vue'),
+        meta: { title: '用户管理', platformAdmin: true },
+      },
+    ],
   },
   {
     path: '/',
@@ -94,13 +128,20 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (!to.meta.public && !auth.isLoggedIn) {
     return '/login'
   }
   if (to.meta.public && auth.isLoggedIn && (to.path === '/login' || to.path === '/register')) {
-    return '/dashboard'
+    if (!auth.user) await auth.fetchMe()
+    return auth.user?.role === 'platform_admin' ? '/admin' : '/dashboard'
+  }
+  if (to.meta.platformAdmin) {
+    if (!auth.user) await auth.fetchMe()
+    if (auth.user?.role !== 'platform_admin') {
+      return '/dashboard'
+    }
   }
 })
 

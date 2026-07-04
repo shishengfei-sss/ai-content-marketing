@@ -9,6 +9,7 @@ const documents = ref([])
 const pasteVisible = ref(false)
 const pasteForm = ref({ title: '', text: '' })
 
+async function loadDocs() {
   loading.value = true
   try {
     const { data } = await knowledgeApi.list()

@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '',
   timeout: 120000,
 })
 
@@ -17,14 +17,27 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     const msg = err.response?.data?.detail || err.message || '请求失败'
-    return Promise.reject(new Error(typeof msg === 'string' ? msg : JSON.stringify(msg)))
+    const text = typeof msg === 'string' ? msg : JSON.stringify(msg)
+    const status = err.response?.status
+    if (
+      status === 401 &&
+      (text.includes('用户不存在') || text.includes('登录已失效') || text.includes('未登录'))
+    ) {
+      localStorage.removeItem('token')
+      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+        window.location.href = '/login'
+      }
+    }
+    return Promise.reject(new Error(text))
   },
 )
 
 export default api
 
 export const authApi = {
-  login: (email, password) => api.post('/api/v1/auth/login', { email, password }),
+  login: (phone, password) => api.post('/api/v1/auth/login', { phone, password }),
+  sendSmsCode: (phone) => api.post('/api/v1/auth/sms/send', { phone }),
+  loginBySms: (phone, code) => api.post('/api/v1/auth/sms/login', { phone, code }),
   register: (data) => api.post('/api/v1/auth/register', data),
   me: () => api.get('/api/v1/auth/me'),
 }
@@ -39,6 +52,7 @@ export const contentApi = {
   list: (params) => api.get('/api/v1/content', { params }),
   get: (id) => api.get(`/api/v1/content/${id}`),
   calendar: () => api.get('/api/v1/content/calendar'),
+  proposals: (data) => api.post('/api/v1/content/proposals', data),
   generate: (data) => api.post('/api/v1/content/generate', data),
   submitReview: (id, comment = '') =>
     api.post(`/api/v1/content/${id}/submit-review`, { comment }),
@@ -50,6 +64,7 @@ export const contentApi = {
   retryPublish: (id) => api.post(`/api/v1/content/${id}/retry-publish`),
   exportXhs: (id) => api.post(`/api/v1/content/${id}/export/xhs`),
   exportDouyin: (id) => api.post(`/api/v1/content/${id}/export/douyin`),
+  exportScript: (id) => api.post(`/api/v1/content/${id}/export/script`),
 }
 
 export const dashboardApi = {
@@ -74,6 +89,10 @@ export const templatesApi = {
   list: (params) => api.get('/api/v1/templates', { params }),
 }
 
+export const assistantsApi = {
+  list: () => api.get('/api/v1/assistants'),
+}
+
 export const brandApi = {
   get: () => api.get('/api/v1/settings/brand'),
   update: (data) => api.put('/api/v1/settings/brand', data),
@@ -83,6 +102,24 @@ export const brandApi = {
 
 export const wechatApi = {
   get: () => api.get('/api/v1/settings/wechat'),
-  bindMock: (accountName) =>
-    api.post('/api/v1/settings/wechat/bind-mock', { account_name: accountName }),
+  bindMock: (accountName, accountType = 'service') =>
+    api.post('/api/v1/settings/wechat/bind-mock', {
+      account_name: accountName,
+      account_type: accountType,
+    }),
+}
+
+export const adminApi = {
+  listContents: (params) => api.get('/api/v1/admin/contents', { params }),
+  listUsers: (params) => api.get('/api/v1/admin/users', { params }),
+  updateUser: (id, data) => api.patch(`/api/v1/admin/users/${id}`, data),
+  resetUserPassword: (id, password) =>
+    api.post(`/api/v1/admin/users/${id}/reset-password`, { password }),
+  deleteUser: (id) => api.delete(`/api/v1/admin/users/${id}`),
+  listKnowledge: () => api.get('/api/v1/admin/knowledge/documents'),
+  uploadKnowledgeText: (data) => api.post('/api/v1/admin/knowledge/documents/text', data),
+  removeKnowledge: (id) => api.delete(`/api/v1/admin/knowledge/documents/${id}`),
+  listAssistants: (params) => api.get('/api/v1/admin/assistants', { params }),
+  createAssistant: (data) => api.post('/api/v1/admin/assistants', data),
+  updateAssistant: (code, data) => api.patch(`/api/v1/admin/assistants/${code}`, data),
 }

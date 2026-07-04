@@ -1,3 +1,9 @@
+"""微信公众号 Mock / Real 发布实现。
+
+Mock：写入 storage/published/{id}.html 并模拟阅读数，供 Dashboard 联调。
+Real：占位，第 11 步部署接入微信 API 后实现。
+"""
+
 import html
 import logging
 import random

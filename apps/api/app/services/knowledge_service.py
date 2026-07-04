@@ -1,3 +1,9 @@
+"""知识库、场景模板与 Prompt 辅助查询。
+
+文档分块入库后供 RAG 检索；检索优先级：租户私有库 → 平台行业库（FR-KB-04）。
+MVP 使用关键词 ILIKE，未接入向量检索。
+"""
+
 import re
 from uuid import UUID
 

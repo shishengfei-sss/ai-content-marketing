@@ -13,21 +13,33 @@ from app.schemas import (
     ContentGenerateRequest,
     ContentListResponse,
     ContentOut,
+    ContentProposal,
+    ContentProposalsRequest,
+    ContentProposalsResponse,
     ExportResponse,
     ReviewActionRequest,
     ScheduleRequest,
 )
+from app.services.assistant_service import get_profile, require_active_assistant
 from app.services.content_service import (
     approve_content,
     get_content_for_tenant,
     reject_content,
     submit_for_review,
 )
-from app.services.export_service import export_douyin_markdown, export_xhs_zip
+from app.services.export_service import export_douyin_markdown, export_video_script_markdown, export_xhs_zip
 from app.services.knowledge_service import get_brand_profile, get_template, get_user_prompt, search_knowledge
 from app.services.llm.base import LLMMessage
 from app.services.llm_service import llm_service
-from app.services.prompt_builder import build_system_prompt, build_user_prompt
+from app.services.prompt_builder import (
+    build_proposals_system_prompt,
+    build_proposals_user_prompt,
+    build_system_prompt,
+    build_user_prompt,
+    default_content_format,
+    parse_proposals_json,
+    validate_platform_format,
+)
 from app.services.publish_service import execute_publish, reset_for_retry, schedule_content
 
 logger = logging.getLogger(__name__)
@@ -45,6 +57,7 @@ def _content_out(content: Content) -> ContentOut:
         scene=content.scene,
         topic=content.topic,
         body=content.body,
+        content_format=getattr(content, "content_format", "article") or "article",
         status=content.status,
         llm_provider=content.llm_provider,
         llm_model=content.llm_model,
@@ -135,13 +148,76 @@ def get_content(
     return _content_out(content)
 
 
+@router.post("/proposals", response_model=ContentProposalsResponse)
+async def generate_proposals(
+    body: ContentProposalsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    content_format = body.content_format or default_content_format(body.platform)
+    try:
+        validate_platform_format(body.platform, content_format)
+    except ValueError as e:
+        if str(e) == "INVALID_PLATFORM_FORMAT":
+            raise HTTPException(status_code=400, detail="该平台不支持所选内容形态") from e
+        raise
+
+    require_active_assistant(db, body.industry_code)
+    assistant = get_profile(db, body.industry_code)
+
+    template = get_template(db, body.industry_code, body.platform, body.scene)
+    system_prompt = build_proposals_system_prompt(assistant=assistant)
+    user_prompt = build_proposals_user_prompt(
+        platform=body.platform,
+        scene=body.scene,
+        topic=body.topic,
+        content_format=content_format,
+        scene_name=template.name if template else "",
+        template_hint=template.prompt_hint if template else "",
+    )
+    messages = [
+        LLMMessage(role="system", content=system_prompt),
+        LLMMessage(role="user", content=user_prompt),
+    ]
+
+    try:
+        result = await llm_service.chat(db, current_user.tenant_id, messages)
+        raw_items = parse_proposals_json(result.content)
+    except ValueError as e:
+        if str(e) == "LLM_API_KEY_NOT_CONFIGURED":
+            raise HTTPException(status_code=400, detail="请先在设置中配置 AI 模型 API Key") from e
+        if str(e) == "PROPOSALS_PARSE_FAILED":
+            raise HTTPException(status_code=502, detail="方案生成失败，请重试") from e
+        raise
+    except httpx.HTTPError as e:
+        logger.exception("LLM proposals request failed")
+        raise HTTPException(status_code=502, detail="模型连接失败，请检查 API Key 与网络") from e
+    except Exception as e:
+        logger.exception("LLM proposals request failed")
+        raise HTTPException(status_code=502, detail=f"方案生成失败: {e}") from e
+
+    proposals = [ContentProposal(**item) for item in raw_items]
+    return ContentProposalsResponse(proposals=proposals)
+
+
 @router.post("/generate", response_model=ContentOut)
 async def generate_content(
     body: ContentGenerateRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    system_prompt = build_system_prompt(body.platform)
+    content_format = body.content_format or default_content_format(body.platform)
+    try:
+        validate_platform_format(body.platform, content_format)
+    except ValueError as e:
+        if str(e) == "INVALID_PLATFORM_FORMAT":
+            raise HTTPException(status_code=400, detail="该平台不支持所选内容形态") from e
+        raise
+
+    require_active_assistant(db, body.industry_code)
+    assistant = get_profile(db, body.industry_code)
+
+    system_prompt = build_system_prompt(body.platform, content_format=content_format, assistant=assistant)
 
     template = get_template(db, body.industry_code, body.platform, body.scene)
     rag_chunks = search_knowledge(
@@ -153,10 +229,12 @@ async def generate_content(
     brand = get_brand_profile(db, current_user.tenant_id)
     user_prompt_profile = get_user_prompt(db, current_user.id) if body.apply_user_prompt else None
 
+    proposal = body.selected_proposal
     user_prompt = build_user_prompt(
         platform=body.platform,
         scene=body.scene,
         topic=body.topic,
+        content_format=content_format,
         scene_name=template.name if template else "",
         template_hint=template.prompt_hint if template else "",
         rag_snippets=[c.content for c in rag_chunks],
@@ -166,6 +244,9 @@ async def generate_content(
         brand_sample=brand.sample_snippet if brand else "",
         user_instructions=user_prompt_profile.global_instructions if user_prompt_profile else "",
         ephemeral_instruction=body.ephemeral_instruction,
+        selected_proposal_title=proposal.title if proposal else "",
+        selected_proposal_angle=proposal.angle if proposal else "",
+        selected_proposal_outline=proposal.outline if proposal else "",
     )
 
     messages = [
@@ -186,14 +267,16 @@ async def generate_content(
         logger.exception("LLM request failed")
         raise HTTPException(status_code=502, detail=f"生成失败: {e}") from e
 
+    topic = proposal.title if proposal else body.topic
     content = Content(
         tenant_id=current_user.tenant_id,
         author_id=current_user.id,
         industry_code=body.industry_code,
         platform=body.platform,
         scene=body.scene,
-        topic=body.topic,
+        topic=topic,
         body=result.content,
+        content_format=content_format,
         status="draft",
         llm_provider=result.provider,
         llm_model=result.model,
@@ -309,6 +392,22 @@ def export_douyin(
     return ExportResponse(
         export_id=record.id,
         export_type="douyin",
+        download_url=f"/storage/exports/{record.file_name}",
+        file_name=record.file_name,
+    )
+
+
+@router.post("/{content_id}/export/script", response_model=ExportResponse)
+def export_script(
+    content_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    content = get_content_for_tenant(db, content_id, current_user.tenant_id)
+    record, _ = export_video_script_markdown(db, content)
+    return ExportResponse(
+        export_id=record.id,
+        export_type=record.export_type,
         download_url=f"/storage/exports/{record.file_name}",
         file_name=record.file_name,
     )

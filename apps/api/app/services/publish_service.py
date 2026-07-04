@@ -1,3 +1,10 @@
+"""公众号发布服务（开发期默认 Mock）。
+
+发布流：draft/scheduled → publishing → published | failed。
+MVP 仅 wechat 平台可发布；失败后可 reset 为 draft 再重试。
+定时到点发布由 main.py 内 asyncio 轮询触发（开发期替代 Celery）。
+"""
+
 import logging
 from datetime import datetime, timezone
 from uuid import UUID
@@ -18,14 +25,31 @@ def assert_wechat_content(content: Content) -> None:
         raise HTTPException(status_code=400, detail="当前仅支持公众号（wechat）内容发布")
 
 
+def assert_wechat_auto_publishable(db: Session, content: Content) -> None:
+    assert_wechat_content(content)
+    if getattr(content, "content_format", "article") != "article":
+        raise HTTPException(
+            status_code=400,
+            detail="视频脚本不支持自动发布，请复制或下载脚本后手动制作视频",
+        )
+    account = get_wechat_account(db, content.tenant_id)
+    if not account:
+        raise HTTPException(status_code=400, detail="请先在设置中绑定公众号")
+    if account.account_type == "subscription":
+        raise HTTPException(
+            status_code=400,
+            detail="订阅号不支持自动发布，请复制或下载内容后到公众号后台手动发表",
+        )
+
+
 def assert_publishable_status(content: Content, *, allow_failed: bool = False) -> None:
-    allowed = {"approved", "scheduled"}
+    allowed = {"draft", "scheduled"}
     if allow_failed:
         allowed = allowed | {"failed"}
     if content.status not in allowed:
         raise HTTPException(
             status_code=400,
-            detail=f"当前状态「{content.status}」不能发布，需先审核通过",
+            detail=f"当前状态「{content.status}」不能发布",
         )
 
 
@@ -48,7 +72,7 @@ def _log_publish(
 
 
 async def execute_publish(db: Session, content: Content) -> Content:
-    assert_wechat_content(content)
+    assert_wechat_auto_publishable(db, content)
     assert_publishable_status(content, allow_failed=True)
 
     content.status = "publishing"
@@ -100,9 +124,9 @@ async def execute_publish(db: Session, content: Content) -> Content:
 
 
 def schedule_content(db: Session, content: Content, scheduled_at: datetime) -> Content:
-    assert_wechat_content(content)
-    if content.status != "approved":
-        raise HTTPException(status_code=400, detail="仅审核通过的内容可排期")
+    assert_wechat_auto_publishable(db, content)
+    if content.status not in {"draft", "failed", "scheduled"}:
+        raise HTTPException(status_code=400, detail="当前状态不能排期")
 
     if scheduled_at.tzinfo is None:
         scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
@@ -126,9 +150,10 @@ def schedule_content(db: Session, content: Content, scheduled_at: datetime) -> C
 
 
 def reset_for_retry(db: Session, content: Content) -> Content:
+    """发布失败后回到 draft，以便再次 execute_publish。"""
     if content.status != "failed":
         raise HTTPException(status_code=400, detail="仅失败状态可重试")
-    content.status = "approved"
+    content.status = "draft"
     content.publish_error = None
     db.commit()
     db.refresh(content)
@@ -170,10 +195,13 @@ def get_wechat_account(db: Session, tenant_id: UUID) -> PlatformAccount | None:
     )
 
 
-def bind_mock_wechat(db: Session, tenant_id: UUID, account_name: str) -> PlatformAccount:
+def bind_mock_wechat(
+    db: Session, tenant_id: UUID, account_name: str, account_type: str = "service"
+) -> PlatformAccount:
     existing = get_wechat_account(db, tenant_id)
     if existing:
         existing.account_name = account_name
+        existing.account_type = account_type
         existing.is_mock = True
         existing.is_active = True
         db.commit()
@@ -184,6 +212,7 @@ def bind_mock_wechat(db: Session, tenant_id: UUID, account_name: str) -> Platfor
         tenant_id=tenant_id,
         platform="wechat",
         account_name=account_name,
+        account_type=account_type,
         is_mock=True,
         is_active=True,
     )

@@ -15,13 +15,17 @@ async function loadProfile() {
   try {
     const data = await authApi.me()
     profile.value = {
-      name: data.display_name || data.email,
-      company: data.tenant?.name || '',
-      initial: (data.display_name || data.email || '?').slice(0, 1),
+      name: data.display_name || data.phone || '用户',
+      company: data.phone ? `手机号 ${data.phone}` : data.tenant?.name || '',
+      initial: (data.display_name || data.phone || '?').slice(0, 1),
     }
   } catch {
     profile.value = { name: '加载失败', company: '', initial: '?' }
   }
+}
+
+function goWechat() {
+  uni.navigateTo({ url: '/pages/wechat/wechat' })
 }
 
 function handleLogout() {
@@ -55,6 +59,12 @@ onShow(loadProfile)
     </view>
 
     <view class="logout-wrap">
+      <view class="menu">
+        <view class="menu-item" @click="goWechat">
+          <text>公众号绑定</text>
+          <text class="menu-item__arrow">›</text>
+        </view>
+      </view>
       <button class="btn-logout" @click="handleLogout">退出登录</button>
     </view>
   </view>

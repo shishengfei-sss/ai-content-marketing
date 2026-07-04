@@ -1,3 +1,8 @@
+"""LLM 适配器抽象层。
+
+定义 chat/stream 接口；具体厂商实现见 openai_compatible 与 factory。
+"""
+
 from dataclasses import dataclass
 from typing import AsyncIterator
 

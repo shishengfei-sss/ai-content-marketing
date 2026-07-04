@@ -1,3 +1,8 @@
+"""LLM Provider 注册表。
+
+按 provider 名称返回单例实现；不支持的名字抛出 ValueError。
+"""
+
 from app.services.llm.base import LLMProvider
 from app.services.llm.openai_compatible import DashScopeProvider, DeepSeekProvider, OpenAICompatibleProvider
 

@@ -21,12 +21,22 @@ export const useAuthStore = defineStore('auth', {
     },
     async fetchMe() {
       if (!this.token) return null
-      const { data } = await authApi.me()
-      this.user = data
-      return data
+      try {
+        const { data } = await authApi.me()
+        this.user = data
+        return data
+      } catch (e) {
+        this.logout()
+        throw e
+      }
     },
-    async login(email, password) {
-      const { data } = await authApi.login(email, password)
+    async login(phone, password) {
+      const { data } = await authApi.login(phone, password)
+      this.setToken(data.access_token)
+      await this.fetchMe()
+    },
+    async loginBySms(phone, code) {
+      const { data } = await authApi.loginBySms(phone, code)
       this.setToken(data.access_token)
       await this.fetchMe()
     },

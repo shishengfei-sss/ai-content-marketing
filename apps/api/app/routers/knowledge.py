@@ -18,6 +18,7 @@ def _doc_out(doc: KnowledgeDocument) -> KnowledgeDocumentOut:
         title=doc.title,
         file_name=doc.file_name,
         scope=doc.scope,
+        industry_code=doc.industry_code or "",
         status=doc.status,
         chunk_count=doc.chunk_count,
         created_at=doc.created_at,

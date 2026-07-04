@@ -1,3 +1,8 @@
+"""LLM API Key 加解密与界面脱敏。
+
+租户 llm_configs 表中的密钥 Fernet 加密存储；设置页展示 mask 后的值。
+"""
+
 import base64
 import hashlib
 

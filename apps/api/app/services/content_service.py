@@ -1,12 +1,20 @@
+"""内容审核服务。
+
+管理审核状态机：draft → pending_review → approved / draft（驳回）。
+仅 admin、reviewer 可执行通过/驳回；每次操作写入 content_reviews 留痕。
+"""
+
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
+from app.database import uuid_eq
 from app.models import Content, ContentReview, User
 
 REVIEWER_ROLES = frozenset({"admin", "reviewer"})
 
+# 审核阶段允许的状态迁移（发布/导出另有独立状态流）
 VALID_TRANSITIONS: dict[str, set[str]] = {
     "draft": {"pending_review"},
     "pending_review": {"approved", "draft"},
@@ -17,7 +25,7 @@ def get_content_for_tenant(db: Session, content_id: UUID, tenant_id: UUID) -> Co
     content = (
         db.query(Content)
         .options(joinedload(Content.author))
-        .filter(Content.id == content_id, Content.tenant_id == tenant_id)
+        .filter(uuid_eq(Content.id, content_id), uuid_eq(Content.tenant_id, tenant_id))
         .first()
     )
     if not content:

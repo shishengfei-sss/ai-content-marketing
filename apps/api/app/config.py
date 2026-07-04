@@ -28,7 +28,18 @@ class Settings(BaseSettings):
     STORAGE_DIR: str = "./storage"
     PUBLISH_POLL_SEC: int = 30
 
-    CORS_ORIGINS: str = "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174"
+    CORS_ORIGINS: str = (
+        "http://127.0.0.1:5173,http://localhost:5173,"
+        "http://127.0.0.1:5174,http://localhost:5174,"
+        "http://127.0.0.1:5175,http://localhost:5175,"
+        "http://127.0.0.1:5176,http://localhost:5176,"
+        "http://127.0.0.1:5177,http://localhost:5177"
+    )
+
+    SMS_PROVIDER: str = "mock"
+    SMS_MOCK_CODE: str = "1111"
+    SMS_CODE_EXPIRE_SEC: int = 300
+    SMS_SEND_INTERVAL_SEC: int = 60
 
     @property
     def storage_published_dir(self) -> Path:

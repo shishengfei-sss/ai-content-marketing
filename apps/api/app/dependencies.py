@@ -11,6 +11,8 @@ from app.services.auth_service import decode_access_token, get_user_by_id
 
 security = HTTPBearer(auto_error=False)
 
+PLATFORM_ADMIN_ROLE = "platform_admin"
+
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
@@ -28,4 +30,12 @@ def get_current_user(
     user = get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账号已禁用")
     return user
+
+
+def require_platform_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != PLATFORM_ADMIN_ROLE:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要平台管理员权限")
+    return current_user

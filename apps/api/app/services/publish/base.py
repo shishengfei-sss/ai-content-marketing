@@ -1,3 +1,8 @@
+"""微信公众号发布适配器接口。
+
+MockWeChatPublisher（开发）与 RealWeChatPublisher（部署）需保持同一方法签名。
+"""
+
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID

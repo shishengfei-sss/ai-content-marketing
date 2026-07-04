@@ -23,9 +23,9 @@ def get_stats(
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     week_start = now - timedelta(days=7)
 
-    pending_review = (
+    draft_count = (
         db.query(func.count(Content.id))
-        .filter(Content.tenant_id == tenant_id, Content.status == "pending_review")
+        .filter(Content.tenant_id == tenant_id, Content.status == "draft")
         .scalar()
         or 0
     )
@@ -61,7 +61,8 @@ def get_stats(
     )
 
     return DashboardStatsOut(
-        pending_review=pending_review,
+        draft_count=draft_count,
+        pending_review=0,
         today_scheduled=today_scheduled,
         reads_last_7_days=int(reads_last_7_days),
         generated_this_month=generated_this_month,

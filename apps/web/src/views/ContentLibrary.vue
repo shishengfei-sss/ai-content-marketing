@@ -1,16 +1,15 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { contentApi } from '../api/client'
+import { contentApi, wechatApi } from '../api/client'
 
 const router = useRouter()
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001'
+const route = useRoute()
+const apiBase = import.meta.env.VITE_API_BASE_URL || ''
 
 const statusMap = {
   draft: { label: '草稿', type: 'info' },
-  pending_review: { label: '待审核', type: 'warning' },
-  approved: { label: '已通过', type: 'success' },
   scheduled: { label: '已排期', type: '' },
   publishing: { label: '发布中', type: 'warning' },
   published: { label: '已发布', type: 'success' },
@@ -42,10 +41,47 @@ const filterStatus = ref('')
 const scheduleVisible = ref(false)
 const scheduleRow = ref(null)
 const scheduleAt = ref(null)
+const wechatSettings = ref({ can_auto_publish: false })
+
+const formatMap = {
+  article: '图文',
+  note: '笔记',
+  video_script: '视频脚本',
+}
 
 function formatTime(iso) {
   if (!iso) return ''
   return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+}
+
+function openPreview(url) {
+  if (!url) return
+  window.open(url, '_blank')
+}
+
+function canAutoPublish(row) {
+  return (
+    row.platformCode === 'wechat' &&
+    row.contentFormat === 'article' &&
+    wechatSettings.value.can_auto_publish
+  )
+}
+
+function handleCopyBody(row) {
+  navigator.clipboard.writeText(row.body || row.title).then(
+    () => ElMessage.success('已复制到剪贴板'),
+    () => ElMessage.error('复制失败'),
+  )
+}
+
+function handleDownloadRow(row) {
+  const blob = new Blob([row.body || ''], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${row.title || 'content'}.txt`
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 async function loadContents() {
@@ -61,6 +97,8 @@ async function loadContents() {
       title: item.topic,
       platform: platformMap[item.platform] || item.platform,
       platformCode: item.platform,
+      contentFormat: item.content_format || 'article',
+      body: item.body,
       scene: sceneMap[item.scene] || item.scene,
       status: item.status,
       author: item.author_name || '—',
@@ -72,16 +110,6 @@ async function loadContents() {
     ElMessage.error(e.message || '加载失败')
   } finally {
     loading.value = false
-  }
-}
-
-async function handleSubmitReview(row) {
-  try {
-    await contentApi.submitReview(row.id)
-    ElMessage.success('已提交审核')
-    loadContents()
-  } catch (e) {
-    ElMessage.error(e.message || '提交失败')
   }
 }
 
@@ -134,8 +162,14 @@ async function handleRetry(row) {
 
 async function handleExport(row, type) {
   try {
-    const api = type === 'xhs' ? contentApi.exportXhs : contentApi.exportDouyin
-    const { data } = await api(row.id)
+    let data
+    if (type === 'xhs') {
+      ;({ data } = await contentApi.exportXhs(row.id))
+    } else if (type === 'script') {
+      ;({ data } = await contentApi.exportScript(row.id))
+    } else {
+      ;({ data } = await contentApi.exportDouyin(row.id))
+    }
     ElMessage.success('导出成功')
     window.open(`${apiBase}${data.download_url}`, '_blank')
     loadContents()
@@ -146,7 +180,18 @@ async function handleExport(row, type) {
 
 watch([page, filterPlatform, filterStatus], () => loadContents())
 
-onMounted(loadContents)
+onMounted(async () => {
+  try {
+    const { data } = await wechatApi.get()
+    wechatSettings.value = data
+  } catch {
+    /* ignore */
+  }
+  if (route.query.status) {
+    filterStatus.value = String(route.query.status)
+  }
+  loadContents()
+})
 </script>
 
 <template>
@@ -167,13 +212,13 @@ onMounted(loadContents)
           <el-option label="小红书" value="xhs" />
           <el-option label="抖音" value="douyin" />
         </el-select>
-        <el-select v-model="filterStatus" placeholder="状态" style="width: 120px" clearable>
+        <el-select v-model="filterStatus" placeholder="状态" style="width: 120px">
+          <el-option label="全部" value="" />
           <el-option label="草稿" value="draft" />
-          <el-option label="待审核" value="pending_review" />
-          <el-option label="已通过" value="approved" />
           <el-option label="已排期" value="scheduled" />
           <el-option label="已发布" value="published" />
           <el-option label="发布失败" value="failed" />
+          <el-option label="已导出" value="exported" />
         </el-select>
         <el-button type="primary" icon="Plus" @click="router.push('/create')">新建内容</el-button>
       </div>
@@ -187,6 +232,11 @@ onMounted(loadContents)
           </template>
         </el-table-column>
         <el-table-column prop="scene" label="场景" width="120" />
+        <el-table-column label="形态" width="90">
+          <template #default="{ row }">
+            <el-tag size="small" type="info">{{ formatMap[row.contentFormat] || row.contentFormat }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="statusMap[row.status]?.type || 'info'" size="small">
@@ -196,18 +246,11 @@ onMounted(loadContents)
         </el-table-column>
         <el-table-column prop="author" label="创建人" width="100" />
         <el-table-column prop="updated" label="更新时间" width="160" />
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
-            <el-button
-              v-if="row.status === 'draft'"
-              type="primary"
-              link
-              size="small"
-              @click="handleSubmitReview(row)"
+            <template
+              v-if="canAutoPublish(row) && (row.status === 'draft' || row.status === 'failed')"
             >
-              提交审核
-            </el-button>
-            <template v-if="row.platformCode === 'wechat' && row.status === 'approved'">
               <el-button type="primary" link size="small" @click="handlePublish(row)">
                 立即发布
               </el-button>
@@ -215,17 +258,28 @@ onMounted(loadContents)
                 排期
               </el-button>
             </template>
+            <template v-if="canAutoPublish(row) && row.status === 'scheduled'">
+              <el-button type="primary" link size="small" @click="openSchedule(row)">
+                改排期
+              </el-button>
+            </template>
+            <el-button type="primary" link size="small" @click="handleCopyBody(row)">
+              复制
+            </el-button>
+            <el-button type="primary" link size="small" @click="handleDownloadRow(row)">
+              下载
+            </el-button>
             <el-button
               v-if="row.previewUrl"
               type="primary"
               link
               size="small"
-              @click="window.open(row.previewUrl, '_blank')"
+              @click="openPreview(row.previewUrl)"
             >
               预览
             </el-button>
             <el-button
-              v-if="row.status === 'failed'"
+              v-if="row.status === 'failed' && canAutoPublish(row)"
               type="warning"
               link
               size="small"
@@ -234,7 +288,7 @@ onMounted(loadContents)
               重试
             </el-button>
             <el-button
-              v-if="row.platformCode === 'xhs'"
+              v-if="row.platformCode === 'xhs' && row.contentFormat === 'note' && row.status !== 'exported'"
               type="primary"
               link
               size="small"
@@ -243,11 +297,11 @@ onMounted(loadContents)
               导出 ZIP
             </el-button>
             <el-button
-              v-if="row.platformCode === 'douyin'"
+              v-if="row.contentFormat === 'video_script' && row.status !== 'exported'"
               type="primary"
               link
               size="small"
-              @click="handleExport(row, 'douyin')"
+              @click="handleExport(row, 'script')"
             >
               导出脚本
             </el-button>

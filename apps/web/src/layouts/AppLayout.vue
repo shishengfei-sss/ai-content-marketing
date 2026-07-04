@@ -33,7 +33,9 @@ function handleLogout() {
   router.push('/login')
 }
 
-const displayName = computed(() => auth.user?.display_name || '用户')
+const displayName = computed(
+  () => auth.user?.phone || auth.user?.display_name || auth.user?.email || '用户',
+)
 const avatarChar = computed(() => displayName.value.charAt(0))
 </script>
 
@@ -69,7 +71,9 @@ const avatarChar = computed(() => displayName.value.charAt(0))
           </div>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item>个人设置</el-dropdown-item>
+              <el-dropdown-item v-if="auth.user?.role === 'platform_admin'" @click="router.push('/admin')">
+                管理后台
+              </el-dropdown-item>
               <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>

@@ -6,10 +6,10 @@
     </view>
 
     <view class="cards">
-      <view class="card card--primary" @click="goTodo">
-        <text class="card__label">待审核</text>
-        <text class="card__value">{{ stats.pending }}</text>
-        <text class="card__hint">点击查看待办</text>
+      <view class="card card--primary" @click="goDrafts">
+        <text class="card__label">我的内容</text>
+        <text class="card__value">{{ stats.drafts }}</text>
+        <text class="card__hint">点击查看内容箱</text>
       </view>
       <view class="card">
         <text class="card__label">今日排期</text>
@@ -51,7 +51,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { contentApi, dashboardApi } from '@/utils/api'
 import { getToken } from '@/utils/auth'
 
-const stats = ref({ pending: 0, scheduled: 0 })
+const stats = ref({ drafts: 0, scheduled: 0 })
 const schedule = ref([])
 
 const platformMap = { wechat: '公众号', xhs: '小红书', douyin: '抖音' }
@@ -66,7 +66,10 @@ async function loadData() {
   if (!getToken()) return
   try {
     const [dash, cal] = await Promise.all([dashboardApi.stats(), contentApi.calendar()])
-    stats.value = { pending: dash.pending_review, scheduled: dash.today_scheduled }
+    stats.value = {
+      drafts: dash.draft_count ?? 0,
+      scheduled: dash.today_scheduled,
+    }
     schedule.value = cal.slice(0, 5).map((item) => ({
       id: item.id,
       title: item.title,
@@ -79,7 +82,7 @@ async function loadData() {
   }
 }
 
-function goTodo() {
+function goDrafts() {
   uni.switchTab({ url: '/pages/todo/todo' })
 }
 function goCreate() {

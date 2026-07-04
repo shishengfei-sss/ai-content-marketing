@@ -25,10 +25,12 @@ class User(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    phone: Mapped[str] = mapped_column(String(20), unique=True, nullable=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(100), default="")
-    role: Mapped[str] = mapped_column(String(50), default="admin")
+    role: Mapped[str] = mapped_column(String(50), default="user")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     tenant: Mapped["Tenant"] = relationship(back_populates="users")
@@ -74,6 +76,7 @@ class Content(Base):
     publish_error: Mapped[str] = mapped_column(Text, nullable=True)
     mock_read_count: Mapped[int] = mapped_column(Integer, default=0)
     preview_path: Mapped[str] = mapped_column(String(500), nullable=True)
+    content_format: Mapped[str] = mapped_column(String(30), default="article")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -119,6 +122,7 @@ class PlatformAccount(Base):
     tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False)
     platform: Mapped[str] = mapped_column(String(30), nullable=False)
     account_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    account_type: Mapped[str] = mapped_column(String(20), default="service")
     is_mock: Mapped[bool] = mapped_column(Boolean, default=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -130,6 +134,13 @@ class IndustryPack(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+    system_role: Mapped[str] = mapped_column(Text, default="")
+    compliance_rules: Mapped[str] = mapped_column(Text, default="")
+    disclaimer: Mapped[str] = mapped_column(Text, default="")
+    default_tone: Mapped[str] = mapped_column(String(100), default="专业亲切")
+    welcome_message: Mapped[str] = mapped_column(Text, default="")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 

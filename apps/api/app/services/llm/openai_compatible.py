@@ -1,3 +1,8 @@
+"""OpenAI 兼容协议的大模型实现。
+
+DeepSeek、通义等均走 /v1/chat/completions；DeepSeek 为默认 provider。
+"""
+
 import httpx
 
 from app.services.llm.base import LLMMessage, LLMProvider, LLMResponse

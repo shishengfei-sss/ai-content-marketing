@@ -1,3 +1,9 @@
+"""租户品牌与用户个人提示词。
+
+品牌信息（公司名、语气、CTA、范文）注入生成 Prompt；
+个人提示词仅在请求 apply_user_prompt=true 时生效。
+"""
+
 from uuid import UUID
 
 from sqlalchemy.orm import Session

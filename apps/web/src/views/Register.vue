@@ -1,27 +1,47 @@
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { assistantsApi } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
-const companyName = ref('')
-const email = ref('')
+const phone = ref('')
 const password = ref('')
 const industryCode = ref('finance')
+const assistants = ref([])
 const loading = ref(false)
 
+const phonePattern = /^1\d{10}$/
+
+onMounted(async () => {
+  try {
+    const { data } = await assistantsApi.list()
+    assistants.value = data
+    if (data.length) industryCode.value = data[0].code
+  } catch {
+    /* public list needs auth - fallback finance on register page before login */
+  }
+})
+
 async function handleRegister() {
-  if (!companyName.value || !email.value || !password.value) {
-    ElMessage.warning('请填写完整信息')
+  if (!phone.value || !password.value) {
+    ElMessage.warning('请填写手机号和密码')
+    return
+  }
+  if (!phonePattern.test(phone.value)) {
+    ElMessage.warning('请输入正确的 11 位手机号')
+    return
+  }
+  if (password.value.length < 8) {
+    ElMessage.warning('密码至少 8 位')
     return
   }
   loading.value = true
   try {
     await auth.register({
-      company_name: companyName.value,
-      email: email.value,
+      phone: phone.value,
       password: password.value,
       industry_code: industryCode.value,
     })
@@ -40,20 +60,17 @@ async function handleRegister() {
     <div class="auth-card">
       <div class="auth-card__brand">
         <span class="auth-card__logo">AI</span>
-        <h1>注册租户</h1>
-        <p>创建您的 AI 营销工作台</p>
+        <h1>注册账号</h1>
+        <p>手机号注册，一人一号专属工作台</p>
       </div>
       <el-form label-position="top">
-        <el-form-item label="公司名称">
-          <el-input v-model="companyName" placeholder="某某财务咨询有限公司" size="large" />
-        </el-form-item>
-        <el-form-item label="行业">
-          <el-select v-model="industryCode" size="large" style="width: 100%">
-            <el-option label="代理记账 / 财税" value="finance" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="管理员邮箱">
-          <el-input v-model="email" placeholder="admin@example.com" size="large" />
+        <el-form-item label="手机号">
+          <el-input
+            v-model="phone"
+            placeholder="请输入 11 位手机号"
+            size="large"
+            maxlength="11"
+          />
         </el-form-item>
         <el-form-item label="密码">
           <el-input
@@ -63,6 +80,16 @@ async function handleRegister() {
             size="large"
             show-password
           />
+        </el-form-item>
+        <el-form-item v-if="assistants.length" label="默认 AI 助手">
+          <el-select v-model="industryCode" size="large" style="width: 100%">
+            <el-option
+              v-for="a in assistants"
+              :key="a.code"
+              :label="a.name"
+              :value="a.code"
+            />
+          </el-select>
         </el-form-item>
         <el-button
           type="primary"
