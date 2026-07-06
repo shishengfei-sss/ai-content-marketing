@@ -4,7 +4,7 @@ import { onMounted, ref } from 'vue'
 
 import { ElMessage } from 'element-plus'
 
-import { wechatApi } from '../api/client'
+import { shouldSilenceLoadError, wechatApi } from '../api/client'
 
 
 
@@ -60,7 +60,9 @@ onMounted(async () => {
 
   } catch (e) {
 
-    ElMessage.error(e.message || '加载失败')
+    if (!shouldSilenceLoadError(e)) {
+      ElMessage.error(e.message || '加载失败')
+    }
 
   } finally {
 

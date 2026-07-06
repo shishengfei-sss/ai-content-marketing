@@ -1,19 +1,25 @@
 """LLM 业务统一入口。
 
-配置解析优先级：租户 llm_configs（有 Key）→ 环境变量（DEEPSEEK_* / LLM_*）。
-业务层应经此服务调用模型，不直接访问各 Provider。
+配置来源：
+- llm_source=platform：平台 Key + 免费额度（正文生成成功扣 1 次）
+- llm_source=tenant：租户自有 Key，不扣平台额度
 """
 
 from dataclasses import dataclass
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.models import LLMConfig
 from app.services.crypto import decrypt_api_key
 from app.services.llm.base import LLMMessage, LLMResponse
 from app.services.llm.factory import get_provider
+from app.services.platform_llm_service import (
+    ensure_platform_quota_available,
+    get_platform_config,
+    resolve_platform_api_key,
+)
 
 
 @dataclass
@@ -23,16 +29,28 @@ class ResolvedLLMConfig:
     api_key: str
     model: str
     timeout_sec: int
-    source: str  # tenant | env
+    source: str  # platform | tenant
 
 
 class LLMService:
-    def resolve_config(self, db: Session, tenant_id: UUID) -> ResolvedLLMConfig:
-        row = db.query(LLMConfig).filter(
-            LLMConfig.tenant_id == tenant_id, LLMConfig.is_active.is_(True)
-        ).first()
-
-        if row and row.api_key_encrypted:
+    def resolve_config(
+        self,
+        db: Session,
+        tenant_id: UUID,
+        llm_source: str = "platform",
+    ) -> ResolvedLLMConfig:
+        source = (llm_source or "platform").strip().lower()
+        if source == "tenant":
+            row = (
+                db.query(LLMConfig)
+                .filter(
+                    LLMConfig.tenant_id == tenant_id,
+                    LLMConfig.is_active.is_(True),
+                )
+                .first()
+            )
+            if not row or not row.api_key_encrypted:
+                raise ValueError("LLM_TENANT_KEY_NOT_CONFIGURED")
             return ResolvedLLMConfig(
                 provider=row.provider,
                 base_url=row.base_url,
@@ -42,36 +60,37 @@ class LLMService:
                 source="tenant",
             )
 
-        provider = settings.LLM_PROVIDER
-        if provider == "deepseek":
+        if source == "platform":
+            platform = get_platform_config(db)
+            if not platform or not platform.is_active:
+                raise ValueError("LLM_PLATFORM_NOT_CONFIGURED")
+            api_key = resolve_platform_api_key(platform)
+            if not api_key:
+                raise ValueError("LLM_PLATFORM_NOT_CONFIGURED")
             return ResolvedLLMConfig(
-                provider="deepseek",
-                base_url=settings.DEEPSEEK_BASE_URL,
-                api_key=settings.DEEPSEEK_API_KEY,
-                model=settings.DEEPSEEK_MODEL,
-                timeout_sec=settings.LLM_TIMEOUT_SEC,
-                source="env",
+                provider=platform.provider,
+                base_url=platform.base_url,
+                api_key=api_key,
+                model=platform.model,
+                timeout_sec=platform.timeout_sec,
+                source="platform",
             )
 
-        return ResolvedLLMConfig(
-            provider="openai_compatible",
-            base_url=settings.LLM_BASE_URL,
-            api_key=settings.LLM_API_KEY,
-            model=settings.LLM_MODEL,
-            timeout_sec=settings.LLM_TIMEOUT_SEC,
-            source="env",
-        )
+        raise ValueError("INVALID_LLM_SOURCE")
 
     async def chat(
         self,
         db: Session,
         tenant_id: UUID,
         messages: list[LLMMessage],
+        llm_source: str = "platform",
+        *,
+        check_platform_quota: bool = False,
     ) -> LLMResponse:
-        cfg = self.resolve_config(db, tenant_id)
-        if not cfg.api_key:
-            raise ValueError("LLM_API_KEY_NOT_CONFIGURED")
+        if check_platform_quota and (llm_source or "platform").strip().lower() == "platform":
+            ensure_platform_quota_available(db, tenant_id)
 
+        cfg = self.resolve_config(db, tenant_id, llm_source)
         provider = get_provider(cfg.provider)
         result = await provider.chat(
             messages,
@@ -81,6 +100,29 @@ class LLMService:
             timeout_sec=cfg.timeout_sec,
         )
         return LLMResponse(content=result.content, model=cfg.model, provider=cfg.provider)
+
+    async def stream(
+        self,
+        db: Session,
+        tenant_id: UUID,
+        messages: list[LLMMessage],
+        llm_source: str = "platform",
+        *,
+        check_platform_quota: bool = False,
+    ):
+        if check_platform_quota and (llm_source or "platform").strip().lower() == "platform":
+            ensure_platform_quota_available(db, tenant_id)
+
+        cfg = self.resolve_config(db, tenant_id, llm_source)
+        provider = get_provider(cfg.provider)
+        async for chunk in provider.stream(
+            messages,
+            model=cfg.model,
+            api_key=cfg.api_key,
+            base_url=cfg.base_url,
+            timeout_sec=cfg.timeout_sec,
+        ):
+            yield chunk
 
 
 llm_service = LLMService()

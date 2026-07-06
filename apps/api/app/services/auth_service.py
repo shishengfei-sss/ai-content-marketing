@@ -1,6 +1,6 @@
 """认证与用户注册（一人一号）。
 
-注册时创建 tenant + user，租户名默认用手机号；登录支持手机号 + 密码。
+注册时创建 tenant + user，公司名称全平台唯一；登录支持手机号 + 密码。
 """
 
 from datetime import datetime, timedelta, timezone
@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.config import settings
 from app.database import uuid_eq
 from app.models import Tenant, User
+from app.services.membership_service import create_tenant_with_admin, list_active_memberships
+from app.services.tenant_service import assert_tenant_name_available
 
 
 def hash_password(password: str) -> str:
@@ -43,16 +45,15 @@ def register_user(
     password: str,
     industry_code: str = "finance",
     display_name: str = "",
+    tenant_name: str,
 ) -> User:
     if db.query(User).filter(User.phone == phone).first():
         raise ValueError("PHONE_EXISTS")
 
-    tenant = Tenant(name=phone, industry_code=industry_code)
-    db.add(tenant)
-    db.flush()
+    company_name = assert_tenant_name_available(db, tenant_name)
 
     user = User(
-        tenant_id=tenant.id,
+        tenant_id=None,
         phone=phone,
         email=None,
         hashed_password=hash_password(password),
@@ -61,6 +62,14 @@ def register_user(
         is_active=True,
     )
     db.add(user)
+    db.flush()
+
+    create_tenant_with_admin(
+        db,
+        name=company_name,
+        industry_code=industry_code,
+        user=user,
+    )
     db.commit()
     db.refresh(user)
     return user
@@ -103,20 +112,8 @@ def reset_user_password(db: Session, user_id: UUID, password: str) -> User:
 
 
 def delete_user_account(db: Session, user_id: UUID, *, actor_id: UUID) -> None:
-    """删除用户及其租户下的全部数据（一人一号）。"""
-    from app.models import (
-        Content,
-        ContentReview,
-        ExportRecord,
-        KnowledgeChunk,
-        KnowledgeDocument,
-        LLMConfig,
-        PlatformAccount,
-        PublishLog,
-        Tenant,
-        TenantBrandProfile,
-        UserPromptProfile,
-    )
+    """删除用户及其 Membership；保留 Tenant 与企业数据（FR-ADMIN-USER-06）。"""
+    from app.models import Content, ContentReview, TenantMembership, UserPromptProfile
 
     user = db.query(User).filter(uuid_eq(User.id, user_id)).first()
     if not user:
@@ -124,54 +121,41 @@ def delete_user_account(db: Session, user_id: UUID, *, actor_id: UUID) -> None:
     if user.id == actor_id:
         raise ValueError("CANNOT_DELETE_SELF")
 
-    tenant_id = user.tenant_id
-    content_ids = [
+    tenant_ids = {
         row[0]
-        for row in db.query(Content.id).filter(Content.tenant_id == tenant_id).all()
-    ]
+        for row in db.query(TenantMembership.tenant_id)
+        .filter(TenantMembership.user_id == user.id)
+        .all()
+    }
 
-    if content_ids:
-        db.query(ContentReview).filter(ContentReview.content_id.in_(content_ids)).delete(
-            synchronize_session=False
+    for tenant_id in tenant_ids:
+        successor = (
+            db.query(TenantMembership)
+            .filter(
+                TenantMembership.tenant_id == tenant_id,
+                TenantMembership.is_active.is_(True),
+                TenantMembership.user_id != user.id,
+            )
+            .order_by(TenantMembership.joined_at.asc())
+            .first()
         )
-        db.query(ExportRecord).filter(ExportRecord.content_id.in_(content_ids)).delete(
-            synchronize_session=False
-        )
-        db.query(PublishLog).filter(PublishLog.content_id.in_(content_ids)).delete(
-            synchronize_session=False
-        )
+        if not successor:
+            continue
+        db.query(Content).filter(
+            Content.tenant_id == tenant_id,
+            Content.author_id == user.id,
+        ).update({Content.author_id: successor.user_id}, synchronize_session=False)
 
-    db.query(Content).filter(Content.tenant_id == tenant_id).delete(synchronize_session=False)
+    db.query(ContentReview).filter(ContentReview.reviewer_id == user.id).delete(
+        synchronize_session=False
+    )
     db.query(UserPromptProfile).filter(UserPromptProfile.user_id == user.id).delete(
         synchronize_session=False
     )
-
-    doc_ids = [
-        row[0]
-        for row in db.query(KnowledgeDocument.id)
-        .filter(KnowledgeDocument.tenant_id == tenant_id)
-        .all()
-    ]
-    if doc_ids:
-        db.query(KnowledgeChunk).filter(KnowledgeChunk.document_id.in_(doc_ids)).delete(
-            synchronize_session=False
-        )
-    db.query(KnowledgeDocument).filter(KnowledgeDocument.tenant_id == tenant_id).delete(
+    db.query(TenantMembership).filter(TenantMembership.user_id == user.id).delete(
         synchronize_session=False
     )
-
-    db.query(LLMConfig).filter(LLMConfig.tenant_id == tenant_id).delete(synchronize_session=False)
-    db.query(TenantBrandProfile).filter(TenantBrandProfile.tenant_id == tenant_id).delete(
-        synchronize_session=False
-    )
-    db.query(PlatformAccount).filter(PlatformAccount.tenant_id == tenant_id).delete(
-        synchronize_session=False
-    )
-    db.query(PublishLog).filter(PublishLog.tenant_id == tenant_id).delete(synchronize_session=False)
-    db.query(ExportRecord).filter(ExportRecord.tenant_id == tenant_id).delete(
-        synchronize_session=False
-    )
-
+    if user.tenant_id:
+        user.tenant_id = None
     db.delete(user)
-    db.query(Tenant).filter(Tenant.id == tenant_id).delete(synchronize_session=False)
     db.commit()

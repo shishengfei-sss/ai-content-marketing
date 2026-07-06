@@ -4,12 +4,14 @@
 """
 
 from app.services.llm.base import LLMProvider
+from app.services.llm.fake import FakeLLMProvider
 from app.services.llm.openai_compatible import DashScopeProvider, DeepSeekProvider, OpenAICompatibleProvider
 
 PROVIDERS: dict[str, LLMProvider] = {
     "deepseek": DeepSeekProvider(),
     "openai_compatible": OpenAICompatibleProvider(),
     "dashscope": DashScopeProvider(),
+    "fake": FakeLLMProvider(),
 }
 
 

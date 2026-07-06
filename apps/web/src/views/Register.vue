@@ -9,6 +9,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const phone = ref('')
 const password = ref('')
+const tenantName = ref('')
 const industryCode = ref('finance')
 const assistants = ref([])
 const loading = ref(false)
@@ -26,8 +27,12 @@ onMounted(async () => {
 })
 
 async function handleRegister() {
-  if (!phone.value || !password.value) {
-    ElMessage.warning('请填写手机号和密码')
+  if (!phone.value || !password.value || !tenantName.value.trim()) {
+    ElMessage.warning('请填写手机号、密码和公司名称')
+    return
+  }
+  if (tenantName.value.trim().length < 2) {
+    ElMessage.warning('公司名称至少 2 个字符')
     return
   }
   if (!phonePattern.test(phone.value)) {
@@ -43,6 +48,7 @@ async function handleRegister() {
     await auth.register({
       phone: phone.value,
       password: password.value,
+      tenant_name: tenantName.value.trim(),
       industry_code: industryCode.value,
     })
     ElMessage.success('注册成功')
@@ -70,6 +76,14 @@ async function handleRegister() {
             placeholder="请输入 11 位手机号"
             size="large"
             maxlength="11"
+          />
+        </el-form-item>
+        <el-form-item label="公司名称">
+          <el-input
+            v-model="tenantName"
+            placeholder="请输入公司全称，全平台唯一"
+            size="large"
+            maxlength="200"
           />
         </el-form-item>
         <el-form-item label="密码">

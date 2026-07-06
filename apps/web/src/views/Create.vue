@@ -1,8 +1,8 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { ArrowDown, Promotion, RefreshRight } from '@element-plus/icons-vue'
+import { ArrowDown, Clock, Promotion, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { contentApi, llmApi, templatesApi, wechatApi, assistantsApi } from '../api/client'
+import { contentApi, agentApi, llmApi, templatesApi, wechatApi, assistantsApi } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
@@ -110,6 +110,14 @@ function syncQuickStarts() {
 const publishingId = ref(null)
 const assistants = ref([])
 const industryCode = ref('finance')
+const llmSource = ref('platform')
+const llmQuota = ref({
+  remaining: 100,
+  quota_limit: 100,
+  used_count: 0,
+  has_tenant_key: false,
+  platform_available: true,
+})
 
 const selectedAssistant = computed(
   () => assistants.value.find((a) => a.code === industryCode.value) || null,
@@ -132,6 +140,140 @@ const messages = ref([
 ])
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+const agentFallback = import.meta.env.VITE_AGENT_FALLBACK === '1'
+const AGENT_SESSION_KEY = 'agent_session_id'
+const agentSessionId = ref(localStorage.getItem(AGENT_SESSION_KEY) || '')
+const sessionDrawerVisible = ref(false)
+const sessionHistory = ref([])
+
+function formatSessionTime(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+function mapApiMessagesToUi(apiMessages) {
+  return (apiMessages || [])
+    .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .map((m) => ({
+      role: m.role,
+      type: 'text',
+      content: m.content || '',
+    }))
+}
+
+async function loadSessionHistory() {
+  const { data } = await agentApi.listSessions({ limit: 20 })
+  sessionHistory.value = data || []
+}
+
+async function openSessionHistory() {
+  sessionDrawerVisible.value = true
+  try {
+    await loadSessionHistory()
+  } catch {
+    ElMessage.error('加载历史会话失败')
+  }
+}
+
+async function switchToSession(session) {
+  if (!session?.id) return
+  agentSessionId.value = session.id
+  localStorage.setItem(AGENT_SESSION_KEY, session.id)
+  sessionDrawerVisible.value = false
+  try {
+    const { data } = await agentApi.getMessages(session.id)
+    const mapped = mapApiMessagesToUi(data)
+    messages.value =
+      mapped.length > 0
+        ? mapped
+        : [
+            {
+              role: 'assistant',
+              type: 'text',
+              content: `已打开会话「${session.title || '未命名'}」，继续输入即可。`,
+            },
+          ]
+    await scrollToBottom()
+  } catch {
+    ElMessage.error('加载会话消息失败')
+  }
+}
+
+async function createAgentSession() {
+  const { data } = await agentApi.createSession({
+    industry_code: industryCode.value || 'finance',
+    title: '营销创作',
+  })
+  agentSessionId.value = data.id
+  localStorage.setItem(AGENT_SESSION_KEY, data.id)
+  return data.id
+}
+
+async function ensureAgentSession() {
+  if (agentSessionId.value) return agentSessionId.value
+  return createAgentSession()
+}
+
+function pushAgentChatResult(data, requestTopic) {
+  if (data.action === 'clarify') {
+    messages.value.push({
+      role: 'assistant',
+      type: 'text',
+      content: data.clarify_question || data.assistant_message,
+    })
+    return
+  }
+  if (data.action === 'proposals' && data.proposals?.length) {
+    messages.value.push({
+      role: 'assistant',
+      type: 'proposals',
+      proposals: data.proposals,
+      requestTopic: requestTopic || '',
+    })
+    return
+  }
+  if (data.action === 'generate' && data.content) {
+    const c = data.content
+    const usePlatform = c.platform || platform.value || 'wechat'
+    messages.value.push({
+      role: 'assistant',
+      type: 'result',
+      content: c.body,
+      contentId: c.id,
+      status: c.status,
+      meta: {
+        platformCode: usePlatform,
+        platform: platformMap[usePlatform] || usePlatform,
+        contentFormat: c.content_format,
+        formatLabel: formatMap[c.content_format] || c.content_format,
+        scene: scenes.value.find((s) => s.value === c.scene)?.label || '自定义',
+        model: `${c.llm_provider} · ${c.llm_model}`,
+      },
+    })
+    modelTag.value = `${c.llm_provider} · ${c.llm_model}`
+    return
+  }
+  messages.value.push({
+    role: 'assistant',
+    type: 'text',
+    content: data.assistant_message || '请补充更多信息后继续创作。',
+  })
+}
+
+async function agentChat(message, { selectedProposalIndex = null } = {}) {
+  const sessionId = await ensureAgentSession()
+  const body = {
+    message,
+    llm_source: llmSource.value,
+  }
+  if (selectedProposalIndex !== null) {
+    body.selected_proposal_index = selectedProposalIndex
+  }
+  const { data } = await agentApi.chat(sessionId, body)
+  return data
+}
 
 async function loadTemplatesForAssistant(code) {
   try {
@@ -174,6 +316,38 @@ async function loadAssistants() {
   }
 }
 
+async function loadLlmQuota() {
+  try {
+    const { data } = await llmApi.getQuota()
+    llmQuota.value = data
+    if (llmSource.value === 'platform') {
+      if (data.remaining <= 0 && data.has_tenant_key) {
+        llmSource.value = 'tenant'
+      } else if (!data.platform_available && data.has_tenant_key) {
+        llmSource.value = 'tenant'
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function pickLlmSource(source) {
+  if (source === 'platform' && (llmQuota.value.remaining <= 0 || !llmQuota.value.platform_available)) {
+    ElMessage.warning(
+      llmQuota.value.remaining <= 0
+        ? '平台免费额度已用完，请使用我的 API Key'
+        : '平台 AI 未配置，请使用我的 API Key 或联系管理员',
+    )
+    return
+  }
+  if (source === 'tenant' && !llmQuota.value.has_tenant_key) {
+    ElMessage.warning('请先在设置中配置我的 API Key')
+    return
+  }
+  llmSource.value = source
+}
+
 function pickAssistant(code) {
   industryCode.value = code
   scene.value = ''
@@ -196,6 +370,8 @@ onMounted(async () => {
     /* ignore */
   }
   await loadAssistants()
+  await loadLlmQuota()
+  await ensureAgentSession()
 })
 
 async function scrollToBottom() {
@@ -248,6 +424,7 @@ function buildGeneratePayload(topic, selectedProposal = null) {
     scene: useScene,
     topic,
     content_format: useFormat,
+    llm_source: llmSource.value,
     selected_proposal: selectedProposal,
   }
 }
@@ -255,8 +432,18 @@ function buildGeneratePayload(topic, selectedProposal = null) {
 async function fetchProposals(topic) {
   const payload = buildGeneratePayload(topic)
   pendingRequest.value = { topic, ...payload }
-  const { data } = await contentApi.proposals(payload)
-  return data.proposals
+  try {
+    const data = await agentChat(buildUserPrompt(topic))
+    if (data.action === 'proposals' && data.proposals?.length) {
+      return data.proposals
+    }
+    pushAgentChatResult(data, topic)
+    return null
+  } catch (e) {
+    if (!agentFallback) throw e
+    const { data } = await contentApi.proposals(payload)
+    return data.proposals
+  }
 }
 
 async function handleSend() {
@@ -270,57 +457,90 @@ async function handleSend() {
   scrollToBottom()
 
   try {
-    const proposals = await fetchProposals(text)
-    messages.value.push({
-      role: 'assistant',
-      type: 'proposals',
-      proposals,
-      requestTopic: text,
-    })
+    const data = await agentChat(buildUserPrompt(text))
+    pushAgentChatResult(data, text)
   } catch (e) {
-    ElMessage.error(e.message || '方案生成失败')
-    messages.value.push({
-      role: 'assistant',
-      type: 'text',
-      content: `方案生成失败：${e.message || '请检查 AI 模型配置'}`,
-    })
+    if (agentFallback) {
+      try {
+        const proposals = await fetchProposals(text)
+        if (proposals?.length) {
+          messages.value.push({
+            role: 'assistant',
+            type: 'proposals',
+            proposals,
+            requestTopic: text,
+          })
+        }
+      } catch (err) {
+        ElMessage.error(err.message || '方案生成失败')
+        messages.value.push({
+          role: 'assistant',
+          type: 'text',
+          content: `方案生成失败：${err.message || '请检查 AI 模型配置'}`,
+        })
+      }
+    } else {
+      ElMessage.error(e.message || '方案生成失败')
+      messages.value.push({
+        role: 'assistant',
+        type: 'text',
+        content: `方案生成失败：${e.message || '请检查 AI 模型配置'}`,
+      })
+    }
   } finally {
     proposing.value = false
     await scrollToBottom()
   }
 }
 
-async function handleSelectProposal(proposal, requestTopic) {
+async function handleSelectProposal(proposal, requestTopic, msg) {
   if (generating.value) return
   generating.value = true
   scrollToBottom()
+  const proposalIndex = msg?.proposals?.findIndex((p) => p.title === proposal.title) ?? 0
   try {
-    const payload = buildGeneratePayload(requestTopic, proposal)
-    const { data } = await contentApi.generate(payload)
-    const usePlatform = payload.platform
-    messages.value.push({
-      role: 'assistant',
-      type: 'result',
-      content: data.body,
-      contentId: data.id,
-      status: data.status,
-      meta: {
-        platformCode: usePlatform,
-        platform: platformMap[usePlatform] || usePlatform,
-        contentFormat: data.content_format,
-        formatLabel: formatMap[data.content_format] || data.content_format,
-        scene: scenes.value.find((s) => s.value === payload.scene)?.label || '自定义',
-        model: `${data.llm_provider} · ${data.llm_model}`,
-      },
-    })
-    modelTag.value = `${data.llm_provider} · ${data.llm_model}`
+    const data = await agentChat('生成正文', { selectedProposalIndex: proposalIndex >= 0 ? proposalIndex : 0 })
+    pushAgentChatResult(data, requestTopic)
+    if (data.action === 'generate' && llmSource.value === 'platform') await loadLlmQuota()
   } catch (e) {
-    ElMessage.error(e.message || '生成失败')
-    messages.value.push({
-      role: 'assistant',
-      type: 'text',
-      content: `生成失败：${e.message || '请检查 AI 模型配置'}`,
-    })
+    if (agentFallback) {
+      try {
+        const payload = buildGeneratePayload(requestTopic, proposal)
+        const { data } = await contentApi.generate(payload)
+        const usePlatform = payload.platform
+        messages.value.push({
+          role: 'assistant',
+          type: 'result',
+          content: data.body,
+          contentId: data.id,
+          status: data.status,
+          meta: {
+            platformCode: usePlatform,
+            platform: platformMap[usePlatform] || usePlatform,
+            contentFormat: data.content_format,
+            formatLabel: formatMap[data.content_format] || data.content_format,
+            scene: scenes.value.find((s) => s.value === payload.scene)?.label || '自定义',
+            model: `${data.llm_provider} · ${data.llm_model}`,
+          },
+        })
+        modelTag.value = `${data.llm_provider} · ${data.llm_model}`
+        if (llmSource.value === 'platform') await loadLlmQuota()
+      } catch (err) {
+        ElMessage.error(err.message || '生成失败')
+        messages.value.push({
+          role: 'assistant',
+          type: 'text',
+          content: `生成失败：${err.message || '请检查 AI 模型配置'}`,
+        })
+      }
+    } else {
+      ElMessage.error(e.message || '生成失败')
+      messages.value.push({
+        role: 'assistant',
+        type: 'text',
+        content: `生成失败：${e.message || '请检查 AI 模型配置'}`,
+      })
+    }
   } finally {
     generating.value = false
     await scrollToBottom()
@@ -331,10 +551,20 @@ async function handleRefreshProposals(msg) {
   if (proposing.value || !msg.requestTopic) return
   proposing.value = true
   try {
-    msg.proposals = await fetchProposals(msg.requestTopic)
-    ElMessage.success('已刷新方案')
+    const data = await agentChat(buildUserPrompt(msg.requestTopic))
+    if (data.action === 'proposals' && data.proposals?.length) {
+      msg.proposals = data.proposals
+      ElMessage.success('已刷新方案')
+    } else {
+      pushAgentChatResult(data, msg.requestTopic)
+    }
   } catch (e) {
-    ElMessage.error(e.message || '刷新失败')
+    if (agentFallback) {
+      msg.proposals = await fetchProposals(msg.requestTopic)
+      ElMessage.success('已刷新方案')
+    } else {
+      ElMessage.error(e.message || '刷新失败')
+    }
   } finally {
     proposing.value = false
   }
@@ -375,6 +605,8 @@ function handleNewChat() {
   generating.value = false
   proposing.value = false
   pendingRequest.value = null
+  agentSessionId.value = ''
+  localStorage.removeItem(AGENT_SESSION_KEY)
   messages.value = [
     {
       role: 'assistant',
@@ -388,6 +620,7 @@ function handleNewChat() {
       items: quickStarts.value,
     },
   ]
+  createAgentSession().catch(() => {})
 }
 
 async function handlePublish(msg) {
@@ -492,9 +725,31 @@ function handleCopy(text) {
         </el-dropdown>
         <div class="chat-header__right">
           <el-tag type="success" size="small">{{ modelTag }}</el-tag>
+          <el-button circle @click="openSessionHistory" title="历史会话">
+            <el-icon><Clock /></el-icon>
+          </el-button>
           <el-button :icon="RefreshRight" circle @click="handleNewChat" title="新对话" />
         </div>
       </div>
+
+      <el-drawer v-model="sessionDrawerVisible" title="历史会话" size="320px" direction="rtl">
+        <div class="session-drawer">
+          <el-button type="primary" link @click="handleNewChat(); sessionDrawerVisible = false">
+            + 新对话
+          </el-button>
+          <div
+            v-for="s in sessionHistory"
+            :key="s.id"
+            class="session-item"
+            :class="{ 'session-item--active': s.id === agentSessionId }"
+            @click="switchToSession(s)"
+          >
+            <div class="session-item__title">{{ s.title || '未命名会话' }}</div>
+            <div class="session-item__time">{{ formatSessionTime(s.updated_at) }}</div>
+          </div>
+          <el-empty v-if="!sessionHistory.length" description="暂无历史会话" />
+        </div>
+      </el-drawer>
 
       <!-- 消息区 -->
       <div class="chat-body">
@@ -547,7 +802,7 @@ function handleCopy(text) {
                   type="primary"
                   size="small"
                   :loading="generating"
-                  @click="handleSelectProposal(item, msg.requestTopic)"
+                  @click="handleSelectProposal(item, msg.requestTopic, msg)"
                 >
                   选这个，生成正文
                 </el-button>
@@ -622,6 +877,29 @@ function handleCopy(text) {
       <div class="chat-footer">
         <div class="compose-box">
           <div class="compose-meta">
+            <div class="meta-track">
+              <span class="meta-track__label">AI</span>
+              <div class="meta-pills">
+                <button
+                  type="button"
+                  class="meta-pill"
+                  :class="{ 'meta-pill--active': llmSource === 'platform' }"
+                  :disabled="llmQuota.remaining <= 0 || !llmQuota.platform_available"
+                  @click="pickLlmSource('platform')"
+                >
+                  平台额度 {{ llmQuota.remaining }}/{{ llmQuota.quota_limit }}
+                </button>
+                <button
+                  type="button"
+                  class="meta-pill"
+                  :class="{ 'meta-pill--active': llmSource === 'tenant' }"
+                  :disabled="!llmQuota.has_tenant_key"
+                  @click="pickLlmSource('tenant')"
+                >
+                  我的 Key
+                </button>
+              </div>
+            </div>
             <div class="meta-track">
               <span class="meta-track__label">平台</span>
               <div class="meta-pills">
@@ -821,8 +1099,43 @@ function handleCopy(text) {
 .chat-header__right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  margin-left: auto;
   flex-shrink: 0;
+}
+
+.session-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.session-item:hover {
+  background: #f5f7fa;
+}
+
+.session-item--active {
+  border-color: #1677ff;
+  background: #ecf5ff;
+}
+
+.session-item__title {
+  font-size: 14px;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+}
+
+.session-item__time {
+  font-size: 12px;
+  color: #909399;
 }
 
 .chat-body {

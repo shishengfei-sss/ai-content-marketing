@@ -5,52 +5,48 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user
-from app.models import Content, User
+from app.dependencies import TenantContext, get_tenant_context
+from app.models import Content
 from app.schemas import AnalyticsStatsOut
+from app.services.scope_service import apply_stats_scope
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 @router.get("/stats", response_model=AnalyticsStatsOut)
 def analytics_stats(
-    current_user: User = Depends(get_current_user),
+    ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
-    tenant_id = current_user.tenant_id
+    tenant_id = ctx.tenant_id
+    perms = {p.permission_code for p in ctx.membership.role.permissions}
+    view_all = "analytics.view_all" in perms
+
+    base = db.query(Content).filter(Content.tenant_id == tenant_id)
+    base = apply_stats_scope(base, ctx, "analytics.view_all")
 
     total_reads = (
         db.query(func.coalesce(func.sum(Content.mock_read_count), 0))
         .filter(Content.tenant_id == tenant_id, Content.status == "published")
-        .scalar()
-        or 0
     )
+    if not view_all:
+        total_reads = total_reads.filter(Content.author_id == ctx.user.id)
+    total_reads = int(total_reads.scalar() or 0)
 
-    total_generated = (
-        db.query(func.count(Content.id)).filter(Content.tenant_id == tenant_id).scalar() or 0
-    )
+    total_generated = base.count()
 
-    published = (
-        db.query(func.count(Content.id))
-        .filter(Content.tenant_id == tenant_id, Content.status == "published")
-        .scalar()
-        or 0
-    )
-    failed = (
-        db.query(func.count(Content.id))
-        .filter(Content.tenant_id == tenant_id, Content.status == "failed")
-        .scalar()
-        or 0
-    )
+    published = base.filter(Content.status == "published").count()
+    failed = base.filter(Content.status == "failed").count()
     attempts = published + failed
     success_rate = round(published / attempts * 100, 1) if attempts else 100.0
 
     platform_rows = (
         db.query(Content.platform, func.count(Content.id))
         .filter(Content.tenant_id == tenant_id)
-        .group_by(Content.platform)
-        .all()
     )
+    if not view_all:
+        platform_rows = platform_rows.filter(Content.author_id == ctx.user.id)
+    platform_rows = platform_rows.group_by(Content.platform).all()
     platform_breakdown = {row[0]: row[1] for row in platform_rows}
 
     now = datetime.now(timezone.utc)
@@ -63,20 +59,14 @@ def analytics_stats(
             next_month = month_start.replace(year=month_start.year + 1, month=1)
         else:
             next_month = month_start.replace(month=month_start.month + 1)
-        count = (
-            db.query(func.count(Content.id))
-            .filter(
-                Content.tenant_id == tenant_id,
-                Content.created_at >= month_start,
-                Content.created_at < next_month,
-            )
-            .scalar()
-            or 0
-        )
+        count = base.filter(
+            Content.created_at >= month_start,
+            Content.created_at < next_month,
+        ).count()
         monthly.append({"month": f"{month_start.month}月", "count": count})
 
     return AnalyticsStatsOut(
-        total_reads=int(total_reads),
+        total_reads=total_reads,
         total_generated=total_generated,
         publish_success_rate=success_rate,
         platform_breakdown=platform_breakdown,

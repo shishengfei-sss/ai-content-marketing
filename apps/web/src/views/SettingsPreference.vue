@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { brandApi } from '../api/client'
+import { brandApi, shouldSilenceLoadError } from '../api/client'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -13,7 +13,9 @@ onMounted(async () => {
     const { data } = await brandApi.getUserPrompt()
     instructions.value = data.global_instructions || ''
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    if (!shouldSilenceLoadError(e)) {
+      ElMessage.error(e.message || '加载失败')
+    }
   } finally {
     loading.value = false
   }

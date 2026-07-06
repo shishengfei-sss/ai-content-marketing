@@ -3,7 +3,7 @@ import { onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { contentApi, dashboardApi } from '../api/client'
+import { contentApi, dashboardApi, isBenignEmptyError } from '../api/client'
 
 const router = useRouter()
 const apiBase = import.meta.env.VITE_API_BASE_URL || ''
@@ -71,7 +71,12 @@ async function loadContentBox() {
       previewUrl: item.preview_url ? `${apiBase}${item.preview_url}` : '',
     }))
   } catch (e) {
-    ElMessage.error(e.message || '加载内容箱失败')
+    if (isBenignEmptyError(e)) {
+      contentTotal.value = 0
+      contentList.value = []
+    } else {
+      ElMessage.error(e.message || '加载内容箱失败')
+    }
   } finally {
     contentLoading.value = false
   }

@@ -2,7 +2,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { contentApi, wechatApi } from '../api/client'
+import { contentApi, isBenignEmptyError, wechatApi } from '../api/client'
 
 const router = useRouter()
 const route = useRoute()
@@ -105,9 +105,14 @@ async function loadContents() {
       updated: formatTime(item.updated_at || item.created_at),
       previewUrl: item.preview_url ? `${apiBase}${item.preview_url}` : '',
     }))
-    total.value = data.total
+    total.value = data.total ?? 0
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    if (isBenignEmptyError(e)) {
+      contents.value = []
+      total.value = 0
+    } else {
+      ElMessage.error(e.message || '加载失败')
+    }
   } finally {
     loading.value = false
   }

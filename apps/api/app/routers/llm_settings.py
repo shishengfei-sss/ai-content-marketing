@@ -1,17 +1,19 @@
 import time
+from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user
-from app.models import LLMConfig, User
-from app.schemas import LLMSettingsOut, LLMSettingsUpdate, LLMTestResponse
+from app.dependencies import require_active_tenant_id
+from app.models import LLMConfig
+from app.schemas import LLMQuotaOut, LLMSettingsOut, LLMSettingsUpdate, LLMTestResponse
 from app.services.crypto import decrypt_api_key, encrypt_api_key, mask_api_key
 from app.services.llm.base import LLMMessage
 from app.services.llm.factory import get_provider
 from app.services.llm_service import llm_service
+from app.services.platform_llm_service import get_quota_status
 
 router = APIRouter(prefix="/settings/llm", tags=["llm-settings"])
 
@@ -28,34 +30,44 @@ def _to_out(cfg, source: str, masked_key: str) -> LLMSettingsOut:
     )
 
 
+@router.get("/quota", response_model=LLMQuotaOut)
+def get_llm_quota(
+    tenant_id: UUID = Depends(require_active_tenant_id),
+    db: Session = Depends(get_db),
+):
+    return LLMQuotaOut(**get_quota_status(db, tenant_id))
+
+
 @router.get("", response_model=LLMSettingsOut)
-def get_llm_settings(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    row = db.query(LLMConfig).filter(LLMConfig.tenant_id == current_user.tenant_id).first()
+def get_llm_settings(
+    tenant_id: UUID = Depends(require_active_tenant_id),
+    db: Session = Depends(get_db),
+):
+    row = db.query(LLMConfig).filter(LLMConfig.tenant_id == tenant_id).first()
     if row:
         key = decrypt_api_key(row.api_key_encrypted) if row.api_key_encrypted else ""
         return _to_out(row, "tenant", mask_api_key(key))
 
-    resolved = llm_service.resolve_config(db, current_user.tenant_id)
     return LLMSettingsOut(
-        provider=resolved.provider,
-        base_url=resolved.base_url,
-        model=resolved.model,
-        timeout_sec=resolved.timeout_sec,
+        provider="deepseek",
+        base_url="https://api.deepseek.com",
+        model="deepseek-chat",
+        timeout_sec=60,
         is_active=True,
-        api_key_masked=mask_api_key(resolved.api_key),
-        source=resolved.source,
+        api_key_masked="",
+        source="none",
     )
 
 
 @router.put("", response_model=LLMSettingsOut)
 def update_llm_settings(
     body: LLMSettingsUpdate,
-    current_user: User = Depends(get_current_user),
+    tenant_id: UUID = Depends(require_active_tenant_id),
     db: Session = Depends(get_db),
 ):
-    row = db.query(LLMConfig).filter(LLMConfig.tenant_id == current_user.tenant_id).first()
+    row = db.query(LLMConfig).filter(LLMConfig.tenant_id == tenant_id).first()
     if not row:
-        row = LLMConfig(tenant_id=current_user.tenant_id)
+        row = LLMConfig(tenant_id=tenant_id)
         db.add(row)
 
     row.provider = body.provider
@@ -75,12 +87,17 @@ def update_llm_settings(
 
 @router.post("/test", response_model=LLMTestResponse)
 async def test_llm_settings(
-    current_user: User = Depends(get_current_user),
+    llm_source: str = Query(default="tenant", pattern="^(platform|tenant)$"),
+    tenant_id: UUID = Depends(require_active_tenant_id),
     db: Session = Depends(get_db),
 ):
-    resolved = llm_service.resolve_config(db, current_user.tenant_id)
-    if not resolved.api_key:
-        raise HTTPException(status_code=400, detail="请先配置 API Key")
+    try:
+        resolved = llm_service.resolve_config(db, tenant_id, llm_source)
+    except ValueError as e:
+        code = str(e)
+        if code == "LLM_TENANT_KEY_NOT_CONFIGURED":
+            raise HTTPException(status_code=400, detail="请先配置我的 API Key") from e
+        raise HTTPException(status_code=400, detail="平台 AI 未配置") from e
 
     provider = get_provider(resolved.provider)
     started = time.perf_counter()

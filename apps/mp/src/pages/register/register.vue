@@ -5,6 +5,7 @@ import { assistantsApi, authApi } from '@/utils/api'
 
 const phone = ref('')
 const password = ref('')
+const tenantName = ref('')
 const industryCode = ref('finance')
 const assistants = ref([])
 const loading = ref(false)
@@ -22,8 +23,12 @@ onMounted(async () => {
 })
 
 async function handleRegister() {
-  if (!phone.value.trim() || !password.value.trim()) {
-    uni.showToast({ title: '请填写手机号和密码', icon: 'none' })
+  if (!phone.value.trim() || !password.value.trim() || !tenantName.value.trim()) {
+    uni.showToast({ title: '请填写手机号、密码和公司名称', icon: 'none' })
+    return
+  }
+  if (tenantName.value.trim().length < 2) {
+    uni.showToast({ title: '公司名称至少 2 个字符', icon: 'none' })
     return
   }
   if (!phonePattern.test(phone.value.trim())) {
@@ -39,6 +44,7 @@ async function handleRegister() {
     const data = await authApi.register({
       phone: phone.value.trim(),
       password: password.value,
+      tenant_name: tenantName.value.trim(),
       industry_code: industryCode.value,
     })
     setToken(data.access_token)
@@ -63,6 +69,10 @@ async function handleRegister() {
       <view class="form-item">
         <text class="label">手机号</text>
         <input v-model="phone" class="input" type="number" maxlength="11" placeholder="11 位手机号" />
+      </view>
+      <view class="form-item">
+        <text class="label">公司名称</text>
+        <input v-model="tenantName" class="input" maxlength="200" placeholder="公司全称，全平台唯一" />
       </view>
       <view class="form-item">
         <text class="label">密码</text>

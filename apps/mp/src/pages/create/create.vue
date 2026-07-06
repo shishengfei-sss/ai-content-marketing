@@ -16,6 +16,7 @@
         </view>
         <text class="assistant-picker__desc">{{ selectedAssistant?.description || '先出方案 · 再生成正文' }}</text>
       </view>
+      <text class="assistant-picker__history" @click.stop="openSessionHistory">历史</text>
     </view>
 
 
@@ -72,7 +73,7 @@
 
                 :loading="generating"
 
-                @click="handleSelectProposal(item, msg.requestTopic)"
+                @click="handleSelectProposal(item, msg.requestTopic, msg)"
 
               >
 
@@ -194,6 +195,25 @@
       <view class="compose-box">
         <view class="compose-meta">
           <view class="meta-track">
+            <text class="meta-track__label">AI</text>
+            <view class="meta-pills">
+              <view
+                class="meta-pill"
+                :class="{ 'meta-pill--active': llmSource === 'platform' }"
+                @click="pickLlmSource('platform')"
+              >
+                平台 {{ llmQuota.remaining }}/{{ llmQuota.quota_limit }}
+              </view>
+              <view
+                class="meta-pill"
+                :class="{ 'meta-pill--active': llmSource === 'tenant', 'meta-pill--disabled': !llmQuota.has_tenant_key }"
+                @click="pickLlmSource('tenant')"
+              >
+                我的 Key
+              </view>
+            </view>
+          </view>
+          <view class="meta-track">
             <text class="meta-track__label">平台</text>
             <view class="meta-pills">
               <view
@@ -256,6 +276,27 @@
       </view>
     </view>
 
+    <view v-if="sessionPanelVisible" class="session-panel">
+      <view class="session-panel__mask" @click="sessionPanelVisible = false" />
+      <view class="session-panel__body">
+        <view class="session-panel__title">历史会话</view>
+        <scroll-view scroll-y class="session-panel__list">
+          <view
+            v-for="s in sessionHistory"
+            :key="s.id"
+            class="session-panel__item"
+            :class="{ 'session-panel__item--active': s.id === agentSessionId }"
+            @click="switchToSession(s)"
+          >
+            <text class="session-panel__name">{{ s.title || '未命名会话' }}</text>
+            <text class="session-panel__time">{{ formatSessionTime(s.updated_at) }}</text>
+          </view>
+          <view v-if="!sessionHistory.length" class="session-panel__empty">暂无历史会话</view>
+        </scroll-view>
+        <button class="btn-outline session-panel__new" size="mini" @click="startNewChat">新对话</button>
+      </view>
+    </view>
+
   </view>
 
 </template>
@@ -270,8 +311,8 @@ import { onShow } from '@dcloudio/uni-app'
 
 
 
-import { BASE_URL, assistantsApi, authApi, contentApi, templatesApi, wechatApi } from '@/utils/api'
-import { getToken } from '@/utils/auth'
+import { BASE_URL, assistantsApi, authApi, agentApi, contentApi, llmApi, templatesApi, wechatApi } from '@/utils/api'
+import { ensureSession } from '@/utils/session'
 
 
 
@@ -297,11 +338,139 @@ const assistants = ref([])
 
 const industryCode = ref('finance')
 
+const llmSource = ref('platform')
+
+const llmQuota = ref({ remaining: 100, quota_limit: 100, has_tenant_key: false })
+
 const scene = ref('')
 
 const scenes = ref([])
 
 const filteredScenes = ref([])
+
+const agentSessionId = ref(uni.getStorageSync('agent_session_id') || '')
+const sessionPanelVisible = ref(false)
+const sessionHistory = ref([])
+
+function formatSessionTime(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const h = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `${m}-${day} ${h}:${min}`
+}
+
+function mapApiMessagesToUi(apiMessages) {
+  return (apiMessages || [])
+    .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .map((m) => ({ role: m.role, type: 'text', content: m.content || '' }))
+}
+
+async function loadSessionHistory() {
+  sessionHistory.value = (await agentApi.listSessions({ limit: 20 })) || []
+}
+
+async function openSessionHistory() {
+  sessionPanelVisible.value = true
+  try {
+    await loadSessionHistory()
+  } catch {
+    uni.showToast({ title: '加载历史失败', icon: 'none' })
+  }
+}
+
+async function switchToSession(session) {
+  if (!session?.id) return
+  agentSessionId.value = session.id
+  uni.setStorageSync('agent_session_id', session.id)
+  sessionPanelVisible.value = false
+  try {
+    const data = await agentApi.getMessages(session.id)
+    const mapped = mapApiMessagesToUi(data)
+    messages.value =
+      mapped.length > 0
+        ? mapped
+        : [{ role: 'assistant', type: 'text', content: `已打开「${session.title || '未命名'}」，继续输入即可。` }]
+  } catch {
+    uni.showToast({ title: '加载消息失败', icon: 'none' })
+  }
+}
+
+function startNewChat() {
+  sessionPanelVisible.value = false
+  agentSessionId.value = ''
+  uni.removeStorageSync('agent_session_id')
+  messages.value = [
+    { role: 'assistant', type: 'text', content: defaultWelcome },
+    { role: 'assistant', type: 'quick', items: quickStarts.value },
+  ]
+  createAgentSession().catch(() => {})
+}
+
+async function createAgentSession() {
+  const data = await agentApi.createSession({
+    industry_code: industryCode.value || 'finance',
+    title: '营销创作',
+  })
+  agentSessionId.value = data.id
+  uni.setStorageSync('agent_session_id', data.id)
+  return data.id
+}
+
+async function ensureAgentSession() {
+  if (agentSessionId.value) return agentSessionId.value
+  return createAgentSession()
+}
+
+function pushAgentChatResult(data, requestTopic) {
+  if (data.action === 'clarify') {
+    messages.value.push({
+      role: 'assistant',
+      type: 'text',
+      content: data.clarify_question || data.assistant_message,
+    })
+    return
+  }
+  if (data.action === 'proposals' && data.proposals?.length) {
+    messages.value.push({
+      role: 'assistant',
+      type: 'proposals',
+      proposals: data.proposals,
+      requestTopic: requestTopic || '',
+    })
+    return
+  }
+  if (data.action === 'generate' && data.content) {
+    const c = data.content
+    messages.value.push({
+      role: 'assistant',
+      type: 'result',
+      content: c.body,
+      contentId: c.id,
+      status: c.status,
+      platformCode: c.platform || platform.value,
+      contentFormat: c.content_format,
+    })
+    return
+  }
+  messages.value.push({
+    role: 'assistant',
+    type: 'text',
+    content: data.assistant_message || '请补充更多信息后继续创作。',
+  })
+}
+
+async function agentChat(message, { selectedProposalIndex = null } = {}) {
+  const sessionId = await ensureAgentSession()
+  const body = { message, llm_source: llmSource.value }
+  if (selectedProposalIndex !== null) {
+    body.selected_proposal_index = selectedProposalIndex
+  }
+  return agentApi.chat(sessionId, body)
+}
 
 const defaultWelcome = '您好！告诉我创作需求，我会先给出 3～5 个方案供选择。'
 
@@ -568,9 +737,6 @@ function syncWelcomeMessage() {
 
 
 async function loadTemplatesForAssistant(code) {
-
-  if (!getToken()) return
-
   try {
 
     const data = await templatesApi.list({ industry_code: code })
@@ -606,9 +772,6 @@ async function loadTemplatesForAssistant(code) {
 
 
 async function loadAssistants() {
-
-  if (!getToken()) return
-
   try {
 
     const data = await assistantsApi.list()
@@ -743,9 +906,60 @@ function buildPayload(topic, selectedProposal = null) {
 
     content_format: contentFormat.value,
 
+    llm_source: llmSource.value,
+
     selected_proposal: selectedProposal,
 
   }
+
+}
+
+
+
+async function loadLlmQuota() {
+  try {
+
+    const data = await llmApi.getQuota()
+
+    llmQuota.value = data
+
+    if (llmSource.value === 'platform') {
+      if (data.remaining <= 0 && data.has_tenant_key) {
+        llmSource.value = 'tenant'
+      } else if (!data.platform_available && data.has_tenant_key) {
+        llmSource.value = 'tenant'
+      }
+    }
+
+  } catch {
+
+    /* ignore */
+
+  }
+
+}
+
+
+
+function pickLlmSource(source) {
+
+  if (source === 'platform' && (llmQuota.value.remaining <= 0 || !llmQuota.value.platform_available)) {
+    uni.showToast({
+      title: llmQuota.value.remaining <= 0 ? '平台额度已用完' : '平台 AI 未配置',
+      icon: 'none',
+    })
+    return
+  }
+
+  if (source === 'tenant' && !llmQuota.value.has_tenant_key) {
+
+    uni.showToast({ title: '请先在设置中配置 API Key', icon: 'none' })
+
+    return
+
+  }
+
+  llmSource.value = source
 
 }
 
@@ -807,19 +1021,9 @@ async function handleSend() {
 
   try {
 
-    const data = await contentApi.proposals(buildPayload(text))
+    const data = await agentChat(text)
 
-    messages.value.push({
-
-      role: 'assistant',
-
-      type: 'proposals',
-
-      proposals: data.proposals,
-
-      requestTopic: text,
-
-    })
+    pushAgentChatResult(data, text)
 
   } catch (e) {
 
@@ -845,7 +1049,7 @@ async function handleSend() {
 
 
 
-async function handleSelectProposal(proposal, requestTopic) {
+async function handleSelectProposal(proposal, requestTopic, msg) {
 
   if (generating.value) return
 
@@ -853,27 +1057,19 @@ async function handleSelectProposal(proposal, requestTopic) {
 
   scrollInto.value = 'bottom'
 
+  const proposalIndex = msg?.proposals?.findIndex((p) => p.title === proposal.title) ?? 0
+
   try {
 
-    const data = await contentApi.generate(buildPayload(requestTopic, proposal))
+    const data = await agentChat('生成正文', {
 
-    messages.value.push({
-
-      role: 'assistant',
-
-      type: 'result',
-
-      content: data.body,
-
-      contentId: data.id,
-
-      status: data.status,
-
-      platformCode: platform.value,
-
-      contentFormat: data.content_format,
+      selectedProposalIndex: proposalIndex >= 0 ? proposalIndex : 0,
 
     })
+
+    pushAgentChatResult(data, requestTopic)
+
+    if (data.action === 'generate' && llmSource.value === 'platform') await loadLlmQuota()
 
   } catch (e) {
 
@@ -907,11 +1103,19 @@ async function handleRefreshProposals(msg) {
 
   try {
 
-    const data = await contentApi.proposals(buildPayload(msg.requestTopic))
+    const data = await agentChat(msg.requestTopic)
 
-    msg.proposals = data.proposals
+    if (data.action === 'proposals' && data.proposals?.length) {
 
-    uni.showToast({ title: '已刷新方案', icon: 'success' })
+      msg.proposals = data.proposals
+
+      uni.showToast({ title: '已刷新方案', icon: 'success' })
+
+    } else {
+
+      pushAgentChatResult(data, msg.requestTopic)
+
+    }
 
   } catch (e) {
 
@@ -1058,11 +1262,12 @@ async function handleExport(msg, type) {
 
 
 onShow(async () => {
-
+  const user = await ensureSession()
+  if (!user) return
   await loadWechatSettings()
-
   await loadAssistants()
-
+  await loadLlmQuota()
+  await ensureAgentSession()
 })
 
 </script>
@@ -1237,6 +1442,82 @@ onShow(async () => {
 
   white-space: nowrap;
 
+}
+
+.assistant-picker__history {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #1677ff;
+  padding: 8rpx 12rpx;
+}
+
+.session-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.session-panel__mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.session-panel__body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 70vh;
+  background: #fff;
+  border-radius: 24rpx 24rpx 0 0;
+  padding: 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.session-panel__title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.session-panel__list {
+  max-height: 50vh;
+}
+
+.session-panel__item {
+  padding: 20rpx 16rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.session-panel__item--active {
+  background: #ecf5ff;
+}
+
+.session-panel__name {
+  display: block;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.session-panel__time {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #999;
+}
+
+.session-panel__empty {
+  padding: 32rpx;
+  text-align: center;
+  color: #999;
+  font-size: 26rpx;
+}
+
+.session-panel__new {
+  align-self: flex-start;
 }
 
 
@@ -1706,6 +1987,14 @@ onShow(async () => {
   font-weight: 600;
 
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.08);
+
+}
+
+
+
+.meta-pill--disabled {
+
+  opacity: 0.45;
 
 }
 

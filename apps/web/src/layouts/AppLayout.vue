@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { NAV_ITEMS, hasAnyPermission, hasPermission } from '../config/permissions'
 import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
@@ -11,15 +13,14 @@ onMounted(() => {
   if (auth.isLoggedIn && !auth.user) auth.fetchMe()
 })
 
-const menuItems = [
-  { path: '/dashboard', title: '工作台', icon: 'Odometer' },
-  { path: '/create', title: '营销创作', icon: 'EditPen' },
-  { path: '/contents', title: '内容库', icon: 'Document' },
-  { path: '/calendar', title: '发布日历', icon: 'Calendar' },
-  { path: '/knowledge', title: '知识库', icon: 'Collection' },
-  { path: '/analytics', title: '数据看板', icon: 'DataLine' },
-  { path: '/settings', title: '设置', icon: 'Setting' },
-]
+const menuItems = computed(() => {
+  const p = auth.permissions
+  return NAV_ITEMS.filter((item) => {
+    if (!item.permission && !item.permissionAny) return true
+    if (item.permissionAny) return hasAnyPermission(p, item.permissionAny)
+    return hasPermission(p, item.permission)
+  })
+})
 
 const activeMenu = computed(() => {
   if (route.path.startsWith('/settings')) return '/settings'
@@ -28,13 +29,30 @@ const activeMenu = computed(() => {
 
 const pageTitle = computed(() => route.meta.title || '工作台')
 
+const tenants = computed(() => auth.user?.tenants || [])
+const showTenantSwitcher = computed(() => tenants.value.length > 1)
+const currentTenantLabel = computed(
+  () => auth.activeTenantName || auth.user?.active_tenant?.name || '当前公司',
+)
+
+async function switchCompany(tenantId) {
+  if (tenantId === auth.user?.active_tenant?.id) return
+  try {
+    await auth.switchTenant(tenantId)
+    ElMessage.success('已切换公司')
+    router.replace('/dashboard')
+  } catch (e) {
+    ElMessage.error(e.message)
+  }
+}
+
 function handleLogout() {
   auth.logout()
   router.push('/login')
 }
 
 const displayName = computed(
-  () => auth.user?.phone || auth.user?.display_name || auth.user?.email || '用户',
+  () => auth.user?.display_name || auth.user?.phone || '用户',
 )
 const avatarChar = computed(() => displayName.value.charAt(0))
 </script>
@@ -47,7 +65,25 @@ const avatarChar = computed(() => displayName.value.charAt(0))
           <span class="app-logo__icon">AI</span>
           <span class="app-logo__text">智营获客</span>
         </div>
-        <span class="app-header__subtitle">AI 内容营销工作台</span>
+        <el-dropdown v-if="showTenantSwitcher" trigger="click" @command="switchCompany">
+          <span class="tenant-switch">
+            {{ currentTenantLabel }}
+            <el-icon><ArrowDown /></el-icon>
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="t in tenants"
+                :key="t.id"
+                :command="t.id"
+                :disabled="t.id === auth.user?.active_tenant?.id"
+              >
+                {{ t.name }} · {{ t.role_name }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <span v-else class="app-header__subtitle">{{ currentTenantLabel }}</span>
       </div>
       <div class="app-header__center">
         <el-input
@@ -58,11 +94,6 @@ const avatarChar = computed(() => displayName.value.charAt(0))
         />
       </div>
       <div class="app-header__right">
-        <el-badge :value="3" class="app-header__badge">
-          <el-button circle>
-            <el-icon><Bell /></el-icon>
-          </el-button>
-        </el-badge>
         <el-dropdown trigger="click">
           <div class="app-header__user">
             <el-avatar :size="32" style="background: #4096ff">{{ avatarChar }}</el-avatar>
@@ -83,16 +114,8 @@ const avatarChar = computed(() => displayName.value.charAt(0))
 
     <div class="app-body">
       <aside class="app-sidebar">
-        <el-menu
-          :default-active="activeMenu"
-          router
-          class="app-sidebar__menu"
-        >
-          <el-menu-item
-            v-for="item in menuItems"
-            :key="item.path"
-            :index="item.path"
-          >
+        <el-menu :default-active="activeMenu" router class="app-sidebar__menu">
+          <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
             <el-icon><component :is="item.icon" /></el-icon>
             <span>{{ item.title }}</span>
           </el-menu-item>
@@ -102,7 +125,7 @@ const avatarChar = computed(() => displayName.value.charAt(0))
       <main class="app-main">
         <div class="app-main__breadcrumb">
           <span class="app-main__title">{{ pageTitle }}</span>
-          <el-tag type="info" size="small">已接 API</el-tag>
+          <el-tag v-if="auth.user?.active_tenant" type="info" size="small">{{ currentTenantLabel }}</el-tag>
         </div>
         <router-view />
       </main>
@@ -153,11 +176,16 @@ const avatarChar = computed(() => displayName.value.charAt(0))
   font-size: 14px;
 }
 
+.tenant-switch,
 .app-header__subtitle {
   font-size: 13px;
-  opacity: 0.85;
+  opacity: 0.9;
   padding-left: 12px;
   border-left: 1px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .app-header__center {
@@ -180,20 +208,10 @@ const avatarChar = computed(() => displayName.value.charAt(0))
   color: #fff;
 }
 
-.app-header__search :deep(.el-input__inner::placeholder) {
-  color: rgba(255, 255, 255, 0.7);
-}
-
 .app-header__right {
   display: flex;
   align-items: center;
   gap: 16px;
-}
-
-.app-header__badge :deep(.el-button) {
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  color: #fff;
 }
 
 .app-header__user {

@@ -1,8 +1,10 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_active_tenant_id
 from app.models import User
 from app.schemas import BrandSettingsOut, BrandSettingsUpdate, UserPromptOut, UserPromptUpdate
 from app.services.brand_service import get_or_create_brand, get_or_create_user_prompt, update_brand, update_user_prompt
@@ -12,22 +14,22 @@ router = APIRouter(prefix="/settings", tags=["brand-settings"])
 
 @router.get("/brand", response_model=BrandSettingsOut)
 def get_brand(
-    current_user: User = Depends(get_current_user),
+    tenant_id: UUID = Depends(require_active_tenant_id),
     db: Session = Depends(get_db),
 ):
-    profile = get_or_create_brand(db, current_user.tenant_id)
+    profile = get_or_create_brand(db, tenant_id)
     return profile
 
 
 @router.put("/brand", response_model=BrandSettingsOut)
 def put_brand(
     body: BrandSettingsUpdate,
-    current_user: User = Depends(get_current_user),
+    tenant_id: UUID = Depends(require_active_tenant_id),
     db: Session = Depends(get_db),
 ):
     return update_brand(
         db,
-        current_user.tenant_id,
+        tenant_id,
         company_display_name=body.company_display_name,
         tone=body.tone,
         cta_text=body.cta_text,

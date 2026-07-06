@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
-import { setToken } from '@/utils/auth'
 import { authApi } from '@/utils/api'
+import { afterAuth } from '@/utils/session'
 
 const loginMode = ref('password')
 const phone = ref('')
@@ -24,11 +24,8 @@ function startCountdown() {
   }, 1000)
 }
 
-function goHome() {
-  uni.showToast({ title: '登录成功', icon: 'success' })
-  setTimeout(() => {
-    uni.switchTab({ url: '/pages/index/index' })
-  }, 400)
+function goForgot() {
+  uni.navigateTo({ url: '/pages/forgot/forgot' })
 }
 
 async function handlePasswordLogin() {
@@ -39,8 +36,8 @@ async function handlePasswordLogin() {
   loading.value = true
   try {
     const data = await authApi.login(phone.value.trim(), password.value)
-    setToken(data.access_token)
-    goHome()
+    uni.showToast({ title: '登录成功', icon: 'success' })
+    await afterAuth(data)
   } catch (e) {
     uni.showToast({ title: e.message || '登录失败', icon: 'none' })
   } finally {
@@ -79,8 +76,8 @@ async function handleSmsLogin() {
   loading.value = true
   try {
     const data = await authApi.loginBySms(phone.value.trim(), smsCode.value.trim())
-    setToken(data.access_token)
-    goHome()
+    uni.showToast({ title: '登录成功', icon: 'success' })
+    await afterAuth(data)
   } catch (e) {
     uni.showToast({ title: e.message || '登录失败', icon: 'none' })
   } finally {
@@ -173,6 +170,8 @@ function goRegister() {
 
         <button class="btn-login" :loading="loading" @click="handleLogin">登录</button>
         <view class="form-footer">
+          <text class="link" @click="goForgot">忘记密码</text>
+          <text style="margin: 0 12rpx">·</text>
           还没有账号？
           <text class="link" @click="goRegister">立即注册</text>
         </view>

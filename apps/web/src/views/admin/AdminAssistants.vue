@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { adminApi } from '../../api/client'
+import { adminApi, isBenignEmptyError } from '../../api/client'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -38,9 +38,13 @@ async function loadItems() {
     if (searchQ.value.trim()) params.q = searchQ.value.trim()
     if (filterActive.value !== '') params.is_active = filterActive.value
     const { data } = await adminApi.listAssistants(params)
-    items.value = data
+    items.value = Array.isArray(data) ? data : []
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    if (isBenignEmptyError(e)) {
+      items.value = []
+    } else {
+      ElMessage.error(e.message || '加载失败')
+    }
   } finally {
     loading.value = false
   }

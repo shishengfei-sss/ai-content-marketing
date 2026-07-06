@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { adminApi } from '../../api/client'
+import { adminApi, isBenignEmptyError } from '../../api/client'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -93,14 +93,19 @@ async function loadData() {
     if (filterPlatform.value) params.platform = filterPlatform.value
     if (searchQ.value.trim()) params.q = searchQ.value.trim()
     const { data } = await adminApi.listContents(params)
-    items.value = data.items.map((item) => ({
+    items.value = (data.items ?? []).map((item) => ({
       ...item,
       platformLabel: platformMap[item.platform] || item.platform,
       previewFullUrl: item.preview_url ? `${apiBase}${item.preview_url}` : '',
     }))
-    total.value = data.total
+    total.value = data.total ?? 0
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    if (isBenignEmptyError(e)) {
+      items.value = []
+      total.value = 0
+    } else {
+      ElMessage.error(e.message || '加载失败')
+    }
   } finally {
     loading.value = false
   }

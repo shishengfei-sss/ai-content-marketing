@@ -23,6 +23,8 @@ function afterLoginSuccess() {
   ElMessage.success('登录成功')
   if (auth.user?.role === 'platform_admin') {
     router.push('/admin')
+  } else if (auth.needSelectTenant || auth.user?.need_select_tenant) {
+    router.push('/select-tenant')
   } else {
     router.push('/dashboard')
   }
@@ -167,6 +169,8 @@ function handleSubmit() {
       </el-form>
 
       <div class="auth-card__footer">
+        <router-link to="/forgot-password">忘记密码</router-link>
+        <span style="margin: 0 8px">·</span>
         还没有账号？
         <router-link to="/register">立即注册</router-link>
       </div>

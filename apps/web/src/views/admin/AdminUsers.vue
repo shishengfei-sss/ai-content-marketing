@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { adminApi } from '../../api/client'
+import { adminApi, isBenignEmptyError } from '../../api/client'
 
 const loading = ref(false)
 const users = ref([])
@@ -27,9 +27,13 @@ async function loadUsers() {
     if (filterRole.value) params.role = filterRole.value
     if (filterActive.value !== '') params.is_active = filterActive.value
     const { data } = await adminApi.listUsers(params)
-    users.value = data
+    users.value = Array.isArray(data) ? data : []
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    if (isBenignEmptyError(e)) {
+      users.value = []
+    } else {
+      ElMessage.error(e.message || '加载失败')
+    }
   } finally {
     loading.value = false
   }
@@ -82,8 +86,8 @@ async function confirmResetPassword() {
 async function handleDelete(row) {
   try {
     await ElMessageBox.confirm(
-      `确定删除用户「${row.phone || row.display_name}」？将同时删除其全部内容与租户数据，且不可恢复。`,
-      '删除用户',
+      `确定删除账号「${row.phone || row.display_name}」？将移除其全部公司成员关系，企业与内容数据保留，且不可恢复。`,
+      '删除账号',
       { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
     )
     await adminApi.deleteUser(row.id)
@@ -127,8 +131,22 @@ onMounted(loadUsers)
     <el-table v-loading="loading" :data="users" stripe style="margin-top: 16px">
       <el-table-column prop="phone" label="手机号" width="130" />
       <el-table-column prop="display_name" label="昵称" width="120" />
-      <el-table-column prop="tenant_name" label="租户名" width="130" />
-      <el-table-column label="角色" width="160">
+      <el-table-column label="所属公司" min-width="220">
+        <template #default="{ row }">
+          <template v-if="row.memberships?.length">
+            <el-tag
+              v-for="m in row.memberships"
+              :key="`${m.tenant_id}-${m.role_code}`"
+              size="small"
+              style="margin: 2px 4px 2px 0"
+            >
+              {{ m.tenant_name }} · {{ m.role_name }}
+            </el-tag>
+          </template>
+          <span v-else>{{ row.tenant_name || '—' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="平台角色" width="160">
         <template #default="{ row }">
           <el-select
             :model-value="row.role"

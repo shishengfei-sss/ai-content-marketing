@@ -1,46 +1,66 @@
 <script setup>
+import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { ref } from 'vue'
+import { MINE_MENU, hasAnyPermission, hasPermission } from '@/utils/permissions'
+import { ensureSession, fetchMe, logout, switchTenant } from '@/utils/session'
 
-import { authApi } from '@/utils/api'
-import { clearToken, getToken } from '@/utils/auth'
+const user = ref(null)
 
-const profile = ref({ name: '未登录', company: '', initial: '?' })
+const profile = computed(() => ({
+  name: user.value?.display_name || user.value?.phone || '用户',
+  company: user.value?.active_tenant?.name || '未选择公司',
+  initial: (user.value?.display_name || user.value?.phone || '?').slice(0, 1),
+}))
+
+const menuItems = computed(() => {
+  const p = user.value?.permissions || []
+  return MINE_MENU.filter((item) => {
+    if (item.permissionAny) return hasAnyPermission(p, item.permissionAny)
+    return hasPermission(p, item.permission)
+  })
+})
+
+const tenants = computed(() => user.value?.tenants || [])
+const showSwitch = computed(() => tenants.value.length > 1)
 
 async function loadProfile() {
-  if (!getToken()) {
-    profile.value = { name: '未登录', company: '', initial: '?' }
-    return
-  }
   try {
-    const data = await authApi.me()
-    profile.value = {
-      name: data.display_name || data.phone || '用户',
-      company: data.phone ? `手机号 ${data.phone}` : data.tenant?.name || '',
-      initial: (data.display_name || data.phone || '?').slice(0, 1),
-    }
+    user.value = await ensureSession()
+    if (user.value) user.value = await fetchMe()
   } catch {
-    profile.value = { name: '加载失败', company: '', initial: '?' }
+    user.value = null
   }
 }
 
-function goWechat() {
-  uni.navigateTo({ url: '/pages/wechat/wechat' })
+function go(url) {
+  uni.navigateTo({ url })
+}
+
+function pickCompany() {
+  if (!showSwitch.value) return
+  const names = tenants.value.map((t) => `${t.name} (${t.role_name})`)
+  uni.showActionSheet({
+    itemList: names,
+    success: async (res) => {
+      const t = tenants.value[res.tapIndex]
+      if (t.id === user.value?.active_tenant?.id) return
+      try {
+        await switchTenant(t.id)
+        uni.showToast({ title: '已切换公司', icon: 'success' })
+        await loadProfile()
+      } catch (e) {
+        uni.showToast({ title: e.message, icon: 'none' })
+      }
+    },
+  })
 }
 
 function handleLogout() {
   uni.showModal({
     title: '退出登录',
     content: '确定要退出当前账号吗？',
-    confirmColor: '#1677ff',
     success(res) {
-      if (res.confirm) {
-        clearToken()
-        uni.showToast({ title: '已退出登录', icon: 'success' })
-        setTimeout(() => {
-          uni.reLaunch({ url: '/pages/login/login' })
-        }, 400)
-      }
+      if (res.confirm) logout()
     },
   })
 }
@@ -54,17 +74,21 @@ onShow(loadProfile)
       <view class="avatar">{{ profile.initial }}</view>
       <view>
         <text class="profile__name">{{ profile.name }}</text>
-        <text class="profile__company">{{ profile.company }}</text>
+        <text class="profile__company" @click="pickCompany">
+          {{ profile.company }}
+          <text v-if="showSwitch" class="switch-hint"> · 切换</text>
+        </text>
+      </view>
+    </view>
+
+    <view class="menu">
+      <view v-for="item in menuItems" :key="item.url" class="menu-item" @click="go(item.url)">
+        <text>{{ item.title }}</text>
+        <text class="menu-item__arrow">›</text>
       </view>
     </view>
 
     <view class="logout-wrap">
-      <view class="menu">
-        <view class="menu-item" @click="goWechat">
-          <text>公众号绑定</text>
-          <text class="menu-item__arrow">›</text>
-        </view>
-      </view>
       <button class="btn-logout" @click="handleLogout">退出登录</button>
     </view>
   </view>
@@ -76,7 +100,6 @@ onShow(loadProfile)
   background: #f5f5f5;
   padding-bottom: 48rpx;
 }
-
 .profile {
   display: flex;
   align-items: center;
@@ -85,7 +108,6 @@ onShow(loadProfile)
   padding: 40rpx 32rpx;
   margin-bottom: 24rpx;
 }
-
 .avatar {
   width: 96rpx;
   height: 96rpx;
@@ -98,24 +120,23 @@ onShow(loadProfile)
   font-size: 36rpx;
   font-weight: 600;
 }
-
 .profile__name {
   display: block;
   font-size: 34rpx;
   font-weight: 600;
   margin-bottom: 6rpx;
 }
-
 .profile__company {
   font-size: 26rpx;
-  color: #999;
+  color: #666;
 }
-
+.switch-hint {
+  color: #1677ff;
+}
 .menu {
   background: #fff;
   margin-bottom: 24rpx;
 }
-
 .menu-item {
   display: flex;
   justify-content: space-between;
@@ -124,16 +145,13 @@ onShow(loadProfile)
   border-bottom: 1rpx solid #f0f0f0;
   font-size: 30rpx;
 }
-
 .menu-item__arrow {
   color: #ccc;
   font-size: 36rpx;
 }
-
 .logout-wrap {
   padding: 0 32rpx;
 }
-
 .btn-logout {
   width: 100%;
   height: 88rpx;
@@ -144,15 +162,7 @@ onShow(loadProfile)
   border-radius: 12rpx;
   border: 1rpx solid #ffccc7;
 }
-
 .btn-logout::after {
   border: none;
-}
-
-.preview-tag {
-  text-align: center;
-  color: #999;
-  font-size: 24rpx;
-  padding: 40rpx;
 }
 </style>

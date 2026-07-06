@@ -49,7 +49,7 @@ import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 
 import { contentApi, dashboardApi } from '@/utils/api'
-import { getToken } from '@/utils/auth'
+import { ensureSession } from '@/utils/session'
 
 const stats = ref({ drafts: 0, scheduled: 0 })
 const schedule = ref([])
@@ -63,7 +63,8 @@ function formatTime(iso) {
 }
 
 async function loadData() {
-  if (!getToken()) return
+  const user = await ensureSession()
+  if (!user) return
   try {
     const [dash, cal] = await Promise.all([dashboardApi.stats(), contentApi.calendar()])
     stats.value = {

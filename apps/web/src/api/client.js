@@ -28,11 +28,15 @@ api.interceptors.response.use(
         window.location.href = '/login'
       }
     }
-    return Promise.reject(new Error(text))
+    const error = new Error(text)
+    error.status = status
+    return Promise.reject(error)
   },
 )
 
 export default api
+
+export { isBenignEmptyError, isRouteNotFoundError, applyEmptyListFallback, shouldSilenceLoadError, formatApiError, ROUTE_NOT_FOUND_HINT } from '../utils/apiError.js'
 
 export const authApi = {
   login: (phone, password) => api.post('/api/v1/auth/login', { phone, password }),
@@ -40,12 +44,17 @@ export const authApi = {
   loginBySms: (phone, code) => api.post('/api/v1/auth/sms/login', { phone, code }),
   register: (data) => api.post('/api/v1/auth/register', data),
   me: () => api.get('/api/v1/auth/me'),
+  selectTenant: (tenant_id) => api.post('/api/v1/auth/select-tenant', { tenant_id }),
+  switchTenant: (tenant_id) => api.post('/api/v1/auth/switch-tenant', { tenant_id }),
+  forgotSendCode: (phone) => api.post('/api/v1/auth/password/forgot/send-code', { phone }),
+  forgotReset: (data) => api.post('/api/v1/auth/password/forgot/reset', data),
 }
 
 export const llmApi = {
   get: () => api.get('/api/v1/settings/llm'),
+  getQuota: () => api.get('/api/v1/settings/llm/quota'),
   update: (data) => api.put('/api/v1/settings/llm', data),
-  test: () => api.post('/api/v1/settings/llm/test'),
+  test: (llmSource = 'tenant') => api.post('/api/v1/settings/llm/test', null, { params: { llm_source: llmSource } }),
 }
 
 export const contentApi = {
@@ -65,6 +74,13 @@ export const contentApi = {
   exportXhs: (id) => api.post(`/api/v1/content/${id}/export/xhs`),
   exportDouyin: (id) => api.post(`/api/v1/content/${id}/export/douyin`),
   exportScript: (id) => api.post(`/api/v1/content/${id}/export/script`),
+}
+
+export const agentApi = {
+  createSession: (data) => api.post('/api/v1/agent/sessions', data),
+  listSessions: (params) => api.get('/api/v1/agent/sessions', { params }),
+  getMessages: (sessionId) => api.get(`/api/v1/agent/sessions/${sessionId}/messages`),
+  chat: (sessionId, data) => api.post(`/api/v1/agent/sessions/${sessionId}/chat`, data),
 }
 
 export const dashboardApi = {
@@ -100,6 +116,22 @@ export const brandApi = {
   updateUserPrompt: (data) => api.put('/api/v1/settings/user-prompt', data),
 }
 
+export const tenantApi = {
+  getProfile: () => api.get('/api/v1/tenant/profile'),
+  updateProfile: (data) => api.patch('/api/v1/tenant/profile', data),
+}
+
+export const teamApi = {
+  listRoles: () => api.get('/api/v1/team/roles'),
+  createRole: (data) => api.post('/api/v1/team/roles', data),
+  updateRole: (id, data) => api.patch(`/api/v1/team/roles/${id}`, data),
+  deleteRole: (id) => api.delete(`/api/v1/team/roles/${id}`),
+  listMembers: () => api.get('/api/v1/team/members'),
+  addMember: (data) => api.post('/api/v1/team/members', data),
+  updateMemberRole: (id, role_id) => api.patch(`/api/v1/team/members/${id}/role`, { role_id }),
+  disableMember: (id) => api.post(`/api/v1/team/members/${id}/disable`),
+}
+
 export const wechatApi = {
   get: () => api.get('/api/v1/settings/wechat'),
   bindMock: (accountName, accountType = 'service') =>
@@ -111,6 +143,11 @@ export const wechatApi = {
 
 export const adminApi = {
   listContents: (params) => api.get('/api/v1/admin/contents', { params }),
+  listTenants: (params) => api.get('/api/v1/admin/tenants', { params }),
+  getTenant: (id) => api.get(`/api/v1/admin/tenants/${id}`),
+  listTenantMembers: (id) => api.get(`/api/v1/admin/tenants/${id}/members`),
+  transferTenantAdmin: (id, new_admin_user_id) =>
+    api.post(`/api/v1/admin/tenants/${id}/transfer-admin`, { new_admin_user_id }),
   listUsers: (params) => api.get('/api/v1/admin/users', { params }),
   updateUser: (id, data) => api.patch(`/api/v1/admin/users/${id}`, data),
   resetUserPassword: (id, password) =>
@@ -122,4 +159,7 @@ export const adminApi = {
   listAssistants: (params) => api.get('/api/v1/admin/assistants', { params }),
   createAssistant: (data) => api.post('/api/v1/admin/assistants', data),
   updateAssistant: (code, data) => api.patch(`/api/v1/admin/assistants/${code}`, data),
+  getPlatformLlm: () => api.get('/api/v1/admin/platform-llm'),
+  updatePlatformLlm: (data) => api.patch('/api/v1/admin/platform-llm', data),
+  testPlatformLlm: (data) => api.post('/api/v1/admin/platform-llm/test', data || {}),
 }

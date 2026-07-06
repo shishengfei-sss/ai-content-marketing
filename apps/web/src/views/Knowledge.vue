@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { knowledgeApi } from '../api/client'
+import { isBenignEmptyError, knowledgeApi } from '../api/client'
 
 const loading = ref(false)
 const uploading = ref(false)
@@ -13,9 +13,13 @@ async function loadDocs() {
   loading.value = true
   try {
     const { data } = await knowledgeApi.list()
-    documents.value = data
+    documents.value = Array.isArray(data) ? data : []
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    if (isBenignEmptyError(e)) {
+      documents.value = []
+    } else {
+      ElMessage.error(e.message || '加载失败')
+    }
   } finally {
     loading.value = false
   }

@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { contentApi } from '../api/client'
+import { contentApi, isBenignEmptyError } from '../api/client'
 
 const loading = ref(true)
 const events = ref([])
@@ -36,7 +36,11 @@ onMounted(async () => {
       platform: platformMap[item.platform] || item.platform,
     }))
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    if (isBenignEmptyError(e)) {
+      events.value = []
+    } else {
+      ElMessage.error(e.message || '加载失败')
+    }
   } finally {
     loading.value = false
   }

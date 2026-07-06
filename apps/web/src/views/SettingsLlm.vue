@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { llmApi } from '../api/client'
+import { llmApi, shouldSilenceLoadError } from '../api/client'
 
 const form = ref({
   provider: 'deepseek',
@@ -22,8 +22,15 @@ const providers = [
 const testing = ref(false)
 const saving = ref(false)
 const testResult = ref(null)
+const llmQuota = ref(null)
 
 onMounted(async () => {
+  try {
+    const { data } = await llmApi.getQuota()
+    llmQuota.value = data
+  } catch {
+    /* ignore */
+  }
   try {
     const { data } = await llmApi.get()
     form.value.provider = data.provider
@@ -33,7 +40,9 @@ onMounted(async () => {
     maskedKey.value = data.api_key_masked
     configSource.value = data.source
   } catch (e) {
-    ElMessage.error(e.message)
+    if (!shouldSilenceLoadError(e)) {
+      ElMessage.error(e.message || '加载失败')
+    }
   }
 })
 
@@ -74,7 +83,15 @@ async function handleSave() {
     <div class="page-card" style="max-width: 640px">
       <div class="page-title">AI 模型配置</div>
       <el-alert
-        title="配置 API Key 后即可调用大模型生成内容。密钥将加密存储，界面脱敏展示。"
+        v-if="llmQuota"
+        :title="`平台免费额度：已用 ${llmQuota.used_count} / ${llmQuota.quota_limit}，剩余 ${llmQuota.remaining} 次（仅正文生成扣次）`"
+        type="success"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      />
+      <el-alert
+        title="配置「我的 API Key」后，创作页可选用自有 Key，不消耗平台额度。平台默认 Key 由管理员在后台维护。"
         type="info"
         :closable="false"
         show-icon
@@ -83,7 +100,7 @@ async function handleSave() {
 
       <el-form :model="form" label-width="120px" label-position="left">
         <el-form-item label="当前来源">
-          <el-tag size="small">{{ configSource === 'tenant' ? '租户配置' : '环境变量' }}</el-tag>
+          <el-tag size="small">{{ configSource === 'tenant' ? '已配置我的 Key' : '未配置' }}</el-tag>
           <span v-if="maskedKey" class="form-hint" style="margin-left: 8px">
             已保存 Key：{{ maskedKey }}
           </span>

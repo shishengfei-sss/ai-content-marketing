@@ -1,10 +1,11 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.dependencies import get_current_user
-from app.models import User
+from app.dependencies import require_active_tenant_id
 from app.schemas import WeChatBindRequest, WeChatSettingsOut
 from app.services.publish_service import bind_mock_wechat, get_wechat_account
 
@@ -25,17 +26,17 @@ def _settings_out(account) -> WeChatSettingsOut:
 
 @router.get("", response_model=WeChatSettingsOut)
 def get_wechat_settings(
-    current_user: User = Depends(get_current_user),
+    tenant_id: UUID = Depends(require_active_tenant_id),
     db: Session = Depends(get_db),
 ):
-    account = get_wechat_account(db, current_user.tenant_id)
+    account = get_wechat_account(db, tenant_id)
     return _settings_out(account)
 
 
 @router.post("/bind-mock", response_model=WeChatSettingsOut)
 def bind_mock(
     body: WeChatBindRequest,
-    current_user: User = Depends(get_current_user),
+    tenant_id: UUID = Depends(require_active_tenant_id),
     db: Session = Depends(get_db),
 ):
     if settings.WECHAT_PUBLISHER != "mock":
@@ -43,7 +44,7 @@ def bind_mock(
 
     account = bind_mock_wechat(
         db,
-        current_user.tenant_id,
+        tenant_id,
         body.account_name,
         body.account_type,
     )

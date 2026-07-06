@@ -98,7 +98,8 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 
 import { BASE_URL, contentApi, wechatApi } from '@/utils/api'
-import { getToken } from '@/utils/auth'
+import { toastUnlessEmpty, isBenignEmptyError } from '@/utils/apiError'
+import { ensureSession } from '@/utils/session'
 
 const PAGE_SIZE = 10
 
@@ -182,7 +183,8 @@ async function fetchPage(pageNum, append = false) {
 }
 
 async function loadItems() {
-  if (!getToken()) {
+  const user = await ensureSession()
+  if (!user) {
     items.value = []
     total.value = 0
     page.value = 1
@@ -192,19 +194,25 @@ async function loadItems() {
   try {
     await fetchPage(1, false)
   } catch (e) {
-    uni.showToast({ title: e.message || '加载失败', icon: 'none' })
+    if (isBenignEmptyError(e)) {
+      items.value = []
+      total.value = 0
+      page.value = 1
+    } else {
+      toastUnlessEmpty(e)
+    }
   } finally {
     loading.value = false
   }
 }
 
 async function loadMore() {
-  if (loading.value || loadingMore.value || !hasMore.value || !getToken()) return
+  if (loading.value || loadingMore.value || !hasMore.value) return
   loadingMore.value = true
   try {
     await fetchPage(page.value + 1, true)
   } catch (e) {
-    uni.showToast({ title: e.message || '加载失败', icon: 'none' })
+    toastUnlessEmpty(e)
   } finally {
     loadingMore.value = false
   }
