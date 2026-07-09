@@ -72,7 +72,27 @@ class FakeLLMProvider(LLMProvider):
         user_text = messages[-1].content if messages else ""
         convo_text = " ".join(m.content for m in messages)
 
-        if "意图解析" in system_text:
+        if "创作预检" in system_text:
+            if "你好" in user_text and len(user_text.strip()) < 12:
+                content = json.dumps(
+                    {"action": "clarify", "topic": "", "clarify_question": "请说明具体创作主题与目标读者。"},
+                    ensure_ascii=False,
+                )
+            elif user_text.strip() in ("写脚本", "帮我写", "写一篇", "写一下"):
+                content = json.dumps(
+                    {
+                        "action": "clarify",
+                        "topic": "",
+                        "clarify_question": "请补充具体主题、受众或核心要点。",
+                    },
+                    ensure_ascii=False,
+                )
+            else:
+                content = json.dumps(
+                    {"action": "proceed", "topic": "税务合规营销内容", "clarify_question": None},
+                    ensure_ascii=False,
+                )
+        elif "意图解析" in system_text:
             if "帮我写点东西" in user_text:
                 content = _intent_json("clarify", clarify_question="请问要发布到哪个平台？")
             elif "抖音文章" in user_text or ("douyin" in user_text.lower() and "article" in user_text.lower()):

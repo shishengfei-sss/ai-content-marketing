@@ -35,7 +35,7 @@ export function toastApiError(err, fallback = '操作失败') {
 }
 
 export const ROUTE_NOT_FOUND_HINT =
-  '后端接口不可用，请运行 scripts/restart-api.cmd 8002 后刷新'
+  '后端接口不可用，请运行 scripts/restart-api.cmd 并确认 VITE_API_PROXY_TARGET=http://127.0.0.1:8003，然后重启前端'
 
 export function formatApiError(err, fallback = '操作失败') {
   if (isRouteNotFoundError(err)) return ROUTE_NOT_FOUND_HINT

@@ -13,28 +13,14 @@ from app.database import SessionLocal
 from app.models import TenantMembership, TenantRole, User
 from app.permissions import SYSTEM_ROLE_EDITOR
 from app.services.auth_service import hash_password
-from tests.http_client import check, req
+from tests.alembic_head import is_at_expected_head
+from tests.http_client import check, req, ensure_fake_platform
 
 
 def login(phone: str, password: str) -> str:
     code, data = req("POST", "/auth/login", body={"phone": phone, "password": password})
     assert code == 200, data
     return data["access_token"]
-
-
-def ensure_fake_platform(admin_token: str) -> None:
-    req(
-        "PATCH",
-        "/admin/platform-llm",
-        token=admin_token,
-        body={
-            "provider": "fake",
-            "base_url": "http://fake.local",
-            "model": "fake-model",
-            "api_key": "fake-key",
-            "is_active": True,
-        },
-    )
 
 
 def ensure_co_editor(db, tenant_id: UUID, phone: str = "13900007777") -> str:
@@ -118,7 +104,7 @@ def main() -> int:
     results: list[bool] = []
 
     out = alembic_head()
-    results.append(check("VLM2-1 alembic=020(head)", "020" in out and "head" in out.lower(), out.strip()))
+    results.append(check("VLM2-1 alembic=022(head)", is_at_expected_head(out), out.strip()))
     results.append(check("VLM2-1 表 agent_session_summaries", table_exists("agent_session_summaries")))
 
     pa_token = login("13800000000", "admin123456")

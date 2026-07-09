@@ -49,6 +49,11 @@ const formatMap = {
   video_script: '视频脚本',
 }
 
+function platformTagType(code) {
+  const map = { wechat: 'success', xhs: 'danger', douyin: 'warning' }
+  return map[code] || 'info'
+}
+
 function formatTime(iso) {
   if (!iso) return ''
   return new Date(iso).toLocaleString('zh-CN', { hour12: false })
@@ -202,57 +207,72 @@ onMounted(async () => {
 <template>
   <div class="contents-page">
     <div class="page-card">
-      <div class="contents-page__toolbar">
-        <el-input
-          v-model="searchQ"
-          placeholder="搜索标题..."
-          prefix-icon="Search"
-          style="width: 240px"
-          clearable
-          @keyup.enter="loadContents"
-          @clear="loadContents"
-        />
-        <el-select v-model="filterPlatform" placeholder="平台" style="width: 120px" clearable>
-          <el-option label="公众号" value="wechat" />
-          <el-option label="小红书" value="xhs" />
-          <el-option label="抖音" value="douyin" />
-        </el-select>
-        <el-select v-model="filterStatus" placeholder="状态" style="width: 120px">
-          <el-option label="全部" value="" />
-          <el-option label="草稿" value="draft" />
-          <el-option label="已排期" value="scheduled" />
-          <el-option label="已发布" value="published" />
-          <el-option label="发布失败" value="failed" />
-          <el-option label="已导出" value="exported" />
-        </el-select>
-        <el-button type="primary" icon="Plus" @click="router.push('/create')">新建内容</el-button>
+      <div class="page-header">
+        <div class="page-title">内容库</div>
+        <div class="page-actions">
+          <el-input
+            v-model="searchQ"
+            placeholder="搜索标题..."
+            prefix-icon="Search"
+            style="width: 220px"
+            clearable
+            @keyup.enter="loadContents"
+            @clear="loadContents"
+          />
+          <el-select v-model="filterPlatform" placeholder="平台" style="width: 120px" clearable>
+            <el-option label="公众号" value="wechat" />
+            <el-option label="小红书" value="xhs" />
+            <el-option label="抖音" value="douyin" />
+          </el-select>
+          <el-select v-model="filterStatus" placeholder="状态" style="width: 120px" clearable>
+            <el-option label="全部" value="" />
+            <el-option label="草稿" value="draft" />
+            <el-option label="已排期" value="scheduled" />
+            <el-option label="已发布" value="published" />
+            <el-option label="发布失败" value="failed" />
+            <el-option label="已导出" value="exported" />
+          </el-select>
+          <el-button type="primary" icon="Plus" @click="router.push('/create')">新建内容</el-button>
+        </div>
       </div>
 
-      <el-table v-loading="loading" :data="contents" stripe>
-        <el-table-column type="selection" width="48" />
-        <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="platform" label="平台" width="100">
+      <div class="crm-list-table-wrap">
+      <el-table
+        v-loading="loading"
+        :data="contents"
+        border
+        class="crm-list-table"
+        :header-cell-class-name="() => 'crm-list-table__header-cell'"
+      >
+        <el-table-column type="selection" width="44" fixed="left" align="center" />
+        <el-table-column prop="title" label="标题" min-width="240" fixed="left" show-overflow-tooltip />
+        <el-table-column prop="platform" label="平台" width="96" align="center">
           <template #default="{ row }">
-            <el-tag size="small">{{ row.platform }}</el-tag>
+            <el-tag size="small" effect="plain" :type="platformTagType(row.platformCode)">
+              {{ row.platform }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="scene" label="场景" width="120" />
-        <el-table-column label="形态" width="90">
+        <el-table-column prop="scene" label="场景" width="120" show-overflow-tooltip />
+        <el-table-column label="形态" width="96" align="center">
           <template #default="{ row }">
-            <el-tag size="small" type="info">{{ formatMap[row.contentFormat] || row.contentFormat }}</el-tag>
+            <el-tag size="small" effect="plain" type="info">
+              {{ formatMap[row.contentFormat] || row.contentFormat }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column prop="status" label="状态" width="96" align="center">
           <template #default="{ row }">
-            <el-tag :type="statusMap[row.status]?.type || 'info'" size="small">
+            <el-tag :type="statusMap[row.status]?.type || 'info'" size="small" effect="light">
               {{ statusMap[row.status]?.label || row.status }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="author" label="创建人" width="100" />
-        <el-table-column prop="updated" label="更新时间" width="160" />
-        <el-table-column label="操作" width="300" fixed="right">
+        <el-table-column prop="author" label="创建人" width="100" show-overflow-tooltip />
+        <el-table-column prop="updated" label="更新时间" width="168" show-overflow-tooltip />
+        <el-table-column label="操作" width="280" fixed="right" align="left">
           <template #default="{ row }">
+            <div class="content-row-actions">
             <template
               v-if="canAutoPublish(row) && (row.status === 'draft' || row.status === 'failed')"
             >
@@ -310,9 +330,11 @@ onMounted(async () => {
             >
               导出脚本
             </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
+      </div>
 
       <div class="contents-page__pagination">
         <el-pagination
@@ -341,11 +363,33 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.contents-page__toolbar {
+.page-header {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1d2129;
+}
+
+.page-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.content-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  line-height: 1.4;
 }
 
 .contents-page__pagination {

@@ -26,6 +26,7 @@ from app.services.prompt_builder import (
     parse_proposals_json,
     validate_platform_format,
 )
+from app.services.proposal_count import resolve_proposal_count
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,10 @@ async def run_generate_proposals(
         content_format=content_format,
         scene_name=template.name if template else "",
         template_hint=template.prompt_hint if template else "",
+        proposal_count=resolve_proposal_count(
+            explicit=body.proposal_count,
+            text=body.topic,
+        ),
     )
     messages = [
         LLMMessage(role="system", content=system_prompt),
@@ -86,7 +91,13 @@ async def run_generate_proposals(
             llm_source=body.llm_source,
             check_platform_quota=True,
         )
-        raw_items = parse_proposals_json(result.content)
+        raw_items = parse_proposals_json(
+            result.content,
+            proposal_count=resolve_proposal_count(
+                explicit=body.proposal_count,
+                text=body.topic,
+            ),
+        )
     except ValueError as e:
         if str(e) == "PROPOSALS_PARSE_FAILED":
             raise HTTPException(status_code=502, detail="方案生成失败，请重试") from e

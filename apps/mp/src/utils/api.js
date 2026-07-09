@@ -2,6 +2,16 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 export { BASE_URL }
 
+function buildCrmQuery(params = {}) {
+  const sp = new URLSearchParams()
+  for (const [key, val] of Object.entries(params)) {
+    if (val === undefined || val === null || val === '') continue
+    sp.append(key, typeof val === 'object' ? JSON.stringify(val) : String(val))
+  }
+  const qs = sp.toString()
+  return qs ? `?${qs}` : ''
+}
+
 function getToken() {
   return uni.getStorageSync('ai_marketing_token') || ''
 }
@@ -95,6 +105,7 @@ export const analyticsApi = {
 }
 
 export const contentApi = {
+  get: (id) => request({ url: `/api/v1/content/${id}` }),
   list: (params) => {
     const query = new URLSearchParams(params).toString()
     return request({ url: `/api/v1/content${query ? `?${query}` : ''}` })
@@ -121,6 +132,17 @@ export const agentApi = {
   getMessages: (sessionId) => request({ url: `/api/v1/agent/sessions/${sessionId}/messages` }),
   chat: (sessionId, data) =>
     request({ url: `/api/v1/agent/sessions/${sessionId}/chat`, method: 'POST', data }),
+  preflight: (sessionId, data) =>
+    request({ url: `/api/v1/agent/sessions/${sessionId}/preflight`, method: 'POST', data }),
+  createWorkflow: (data) => request({ url: '/api/v1/agent/workflows', method: 'POST', data }),
+  getWorkflow: (workflowId) => request({ url: `/api/v1/agent/workflows/${workflowId}` }),
+  resumeWorkflow: (workflowId, data) =>
+    request({ url: `/api/v1/agent/workflows/${workflowId}/resume`, method: 'POST', data }),
+  listMemories: (params) => request({ url: '/api/v1/agent/memories', data: params }),
+  deleteMemory: (memoryId) =>
+    request({ url: `/api/v1/agent/memories/${memoryId}`, method: 'DELETE' }),
+  confirmMemory: (memoryId) =>
+    request({ url: `/api/v1/agent/memories/${memoryId}/confirm`, method: 'POST' }),
 }
 
 export const wechatApi = {
@@ -139,4 +161,38 @@ export const assistantsApi = {
 
 export const templatesApi = {
   list: (params) => request({ url: '/api/v1/templates', data: params }),
+}
+
+export const crmApi = {
+  listLeads: (params) => request({ url: `/api/v1/crm/leads${buildCrmQuery(params)}` }),
+  getLead: (id) => request({ url: `/api/v1/crm/leads/${id}` }),
+  createLead: (data) => request({ url: '/api/v1/crm/leads', method: 'POST', data }),
+  updateLead: (id, data) => request({ url: `/api/v1/crm/leads/${id}`, method: 'PATCH', data }),
+  convertLead: (id) => request({ url: `/api/v1/crm/leads/${id}/convert`, method: 'POST' }),
+  updateCustomer: (id, data) => request({ url: `/api/v1/crm/customers/${id}`, method: 'PATCH', data }),
+  listViews: (entityType) => request({ url: `/api/v1/crm/views?entity_type=${entityType}` }),
+  listCampaigns: (params) => {
+    const query = new URLSearchParams(params).toString()
+    return request({ url: `/api/v1/crm/campaigns${query ? `?${query}` : ''}` })
+  },
+  getCampaign: (id) => request({ url: `/api/v1/crm/campaigns/${id}` }),
+  listCustomers: (params) => request({ url: `/api/v1/crm/customers${buildCrmQuery(params)}` }),
+  getCustomer: (id) => request({ url: `/api/v1/crm/customers/${id}` }),
+  listContacts: (customerId) => request({ url: `/api/v1/crm/customers/${customerId}/contacts` }),
+  createCustomer: (data) => request({ url: '/api/v1/crm/customers', method: 'POST', data }),
+  listActivities: (params) => {
+    const query = new URLSearchParams(params).toString()
+    return request({ url: `/api/v1/crm/activities${query ? `?${query}` : ''}` })
+  },
+  createActivity: (data) => request({ url: '/api/v1/crm/activities', method: 'POST', data }),
+  listTasks: (params) => {
+    const query = new URLSearchParams(params).toString()
+    return request({ url: `/api/v1/crm/tasks${query ? `?${query}` : ''}` })
+  },
+  createTask: (data) => request({ url: '/api/v1/crm/tasks', method: 'POST', data }),
+  updateTask: (id, data) => request({ url: `/api/v1/crm/tasks/${id}`, method: 'PATCH', data }),
+  getSchema: (entityType) => request({ url: `/api/v1/crm/schema/${entityType}` }),
+  getViewPreferences: (entityType) => request({ url: `/api/v1/me/view-preferences/${entityType}` }),
+  saveViewPreferences: (entityType, data) =>
+    request({ url: `/api/v1/me/view-preferences/${entityType}`, method: 'PUT', data }),
 }

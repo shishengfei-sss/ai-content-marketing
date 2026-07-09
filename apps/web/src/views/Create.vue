@@ -2,13 +2,14 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { ArrowDown, Clock, Promotion, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { contentApi, agentApi, llmApi, templatesApi, wechatApi, assistantsApi } from '../api/client'
+import { contentApi, agentApi, llmApi, wechatApi, assistantsApi, crmApi } from '../api/client'
+import { formatApiError, isRouteNotFoundError } from '../utils/apiError'
 import { useAuthStore } from '../stores/auth'
+import { hasPermission } from '../config/permissions'
 
 const auth = useAuthStore()
 
 const platform = ref('wechat')
-const scene = ref('')
 const contentFormat = ref('article')
 const inputText = ref('')
 const generating = ref(false)
@@ -62,50 +63,7 @@ function resolveContentFormat(platform, currentFormat) {
 
 const formatOptions = computed(() => formatOptionsForPlatform(platform.value || 'wechat'))
 
-const scenes = ref([
-  { value: 'tax_deadline_reminder', label: '报税截止提醒' },
-  { value: 'bookkeeping_intro', label: '代理记账介绍' },
-])
-
-const filteredScenes = ref([])
-
-function updateFilteredScenes() {
-  if (!platform.value) {
-    filteredScenes.value = scenes.value
-    return
-  }
-  filteredScenes.value = scenes.value.filter((s) => s.platform === platform.value || !s.platform)
-}
-
-const quickStarts = ref([
-  { text: '写一篇公众号报税提醒', platform: 'wechat', scene: 'tax_deadline_reminder' },
-  { text: '小红书代理记账服务介绍', platform: 'xhs', scene: 'bookkeeping_intro' },
-  { text: '抖音新公司注册指南脚本', platform: 'douyin', scene: 'small_company_register' },
-  { text: '税务处罚案例故事（公众号）', platform: 'wechat', scene: 'case_penalty_story' },
-])
-
-function buildQuickStartsFromTemplates(templates) {
-  const platformOrder = ['wechat', 'xhs', 'douyin']
-  const picked = []
-  for (const p of platformOrder) {
-    const t = templates.find((x) => x.platform === p)
-    if (t) {
-      picked.push({ text: t.name, platform: t.platform, scene: t.scene })
-    }
-  }
-  for (const t of templates) {
-    if (picked.length >= 4) break
-    if (!picked.some((x) => x.scene === t.scene && x.platform === t.platform)) {
-      picked.push({ text: t.name, platform: t.platform, scene: t.scene })
-    }
-  }
-  return picked.slice(0, 4)
-}
-
-function syncQuickStarts() {
-  const quickMsg = messages.value.find((m) => m.role === 'assistant' && m.type === 'quick')
-  if (quickMsg) quickMsg.items = quickStarts.value
-}
+const CUSTOM_SCENE = 'custom'
 
 const publishingId = ref(null)
 const assistants = ref([])
@@ -118,13 +76,42 @@ const llmQuota = ref({
   has_tenant_key: false,
   platform_available: true,
 })
+const campaignId = ref(null)
+const campaigns = ref([])
+const showCampaignPicker = computed(
+  () =>
+    hasPermission(auth.permissions, 'crm.campaign.create') ||
+    hasPermission(auth.permissions, 'crm.campaign.list_own'),
+)
 
 const selectedAssistant = computed(
   () => assistants.value.find((a) => a.code === industryCode.value) || null,
 )
 
 const defaultWelcome =
-  '您好，我是智营 AI 创作助手。直接告诉我您想创作什么，或点击下方快捷选题开始——我会帮您生成符合行业合规要求的营销内容。'
+  '您好，我是智营 AI 创作助手。请选择发布平台与内容形态，在输入框描述想创作的主题、目标读者和核心要点——信息不足时我会先请您补充，再生成方案。'
+
+function buildWelcomeText() {
+  const name = selectedAssistant.value?.name || '智营 AI 创作助手'
+  return `您好，我是${name}。请选择发布平台与内容形态，在输入框描述想创作的主题、目标读者和核心要点——信息不足时我会先请您补充，再生成方案。`
+}
+
+const GREETING_RE = /^(你好|您好|hi|hello|在吗|试试|测试|help)[!.?。！？\s]*$/i
+const TOO_VAGUE_RE = /^(写(一)?篇|帮我写|生成(一个)?|来(一)?个|写个|写脚本|写笔记|创作)[!.?。！？\s]*$/i
+
+function localPreflightCheck(text) {
+  const t = text.trim()
+  if (t.length < 6) {
+    return '请补充更具体的创作需求，例如：主题、目标读者或想强调的核心要点。'
+  }
+  if (GREETING_RE.test(t)) {
+    return '请告诉我您想创作的主题、目标读者或核心卖点，我再为您生成方案。'
+  }
+  if (TOO_VAGUE_RE.test(t)) {
+    return '请补充具体主题与要点，例如：「抖音视频脚本，讲新公司注册流程，面向首次创业的老板」。'
+  }
+  return null
+}
 
 const messages = ref([
   {
@@ -132,15 +119,11 @@ const messages = ref([
     type: 'text',
     content: defaultWelcome,
   },
-  {
-    role: 'assistant',
-    type: 'quick',
-    items: quickStarts.value,
-  },
 ])
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || ''
 const agentFallback = import.meta.env.VITE_AGENT_FALLBACK === '1'
+const useWorkflow = import.meta.env.VITE_AGENT_WORKFLOW !== '0'
 const AGENT_SESSION_KEY = 'agent_session_id'
 const agentSessionId = ref(localStorage.getItem(AGENT_SESSION_KEY) || '')
 const sessionDrawerVisible = ref(false)
@@ -201,19 +184,37 @@ async function switchToSession(session) {
   }
 }
 
-async function createAgentSession() {
-  const { data } = await agentApi.createSession({
-    industry_code: industryCode.value || 'finance',
-    title: '营销创作',
-  })
-  agentSessionId.value = data.id
-  localStorage.setItem(AGENT_SESSION_KEY, data.id)
-  return data.id
-}
-
 async function ensureAgentSession() {
   if (agentSessionId.value) return agentSessionId.value
   return createAgentSession()
+}
+
+function clearAgentSession() {
+  agentSessionId.value = ''
+  localStorage.removeItem(AGENT_SESSION_KEY)
+}
+
+function isAgentSessionNotFound(err) {
+  const status = err?.response?.status ?? err?.status
+  const msg = err?.response?.data?.detail ?? err?.message ?? ''
+  return status === 404 || /Not Found|会话不存在/.test(String(msg))
+}
+
+async function createAgentSession() {
+  try {
+    const { data } = await agentApi.createSession({
+      industry_code: industryCode.value || 'finance',
+      title: '营销创作',
+    })
+    agentSessionId.value = data.id
+    localStorage.setItem(AGENT_SESSION_KEY, data.id)
+    return data.id
+  } catch (e) {
+    if (isAgentSessionNotFound(e)) {
+      throw new Error('Agent 接口不可用，请确认后端已启动并已执行 alembic upgrade head')
+    }
+    throw e
+  }
 }
 
 function pushAgentChatResult(data, requestTopic) {
@@ -248,7 +249,7 @@ function pushAgentChatResult(data, requestTopic) {
         platform: platformMap[usePlatform] || usePlatform,
         contentFormat: c.content_format,
         formatLabel: formatMap[c.content_format] || c.content_format,
-        scene: scenes.value.find((s) => s.value === c.scene)?.label || '自定义',
+        scene: '自定义',
         model: `${c.llm_provider} · ${c.llm_model}`,
       },
     })
@@ -262,7 +263,7 @@ function pushAgentChatResult(data, requestTopic) {
   })
 }
 
-async function agentChat(message, { selectedProposalIndex = null } = {}) {
+async function agentChat(message, { selectedProposalIndex = null, retried = false } = {}) {
   const sessionId = await ensureAgentSession()
   const body = {
     message,
@@ -271,30 +272,20 @@ async function agentChat(message, { selectedProposalIndex = null } = {}) {
   if (selectedProposalIndex !== null) {
     body.selected_proposal_index = selectedProposalIndex
   }
-  const { data } = await agentApi.chat(sessionId, body)
-  return data
-}
-
-async function loadTemplatesForAssistant(code) {
   try {
-    const { data } = await templatesApi.list({ industry_code: code })
-    scenes.value = data.map((t) => ({
-      value: t.scene,
-      label: t.name,
-      platform: t.platform,
-    }))
-    if (data.length) {
-      quickStarts.value = buildQuickStartsFromTemplates(data)
-      syncQuickStarts()
+    const { data } = await agentApi.chat(sessionId, body)
+    return data
+  } catch (e) {
+    if (!retried && isAgentSessionNotFound(e)) {
+      clearAgentSession()
+      return agentChat(message, { selectedProposalIndex, retried: true })
     }
-    updateFilteredScenes()
-  } catch {
-    /* keep defaults */
+    throw e
   }
 }
 
 function syncWelcomeMessage() {
-  const welcome = selectedAssistant.value?.welcome_message || defaultWelcome
+  const welcome = buildWelcomeText()
   const first = messages.value.find((m) => m.role === 'assistant' && m.type === 'text')
   if (first) first.content = welcome
 }
@@ -310,9 +301,8 @@ async function loadAssistants() {
       industryCode.value = data[0].code
     }
     syncWelcomeMessage()
-    await loadTemplatesForAssistant(industryCode.value)
   } catch {
-    await loadTemplatesForAssistant('finance')
+    /* keep defaults */
   }
 }
 
@@ -350,9 +340,7 @@ function pickLlmSource(source) {
 
 function pickAssistant(code) {
   industryCode.value = code
-  scene.value = ''
   syncWelcomeMessage()
-  loadTemplatesForAssistant(code)
 }
 
 onMounted(async () => {
@@ -371,8 +359,19 @@ onMounted(async () => {
   }
   await loadAssistants()
   await loadLlmQuota()
+  await loadCampaigns()
   await ensureAgentSession()
 })
+
+async function loadCampaigns() {
+  if (!showCampaignPicker.value) return
+  try {
+    const { data } = await crmApi.listCampaigns({ page_size: 50 })
+    campaigns.value = data.items || []
+  } catch {
+    campaigns.value = []
+  }
+}
 
 async function scrollToBottom() {
   await nextTick()
@@ -382,51 +381,153 @@ async function scrollToBottom() {
 function pickPlatform(p) {
   platform.value = p
   contentFormat.value = resolveContentFormat(p, contentFormat.value)
-  updateFilteredScenes()
-  if (scene.value && !filteredScenes.value.some((s) => s.value === scene.value)) {
-    scene.value = ''
-  }
 }
 
 function pickContentFormat(f) {
   contentFormat.value = f
 }
 
-function handleQuickStart(item) {
-  platform.value = item.platform
-  scene.value = item.scene
-  contentFormat.value = defaultContentFormat(item.platform)
-  inputText.value = item.text
-  handleSend()
-}
-
 function buildUserPrompt(text) {
   const parts = [text]
   if (platform.value) parts.unshift(`[平台：${platformMap[platform.value]}]`)
-  if (scene.value) {
-    const label = scenes.value.find((s) => s.value === scene.value)?.label
-    if (label) parts.unshift(`[场景：${label}]`)
-  }
   return parts.join(' ')
 }
 
 function buildGeneratePayload(topic, selectedProposal = null) {
   const usePlatform = platform.value || 'wechat'
-  const useScene =
-    scene.value ||
-    filteredScenes.value[0]?.value ||
-    quickStarts.value[0]?.scene ||
-    'tax_deadline_reminder'
   const useFormat = contentFormat.value || defaultContentFormat(usePlatform)
-  return {
+  const payload = {
     industry_code: industryCode.value || 'finance',
     platform: usePlatform,
-    scene: useScene,
+    scene: CUSTOM_SCENE,
     topic,
     content_format: useFormat,
     llm_source: llmSource.value,
     selected_proposal: selectedProposal,
   }
+  if (campaignId.value) payload.campaign_id = campaignId.value
+  return payload
+}
+
+async function runPreflight(text) {
+  const localQ = localPreflightCheck(text)
+  if (localQ) {
+    return { ready: false, action: 'clarify', clarify_question: localQ, topic: null }
+  }
+  await ensureAgentSession()
+  try {
+    const { data } = await agentApi.preflight(agentSessionId.value, {
+      message: text,
+      platform: platform.value || 'wechat',
+      content_format: contentFormat.value || defaultContentFormat(platform.value || 'wechat'),
+      llm_source: llmSource.value,
+    })
+    return data
+  } catch (e) {
+    if (isRouteNotFoundError(e)) {
+      return { ready: true, action: 'proceed', topic: text }
+    }
+    throw e
+  }
+}
+
+function pushClarifyMessage(question) {
+  messages.value.push({
+    role: 'assistant',
+    type: 'text',
+    content: question || '请补充更多信息后继续创作。',
+  })
+}
+
+function buildWorkflowInput(topic, proposalCount = null) {
+  const payload = buildGeneratePayload(topic)
+  const input = {
+    industry_code: payload.industry_code,
+    platform: payload.platform,
+    scene: payload.scene,
+    topic: payload.topic,
+    content_format: payload.content_format,
+    llm_source: payload.llm_source,
+    search_query: payload.topic,
+  }
+  if (proposalCount != null && proposalCount >= 1) {
+    input.proposal_count = proposalCount
+  }
+  return input
+}
+
+function parseWorkflowOutput(workflow) {
+  if (!workflow?.output_json) return {}
+  try {
+    return typeof workflow.output_json === 'string'
+      ? JSON.parse(workflow.output_json)
+      : workflow.output_json
+  } catch {
+    return {}
+  }
+}
+
+function pushWorkflowProposals(proposals, requestTopic, workflowId) {
+  messages.value.push({
+    role: 'assistant',
+    type: 'proposals',
+    proposals,
+    requestTopic: requestTopic || '',
+    workflowId,
+  })
+}
+
+function pushContentResult(content, payload) {
+  const usePlatform = content.platform || payload.platform
+  messages.value.push({
+    role: 'assistant',
+    type: 'result',
+    content: content.body,
+    contentId: content.id,
+    status: content.status,
+    meta: {
+      platformCode: usePlatform,
+      platform: platformMap[usePlatform] || usePlatform,
+      contentFormat: content.content_format,
+      formatLabel: formatMap[content.content_format] || content.content_format,
+      scene: '自定义',
+      model: `${content.llm_provider} · ${content.llm_model}`,
+    },
+  })
+  modelTag.value = `${content.llm_provider} · ${content.llm_model}`
+}
+
+async function runProposeWorkflow(topic, proposalCount = null) {
+  await ensureAgentSession()
+  const { data: wf } = await agentApi.createWorkflow({
+    pipeline_code: 'content_propose',
+    auto_run: true,
+    session_id: agentSessionId.value || undefined,
+    input: buildWorkflowInput(topic, proposalCount),
+  })
+  if (wf.status === 'paused') {
+    const output = parseWorkflowOutput(wf)
+    const proposals = output.proposals || []
+    if (!proposals.length) throw new Error('未生成选题方案')
+    return { workflowId: wf.id, proposals }
+  }
+  if (wf.status === 'failed') {
+    throw new Error(wf.error_message || '方案生成失败')
+  }
+  throw new Error('工作流未返回方案')
+}
+
+async function runFinishWorkflow(workflowId, proposalIndex) {
+  const { data: wf } = await agentApi.resumeWorkflow(workflowId, {
+    selected_proposal_index: proposalIndex >= 0 ? proposalIndex : 0,
+  })
+  if (wf.status !== 'completed') {
+    throw new Error(wf.error_message || '生成正文失败')
+  }
+  const output = parseWorkflowOutput(wf)
+  if (!output.content_id) throw new Error('未生成正文')
+  const { data: content } = await contentApi.get(output.content_id)
+  return { workflow: wf, content, output }
 }
 
 async function fetchProposals(topic) {
@@ -450,26 +551,31 @@ async function handleSend() {
   const text = inputText.value.trim()
   if (!text || generating.value || proposing.value) return
 
-  messages.value = messages.value.filter((m) => m.type !== 'quick')
   messages.value.push({ role: 'user', type: 'text', content: buildUserPrompt(text) })
   inputText.value = ''
   proposing.value = true
   scrollToBottom()
 
   try {
-    const data = await agentChat(buildUserPrompt(text))
-    pushAgentChatResult(data, text)
+    if (useWorkflow) {
+      const pre = await runPreflight(text)
+      if (!pre.ready) {
+        pushClarifyMessage(pre.clarify_question)
+        return
+      }
+      const topic = pre.topic || text
+      const { workflowId, proposals } = await runProposeWorkflow(topic, pre.proposal_count ?? null)
+      pushWorkflowProposals(proposals, topic, workflowId)
+    } else {
+      const data = await agentChat(buildUserPrompt(text))
+      pushAgentChatResult(data, text)
+    }
   } catch (e) {
-    if (agentFallback) {
+    if (useWorkflow && agentFallback) {
       try {
         const proposals = await fetchProposals(text)
         if (proposals?.length) {
-          messages.value.push({
-            role: 'assistant',
-            type: 'proposals',
-            proposals,
-            requestTopic: text,
-          })
+          pushWorkflowProposals(proposals, text, null)
         }
       } catch (err) {
         ElMessage.error(err.message || '方案生成失败')
@@ -480,11 +586,11 @@ async function handleSend() {
         })
       }
     } else {
-      ElMessage.error(e.message || '方案生成失败')
+      ElMessage.error(formatApiError(e, '方案生成失败'))
       messages.value.push({
         role: 'assistant',
         type: 'text',
-        content: `方案生成失败：${e.message || '请检查 AI 模型配置'}`,
+        content: `方案生成失败：${formatApiError(e, '请检查 AI 模型配置')}`,
       })
     }
   } finally {
@@ -498,32 +604,22 @@ async function handleSelectProposal(proposal, requestTopic, msg) {
   generating.value = true
   scrollToBottom()
   const proposalIndex = msg?.proposals?.findIndex((p) => p.title === proposal.title) ?? 0
+  const payload = buildGeneratePayload(requestTopic, proposal)
   try {
-    const data = await agentChat('生成正文', { selectedProposalIndex: proposalIndex >= 0 ? proposalIndex : 0 })
-    pushAgentChatResult(data, requestTopic)
-    if (data.action === 'generate' && llmSource.value === 'platform') await loadLlmQuota()
+    if (useWorkflow && msg?.workflowId) {
+      const { content } = await runFinishWorkflow(msg.workflowId, proposalIndex)
+      pushContentResult(content, payload)
+      if (llmSource.value === 'platform') await loadLlmQuota()
+    } else {
+      const data = await agentChat('生成正文', { selectedProposalIndex: proposalIndex >= 0 ? proposalIndex : 0 })
+      pushAgentChatResult(data, requestTopic)
+      if (data.action === 'generate' && llmSource.value === 'platform') await loadLlmQuota()
+    }
   } catch (e) {
     if (agentFallback) {
       try {
-        const payload = buildGeneratePayload(requestTopic, proposal)
         const { data } = await contentApi.generate(payload)
-        const usePlatform = payload.platform
-        messages.value.push({
-          role: 'assistant',
-          type: 'result',
-          content: data.body,
-          contentId: data.id,
-          status: data.status,
-          meta: {
-            platformCode: usePlatform,
-            platform: platformMap[usePlatform] || usePlatform,
-            contentFormat: data.content_format,
-            formatLabel: formatMap[data.content_format] || data.content_format,
-            scene: scenes.value.find((s) => s.value === payload.scene)?.label || '自定义',
-            model: `${data.llm_provider} · ${data.llm_model}`,
-          },
-        })
-        modelTag.value = `${data.llm_provider} · ${data.llm_model}`
+        pushContentResult(data, payload)
         if (llmSource.value === 'platform') await loadLlmQuota()
       } catch (err) {
         ElMessage.error(err.message || '生成失败')
@@ -551,12 +647,19 @@ async function handleRefreshProposals(msg) {
   if (proposing.value || !msg.requestTopic) return
   proposing.value = true
   try {
-    const data = await agentChat(buildUserPrompt(msg.requestTopic))
-    if (data.action === 'proposals' && data.proposals?.length) {
-      msg.proposals = data.proposals
+    if (useWorkflow) {
+      const { workflowId, proposals } = await runProposeWorkflow(msg.requestTopic)
+      msg.proposals = proposals
+      msg.workflowId = workflowId
       ElMessage.success('已刷新方案')
     } else {
-      pushAgentChatResult(data, msg.requestTopic)
+      const data = await agentChat(buildUserPrompt(msg.requestTopic))
+      if (data.action === 'proposals' && data.proposals?.length) {
+        msg.proposals = data.proposals
+        ElMessage.success('已刷新方案')
+      } else {
+        pushAgentChatResult(data, msg.requestTopic)
+      }
     }
   } catch (e) {
     if (agentFallback) {
@@ -598,8 +701,7 @@ function handleKeydown(e) {
 }
 
 function handleNewChat() {
-  platform.value = ''
-  scene.value = ''
+  platform.value = 'wechat'
   contentFormat.value = 'article'
   inputText.value = ''
   generating.value = false
@@ -611,13 +713,7 @@ function handleNewChat() {
     {
       role: 'assistant',
       type: 'text',
-      content:
-        '已开启新对话。告诉我您想创作的内容，或选择快捷选题开始。',
-    },
-    {
-      role: 'assistant',
-      type: 'quick',
-      items: quickStarts.value,
+      content: '已开启新对话。请选择平台与形态，描述想创作的内容即可。',
     },
   ]
   createAgentSession().catch(() => {})
@@ -777,18 +873,6 @@ function handleCopy(text) {
               {{ msg.content }}
             </div>
 
-            <!-- 快捷选题 -->
-            <div v-else-if="msg.type === 'quick'" class="quick-grid">
-              <button
-                v-for="item in msg.items"
-                :key="item.text"
-                class="quick-chip"
-                @click="handleQuickStart(item)"
-              >
-                {{ item.text }}
-              </button>
-            </div>
-
             <!-- 创作方案 -->
             <div v-else-if="msg.type === 'proposals'" class="proposals-block">
               <div class="proposals-block__title">为您准备了 {{ msg.proposals.length }} 个创作方向，请选择后再生成正文：</div>
@@ -930,22 +1014,16 @@ function handleCopy(text) {
                 </button>
               </div>
             </div>
-            <div class="meta-track meta-track--scene">
-              <span class="meta-track__label">场景</span>
+            <div v-if="showCampaignPicker" class="meta-track">
+              <span class="meta-track__label">活动</span>
               <el-select
-                v-model="scene"
+                v-model="campaignId"
                 clearable
-                filterable
+                placeholder="所属活动（可选）"
                 size="small"
-                placeholder="可选"
-                class="meta-scene"
+                style="width: 200px"
               >
-                <el-option
-                  v-for="s in filteredScenes"
-                  :key="s.value"
-                  :label="s.label"
-                  :value="s.value"
-                />
+                <el-option v-for="c in campaigns" :key="c.id" :label="c.name" :value="c.id" />
               </el-select>
             </div>
           </div>

@@ -35,28 +35,6 @@
 
 
 
-          <view v-else-if="msg.type === 'quick'" class="quick-list">
-
-            <view
-
-              v-for="item in msg.items"
-
-              :key="item.text"
-
-              class="quick-item"
-
-              @click="handleQuick(item)"
-
-            >
-
-              {{ item.text }}
-
-            </view>
-
-          </view>
-
-
-
           <view v-else-if="msg.type === 'proposals'" class="proposals">
 
             <text class="proposals__title">请选择创作方向（{{ msg.proposals.length }} 个）：</text>
@@ -241,18 +219,6 @@
               </view>
             </view>
           </view>
-          <view class="meta-track meta-track--scene">
-            <text class="meta-track__label">场景</text>
-            <picker
-              mode="selector"
-              :range="scenePickerOptions"
-              range-key="label"
-              :value="scenePickerIndex"
-              @change="onScenePick"
-            >
-              <view class="meta-scene">{{ sceneLabel }}</view>
-            </picker>
-          </view>
         </view>
 
         <view class="compose-input">
@@ -311,10 +277,11 @@ import { onShow } from '@dcloudio/uni-app'
 
 
 
-import { BASE_URL, assistantsApi, authApi, agentApi, contentApi, llmApi, templatesApi, wechatApi } from '@/utils/api'
+import { BASE_URL, assistantsApi, authApi, agentApi, contentApi, llmApi, wechatApi } from '@/utils/api'
 import { ensureSession } from '@/utils/session'
 
-
+const agentFallback = import.meta.env.VITE_AGENT_FALLBACK === '1'
+const useWorkflow = import.meta.env.VITE_AGENT_WORKFLOW !== '0'
 
 const platform = ref('wechat')
 
@@ -342,11 +309,7 @@ const llmSource = ref('platform')
 
 const llmQuota = ref({ remaining: 100, quota_limit: 100, has_tenant_key: false })
 
-const scene = ref('')
-
-const scenes = ref([])
-
-const filteredScenes = ref([])
+const CUSTOM_SCENE = 'custom'
 
 const agentSessionId = ref(uni.getStorageSync('agent_session_id') || '')
 const sessionPanelVisible = ref(false)
@@ -405,24 +368,39 @@ function startNewChat() {
   uni.removeStorageSync('agent_session_id')
   messages.value = [
     { role: 'assistant', type: 'text', content: defaultWelcome },
-    { role: 'assistant', type: 'quick', items: quickStarts.value },
   ]
   createAgentSession().catch(() => {})
 }
 
 async function createAgentSession() {
-  const data = await agentApi.createSession({
-    industry_code: industryCode.value || 'finance',
-    title: '营销创作',
-  })
-  agentSessionId.value = data.id
-  uni.setStorageSync('agent_session_id', data.id)
-  return data.id
+  try {
+    const data = await agentApi.createSession({
+      industry_code: industryCode.value || 'finance',
+      title: '营销创作',
+    })
+    agentSessionId.value = data.id
+    uni.setStorageSync('agent_session_id', data.id)
+    return data.id
+  } catch (e) {
+    if (isAgentSessionNotFound(e)) {
+      throw new Error('Agent 接口不可用，请确认后端已启动（端口 8003）并已执行 alembic upgrade head')
+    }
+    throw e
+  }
+}
+
+function clearAgentSession() {
+  agentSessionId.value = ''
+  uni.removeStorageSync('agent_session_id')
 }
 
 async function ensureAgentSession() {
   if (agentSessionId.value) return agentSessionId.value
   return createAgentSession()
+}
+
+function isAgentSessionNotFound(err) {
+  return err?.status === 404 || /Not Found|会话不存在/.test(String(err?.message || ''))
 }
 
 function pushAgentChatResult(data, requestTopic) {
@@ -463,74 +441,46 @@ function pushAgentChatResult(data, requestTopic) {
   })
 }
 
-async function agentChat(message, { selectedProposalIndex = null } = {}) {
+async function agentChat(message, { selectedProposalIndex = null, retried = false } = {}) {
   const sessionId = await ensureAgentSession()
   const body = { message, llm_source: llmSource.value }
   if (selectedProposalIndex !== null) {
     body.selected_proposal_index = selectedProposalIndex
   }
-  return agentApi.chat(sessionId, body)
-}
-
-const defaultWelcome = '您好！告诉我创作需求，我会先给出 3～5 个方案供选择。'
-
-
-
-function updateFilteredScenes() {
-
-  if (!platform.value) {
-
-    filteredScenes.value = scenes.value
-
-    return
-
+  try {
+    return await agentApi.chat(sessionId, body)
+  } catch (e) {
+    if (!retried && isAgentSessionNotFound(e)) {
+      clearAgentSession()
+      return agentChat(message, { selectedProposalIndex, retried: true })
+    }
+    throw e
   }
-
-  filteredScenes.value = scenes.value.filter((s) => s.platform === platform.value || !s.platform)
-
 }
 
+const defaultWelcome = '您好！请选择平台与内容形态，在输入框描述创作主题与要点；信息不足时我会先请您补充，再给出方案。'
 
-
-const scenePickerOptions = computed(() => [
-
-  { value: '', label: '不限' },
-
-  ...filteredScenes.value,
-
-])
-
-
-
-const sceneLabel = computed(() => {
-
-  if (!scene.value) return '不限'
-
-  return filteredScenes.value.find((s) => s.value === scene.value)?.label || '不限'
-
-})
-
-
-
-const scenePickerIndex = computed(() => {
-
-  const idx = scenePickerOptions.value.findIndex((s) => s.value === scene.value)
-
-  return idx >= 0 ? idx : 0
-
-})
-
-
-
-function onScenePick(e) {
-
-  const item = scenePickerOptions.value[e.detail.value]
-
-  scene.value = item?.value || ''
-
+function buildWelcomeText() {
+  const name = selectedAssistant.value?.name || '智营 AI 创作助手'
+  return `您好，我是${name}。请选择平台与内容形态，在输入框描述创作主题与要点；信息不足时我会先请您补充，再给出方案。`
 }
 
+const GREETING_RE = /^(你好|您好|hi|hello|在吗|试试|测试|help)[!.?。！？\s]*$/i
+const TOO_VAGUE_RE = /^(写(一)?篇|帮我写|生成(一个)?|来(一)?个|写个|写脚本|写笔记|创作)[!.?。！？\s]*$/i
 
+function localPreflightCheck(text) {
+  const t = text.trim()
+  if (t.length < 6) {
+    return '请补充更具体的创作需求，例如：主题、目标读者或想强调的核心要点。'
+  }
+  if (GREETING_RE.test(t)) {
+    return '请告诉我您想创作的主题、目标读者或核心卖点，我再为您生成方案。'
+  }
+  if (TOO_VAGUE_RE.test(t)) {
+    return '请补充具体主题与要点，例如：「抖音视频脚本，讲新公司注册流程，面向首次创业的老板」。'
+  }
+  return null
+}
 
 function defaultContentFormat(p) {
 
@@ -539,84 +489,6 @@ function defaultContentFormat(p) {
   if (p === 'douyin') return 'video_script'
 
   return 'article'
-
-}
-
-
-
-function buildQuickStartsFromTemplates(templates) {
-
-  const platformOrder = ['wechat', 'xhs', 'douyin']
-
-  const picked = []
-
-  for (const p of platformOrder) {
-
-    const t = templates.find((x) => x.platform === p)
-
-    if (t) {
-
-      picked.push({
-
-        text: t.name,
-
-        platform: t.platform,
-
-        scene: t.scene,
-
-        format: defaultContentFormat(t.platform),
-
-      })
-
-    }
-
-  }
-
-  for (const t of templates) {
-
-    if (picked.length >= 4) break
-
-    if (!picked.some((x) => x.scene === t.scene && x.platform === t.platform)) {
-
-      picked.push({
-
-        text: t.name,
-
-        platform: t.platform,
-
-        scene: t.scene,
-
-        format: defaultContentFormat(t.platform),
-
-      })
-
-    }
-
-  }
-
-  return picked.slice(0, 4)
-
-}
-
-
-
-const quickStarts = ref([
-
-  { text: '公众号报税提醒', platform: 'wechat', scene: 'tax_deadline_reminder', format: 'article' },
-
-  { text: '小红书代账笔记', platform: 'xhs', scene: 'bookkeeping_intro', format: 'note' },
-
-  { text: '抖音注册指南脚本', platform: 'douyin', scene: 'small_company_register', format: 'video_script' },
-
-])
-
-
-
-function syncQuickStarts() {
-
-  const quickMsg = messages.value.find((m) => m.role === 'assistant' && m.type === 'quick')
-
-  if (quickMsg) quickMsg.items = quickStarts.value
 
 }
 
@@ -644,22 +516,20 @@ const formatMap = {
 
 }
 
+const platformMap = {
+  wechat: '公众号',
+  xhs: '小红书',
+  douyin: '抖音',
+}
+
 
 
 const messages = ref([
-
   {
-
     role: 'assistant',
-
     type: 'text',
-
     content: defaultWelcome,
-
   },
-
-  { role: 'assistant', type: 'quick', items: quickStarts.value },
-
 ])
 
 
@@ -726,46 +596,11 @@ const selectedAssistant = computed(
 
 function syncWelcomeMessage() {
 
-  const welcome = selectedAssistant.value?.welcome_message || defaultWelcome
+  const welcome = buildWelcomeText()
 
   const first = messages.value.find((m) => m.role === 'assistant' && m.type === 'text')
 
   if (first) first.content = welcome
-
-}
-
-
-
-async function loadTemplatesForAssistant(code) {
-  try {
-
-    const data = await templatesApi.list({ industry_code: code })
-
-    if (data.length) {
-
-      scenes.value = data.map((t) => ({
-
-        value: t.scene,
-
-        label: t.name,
-
-        platform: t.platform,
-
-      }))
-
-      quickStarts.value = buildQuickStartsFromTemplates(data)
-
-      updateFilteredScenes()
-
-      syncQuickStarts()
-
-    }
-
-  } catch {
-
-    /* keep defaults */
-
-  }
 
 }
 
@@ -802,8 +637,6 @@ async function loadAssistants() {
 
     syncWelcomeMessage()
 
-    await loadTemplatesForAssistant(industryCode.value)
-
   } catch {
 
     /* ignore */
@@ -818,11 +651,7 @@ function pickAssistant(code) {
 
   industryCode.value = code
 
-  scene.value = ''
-
   syncWelcomeMessage()
-
-  loadTemplatesForAssistant(code)
 
 }
 
@@ -872,46 +701,157 @@ function pickPlatform(p) {
 
   contentFormat.value = resolveContentFormat(p, contentFormat.value)
 
-  updateFilteredScenes()
-
-  if (scene.value && !filteredScenes.value.some((s) => s.value === scene.value)) {
-
-    scene.value = ''
-
-  }
-
 }
 
 
 
 function buildPayload(topic, selectedProposal = null) {
-
+  const usePlatform = platform.value || 'wechat'
+  const useFormat = contentFormat.value || defaultContentFormat(usePlatform)
   return {
-
     industry_code: industryCode.value || 'finance',
-
-    platform: platform.value,
-
-    scene:
-
-      scene.value ||
-
-      filteredScenes.value[0]?.value ||
-
-      quickStarts.value[0]?.scene ||
-
-      'tax_deadline_reminder',
-
+    platform: usePlatform,
+    scene: CUSTOM_SCENE,
     topic,
-
-    content_format: contentFormat.value,
-
+    content_format: useFormat,
     llm_source: llmSource.value,
-
     selected_proposal: selectedProposal,
-
   }
+}
 
+function buildUserPrompt(text) {
+  const parts = [text]
+  if (platform.value) parts.unshift(`[平台：${platformMap[platform.value] || platform.value}]`)
+  return parts.join(' ')
+}
+
+async function runPreflight(text) {
+  const localQ = localPreflightCheck(text)
+  if (localQ) {
+    return { ready: false, action: 'clarify', clarify_question: localQ, topic: null }
+  }
+  await ensureAgentSession()
+  try {
+    return await agentApi.preflight(agentSessionId.value, {
+      message: text,
+      platform: platform.value || 'wechat',
+      content_format: contentFormat.value || defaultContentFormat(platform.value || 'wechat'),
+      llm_source: llmSource.value,
+    })
+  } catch (e) {
+    if (e?.status === 404 || /Not Found/i.test(String(e?.message || ''))) {
+      return { ready: true, action: 'proceed', topic: text }
+    }
+    throw e
+  }
+}
+
+function pushClarifyMessage(question) {
+  messages.value.push({
+    role: 'assistant',
+    type: 'text',
+    content: question || '请补充更多信息后继续创作。',
+  })
+}
+
+function buildWorkflowInput(topic, proposalCount = null) {
+  const payload = buildPayload(topic)
+  const input = {
+    industry_code: payload.industry_code,
+    platform: payload.platform,
+    scene: payload.scene,
+    topic: payload.topic,
+    content_format: payload.content_format,
+    llm_source: payload.llm_source,
+    search_query: payload.topic,
+  }
+  if (proposalCount != null && proposalCount >= 1) {
+    input.proposal_count = proposalCount
+  }
+  return input
+}
+
+function parseWorkflowOutput(workflow) {
+  if (!workflow?.output_json) return {}
+  try {
+    return typeof workflow.output_json === 'string'
+      ? JSON.parse(workflow.output_json)
+      : workflow.output_json
+  } catch {
+    return {}
+  }
+}
+
+function pushWorkflowProposals(proposals, requestTopic, workflowId) {
+  messages.value.push({
+    role: 'assistant',
+    type: 'proposals',
+    proposals,
+    requestTopic: requestTopic || '',
+    workflowId,
+  })
+}
+
+function pushContentResult(content, payload) {
+  const usePlatform = content.platform || payload.platform
+  messages.value.push({
+    role: 'assistant',
+    type: 'result',
+    content: content.body,
+    contentId: content.id,
+    status: content.status,
+    platformCode: usePlatform,
+    contentFormat: content.content_format,
+  })
+}
+
+async function runProposeWorkflow(topic, proposalCount = null) {
+  await ensureAgentSession()
+  const wf = await agentApi.createWorkflow({
+    pipeline_code: 'content_propose',
+    auto_run: true,
+    session_id: agentSessionId.value || undefined,
+    input: buildWorkflowInput(topic, proposalCount),
+  })
+  if (wf.status === 'paused') {
+    const output = parseWorkflowOutput(wf)
+    const proposals = output.proposals || []
+    if (!proposals.length) throw new Error('未生成选题方案')
+    return { workflowId: wf.id, proposals }
+  }
+  if (wf.status === 'failed') {
+    throw new Error(wf.error_message || '方案生成失败')
+  }
+  throw new Error('工作流未返回方案')
+}
+
+async function runFinishWorkflow(workflowId, proposalIndex) {
+  const wf = await agentApi.resumeWorkflow(workflowId, {
+    selected_proposal_index: proposalIndex >= 0 ? proposalIndex : 0,
+  })
+  if (wf.status !== 'completed') {
+    throw new Error(wf.error_message || '生成正文失败')
+  }
+  const output = parseWorkflowOutput(wf)
+  if (!output.content_id) throw new Error('未生成正文')
+  const content = await contentApi.get(output.content_id)
+  return { workflow: wf, content, output }
+}
+
+async function fetchProposals(topic) {
+  const payload = buildPayload(topic)
+  try {
+    const data = await agentChat(buildUserPrompt(topic))
+    if (data.action === 'proposals' && data.proposals?.length) {
+      return data.proposals
+    }
+    pushAgentChatResult(data, topic)
+    return null
+  } catch (e) {
+    if (!agentFallback) throw e
+    const res = await contentApi.proposals(payload)
+    return res.proposals
+  }
 }
 
 
@@ -981,152 +921,136 @@ async function loadWechatSettings() {
 
 
 
-function handleQuick(item) {
-
-  platform.value = item.platform
-
-  scene.value = item.scene || ''
-
-  contentFormat.value = item.format || defaultContentFormat(item.platform)
-
-  inputText.value = item.text
-
-  handleSend()
-
-}
-
-
-
 async function handleSend() {
-
   const text = inputText.value.trim()
-
   if (!text || generating.value || proposing.value) return
 
-
-
-  messages.value = messages.value.filter((m) => m.type !== 'quick')
-
-  messages.value.push({ role: 'user', type: 'text', content: text })
-
+  messages.value.push({ role: 'user', type: 'text', content: buildUserPrompt(text) })
   inputText.value = ''
-
   pendingTopic.value = text
-
   proposing.value = true
-
   scrollInto.value = 'bottom'
 
-
-
   try {
-
-    const data = await agentChat(text)
-
-    pushAgentChatResult(data, text)
-
+    if (useWorkflow) {
+      const pre = await runPreflight(text)
+      if (!pre.ready) {
+        pushClarifyMessage(pre.clarify_question)
+        return
+      }
+      const topic = pre.topic || text
+      const { workflowId, proposals } = await runProposeWorkflow(topic, pre.proposal_count ?? null)
+      pushWorkflowProposals(proposals, topic, workflowId)
+    } else {
+      const data = await agentChat(buildUserPrompt(text))
+      pushAgentChatResult(data, text)
+    }
   } catch (e) {
-
-    messages.value.push({
-
-      role: 'assistant',
-
-      type: 'text',
-
-      content: `方案生成失败：${e.message || '请检查 API 与模型配置'}`,
-
-    })
-
+    if (useWorkflow && agentFallback) {
+      try {
+        const proposals = await fetchProposals(text)
+        if (proposals?.length) {
+          pushWorkflowProposals(proposals, text, null)
+        }
+      } catch (err) {
+        messages.value.push({
+          role: 'assistant',
+          type: 'text',
+          content: `方案生成失败：${err.message || '请检查 API 与模型配置'}`,
+        })
+      }
+    } else {
+      messages.value.push({
+        role: 'assistant',
+        type: 'text',
+        content: `方案生成失败：${e.message || '请检查 API 与模型配置'}`,
+      })
+    }
   } finally {
-
     proposing.value = false
-
     scrollInto.value = 'bottom'
-
   }
-
 }
 
 
 
 async function handleSelectProposal(proposal, requestTopic, msg) {
-
   if (generating.value) return
-
   generating.value = true
-
   scrollInto.value = 'bottom'
-
   const proposalIndex = msg?.proposals?.findIndex((p) => p.title === proposal.title) ?? 0
-
+  const payload = buildPayload(requestTopic, proposal)
   try {
-
-    const data = await agentChat('生成正文', {
-
-      selectedProposalIndex: proposalIndex >= 0 ? proposalIndex : 0,
-
-    })
-
-    pushAgentChatResult(data, requestTopic)
-
-    if (data.action === 'generate' && llmSource.value === 'platform') await loadLlmQuota()
-
+    if (useWorkflow && msg?.workflowId) {
+      const { content } = await runFinishWorkflow(msg.workflowId, proposalIndex)
+      pushContentResult(content, payload)
+      if (llmSource.value === 'platform') await loadLlmQuota()
+    } else {
+      const data = await agentChat('生成正文', {
+        selectedProposalIndex: proposalIndex >= 0 ? proposalIndex : 0,
+      })
+      pushAgentChatResult(data, requestTopic)
+      if (data.action === 'generate' && llmSource.value === 'platform') await loadLlmQuota()
+    }
   } catch (e) {
-
-    messages.value.push({
-
-      role: 'assistant',
-
-      type: 'text',
-
-      content: `生成失败：${e.message || '请检查 API 与模型配置'}`,
-
-    })
-
+    if (agentFallback) {
+      try {
+        const content = await contentApi.generate(payload)
+        pushContentResult(content, payload)
+        if (llmSource.value === 'platform') await loadLlmQuota()
+      } catch (err) {
+        messages.value.push({
+          role: 'assistant',
+          type: 'text',
+          content: `生成失败：${err.message || '请检查 API 与模型配置'}`,
+        })
+      }
+    } else {
+      messages.value.push({
+        role: 'assistant',
+        type: 'text',
+        content: `生成失败：${e.message || '请检查 API 与模型配置'}`,
+      })
+    }
   } finally {
-
     generating.value = false
-
     scrollInto.value = 'bottom'
-
   }
-
 }
 
 
 
 async function handleRefreshProposals(msg) {
-
   if (proposing.value || !msg.requestTopic) return
-
   proposing.value = true
-
   try {
-
-    const data = await agentChat(msg.requestTopic)
-
-    if (data.action === 'proposals' && data.proposals?.length) {
-
-      msg.proposals = data.proposals
-
+    if (useWorkflow) {
+      const { workflowId, proposals } = await runProposeWorkflow(msg.requestTopic)
+      msg.proposals = proposals
+      msg.workflowId = workflowId
       uni.showToast({ title: '已刷新方案', icon: 'success' })
-
     } else {
-
-      pushAgentChatResult(data, msg.requestTopic)
-
+      const data = await agentChat(buildUserPrompt(msg.requestTopic))
+      if (data.action === 'proposals' && data.proposals?.length) {
+        msg.proposals = data.proposals
+        uni.showToast({ title: '已刷新方案', icon: 'success' })
+      } else {
+        pushAgentChatResult(data, msg.requestTopic)
+      }
     }
-
   } catch (e) {
-
-    uni.showToast({ title: e.message || '刷新失败', icon: 'none' })
-
+    if (agentFallback) {
+      const proposals = await fetchProposals(msg.requestTopic)
+      if (proposals?.length) {
+        msg.proposals = proposals
+        uni.showToast({ title: '已刷新方案', icon: 'success' })
+      }
+    } else {
+      uni.showToast({ title: e.message || '刷新失败', icon: 'none' })
+    }
   } finally {
-
     proposing.value = false
-
   }
-
 }
 
 

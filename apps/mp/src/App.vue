@@ -14,12 +14,13 @@ body,
 }
 
 page {
-  height: 100%;
+  min-height: 100%;
   background-color: #f0f2f5;
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei',
     sans-serif;
   -webkit-font-smoothing: antialiased;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* uni-app 默认 button 在 H5 上样式较丑，统一重置 */
@@ -36,17 +37,19 @@ button::after {
 }
 
 uni-page {
-  height: 100%;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 uni-page-body {
-  height: 100%;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   box-sizing: border-box;
 }
 
@@ -86,5 +89,18 @@ uni-page-body {
 .uni-tabbar__item:nth-child(3) .uni-tabbar__icon img {
   width: 32px !important;
   height: 32px !important;
+}
+
+/* H5：确保表单输入框可点击、可输入 */
+uni-input,
+uni-textarea {
+  pointer-events: auto !important;
+}
+
+uni-input .uni-input-input,
+uni-textarea .uni-textarea-textarea {
+  pointer-events: auto !important;
+  -webkit-user-select: text !important;
+  user-select: text !important;
 }
 </style>

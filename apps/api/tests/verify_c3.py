@@ -10,28 +10,14 @@ from pathlib import Path
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import check, req
+from tests.alembic_head import is_at_expected_head
+from tests.http_client import check, req, ensure_fake_platform
 
 
 def login(phone: str, password: str) -> str:
     code, data = req("POST", "/auth/login", body={"phone": phone, "password": password})
     assert code == 200, data
     return data["access_token"]
-
-
-def ensure_fake_platform(admin_token: str) -> None:
-    req(
-        "PATCH",
-        "/admin/platform-llm",
-        token=admin_token,
-        body={
-            "provider": "fake",
-            "base_url": "http://fake.local",
-            "model": "fake-model",
-            "api_key": "fake-key",
-            "is_active": True,
-        },
-    )
 
 
 def alembic_head() -> str:
@@ -83,7 +69,7 @@ def main() -> int:
     results: list[bool] = []
 
     out = alembic_head()
-    results.append(check("VC3-1 alembic=020(head)", "020" in out and "head" in out.lower(), out.strip()))
+    results.append(check("VC3-1 alembic=022(head)", is_at_expected_head(out), out.strip()))
     results.append(check("VC3-1 表 agent_pending_actions", table_exists("agent_pending_actions")))
 
     pa_token = login("13800000000", "admin123456")

@@ -2,7 +2,7 @@
 export function isRouteNotFoundError(err) {
   if (err?.status !== 404) return false
   const msg = String(err?.message || '').trim().toLowerCase()
-  return msg === 'not found'
+  return msg === 'not found' || msg.includes('status code 404') || msg.includes('request failed with status code 404')
 }
 
 /** 列表/搜索无结果：路由 404 时按空列表处理，不弹红条。 */

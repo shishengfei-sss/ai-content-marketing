@@ -1,8 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { PERMISSION_GROUPS } from '../config/permissions'
+import { PERMISSION_GROUPS, isPermDisabled } from '../config/permissions'
 import { formatApiError, isRouteNotFoundError, teamApi, ROUTE_NOT_FOUND_HINT } from '../api/client'
+import { invalidateTeamMembersCache } from '../composables/useTeamMembers'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
@@ -14,12 +15,23 @@ const roles = ref([])
 
 const memberDialog = ref(false)
 const memberForm = ref({ phone: '', display_name: '', password: 'ChangeMe123' })
+const memberNameComposing = ref(false)
+const memberNameInputRef = ref(null)
+const editMemberDialog = ref(false)
+const editingMember = ref(null)
+const editMemberForm = ref({ display_name: '' })
+const editNameComposing = ref(false)
+const editNameInputRef = ref(null)
 
 const roleDialog = ref(false)
 const editingRole = ref(null)
 const roleForm = ref({ name: '', permissions: [] })
 
 const selectableRoles = computed(() => roles.value.filter((r) => r.code !== 'admin' || r.is_system))
+
+function isDefaultDisplayName(name) {
+  return /^用户\d{4}$/.test(name || '')
+}
 
 function buildMemberFallback() {
   const user = auth.user
@@ -99,9 +111,44 @@ async function loadAll() {
 
 const phonePattern = /^1\d{10}$/
 
+function inputValue(refEl) {
+  const el = refEl.value?.input ?? refEl.value?.$el?.querySelector('input')
+  return el?.value != null ? String(el.value) : ''
+}
+
+function openAddMemberDialog() {
+  memberForm.value = { phone: '', display_name: '', password: 'ChangeMe123' }
+  memberNameComposing.value = false
+  memberDialog.value = true
+}
+
+function onMemberNameCompositionEnd(e) {
+  memberNameComposing.value = false
+  memberForm.value.display_name = e.target?.value ?? memberForm.value.display_name
+}
+
+function onEditNameCompositionEnd(e) {
+  editNameComposing.value = false
+  editMemberForm.value.display_name = e.target?.value ?? editMemberForm.value.display_name
+}
+
+function onMemberNameBlur(e) {
+  if (memberNameComposing.value) return
+  memberForm.value.display_name = e.target?.value ?? memberForm.value.display_name
+}
+
+function onEditNameBlur(e) {
+  if (editNameComposing.value) return
+  editMemberForm.value.display_name = e.target?.value ?? editMemberForm.value.display_name
+}
+
 async function addMember() {
   if (apiUnavailable.value) {
     ElMessage.error(ROUTE_NOT_FOUND_HINT)
+    return
+  }
+  if (memberNameComposing.value) {
+    ElMessage.warning('请按空格或回车确认中文选字后再提交')
     return
   }
   const phone = memberForm.value.phone.trim()
@@ -109,19 +156,21 @@ async function addMember() {
     ElMessage.warning('请输入正确的 11 位手机号')
     return
   }
-  if (!memberForm.value.display_name.trim()) {
+  const displayName = (inputValue(memberNameInputRef) || memberForm.value.display_name).trim()
+  if (!displayName) {
     ElMessage.warning('请填写姓名')
     return
   }
   try {
     await teamApi.addMember({
       phone,
-      display_name: memberForm.value.display_name.trim(),
+      display_name: displayName,
       password: memberForm.value.password,
     })
     ElMessage.success('已添加成员')
     memberDialog.value = false
     memberForm.value = { phone: '', display_name: '', password: 'ChangeMe123' }
+    invalidateTeamMembersCache()
     await loadMembers()
   } catch (e) {
     ElMessage.error(formatApiError(e, '添加失败'))
@@ -133,6 +182,7 @@ async function changeRole(member, roleId) {
   try {
     await teamApi.updateMemberRole(member.id, roleId)
     ElMessage.success('角色已更新')
+    invalidateTeamMembersCache()
     await loadMembers()
   } catch (e) {
     ElMessage.error(formatApiError(e, '更新失败'))
@@ -145,9 +195,40 @@ async function disableMember(member) {
     await ElMessageBox.confirm(`确定禁用 ${member.display_name}？`, '确认')
     await teamApi.disableMember(member.id)
     ElMessage.success('已禁用')
+    invalidateTeamMembersCache()
     await loadMembers()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(formatApiError(e, '操作失败'))
+  }
+}
+
+function openEditMember(member) {
+  if (member.readonly || apiUnavailable.value) return
+  editingMember.value = member
+  editMemberForm.value = { display_name: member.display_name || '' }
+  editMemberDialog.value = true
+}
+
+async function saveEditMember() {
+  if (!editingMember.value) return
+  if (editNameComposing.value) {
+    ElMessage.warning('请按空格或回车确认中文选字后再保存')
+    return
+  }
+  const name = (inputValue(editNameInputRef) || editMemberForm.value.display_name).trim()
+  if (!name) {
+    ElMessage.warning('请填写姓名')
+    return
+  }
+  try {
+    await teamApi.updateMember(editingMember.value.id, { display_name: name })
+    ElMessage.success('姓名已更新')
+    editMemberDialog.value = false
+    editingMember.value = null
+    invalidateTeamMembersCache()
+    await loadMembers()
+  } catch (e) {
+    ElMessage.error(formatApiError(e, '更新失败'))
   }
 }
 
@@ -212,19 +293,26 @@ onMounted(loadAll)
       :closable="false"
       show-icon
       title="团队接口暂不可用"
-      description="当前连接的后端缺少 /team 接口（多为旧 API 未重启）。请双击运行 scripts/restart-api.cmd（或指定端口：restart-api.cmd 8002），然后硬刷新页面（Ctrl+Shift+R）。"
+      description="当前连接的后端缺少最新 /team 接口（多为旧 API 未重启或代理端口不一致）。请运行 scripts/restart-api.cmd，确认 apps/web/.env.development 中 VITE_API_PROXY_TARGET 与 API 端口一致，重启 Web 开发服务后硬刷新（Ctrl+Shift+R）。"
       style="margin-bottom: 16px"
     />
 
     <el-tabs v-model="tab">
       <el-tab-pane label="成员" name="members">
         <div style="margin-bottom: 12px">
-          <el-button type="primary" :disabled="apiUnavailable" @click="memberDialog = true">
+          <el-button type="primary" :disabled="apiUnavailable" @click="openAddMemberDialog">
             添加成员
           </el-button>
         </div>
         <el-table :data="members" stripe>
-          <el-table-column prop="display_name" label="姓名" />
+          <el-table-column label="姓名" min-width="120">
+            <template #default="{ row }">
+              <span>{{ row.display_name }}</span>
+              <el-tag v-if="isDefaultDisplayName(row.display_name)" size="small" type="info" style="margin-left: 6px">
+                默认名
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="phone" label="手机号" />
           <el-table-column prop="role_name" label="角色" />
           <el-table-column label="状态" width="90">
@@ -234,8 +322,17 @@ onMounted(loadAll)
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="220">
+          <el-table-column label="操作" width="280">
             <template #default="{ row }">
+              <el-button
+                v-if="!row.readonly"
+                link
+                type="primary"
+                :disabled="apiUnavailable"
+                @click="openEditMember(row)"
+              >
+                编辑姓名
+              </el-button>
               <el-select
                 v-if="row.role_code !== 'admin' && !row.readonly"
                 :model-value="row.role_id"
@@ -295,13 +392,20 @@ onMounted(loadAll)
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="memberDialog" title="添加成员" width="420px">
-      <el-form label-width="80px">
+    <el-dialog v-model="memberDialog" title="添加成员" width="420px" destroy-on-close>
+      <el-form label-width="80px" @submit.prevent="addMember">
         <el-form-item label="手机号">
           <el-input v-model="memberForm.phone" maxlength="11" />
         </el-form-item>
         <el-form-item label="姓名">
-          <el-input v-model="memberForm.display_name" />
+          <el-input
+            ref="memberNameInputRef"
+            v-model="memberForm.display_name"
+            placeholder="请输入姓名，中文需确认选字"
+            @compositionstart="memberNameComposing = true"
+            @compositionend="onMemberNameCompositionEnd"
+            @blur="onMemberNameBlur"
+          />
         </el-form-item>
         <el-form-item label="初始密码">
           <el-input v-model="memberForm.password" show-password />
@@ -313,7 +417,35 @@ onMounted(loadAll)
       </template>
     </el-dialog>
 
-    <el-dialog v-model="roleDialog" :title="editingRole ? '编辑角色' : '新建角色'" width="560px">
+    <el-dialog v-model="editMemberDialog" title="编辑姓名" width="420px" destroy-on-close>
+      <el-form label-width="80px" @submit.prevent="saveEditMember">
+        <el-form-item label="手机号">
+          <el-input :model-value="editingMember?.phone" disabled />
+        </el-form-item>
+        <el-form-item label="姓名">
+          <el-input
+            ref="editNameInputRef"
+            v-model="editMemberForm.display_name"
+            placeholder="请输入真实姓名，中文需确认选字"
+            @compositionstart="editNameComposing = true"
+            @compositionend="onEditNameCompositionEnd"
+            @blur="onEditNameBlur"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editMemberDialog = false">取消</el-button>
+        <el-button type="primary" :disabled="apiUnavailable" @click="saveEditMember">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="roleDialog"
+      :title="editingRole ? '编辑角色' : '新建角色'"
+      width="680px"
+      top="4vh"
+      class="role-perm-dialog"
+    >
       <el-form label-width="80px">
         <el-form-item label="名称">
           <el-input v-model="roleForm.name" :disabled="editingRole?.is_system && editingRole?.code === 'admin'" />
@@ -321,15 +453,33 @@ onMounted(loadAll)
       </el-form>
       <div v-for="group in PERMISSION_GROUPS" :key="group.label" class="perm-group">
         <div class="perm-group__title">{{ group.label }}</div>
-        <el-checkbox
-          v-for="item in group.items"
-          :key="item.code"
-          :model-value="roleForm.permissions.includes(item.code)"
-          :disabled="item.requires && !roleForm.permissions.includes(item.requires)"
-          @change="togglePerm(item.code)"
-        >
-          {{ item.label }}
-        </el-checkbox>
+        <template v-for="(row, rowIdx) in group.rows" :key="`${group.label}-${rowIdx}`">
+          <div v-if="row.type === 'scope'" class="perm-scope-row">
+            <span class="perm-scope-row__menu">{{ row.menu }}</span>
+            <div class="perm-scope-row__options">
+              <el-checkbox
+                v-for="item in row.items"
+                :key="item.code"
+                :model-value="roleForm.permissions.includes(item.code)"
+                :disabled="isPermDisabled(roleForm.permissions, item)"
+                @change="togglePerm(item.code)"
+              >
+                {{ item.label }}
+              </el-checkbox>
+            </div>
+          </div>
+          <div v-else class="perm-inline-row">
+            <el-checkbox
+              v-for="item in row.items"
+              :key="item.code"
+              :model-value="roleForm.permissions.includes(item.code)"
+              :disabled="isPermDisabled(roleForm.permissions, item)"
+              @change="togglePerm(item.code)"
+            >
+              {{ item.label }}
+            </el-checkbox>
+          </div>
+        </template>
       </div>
       <template #footer>
         <el-button @click="roleDialog = false">取消</el-button>
@@ -347,8 +497,38 @@ onMounted(loadAll)
   font-weight: 600;
   margin-bottom: 8px;
 }
-.perm-group :deep(.el-checkbox) {
-  display: block;
-  margin-bottom: 4px;
+.perm-scope-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 4px 0;
+}
+.perm-scope-row__menu {
+  width: 72px;
+  flex-shrink: 0;
+  color: #606266;
+  font-size: 13px;
+  line-height: 32px;
+}
+.perm-scope-row__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  flex: 1;
+}
+.perm-scope-row__options :deep(.el-checkbox),
+.perm-inline-row :deep(.el-checkbox) {
+  display: inline-flex;
+  margin-right: 0;
+  margin-bottom: 0;
+  height: 32px;
+}
+.perm-inline-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-bottom: 8px;
+  padding-left: 84px;
 }
 </style>

@@ -18,6 +18,7 @@ from app.services.llm.factory import get_provider
 from app.services.platform_llm_service import (
     ensure_platform_quota_available,
     get_platform_config,
+    normalize_platform_provider,
     resolve_platform_api_key,
 )
 
@@ -64,14 +65,29 @@ class LLMService:
             platform = get_platform_config(db)
             if not platform or not platform.is_active:
                 raise ValueError("LLM_PLATFORM_NOT_CONFIGURED")
+
+            # 离线验收 / CI：平台配置为 fake 时使用 FakeLLMProvider
+            if platform.provider == "fake" or platform.base_url == "http://fake.local":
+                return ResolvedLLMConfig(
+                    provider="fake",
+                    base_url=platform.base_url or "http://fake.local",
+                    api_key="fake-key",
+                    model=platform.model or "fake-model",
+                    timeout_sec=platform.timeout_sec,
+                    source="platform",
+                )
+
+            provider_name = normalize_platform_provider(platform.provider)
+            base_url = platform.base_url
+            model = platform.model
             api_key = resolve_platform_api_key(platform)
             if not api_key:
                 raise ValueError("LLM_PLATFORM_NOT_CONFIGURED")
             return ResolvedLLMConfig(
-                provider=platform.provider,
-                base_url=platform.base_url,
+                provider=provider_name,
+                base_url=base_url,
                 api_key=api_key,
-                model=platform.model,
+                model=model,
                 timeout_sec=platform.timeout_sec,
                 source="platform",
             )

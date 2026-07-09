@@ -66,9 +66,10 @@ const displayName = computed(
 
 <style scoped>
 .admin-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: #f5f5f5;
 }
 

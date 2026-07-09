@@ -14,8 +14,8 @@ from app.services.auth_service import hash_password, reset_user_password
 from app.services.membership_service import get_membership, seed_tenant_roles
 
 
-def _is_admin_role(role: TenantRole) -> bool:
-    return role.is_system and role.code == SYSTEM_ROLE_ADMIN
+def _is_admin_role(role: TenantRole | None) -> bool:
+    return role is not None and role.is_system and role.code == SYSTEM_ROLE_ADMIN
 
 
 def _assert_can_manage_target(operator: TenantMembership, target: TenantMembership | None, new_role: TenantRole | None = None) -> None:
@@ -65,7 +65,15 @@ def create_custom_role(db: Session, tenant_id: UUID, *, name: str, permissions: 
     return role
 
 
-def update_role_permissions(db: Session, tenant_id: UUID, role_id: UUID, *, name: str | None, permissions: list[str] | None) -> TenantRole:
+def update_role_permissions(
+    db: Session,
+    tenant_id: UUID,
+    role_id: UUID,
+    *,
+    operator: TenantMembership,
+    name: str | None,
+    permissions: list[str] | None,
+) -> TenantRole:
     role = (
         db.query(TenantRole)
         .options(joinedload(TenantRole.permissions))
@@ -74,6 +82,8 @@ def update_role_permissions(db: Session, tenant_id: UUID, role_id: UUID, *, name
     )
     if not role:
         raise HTTPException(status_code=404, detail="角色不存在")
+    if role.is_system and not _is_admin_role(operator.role):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="不能修改系统内置角色")
     if role.is_system and role.code == SYSTEM_ROLE_ADMIN:
         raise HTTPException(status_code=400, detail="不能修改管理员角色权限")
     if name is not None:
@@ -105,7 +115,7 @@ def delete_custom_role(db: Session, tenant_id: UUID, role_id: UUID) -> None:
 
 
 def list_members(db: Session, tenant_id: UUID) -> list[TenantMembership]:
-    return (
+    members = (
         db.query(TenantMembership)
         .options(
             joinedload(TenantMembership.user),
@@ -115,6 +125,12 @@ def list_members(db: Session, tenant_id: UUID) -> list[TenantMembership]:
         .order_by(TenantMembership.joined_at.asc())
         .all()
     )
+    for m in members:
+        if m.role is None:
+            role = db.query(TenantRole).filter(uuid_eq(TenantRole.id, m.role_id)).first()
+            if role:
+                m.role = role
+    return members
 
 
 def add_member(
@@ -139,12 +155,14 @@ def add_member(
         user = User(
             phone=phone,
             hashed_password=hash_password(password),
-            display_name=display_name or f"用户{phone[-4:]}",
+            display_name=display_name.strip() if display_name and display_name.strip() else f"用户{phone[-4:]}",
             role="user",
             is_active=True,
         )
         db.add(user)
         db.flush()
+    elif display_name and display_name.strip():
+        user.display_name = display_name.strip()
 
     existing = get_membership(db, user.id, tenant_id)
     if existing:
@@ -159,7 +177,47 @@ def add_member(
     )
     db.add(membership)
     db.commit()
-    db.refresh(membership)
+    membership = (
+        db.query(TenantMembership)
+        .options(joinedload(TenantMembership.role), joinedload(TenantMembership.user))
+        .filter(uuid_eq(TenantMembership.id, membership.id), TenantMembership.tenant_id == tenant_id)
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=500, detail="成员创建失败")
+    return membership
+
+
+def update_member(
+    db: Session,
+    tenant_id: UUID,
+    operator: TenantMembership,
+    membership_id: UUID,
+    *,
+    display_name: str,
+) -> TenantMembership:
+    membership = (
+        db.query(TenantMembership)
+        .options(joinedload(TenantMembership.role), joinedload(TenantMembership.user))
+        .filter(uuid_eq(TenantMembership.id, membership_id), TenantMembership.tenant_id == tenant_id)
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=404, detail="成员不存在")
+    _assert_can_manage_target(operator, membership)
+    name = display_name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="姓名不能为空")
+    membership.user.display_name = name
+    db.commit()
+    membership = (
+        db.query(TenantMembership)
+        .options(joinedload(TenantMembership.role), joinedload(TenantMembership.user))
+        .filter(uuid_eq(TenantMembership.id, membership_id), TenantMembership.tenant_id == tenant_id)
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=404, detail="成员不存在")
     return membership
 
 
@@ -191,7 +249,14 @@ def update_member_role(
 
     membership.role_id = new_role.id
     db.commit()
-    db.refresh(membership)
+    membership = (
+        db.query(TenantMembership)
+        .options(joinedload(TenantMembership.role), joinedload(TenantMembership.user))
+        .filter(uuid_eq(TenantMembership.id, membership_id), TenantMembership.tenant_id == tenant_id)
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=404, detail="成员不存在")
     return membership
 
 

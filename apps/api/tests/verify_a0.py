@@ -8,6 +8,7 @@ from pathlib import Path
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
+from tests.alembic_head import is_at_expected_head
 from tests.http_client import _get_test_client, check, req
 
 
@@ -21,7 +22,7 @@ def main() -> int:
         text=True,
     )
     out = proc.stdout + proc.stderr
-    results.append(check("VA0-1 alembic=020(head)", "020" in out and "head" in out.lower(), out.strip()))
+    results.append(check("VA0-1 alembic=022(head)", is_at_expected_head(out), out.strip()))
 
     r = _get_test_client().get("/api/v1/agent/health")
     results.append(check("VA0-2 agent health", r.status_code == 200 and r.json().get("status") == "ok"))

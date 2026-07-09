@@ -121,6 +121,8 @@ async def _search_knowledge(ctx: AgentToolContext, args: dict[str, Any]) -> dict
 
 
 async def _generate_proposals(ctx: AgentToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    raw_count = args.get("proposal_count")
+    proposal_count = int(raw_count) if raw_count is not None else None
     body = ContentProposalsRequest(
         industry_code=args.get("industry_code") or ctx.industry_code,
         platform=args["platform"],
@@ -128,6 +130,7 @@ async def _generate_proposals(ctx: AgentToolContext, args: dict[str, Any]) -> di
         topic=args["topic"],
         content_format=args.get("content_format") or "article",
         llm_source=args.get("llm_source") or "platform",
+        proposal_count=proposal_count,
     )
     result = await run_generate_proposals(ctx.db, ctx.tenant_id, body)
     return {"proposals": [p.model_dump() for p in result.proposals]}

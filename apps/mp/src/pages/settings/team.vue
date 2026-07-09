@@ -3,7 +3,8 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { teamApi } from '@/utils/api'
 import { formatApiError, isRouteNotFoundError, ROUTE_NOT_FOUND_HINT } from '@/utils/apiError'
-import { PERMISSION_GROUPS, hasPermission } from '@/utils/permissions'
+import { invalidateTeamMembersCache } from '@/utils/useTeamMembers'
+import { PERMISSION_GROUPS, hasPermission, isPermDisabled } from '@/utils/permissions'
 import { ensureSession, fetchMe } from '@/utils/session'
 
 const tab = ref('members')
@@ -141,6 +142,7 @@ async function submitAdd() {
     })
     showAdd.value = false
     uni.showToast({ title: '已添加成员', icon: 'success' })
+    invalidateTeamMembersCache()
     await loadMembers(cachedUser.value)
   } catch (e) {
     uni.showToast({ title: formatApiError(e, '添加失败'), icon: 'none' })
@@ -205,7 +207,7 @@ function togglePerm(code) {
 }
 
 function permDisabled(item) {
-  return item.requires && !roleForm.value.permissions.includes(item.requires)
+  return isPermDisabled(roleForm.value.permissions, item)
 }
 
 async function saveRoleEdit() {
@@ -340,13 +342,39 @@ onShow(loadAll)
         <scroll-view scroll-y class="perm-scroll">
           <view v-for="group in PERMISSION_GROUPS" :key="group.label" class="perm-group">
             <text class="perm-group__title">{{ group.label }}</text>
-            <label v-for="item in group.items" :key="item.code" class="perm-item" @click="!permDisabled(item) && togglePerm(item.code)">
-              <checkbox
-                :checked="roleForm.permissions.includes(item.code)"
-                :disabled="permDisabled(item)"
-              />
-              <text>{{ item.label }}</text>
-            </label>
+            <template v-for="(row, rowIdx) in group.rows" :key="`${group.label}-${rowIdx}`">
+              <view v-if="row.type === 'scope'" class="perm-scope-row">
+                <text class="perm-scope-row__menu">{{ row.menu }}</text>
+                <view class="perm-scope-row__options">
+                  <label
+                    v-for="item in row.items"
+                    :key="item.code"
+                    class="perm-item perm-item--inline"
+                    @click="!permDisabled(item) && togglePerm(item.code)"
+                  >
+                    <checkbox
+                      :checked="roleForm.permissions.includes(item.code)"
+                      :disabled="permDisabled(item)"
+                    />
+                    <text>{{ item.label }}</text>
+                  </label>
+                </view>
+              </view>
+              <view v-else class="perm-inline-row">
+                <label
+                  v-for="item in row.items"
+                  :key="item.code"
+                  class="perm-item perm-item--inline"
+                  @click="!permDisabled(item) && togglePerm(item.code)"
+                >
+                  <checkbox
+                    :checked="roleForm.permissions.includes(item.code)"
+                    :disabled="permDisabled(item)"
+                  />
+                  <text>{{ item.label }}</text>
+                </label>
+              </view>
+            </template>
           </view>
         </scroll-view>
         <view class="sheet__btns">
@@ -474,6 +502,7 @@ onShow(loadAll)
   max-height: 85vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .sheet__title {
   display: block;
@@ -502,6 +531,7 @@ onShow(loadAll)
   display: flex;
   gap: 16rpx;
   margin-top: 16rpx;
+  flex-shrink: 0;
 }
 .btn-cancel,
 .btn-primary {
@@ -519,7 +549,10 @@ onShow(loadAll)
 }
 .perm-scroll {
   flex: 1;
-  max-height: 50vh;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .perm-group {
   margin-bottom: 24rpx;
@@ -530,11 +563,38 @@ onShow(loadAll)
   font-size: 28rpx;
   margin-bottom: 12rpx;
 }
+.perm-scope-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  margin-bottom: 12rpx;
+}
+.perm-scope-row__menu {
+  width: 140rpx;
+  flex-shrink: 0;
+  color: #666;
+  font-size: 26rpx;
+  line-height: 48rpx;
+}
+.perm-scope-row__options,
+.perm-inline-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx 24rpx;
+  flex: 1;
+}
+.perm-inline-row {
+  padding-left: 156rpx;
+  margin-bottom: 12rpx;
+}
 .perm-item {
   display: flex;
   align-items: center;
   gap: 12rpx;
   margin-bottom: 8rpx;
   font-size: 26rpx;
+}
+.perm-item--inline {
+  margin-bottom: 0;
 }
 </style>

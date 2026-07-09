@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import SessionLocal
-from app.routers import admin, agent, analytics, assistants, auth, brand_settings, content, dashboard, knowledge, llm_settings, team, templates, tenant, wechat_settings
+from app.routers import admin, agent, analytics, assistants, auth, brand_settings, content, crm, dashboard, knowledge, llm_settings, me, team, templates, tenant, wechat_settings
 from app.services.publish_service import process_due_scheduled_async
 
 logger = logging.getLogger(__name__)
@@ -66,6 +66,8 @@ app.include_router(team.router, prefix="/api/v1")
 app.include_router(tenant.router, prefix="/api/v1")
 app.include_router(agent.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
+app.include_router(crm.router, prefix="/api/v1")
+app.include_router(me.router, prefix="/api/v1")
 
 settings.storage_published_dir.mkdir(parents=True, exist_ok=True)
 exports_dir = Path(settings.STORAGE_DIR) / "exports"

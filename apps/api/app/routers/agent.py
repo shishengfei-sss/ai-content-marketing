@@ -10,6 +10,8 @@ from app.dependencies import TenantContext
 from app.schemas import (
     AgentChatRequest,
     AgentChatResponse,
+    AgentPreflightRequest,
+    AgentPreflightResponse,
     AgentMemoryContextOut,
     AgentMemoryCreate,
     AgentMemoryOut,
@@ -30,6 +32,7 @@ from app.schemas import (
     AgentSeoOptimizeOut,
     AgentWorkflowCreate,
     AgentWorkflowOut,
+    AgentWorkflowResumeRequest,
     AgentWorkflowStepOut,
 )
 from app.services.agent.chat_service import handle_chat
@@ -54,6 +57,7 @@ from app.services.agent.workflow_manager import (
     get_workflow,
     get_workflow_handoffs,
     list_workflows,
+    resume_workflow,
     run_workflow,
 )
 from app.services.agent.supervisor_service import list_agents
@@ -66,6 +70,7 @@ from app.services.agent.ops_service import (
     pending_action_to_dict,
 )
 from app.services.agent.orchestrator import handle_react_chat
+from app.services.agent.preflight_service import run_create_preflight
 from app.services.agent.session_service import (
     append_message,
     create_session,
@@ -172,6 +177,28 @@ async def post_session_chat(
         selected_proposal_index=body.selected_proposal_index,
         tenant_ctx=ctx,
     )
+
+
+@router.post("/sessions/{session_id}/preflight", response_model=AgentPreflightResponse)
+async def post_session_preflight(
+    session_id: UUID,
+    body: AgentPreflightRequest,
+    ctx: TenantContext = Depends(require_permission("content.create")),
+    db: Session = Depends(get_db),
+):
+    session = get_session(db, session_id, tenant_id=ctx.tenant_id, user_id=ctx.user.id)
+    result = await run_create_preflight(
+        db,
+        session.tenant_id,
+        message=body.message,
+        platform=body.platform,
+        content_format=body.content_format,
+        industry_code=session.industry_code,
+        llm_source=body.llm_source,
+        session=session,
+        persist_messages=True,
+    )
+    return AgentPreflightResponse(**result)
 
 
 @router.post("/sessions/{session_id}/chat/stream")
@@ -401,6 +428,22 @@ async def post_agent_workflow_run(
     db: Session = Depends(get_db),
 ):
     workflow = await run_workflow(db, ctx, workflow_id)
+    return _workflow_out(workflow)
+
+
+@router.post("/workflows/{workflow_id}/resume", response_model=AgentWorkflowOut)
+async def post_agent_workflow_resume(
+    workflow_id: UUID,
+    body: AgentWorkflowResumeRequest,
+    ctx: TenantContext = Depends(require_permission("content.create")),
+    db: Session = Depends(get_db),
+):
+    workflow = await resume_workflow(
+        db,
+        ctx,
+        workflow_id,
+        selected_proposal_index=body.selected_proposal_index,
+    )
     return _workflow_out(workflow)
 
 

@@ -452,3 +452,6 @@ class AgentPendingAction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+from app.models.crm import Contact, CrmActivity, Customer, Lead  # noqa: E402, F401

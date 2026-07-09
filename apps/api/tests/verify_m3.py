@@ -7,7 +7,7 @@ from pathlib import Path
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-from app.permissions import EDITOR_DEFAULT_PERMISSIONS
+from app.permissions import ALL_PERMISSIONS, EDITOR_DEFAULT_PERMISSIONS
 from tests.http_client import check, req
 
 
@@ -21,7 +21,7 @@ def main():
     results = []
     admin_token = login("13900000099", "test123456")
     code, me = req("GET", "/auth/me", token=admin_token)
-    results.append(check("V3-1 admin permissions", code == 200 and len(me.get("permissions", [])) == 24))
+    results.append(check("V3-1 admin permissions", code == 200 and len(me.get("permissions", [])) == len(ALL_PERMISSIONS)))
 
     multi_token = login("13900008888", "Test123456")
     code, me_m = req("GET", "/auth/me", token=multi_token)
@@ -67,7 +67,24 @@ def main():
     results.append(check("V3-6 合法信用代码", code == 200, str(prof.get("credit_code") if isinstance(prof, dict) else prof)))
 
     code, roles = req("GET", "/team/roles", token=admin_token)
-    results.append(check("V3-3 admin角色列表", code == 200 and len(roles) >= 2))
+    results.append(check("V3-3 admin角色列表", code == 200 and len(roles) >= 5))
+
+    editor_role = next((r for r in roles if r.get("code") == "editor"), None) if code == 200 else None
+    if editor_role:
+        code, _ = req(
+            "PATCH",
+            f"/team/roles/{editor_role['id']}",
+            token=admin_token,
+            body={"name": "编辑"},
+        )
+        results.append(check("V3-12 admin可改内置角色", code == 200, str(code)))
+        code, _ = req(
+            "PATCH",
+            f"/team/roles/{editor_role['id']}",
+            token=editor_token,
+            body={"name": "编辑2"},
+        )
+        results.append(check("V3-12 非admin不可改内置角色", code == 403, str(code)))
 
     if custom_role_id and code == 200 and isinstance(members, list):
         admin_role = next((r for r in roles if r.get("code") == "admin"), None)

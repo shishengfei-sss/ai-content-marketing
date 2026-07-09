@@ -25,6 +25,20 @@ const settingsMenu = computed(() => {
       show: hasAnyPermission(p, ['team.member.view', 'team.role.manage']),
     },
     {
+      title: '销售组织',
+      desc: '销售地区与汇报关系',
+      icon: 'Share',
+      path: '/settings/crm-org',
+      show: hasPermission(p, 'crm.org.manage'),
+    },
+    {
+      title: '表单字段',
+      desc: 'CRM 实体字段与自定义列',
+      icon: 'Grid',
+      path: '/settings/crm-schema',
+      show: hasPermission(p, 'crm.schema.manage'),
+    },
+    {
       title: '品牌设置',
       desc: '公司名、人设、语气、CTA',
       icon: 'Shop',
@@ -37,6 +51,13 @@ const settingsMenu = computed(() => {
       icon: 'User',
       path: '/settings/preference',
       show: hasPermission(p, 'preference.manage'),
+    },
+    {
+      title: 'AI 记忆',
+      desc: '查看与管理 Agent 长期记忆',
+      icon: 'Memo',
+      path: '/settings/memory',
+      show: hasPermission(p, 'content.create'),
     },
     {
       title: '公众号绑定',

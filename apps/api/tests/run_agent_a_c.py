@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import os
 from pathlib import Path
 
 API_ROOT = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parent
 PY = sys.executable
 sys.path.insert(0, str(API_ROOT))
+
+# 全量离线验收仍使用 FakeLLM；日常开发不覆盖平台 deepseek 配置
+os.environ.setdefault("FORCE_FAKE_PLATFORM_LLM", "1")
 
 from tests.http_client import reset_all_tenant_quotas
 
@@ -34,6 +38,12 @@ STEPS = [
     ("C4", "verify_c4.py"),
     ("C5", "verify_c5.py"),
     ("C6", "verify_c6.py"),
+    ("WF1", "verify_wf_ui.py"),
+    ("WF2", "verify_wf2.py"),
+    ("WF3", "verify_wf3.py"),
+    ("VP1", "verify_preflight.py"),
+    ("MM1", "verify_memory_mgmt.py"),
+    ("VPC1", "verify_proposal_count.py"),
     ("AG8", "verify_ag8.py"),
 ]
 

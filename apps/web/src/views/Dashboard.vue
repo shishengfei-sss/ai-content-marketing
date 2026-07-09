@@ -13,15 +13,19 @@ let chartInstance = null
 let readsBase = 200
 
 const stats = ref([
-  { label: '我的草稿', value: 0, primary: true },
-  { label: '今日排期', value: 0, primary: false },
-  { label: '近7日阅读', value: 0, primary: false },
-  { label: '本月生成', value: 0, primary: false },
+  { label: '我的草稿', value: 0, primary: true, path: '/contents?status=draft' },
+  { label: '今日排期', value: 0, primary: false, path: '/contents?status=scheduled' },
+  { label: '近7日阅读', value: 0, primary: false, path: '/analytics' },
+  { label: '本月生成', value: 0, primary: false, path: '/contents' },
 ])
+
+const crmStats = ref([])
 
 const shortcuts = [
   { title: '新建公众号文章', desc: 'AI 生成财税营销内容', icon: 'ChatDotRound', path: '/create' },
   { title: '小红书导出', desc: '文案 + 封面一键打包', icon: 'Picture', path: '/contents' },
+  { title: '我的线索', desc: '查看与跟进销售线索', icon: 'User', path: '/crm/leads' },
+  { title: '今日任务', desc: 'CRM 待办与回访', icon: 'List', path: '/crm/tasks' },
   { title: '上传知识库', desc: '导入个人服务资料', icon: 'Upload', path: '/knowledge' },
   { title: '配置 AI 模型', desc: 'DeepSeek / 其他大模型', icon: 'Cpu', path: '/settings/llm' },
 ]
@@ -51,6 +55,11 @@ function formatTime(iso) {
 function openPreview(url) {
   if (!url) return
   window.open(url, '_blank')
+}
+
+function goStat(stat) {
+  if (!stat.path) return
+  router.push(stat.path)
 }
 
 async function loadContentBox() {
@@ -157,14 +166,35 @@ onMounted(async () => {
   try {
     const { data: dash } = await dashboardApi.stats()
     stats.value = [
-      { label: '我的草稿', value: dash.draft_count, primary: true },
-      { label: '今日排期', value: dash.today_scheduled, primary: false },
+      { label: '我的草稿', value: dash.draft_count, primary: true, path: '/contents?status=draft' },
+      { label: '今日排期', value: dash.today_scheduled, primary: false, path: '/contents?status=scheduled' },
       {
         label: '近7日阅读',
         value: dash.reads_last_7_days.toLocaleString('zh-CN'),
         primary: false,
+        path: '/analytics',
       },
-      { label: '本月生成', value: dash.generated_this_month, primary: false },
+      { label: '本月生成', value: dash.generated_this_month, primary: false, path: '/contents' },
+    ]
+    crmStats.value = [
+      {
+        label: '近7日新线索',
+        value: dash.crm_new_leads ?? 0,
+        key: 'crm_new_leads',
+        path: '/crm/leads',
+      },
+      {
+        label: '今日待办',
+        value: dash.crm_tasks_due_today ?? 0,
+        key: 'crm_tasks_due_today',
+        path: '/crm/tasks?due=today',
+      },
+      {
+        label: '逾期任务',
+        value: dash.crm_tasks_overdue ?? 0,
+        key: 'crm_tasks_overdue',
+        path: '/crm/tasks?overdue=1',
+      },
     ]
     await loadContentBox()
   } catch (e) {
@@ -182,7 +212,13 @@ onMounted(async () => {
   <div class="dashboard">
     <el-row :gutter="16" class="dashboard__stats">
       <el-col v-for="stat in stats" :key="stat.label" :span="6">
-        <div class="stat-card">
+        <div
+          class="stat-card stat-card--clickable"
+          role="link"
+          tabindex="0"
+          @click="goStat(stat)"
+          @keydown.enter="goStat(stat)"
+        >
           <div class="stat-card__label">{{ stat.label }}</div>
           <div
             class="stat-card__value"
@@ -190,6 +226,21 @@ onMounted(async () => {
           >
             {{ stat.value }}
           </div>
+        </div>
+      </el-col>
+    </el-row>
+
+    <el-row v-if="crmStats.length" :gutter="16" class="dashboard__stats dashboard__stats--crm">
+      <el-col v-for="stat in crmStats" :key="stat.key" :span="8">
+        <div
+          class="stat-card stat-card--crm stat-card--clickable"
+          role="link"
+          tabindex="0"
+          @click="goStat(stat)"
+          @keydown.enter="goStat(stat)"
+        >
+          <div class="stat-card__label">{{ stat.label }}</div>
+          <div class="stat-card__value">{{ stat.value }}</div>
         </div>
       </el-col>
     </el-row>
@@ -305,6 +356,23 @@ onMounted(async () => {
 <style scoped>
 .dashboard__stats {
   margin-bottom: 16px;
+}
+
+.dashboard__stats--crm {
+  margin-bottom: 16px;
+}
+
+.stat-card--clickable {
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+.stat-card--clickable:hover {
+  box-shadow: 0 4px 16px rgba(22, 119, 255, 0.12);
+}
+
+.stat-card--crm .stat-card__value {
+  color: #1677ff;
 }
 
 .dashboard__row {

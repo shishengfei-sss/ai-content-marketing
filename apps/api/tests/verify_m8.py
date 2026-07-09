@@ -16,6 +16,7 @@ sys.path.insert(0, str(API_ROOT))
 
 from app.database import SessionLocal
 from app.permissions import EDITOR_DEFAULT_PERMISSIONS, SYSTEM_ROLE_ADMIN
+from tests.alembic_head import EXPECTED_HEAD, is_at_expected_head
 from tests.http_client import check, req
 from tests.test_helpers import ensure_multi_tenant_user, restore_single_company_user
 
@@ -76,7 +77,7 @@ def main() -> int:
         text=True,
     )
     out = proc.stdout + proc.stderr
-    results.append(check("G8 alembic head=020", "020" in out and "head" in out.lower(), out.strip()))
+    results.append(check(f"G8 alembic head={EXPECTED_HEAD}", is_at_expected_head(out), out.strip()))
 
     for f in WEB_UAT_FILES:
         results.append(check(f"G8 Web {f}", (WEB_ROOT / f).is_file()))

@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from './layouts/AppLayout.vue'
 import AdminLayout from './layouts/AdminLayout.vue'
 import { useAuthStore } from './stores/auth'
-import { hasAnyPermission, hasPermission } from './config/permissions'
+import { NAV_ITEMS, hasAnyPermission, hasPermission } from './config/permissions'
 
 const routes = [
   {
@@ -114,6 +114,60 @@ const routes = [
         meta: { title: '数据看板', permission: 'analytics.view' },
       },
       {
+        path: 'crm/leads',
+        name: 'CrmLeads',
+        component: () => import('./views/crm/Leads.vue'),
+        meta: {
+          title: '线索',
+          permissionAny: ['crm.lead.list_own', 'crm.lead.list_team', 'crm.lead.list_territory', 'crm.lead.list_all'],
+        },
+      },
+      {
+        path: 'crm/leads/:id',
+        name: 'CrmLeadDetail',
+        component: () => import('./views/crm/LeadDetail.vue'),
+        meta: { title: '线索详情', permission: 'crm.lead.view' },
+      },
+      {
+        path: 'crm/customers',
+        name: 'CrmCustomers',
+        component: () => import('./views/crm/Customers.vue'),
+        meta: {
+          title: '客户',
+          permissionAny: ['crm.customer.list_own', 'crm.customer.list_team', 'crm.customer.list_territory', 'crm.customer.list_all'],
+        },
+      },
+      {
+        path: 'crm/customers/:id',
+        name: 'CrmCustomerDetail',
+        component: () => import('./views/crm/CustomerDetail.vue'),
+        meta: { title: '客户详情', permission: 'crm.customer.view' },
+      },
+      {
+        path: 'crm/tasks',
+        name: 'CrmTasks',
+        component: () => import('./views/crm/Tasks.vue'),
+        meta: {
+          title: '任务',
+          permissionAny: ['crm.task.list_own', 'crm.task.list_team', 'crm.task.list_territory', 'crm.task.list_all'],
+        },
+      },
+      {
+        path: 'crm/campaigns',
+        name: 'CrmCampaigns',
+        component: () => import('./views/crm/Campaigns.vue'),
+        meta: {
+          title: '营销活动',
+          permissionAny: ['crm.campaign.list_own', 'crm.campaign.list_team', 'crm.campaign.list_territory', 'crm.campaign.list_all'],
+        },
+      },
+      {
+        path: 'crm/campaigns/:id',
+        name: 'CrmCampaignDetail',
+        component: () => import('./views/crm/CampaignDetail.vue'),
+        meta: { title: '活动详情', permission: 'crm.campaign.view' },
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('./views/Settings.vue'),
@@ -130,6 +184,18 @@ const routes = [
         name: 'SettingsTeam',
         component: () => import('./views/SettingsTeam.vue'),
         meta: { title: '角色与成员', permissionAny: ['team.member.view', 'team.role.manage'] },
+      },
+      {
+        path: 'settings/crm-org',
+        name: 'SettingsCrmOrg',
+        component: () => import('./views/SettingsCrmOrg.vue'),
+        meta: { title: '销售组织', permission: 'crm.org.manage' },
+      },
+      {
+        path: 'settings/crm-schema',
+        name: 'SettingsSchema',
+        component: () => import('./views/SettingsSchema.vue'),
+        meta: { title: '表单字段', permission: 'crm.schema.manage' },
       },
       {
         path: 'settings/llm',
@@ -155,6 +221,12 @@ const routes = [
         component: () => import('./views/SettingsPreference.vue'),
         meta: { title: '我的偏好', permission: 'preference.manage' },
       },
+      {
+        path: 'settings/memory',
+        name: 'SettingsMemory',
+        component: () => import('./views/SettingsMemory.vue'),
+        meta: { title: 'AI 记忆', permission: 'content.create' },
+      },
     ],
   },
 ]
@@ -164,38 +236,76 @@ const router = createRouter({
   routes,
 })
 
+function firstAllowedPath(permissions) {
+  for (const item of NAV_ITEMS) {
+    if (!item.permission && !item.permissionAny) return item.path
+    if (item.permissionAny && hasAnyPermission(permissions, item.permissionAny)) return item.path
+    if (item.permission && hasPermission(permissions, item.permission)) return item.path
+  }
+  return '/settings'
+}
+
+async function ensureUser(auth) {
+  if (!auth.isLoggedIn || auth.user) return
+  try {
+    await auth.fetchMe()
+  } catch {
+    /* fetchMe 失败时会 logout；无效 token 不应阻塞公开页 */
+  }
+}
+
+function redirectIfPermissionDenied(to, permissions) {
+  if (to.meta.permission && !hasPermission(permissions, to.meta.permission)) {
+    const fallback = firstAllowedPath(permissions)
+    return to.path === fallback ? undefined : fallback
+  }
+  if (to.meta.permissionAny && !hasAnyPermission(permissions, to.meta.permissionAny)) {
+    const fallback = firstAllowedPath(permissions)
+    return to.path === fallback ? undefined : fallback
+  }
+  return undefined
+}
+
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (!to.meta.public && !auth.isLoggedIn) {
     return '/login'
   }
-  if (auth.isLoggedIn && !to.meta.public && to.path !== '/select-tenant') {
-    if (!auth.user) await auth.fetchMe()
-    if (auth.user?.role !== 'platform_admin' && (auth.needSelectTenant || auth.user?.need_select_tenant)) {
-      return '/select-tenant'
-    }
+
+  if (!auth.isLoggedIn) return
+
+  await ensureUser(auth)
+  if (!auth.isLoggedIn) {
+    return to.meta.public ? undefined : '/login'
   }
-  if (to.meta.public && auth.isLoggedIn && (to.path === '/login' || to.path === '/register')) {
-    if (!auth.user) await auth.fetchMe()
-    if (auth.user?.role === 'platform_admin') return '/admin'
+
+  if (auth.user?.role === 'platform_admin') {
+    if (to.meta.platformAdmin) return
+    if (to.meta.public) return '/admin'
+    return '/admin'
+  }
+
+  if (
+    !to.meta.public &&
+    to.path !== '/select-tenant' &&
+    (auth.needSelectTenant || auth.user?.need_select_tenant)
+  ) {
+    return '/select-tenant'
+  }
+
+  if (to.meta.public && (to.path === '/login' || to.path === '/register')) {
     if (auth.needSelectTenant || auth.user?.need_select_tenant) return '/select-tenant'
-    return '/dashboard'
+    const home = firstAllowedPath(auth.permissions)
+    return to.path === home ? undefined : home
   }
-  if (to.meta.platformAdmin) {
-    if (!auth.user) await auth.fetchMe()
-    if (auth.user?.role !== 'platform_admin') {
-      return '/dashboard'
-    }
+
+  if (to.meta.platformAdmin && auth.user?.role !== 'platform_admin') {
+    const fallback = firstAllowedPath(auth.permissions)
+    return to.path === fallback ? undefined : fallback
   }
-  if (!to.meta.public && auth.isLoggedIn && (to.meta.permission || to.meta.permissionAny)) {
-    if (!auth.user) await auth.fetchMe()
-    const p = auth.permissions
-    if (to.meta.permission && !hasPermission(p, to.meta.permission)) {
-      return '/dashboard'
-    }
-    if (to.meta.permissionAny && !hasAnyPermission(p, to.meta.permissionAny)) {
-      return '/dashboard'
-    }
+
+  if (!to.meta.public) {
+    return redirectIfPermissionDenied(to, auth.permissions)
   }
 })
 

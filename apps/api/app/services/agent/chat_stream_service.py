@@ -221,6 +221,7 @@ async def stream_chat(
 
         full_body = "".join(parts)
         topic_title = proposal.title if proposal else req.topic
+        cfg = llm_service.resolve_config(db, session.tenant_id, llm_source)
         content = Content(
             tenant_id=session.tenant_id,
             author_id=user.id,
@@ -231,8 +232,8 @@ async def stream_chat(
             body=full_body,
             content_format=content_format,
             status="draft",
-            llm_provider="fake",
-            llm_model="fake-model",
+            llm_provider=cfg.provider,
+            llm_model=cfg.model,
         )
         db.add(content)
         if llm_source == "platform":

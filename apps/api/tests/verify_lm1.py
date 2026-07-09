@@ -13,6 +13,7 @@ from app.database import SessionLocal
 from app.models import TenantMembership, TenantRole, User
 from app.permissions import SYSTEM_ROLE_EDITOR
 from app.services.auth_service import hash_password
+from tests.alembic_head import is_at_expected_head
 from tests.http_client import check, req
 
 
@@ -90,7 +91,7 @@ def main() -> int:
     results: list[bool] = []
 
     out = alembic_head()
-    results.append(check("VLM1-1 alembic=020(head)", "020" in out and "head" in out.lower(), out.strip()))
+    results.append(check("VLM1-1 alembic=022(head)", is_at_expected_head(out), out.strip()))
     results.append(check("VLM1-1 表 agent_memory_facts", table_exists("agent_memory_facts")))
 
     admin_token = login("13900000099", "test123456")

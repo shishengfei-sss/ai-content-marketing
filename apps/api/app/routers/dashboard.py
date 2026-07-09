@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
@@ -8,7 +7,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import TenantContext, get_tenant_context
 from app.models import Content
+from app.models.crm import CrmTask, Lead
 from app.schemas import DashboardStatsOut
+from app.services.crm.crm_scope_service import apply_lead_list_scope, apply_task_list_scope
 from app.services.scope_service import apply_stats_scope
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -22,6 +23,7 @@ def get_stats(
     tenant_id = ctx.tenant_id
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     week_start = now - timedelta(days=7)
 
@@ -33,7 +35,7 @@ def get_stats(
     today_scheduled = base.filter(
         Content.status == "scheduled",
         Content.scheduled_at >= today_start,
-        Content.scheduled_at < today_start + timedelta(days=1),
+        Content.scheduled_at < today_end,
     ).count()
 
     reads_last_7_days = (
@@ -50,10 +52,33 @@ def get_stats(
 
     generated_this_month = base.filter(Content.created_at >= month_start).count()
 
+    lead_q = db.query(Lead).filter(
+        Lead.tenant_id == tenant_id,
+        Lead.deleted_at.is_(None),
+        Lead.created_at >= week_start,
+    )
+    lead_q = apply_lead_list_scope(lead_q, ctx, db)
+    crm_new_leads = lead_q.count()
+
+    task_q = db.query(CrmTask).filter(
+        CrmTask.tenant_id == tenant_id,
+        CrmTask.deleted_at.is_(None),
+        CrmTask.status.in_(("open", "in_progress")),
+    )
+    task_q = apply_task_list_scope(task_q, ctx, db)
+    crm_tasks_due_today = task_q.filter(
+        CrmTask.due_at >= today_start,
+        CrmTask.due_at < today_end,
+    ).count()
+    crm_tasks_overdue = task_q.filter(CrmTask.due_at < today_start).count()
+
     return DashboardStatsOut(
         draft_count=draft_count,
         pending_review=0,
         today_scheduled=today_scheduled,
         reads_last_7_days=int(reads_last_7_days),
         generated_this_month=generated_this_month,
+        crm_new_leads=crm_new_leads,
+        crm_tasks_due_today=crm_tasks_due_today,
+        crm_tasks_overdue=crm_tasks_overdue,
     )

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.dependencies import TenantContext, get_current_user, get_tenant_context, require_active_tenant_id
 from app.models import Content, User
+from app.models.crm import CampaignContent
 from app.schemas import (
     CalendarEventOut,
     ContentGenerateRequest,
@@ -59,6 +60,7 @@ def list_contents(
     status: str | None = Query(default=None),
     platform: str | None = Query(default=None),
     q: str | None = Query(default=None),
+    campaign_id: UUID | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     ctx: TenantContext = Depends(get_tenant_context),
@@ -76,6 +78,10 @@ def list_contents(
         query = query.filter(Content.platform == platform)
     if q:
         query = query.filter(Content.topic.ilike(f"%{q}%"))
+    if campaign_id:
+        query = query.join(CampaignContent, CampaignContent.content_id == Content.id).filter(
+            CampaignContent.campaign_id == campaign_id
+        )
 
     total = query.count()
     items = (
@@ -152,6 +158,17 @@ async def generate_content(
     db: Session = Depends(get_db),
 ):
     content = await run_generate_content(db, tenant_id, current_user, body)
+    if body.campaign_id:
+        from app.services.crm.campaign_service import get_campaign, link_content
+        from app.dependencies import TenantContext
+        from app.services.membership_service import get_membership
+
+        membership = get_membership(db, current_user.id, tenant_id)
+        if membership:
+            ctx = TenantContext(user=current_user, tenant_id=tenant_id, membership=membership)
+            campaign = get_campaign(db, tenant_id, body.campaign_id)
+            if campaign:
+                link_content(db, ctx, campaign, content.id)
     return _content_out(content)
 
 

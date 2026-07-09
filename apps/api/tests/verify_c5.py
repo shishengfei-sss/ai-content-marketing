@@ -14,28 +14,14 @@ from app.database import SessionLocal, uuid_eq
 from app.models import Content
 from app.services.agent.supervisor_service import assert_agent_may_run_tool, decide_after_compliance
 from fastapi import HTTPException
-from tests.http_client import _get_test_client, check, req
+from tests.alembic_head import is_at_expected_head
+from tests.http_client import _get_test_client, check, req, ensure_fake_platform
 
 
 def login(phone: str, password: str) -> str:
     code, data = req("POST", "/auth/login", body={"phone": phone, "password": password})
     assert code == 200, data
     return data["access_token"]
-
-
-def ensure_fake_platform(admin_token: str) -> None:
-    req(
-        "PATCH",
-        "/admin/platform-llm",
-        token=admin_token,
-        body={
-            "provider": "fake",
-            "base_url": "http://fake.local",
-            "model": "fake-model",
-            "api_key": "fake-key",
-            "is_active": True,
-        },
-    )
 
 
 def alembic_head() -> str:
@@ -67,7 +53,7 @@ def main() -> int:
     client = _get_test_client()
 
     out = alembic_head()
-    results.append(check("VC5-0 alembic=020(head)", "020" in out and "head" in out.lower(), out.strip()))
+    results.append(check("VC5-0 alembic=022(head)", is_at_expected_head(out), out.strip()))
 
     r = client.get("/api/v1/agent/supervisor/agents", headers={"Authorization": f"Bearer {token}"})
     agents = {a["code"] for a in (r.json().get("agents") or [])}

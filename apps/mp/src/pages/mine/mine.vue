@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { MINE_MENU, hasAnyPermission, hasPermission } from '@/utils/permissions'
+import { MINE_MENU, CRM_MENU, filterMenuByPermission, hasAnyPermission, hasPermission } from '@/utils/permissions'
 import { ensureSession, fetchMe, logout, switchTenant } from '@/utils/session'
 
 const user = ref(null)
@@ -12,9 +12,11 @@ const profile = computed(() => ({
   initial: (user.value?.display_name || user.value?.phone || '?').slice(0, 1),
 }))
 
-const menuItems = computed(() => {
+const crmMenuItems = computed(() => filterMenuByPermission(CRM_MENU, user.value?.permissions || []))
+
+const settingsMenuItems = computed(() => {
   const p = user.value?.permissions || []
-  return MINE_MENU.filter((item) => {
+  return MINE_MENU.filter((item) => !CRM_MENU.some((c) => c.url === item.url)).filter((item) => {
     if (item.permissionAny) return hasAnyPermission(p, item.permissionAny)
     return hasPermission(p, item.permission)
   })
@@ -81,10 +83,26 @@ onShow(loadProfile)
       </view>
     </view>
 
-    <view class="menu">
-      <view v-for="item in menuItems" :key="item.url" class="menu-item" @click="go(item.url)">
-        <text>{{ item.title }}</text>
-        <text class="menu-item__arrow">›</text>
+    <view v-if="crmMenuItems.length" class="menu-section">
+      <text class="menu-section__title">销售管理</text>
+      <view class="menu">
+        <view v-for="item in crmMenuItems" :key="item.url" class="menu-item" @click="go(item.url)">
+          <view>
+            <text class="menu-item__title">{{ item.title }}</text>
+            <text v-if="item.desc" class="menu-item__desc">{{ item.desc }}</text>
+          </view>
+          <text class="menu-item__arrow">›</text>
+        </view>
+      </view>
+    </view>
+
+    <view v-if="settingsMenuItems.length" class="menu-section">
+      <text class="menu-section__title">设置与工具</text>
+      <view class="menu">
+        <view v-for="item in settingsMenuItems" :key="item.url" class="menu-item" @click="go(item.url)">
+          <text>{{ item.title }}</text>
+          <text class="menu-item__arrow">›</text>
+        </view>
       </view>
     </view>
 
@@ -133,9 +151,17 @@ onShow(loadProfile)
 .switch-hint {
   color: #1677ff;
 }
+.menu-section {
+  margin-bottom: 24rpx;
+}
+.menu-section__title {
+  display: block;
+  padding: 0 32rpx 12rpx;
+  font-size: 24rpx;
+  color: #999;
+}
 .menu {
   background: #fff;
-  margin-bottom: 24rpx;
 }
 .menu-item {
   display: flex;
@@ -144,6 +170,15 @@ onShow(loadProfile)
   padding: 32rpx;
   border-bottom: 1rpx solid #f0f0f0;
   font-size: 30rpx;
+}
+.menu-item__title {
+  display: block;
+}
+.menu-item__desc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #999;
 }
 .menu-item__arrow {
   color: #ccc;

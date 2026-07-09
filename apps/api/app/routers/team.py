@@ -9,6 +9,7 @@ from app.schemas import (
     MemberCreateRequest,
     MemberOut,
     MemberRoleUpdateRequest,
+    MemberUpdateRequest,
     RoleCreateRequest,
     RoleOut,
     RoleUpdateRequest,
@@ -21,6 +22,7 @@ from app.services.team_service import (
     disable_member,
     list_members,
     list_roles,
+    update_member,
     update_member_role,
     update_role_permissions,
 )
@@ -39,14 +41,15 @@ def _role_out(role) -> RoleOut:
 
 
 def _member_out(m) -> MemberOut:
+    role = m.role
     return MemberOut(
         id=m.id,
         user_id=m.user_id,
         phone=m.user.phone,
         display_name=m.user.display_name,
         role_id=m.role_id,
-        role_code=m.role.code,
-        role_name=m.role.name,
+        role_code=role.code if role else "",
+        role_name=role.name if role else "",
         is_active=m.is_active,
         joined_at=m.joined_at,
     )
@@ -74,7 +77,14 @@ def patch_role(
     ctx: TenantContext = Depends(require_permission("team.role.manage")),
     db: Session = Depends(get_db),
 ):
-    role = update_role_permissions(db, ctx.tenant_id, role_id, name=body.name, permissions=body.permissions)
+    role = update_role_permissions(
+        db,
+        ctx.tenant_id,
+        role_id,
+        operator=ctx.membership,
+        name=body.name,
+        permissions=body.permissions,
+    )
     return _role_out(role)
 
 
@@ -118,6 +128,23 @@ def patch_member_role(
     db: Session = Depends(get_db),
 ):
     m = update_member_role(db, ctx.tenant_id, ctx.membership, membership_id, body.role_id)
+    return _member_out(m)
+
+
+@router.patch("/members/{membership_id}", response_model=MemberOut)
+def patch_member(
+    membership_id: UUID,
+    body: MemberUpdateRequest,
+    ctx: TenantContext = Depends(require_permission("team.member.manage")),
+    db: Session = Depends(get_db),
+):
+    m = update_member(
+        db,
+        ctx.tenant_id,
+        ctx.membership,
+        membership_id,
+        display_name=body.display_name,
+    )
     return _member_out(m)
 
 

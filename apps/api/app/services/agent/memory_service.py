@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import uuid_eq
 from app.dependencies import TenantContext
 from app.models import AgentMemoryFact
+from app.permissions import SYSTEM_ROLE_ADMIN
 
 
 def _validate_scope_payload(scope: str, *, user_id: UUID | None, tenant_id: UUID | None) -> None:
@@ -25,11 +26,24 @@ def _validate_scope_payload(scope: str, *, user_id: UUID | None, tenant_id: UUID
         raise HTTPException(status_code=400, detail="scope 必须为 user 或 tenant")
 
 
+def is_tenant_admin(ctx: TenantContext) -> bool:
+    role = ctx.membership.role
+    return bool(role.is_system and role.code == SYSTEM_ROLE_ADMIN)
+
+
 def can_access_memory(ctx: TenantContext, memory: AgentMemoryFact) -> bool:
     if memory.scope == "user":
         return memory.user_id == ctx.user.id
     if memory.scope == "tenant":
         return memory.tenant_id == ctx.tenant_id
+    return False
+
+
+def can_delete_memory(ctx: TenantContext, memory: AgentMemoryFact) -> bool:
+    if memory.scope == "user":
+        return memory.user_id == ctx.user.id
+    if memory.scope == "tenant":
+        return is_tenant_admin(ctx)
     return False
 
 
@@ -147,5 +161,7 @@ def confirm_memory(db: Session, memory_id: UUID, ctx: TenantContext) -> AgentMem
 
 def delete_memory(db: Session, memory_id: UUID, ctx: TenantContext) -> None:
     memory = get_memory(db, memory_id, ctx)
+    if not can_delete_memory(ctx, memory):
+        raise HTTPException(status_code=403, detail="无权删除该记忆")
     db.delete(memory)
     db.commit()

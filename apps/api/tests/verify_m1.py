@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, inspect, text
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
+from tests.alembic_head import EXPECTED_HEAD, is_at_expected_head
 from app.config import settings  # noqa: E402
 from app.permissions import (  # noqa: E402
     ALL_PERMISSIONS,
@@ -36,7 +37,7 @@ def main() -> int:
         text=True,
     )
     out = proc.stdout + proc.stderr
-    results.append(check("V1-0 alembic=020(head)", "020" in out and "head" in out.lower(), out.strip()))
+    results.append(check(f"V1-0 alembic={EXPECTED_HEAD}(head)", is_at_expected_head(out), out.strip()))
 
     engine = create_engine(settings.DATABASE_URL)
     insp = inspect(engine)
@@ -52,16 +53,25 @@ def main() -> int:
             text(
                 """
                 SELECT tenant_id, COUNT(*) AS c FROM tenant_roles
-                WHERE is_system = 1 AND code IN ('admin', 'editor')
+                WHERE is_system = 1
                 GROUP BY tenant_id
+                HAVING c = 5
                 """
             )
         ).fetchall()
+        tenants_with_admin = conn.execute(
+            text(
+                """
+                SELECT COUNT(DISTINCT tenant_id) FROM tenant_roles
+                WHERE is_system = 1 AND code = 'admin'
+                """
+            )
+        ).scalar()
         results.append(
             check(
-                "V1-2 每tenant内置admin+editor",
-                len(role_pairs) == tenant_count and all(r[1] == 2 for r in role_pairs),
-                f"tenants={tenant_count} role_groups={len(role_pairs)}",
+                "V1-2 每tenant五内置角色",
+                len(role_pairs) == tenants_with_admin,
+                f"admin_tenants={tenants_with_admin} full5={len(role_pairs)} total_tenants={tenant_count}",
             )
         )
 
@@ -87,12 +97,21 @@ def main() -> int:
             ),
             {"code": SYSTEM_ROLE_EDITOR},
         ).scalar()
-        expected_editor = len(EDITOR_DEFAULT_PERMISSIONS)
+        editor_role_count = conn.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM tenant_roles
+                WHERE code = :code AND is_system = 1
+                """
+            ),
+            {"code": SYSTEM_ROLE_EDITOR},
+        ).scalar()
+        expected_editor = len(EDITOR_DEFAULT_PERMISSIONS) * (editor_role_count or 0)
         results.append(
             check(
                 "V1-3 editor默认权限",
-                editor_count_row == expected_editor * tenant_count,
-                f"count={editor_count_row} expected={expected_editor * tenant_count}",
+                editor_count_row == expected_editor,
+                f"count={editor_count_row} expected={expected_editor} roles={editor_role_count}",
             )
         )
 

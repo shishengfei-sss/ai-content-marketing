@@ -1,17 +1,46 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { NAV_ITEMS, hasAnyPermission, hasPermission } from '../config/permissions'
 import { useAuthStore } from '../stores/auth'
+import { usePinnedViews } from '../composables/usePinnedViews'
+import { unpinSavedView } from '../composables/useCrmSavedViews'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { leadPinnedViews, customerPinnedViews, loadPinnedViews, pinnedForPath, viewRoute, viewIndex } =
+  usePinnedViews()
+
+const unpinningId = ref(null)
 
 onMounted(() => {
   if (auth.isLoggedIn && !auth.user) auth.fetchMe()
+  if (auth.isLoggedIn) loadPinnedViews()
+  window.addEventListener('crm:pinned-views-changed', onPinnedChanged)
 })
+
+onUnmounted(() => {
+  window.removeEventListener('crm:pinned-views-changed', onPinnedChanged)
+})
+
+function onPinnedChanged() {
+  loadPinnedViews(true)
+}
+
+async function handleUnpinView(view) {
+  if (!view?.id || unpinningId.value) return
+  unpinningId.value = view.id
+  try {
+    await unpinSavedView(view)
+    await loadPinnedViews(true)
+  } catch (e) {
+    ElMessage.error(e.message || '取消钉选失败')
+  } finally {
+    unpinningId.value = null
+  }
+}
 
 const menuItems = computed(() => {
   const p = auth.permissions
@@ -22,8 +51,16 @@ const menuItems = computed(() => {
   })
 })
 
+function hasPinnedChildren(item) {
+  return pinnedForPath(item.path).length > 0
+}
+
 const activeMenu = computed(() => {
   if (route.path.startsWith('/settings')) return '/settings'
+  const viewId = route.query.view_id
+  if (viewId && (route.path === '/crm/leads' || route.path === '/crm/customers')) {
+    return viewIndex(route.path, String(viewId))
+  }
   return route.path
 })
 
@@ -115,10 +152,43 @@ const avatarChar = computed(() => displayName.value.charAt(0))
     <div class="app-body">
       <aside class="app-sidebar">
         <el-menu :default-active="activeMenu" router class="app-sidebar__menu">
-          <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
-            <el-icon><component :is="item.icon" /></el-icon>
-            <span>{{ item.title }}</span>
-          </el-menu-item>
+          <template v-for="item in menuItems" :key="item.path">
+            <el-sub-menu v-if="hasPinnedChildren(item)" :index="item.path">
+              <template #title>
+                <el-icon><component :is="item.icon" /></el-icon>
+                <span>{{ item.title }}</span>
+              </template>
+              <el-menu-item :index="item.path" :route="{ path: item.path }">
+                全部{{ item.title }}
+              </el-menu-item>
+              <el-menu-item
+                v-for="view in pinnedForPath(item.path)"
+                :key="view.id"
+                :index="viewIndex(item.path, view.id)"
+                :route="viewRoute(item.path, view.id)"
+                class="pinned-view-menu-item"
+              >
+                <span class="pinned-view-item">
+                  <span class="pinned-view-item__label">{{ view.name }}</span>
+                  <el-tooltip content="取消钉选" placement="right">
+                    <span
+                      class="pinned-view-item__unpin"
+                      role="button"
+                      tabindex="0"
+                      @click.stop.prevent="handleUnpinView(view)"
+                      @keydown.enter.prevent="handleUnpinView(view)"
+                    >
+                      <el-icon><StarFilled /></el-icon>
+                    </span>
+                  </el-tooltip>
+                </span>
+              </el-menu-item>
+            </el-sub-menu>
+            <el-menu-item v-else :index="item.path">
+              <el-icon><component :is="item.icon" /></el-icon>
+              <span>{{ item.title }}</span>
+            </el-menu-item>
+          </template>
         </el-menu>
       </aside>
 
@@ -135,9 +205,10 @@ const avatarChar = computed(() => displayName.value.charAt(0))
 
 <style scoped>
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .app-header {
@@ -243,6 +314,46 @@ const avatarChar = computed(() => displayName.value.charAt(0))
 .app-sidebar__menu :deep(.el-menu-item.is-active) {
   background: #e6f4ff;
   color: var(--color-primary);
+}
+
+.pinned-view-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pinned-view-item__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pinned-view-item__unpin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  opacity: 0.85;
+  color: var(--el-color-warning);
+  cursor: pointer;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.pinned-view-menu-item:hover .pinned-view-item__unpin,
+.pinned-view-item__unpin:focus-visible {
+  opacity: 1;
+}
+
+.pinned-view-item__unpin:hover {
+  background: rgba(230, 162, 60, 0.12);
 }
 
 .app-main {

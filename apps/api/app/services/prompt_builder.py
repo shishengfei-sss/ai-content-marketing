@@ -165,6 +165,8 @@ def build_proposals_user_prompt(
 
     template_hint: str = "",
 
+    proposal_count: int | None = None,
+
 ) -> str:
 
     scene_label = scene_name or scene or "通用营销"
@@ -179,11 +181,18 @@ def build_proposals_user_prompt(
 
         f"用户选题：{topic}",
 
-        "请给出 3 到 5 个不同创作方向，JSON 数组，每项仅一个字段：",
-
-        '- "title"：一句话创作方向（15～40 字，只说切入点，不要标题、不要分点、不要大纲）',
-
     ]
+
+    if proposal_count is not None:
+        parts.append(
+            f"请给出恰好 {proposal_count} 个不同创作方向，JSON 数组长度必须等于 {proposal_count}，每项仅一个字段："
+        )
+    else:
+        parts.append("请给出 3 到 5 个不同创作方向，JSON 数组，每项仅一个字段：")
+
+    parts.append(
+        '- "title"：一句话创作方向（15～40 字，只说切入点，不要标题、不要分点、不要大纲）'
+    )
 
     if template_hint:
 
@@ -364,7 +373,7 @@ def build_user_prompt(
 
 
 
-def parse_proposals_json(raw: str) -> list[dict[str, str]]:
+def parse_proposals_json(raw: str, *, proposal_count: int | None = None) -> list[dict[str, str]]:
 
     text = raw.strip()
 
@@ -390,15 +399,15 @@ def parse_proposals_json(raw: str) -> list[dict[str, str]]:
 
 
 
-    if not isinstance(data, list) or len(data) < 3:
+    if not isinstance(data, list):
 
         raise ValueError("PROPOSALS_PARSE_FAILED")
 
-
+    max_items = proposal_count if proposal_count is not None else 5
 
     proposals: list[dict[str, str]] = []
 
-    for item in data[:5]:
+    for item in data[:max_items]:
 
         if not isinstance(item, dict):
 
@@ -412,10 +421,15 @@ def parse_proposals_json(raw: str) -> list[dict[str, str]]:
 
 
 
+    if proposal_count is not None:
+        if len(proposals) < proposal_count:
+            raise ValueError("PROPOSALS_PARSE_FAILED")
+        return proposals[:proposal_count]
+
     if len(proposals) < 3:
 
         raise ValueError("PROPOSALS_PARSE_FAILED")
 
-    return proposals
+    return proposals[:5]
 
 

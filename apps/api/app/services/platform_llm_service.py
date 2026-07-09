@@ -9,6 +9,15 @@ from app.config import settings
 from app.models import LLMConfig, PlatformLLMConfig, TenantLLMUsage
 from app.services.crypto import decrypt_api_key
 
+REAL_PLATFORM_PROVIDERS = frozenset({"deepseek", "openai_compatible", "dashscope"})
+
+
+def normalize_platform_provider(provider: str | None) -> str:
+    name = (provider or "deepseek").strip().lower()
+    if name == "fake" or name not in REAL_PLATFORM_PROVIDERS:
+        return "deepseek"
+    return name
+
 
 def get_platform_config(db: Session) -> PlatformLLMConfig | None:
     return db.query(PlatformLLMConfig).order_by(PlatformLLMConfig.updated_at.desc()).first()

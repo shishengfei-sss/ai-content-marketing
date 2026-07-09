@@ -149,12 +149,16 @@ class MemberOut(BaseModel):
 
 class MemberCreateRequest(BaseModel):
     phone: str = Field(pattern=r"^1\d{10}$")
-    display_name: str = ""
+    display_name: str = Field(min_length=1, max_length=100)
     password: str = Field(default="ChangeMe123", min_length=8, max_length=128)
 
 
 class MemberRoleUpdateRequest(BaseModel):
     role_id: UUID
+
+
+class MemberUpdateRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=100)
 
 
 class UserOut(BaseModel):
@@ -243,6 +247,7 @@ class ContentGenerateRequest(BaseModel):
     ephemeral_instruction: str = ""
     selected_proposal: "ContentProposal | None" = None
     llm_source: str = Field(default="platform", pattern="^(platform|tenant)$")
+    campaign_id: UUID | None = None
 
 
 class ContentProposal(BaseModel):
@@ -259,6 +264,7 @@ class ContentProposalsRequest(BaseModel):
     content_format: str = Field(default="article", pattern="^(article|note|video_script)$")
     apply_user_prompt: bool = False
     llm_source: str = Field(default="platform", pattern="^(platform|tenant)$")
+    proposal_count: int | None = Field(default=None, ge=1, le=10)
 
 
 class ContentProposalsResponse(BaseModel):
@@ -316,6 +322,9 @@ class DashboardStatsOut(BaseModel):
     reads_last_7_days: int
     generated_this_month: int
     pending_review: int = 0
+    crm_new_leads: int = 0
+    crm_tasks_due_today: int = 0
+    crm_tasks_overdue: int = 0
 
 
 class WeChatSettingsOut(BaseModel):
@@ -588,7 +597,22 @@ class AgentChatResponse(BaseModel):
     clarify_question: str | None = None
     proposals: list[ContentProposal] | None = None
     content: ContentOut | None = None
-    message_id: UUID
+    message_id: UUID | None = None
+
+
+class AgentPreflightRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    platform: str = Field(pattern=r"^(wechat|xhs|douyin)$")
+    content_format: str = Field(pattern=r"^(article|note|video_script)$")
+    llm_source: str = Field(default="platform", pattern=r"^(platform|tenant)$")
+
+
+class AgentPreflightResponse(BaseModel):
+    ready: bool
+    action: str
+    clarify_question: str | None = None
+    topic: str | None = None
+    proposal_count: int | None = None
 
 
 class AgentToolOut(BaseModel):
@@ -666,6 +690,10 @@ class AgentWorkflowCreate(BaseModel):
     input: dict = Field(default_factory=dict)
     session_id: UUID | None = None
     auto_run: bool = True
+
+
+class AgentWorkflowResumeRequest(BaseModel):
+    selected_proposal_index: int = Field(default=0, ge=0, le=20)
 
 
 class AgentWorkflowStepOut(BaseModel):

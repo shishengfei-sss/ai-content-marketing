@@ -10,28 +10,13 @@ from uuid import uuid4
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import _get_test_client, check, req, reset_all_tenant_quotas
+from tests.http_client import _get_test_client, check, req, reset_all_tenant_quotas, ensure_fake_platform
 
 
 def login(phone: str, password: str) -> str:
     code, data = req("POST", "/auth/login", body={"phone": phone, "password": password})
     assert code == 200, data
     return data["access_token"]
-
-
-def ensure_fake_platform(admin_token: str) -> None:
-    req(
-        "PATCH",
-        "/admin/platform-llm",
-        token=admin_token,
-        body={
-            "provider": "fake",
-            "base_url": "http://fake.local",
-            "model": "fake-model",
-            "api_key": "fake-key",
-            "is_active": True,
-        },
-    )
 
 
 def main() -> int:

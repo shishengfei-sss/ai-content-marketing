@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [uni()],
     server: {
+      host: '0.0.0.0',
       port: Number(env.VITE_DEV_PORT) || 5174,
       strictPort: false,
       proxy: {

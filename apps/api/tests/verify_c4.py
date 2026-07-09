@@ -11,6 +11,7 @@ sys.path.insert(0, str(API_ROOT))
 
 from app.database import SessionLocal
 from app.services.knowledge_service import backfill_knowledge_embeddings
+from tests.alembic_head import is_at_expected_head
 from tests.http_client import _get_test_client, check, req
 
 
@@ -47,12 +48,13 @@ def main() -> int:
     client = _get_test_client()
 
     out = alembic_head()
-    results.append(check("VC4-1 alembic=020(head)", "020" in out and "head" in out.lower(), out.strip()))
+    results.append(check("VC4-1 alembic=022(head)", is_at_expected_head(out), out.strip()))
     results.append(check("VC4-1 embedding_json 列", column_exists("knowledge_chunks", "embedding_json")))
 
     db = SessionLocal()
     try:
-        filled = backfill_knowledge_embeddings(db, limit=200)
+        filled = backfill_knowledge_embeddings(db, limit=500)
+        db.commit()
     finally:
         db.close()
     results.append(check("VC4-2 backfill 可执行", filled >= 0, str(filled)))
@@ -85,7 +87,11 @@ def main() -> int:
 
     r = client.get(
         "/api/v1/knowledge/search",
-        params={"q": "电子税局门户 线上申报缴款 滞纳金 信用惩戒", "mode": "hybrid", "limit": 5},
+        params={
+            "q": f"{relevant_marker} 电子税局门户 线上申报缴款 滞纳金 信用惩戒",
+            "mode": "hybrid",
+            "limit": 5,
+        },
         headers={"Authorization": f"Bearer {token}"},
     )
     data = r.json()

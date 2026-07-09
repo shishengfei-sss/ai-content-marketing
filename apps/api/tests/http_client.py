@@ -7,6 +7,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit, quote
 
 API_ROOT = Path(__file__).resolve().parents[1]
 if str(API_ROOT) not in sys.path:
@@ -16,6 +17,11 @@ USE_LIVE = os.environ.get("VERIFY_LIVE_API") == "1"
 BASE = os.environ.get("VERIFY_API_BASE", "http://127.0.0.1:8000/api/v1")
 
 _client = None
+
+
+def reset_test_client() -> None:
+    global _client
+    _client = None
 
 
 def _get_test_client():
@@ -54,17 +60,33 @@ def req(method: str, path: str, token: str | None = None, body: dict | None = No
         try:
             data = r.json()
         except Exception:
-            data = r.text
+            data = r.text if (r.text or "").strip() else {}
         return r.status_code, data
 
     url = BASE + path if path.startswith("/api/") else BASE + path
+    parts = urlsplit(url)
+    if parts.query:
+        url = urlunsplit(
+            (
+                parts.scheme,
+                parts.netloc,
+                parts.path,
+                urlencode(parse_qsl(parts.query, keep_blank_values=True), quote_via=quote),
+                parts.fragment,
+            )
+        )
     data_bytes = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
     request = urllib.request.Request(url, data=data_bytes, headers=headers, method=method)
     try:
         with urllib.request.urlopen(request, timeout=120) as resp:
-            return resp.status, json.loads(resp.read().decode())
+            raw = resp.read().decode()
+            if not raw.strip():
+                return resp.status, {}
+            return resp.status, json.loads(raw)
     except urllib.error.HTTPError as e:
         raw = e.read().decode()
+        if not raw.strip():
+            return e.code, {}
         try:
             detail = json.loads(raw)
         except json.JSONDecodeError:
@@ -89,3 +111,21 @@ def reset_all_tenant_quotas() -> None:
         db.commit()
     finally:
         db.close()
+
+
+def ensure_fake_platform(admin_token: str) -> None:
+    """仅 FORCE_FAKE_PLATFORM_LLM=1 时写入 fake（CI/离线验收）；否则不覆盖真实配置。"""
+    if os.environ.get("FORCE_FAKE_PLATFORM_LLM") != "1":
+        return
+    req(
+        "PATCH",
+        "/admin/platform-llm",
+        token=admin_token,
+        body={
+            "provider": "fake",
+            "base_url": "http://fake.local",
+            "model": "fake-model",
+            "api_key": "fake-key",
+            "is_active": True,
+        },
+    )

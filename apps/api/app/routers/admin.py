@@ -1,4 +1,5 @@
 from uuid import UUID
+import os
 import time
 
 import httpx
@@ -497,6 +498,8 @@ def update_platform_llm_settings(
 
     updates = body.model_dump(exclude_unset=True)
     api_key = updates.pop("api_key", None)
+    if updates.get("provider") == "fake" and os.environ.get("FORCE_FAKE_PLATFORM_LLM") != "1":
+        raise HTTPException(status_code=400, detail="fake 提供方已停用，请使用 deepseek / openai_compatible / dashscope")
     for field, value in updates.items():
         setattr(row, field, value)
     if api_key:
@@ -515,6 +518,8 @@ async def test_platform_llm_settings(
 ):
     row = get_platform_config(db)
     provider = (body.provider if body and body.provider else None) or (row.provider if row else "deepseek")
+    if provider == "fake" and os.environ.get("FORCE_FAKE_PLATFORM_LLM") != "1":
+        raise HTTPException(status_code=400, detail="fake 提供方已停用，请使用 deepseek / openai_compatible / dashscope")
     base_url = (body.base_url if body and body.base_url else None) or (row.base_url if row else "https://api.deepseek.com")
     model = (body.model if body and body.model else None) or (row.model if row else "deepseek-chat")
     timeout_sec = (body.timeout_sec if body and body.timeout_sec else None) or (row.timeout_sec if row else 60)
