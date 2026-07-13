@@ -58,8 +58,8 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.Uuid(), nullable=False),
         sa.Column("platform", sa.String(length=30), nullable=False),
         sa.Column("account_name", sa.String(length=200), nullable=False),
-        sa.Column("is_mock", sa.Boolean(), nullable=False, server_default=sa.text("1")),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_mock", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

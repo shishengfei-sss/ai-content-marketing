@@ -7,3 +7,8 @@ __pycache__/
 .env
 dev.db
 storage/
+*.zip
+apps/api/run_agent_result*.txt
+apps/api/tests/run_agent_result*.txt
+apps/api/scripts/_cursorCreds.json
+apps/api/scripts/_oneTimeSettings.json

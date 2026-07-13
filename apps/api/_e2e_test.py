@@ -80,7 +80,7 @@ def main():
     proposals_body = {
         "industry_code": "finance",
         "platform": "wechat",
-        "scene": "bookkeeping_intro",
+        "scene": "brand_intro",
         "topic": "2026年稳健理财配置思路",
         "content_format": "article",
         "llm_source": "platform",

@@ -3,8 +3,9 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
@@ -42,6 +43,25 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="智营获客 API", version="0.1.0", lifespan=lifespan)
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled error on %s", request.url.path)
+    detail = "服务器内部错误，请查看 API 日志"
+    msg = str(exc).lower()
+    if "does not exist" in msg or "undefinedtable" in msg or "no such table" in msg:
+        detail = "数据库表未初始化，请在服务器执行 alembic upgrade head"
+    elif "type \"vector\"" in msg or "pg_extension" in msg or "vector" in msg and "does not exist" in msg:
+        detail = "知识库向量扩展未就绪，已降级为 JSON 索引；请更新 API 或安装 pgvector"
+    elif "marketing" in msg and ("industry" in msg or "顾问" in msg):
+        detail = "营销顾问配置未初始化，请执行 alembic upgrade head"
+    return JSONResponse(status_code=500, content={"detail": detail})
 
 origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 app.add_middleware(

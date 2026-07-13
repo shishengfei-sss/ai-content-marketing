@@ -9,10 +9,11 @@ API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
 from tests.alembic_head import EXPECTED_HEAD, is_at_expected_head
-from tests.http_client import _get_test_client, check, req
+from tests.http_client import _get_test_client, check, req, ensure_fake_platform, reset_all_tenant_quotas
 
 
 def main() -> int:
+    reset_all_tenant_quotas()
     results: list[bool] = []
 
     proc = subprocess.run(
@@ -32,6 +33,7 @@ def main() -> int:
     if code != 200:
         return 1
     admin_token = admin["access_token"]
+    ensure_fake_platform(admin_token)
 
     code, platform = req("GET", "/admin/platform-llm", token=admin_token)
     results.append(check("V0-4 platform-llm GET", code == 200, str(platform.get("default_free_quota"))))
@@ -70,9 +72,9 @@ def main() -> int:
         "/content/proposals",
         token=user_token,
         body={
-            "industry_code": "finance",
+            "industry_code": "marketing",
             "platform": "wechat",
-            "scene": "bookkeeping_intro",
+            "scene": "brand_intro",
             "topic": "M0验收测试主题",
             "content_format": "article",
             "llm_source": "platform",
@@ -94,9 +96,9 @@ def main() -> int:
             "/content/generate",
             token=user_token,
             body={
-                "industry_code": "finance",
+                "industry_code": "marketing",
                 "platform": "wechat",
-                "scene": "bookkeeping_intro",
+                "scene": "brand_intro",
                 "topic": "M0验收测试主题",
                 "content_format": "article",
                 "llm_source": "platform",

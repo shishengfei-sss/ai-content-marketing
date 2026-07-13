@@ -72,7 +72,7 @@ def main() -> int:
         "POST",
         "/agent/sessions",
         token=token,
-        body={"industry_code": "finance", "title": "LM3注入"},
+        body={"industry_code": "marketing", "title": "LM3注入"},
     )
     sid = session.get("id")
     code, chat = req(
@@ -83,7 +83,7 @@ def main() -> int:
     )
     results.append(check("VLM3-3 chat 仍可用", code == 200 and chat.get("action") == "proposals", chat.get("action")))
 
-    proc = subprocess.run([sys.executable, "tests/verify_lm2.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_lm2.py"], cwd=API_ROOT)
     results.append(check("VLM3-4 verify_lm2 回归", proc.returncode == 0))
 
     passed = all(results)

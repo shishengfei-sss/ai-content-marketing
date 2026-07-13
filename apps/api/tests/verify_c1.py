@@ -75,9 +75,9 @@ def main() -> int:
             "input": {
                 "platform": "wechat",
                 "topic": "报税提醒",
-                "scene": "bookkeeping_intro",
+                "scene": "brand_intro",
                 "content_format": "article",
-                "industry_code": "finance",
+                "industry_code": "marketing",
                 "llm_source": "platform",
                 "search_query": "报税",
             },
@@ -145,7 +145,7 @@ def main() -> int:
         )
     )
 
-    proc = subprocess.run([sys.executable, "tests/verify_lm5.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_lm5.py"], cwd=API_ROOT)
     results.append(check("VC1-7 verify_lm5 回归", proc.returncode == 0))
 
     passed = all(results)

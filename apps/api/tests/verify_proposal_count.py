@@ -90,7 +90,7 @@ def main() -> int:
         "POST",
         "/agent/sessions",
         token=token,
-        body={"industry_code": "finance", "title": "ProposalCount"},
+        body={"industry_code": "marketing", "title": "ProposalCount"},
     )
     sid = session.get("id")
     if sid:

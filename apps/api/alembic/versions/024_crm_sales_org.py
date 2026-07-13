@@ -25,7 +25,7 @@ def upgrade() -> None:
         sa.Column("code", sa.String(50), nullable=True),
         sa.Column("manager_membership_id", sa.Uuid(), nullable=True),
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),

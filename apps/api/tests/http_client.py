@@ -13,7 +13,12 @@ API_ROOT = Path(__file__).resolve().parents[1]
 if str(API_ROOT) not in sys.path:
     sys.path.insert(0, str(API_ROOT))
 
-USE_LIVE = os.environ.get("VERIFY_LIVE_API") == "1"
+USE_LIVE = os.environ.get("VERIFY_LIVE_API", "0") == "1"
+if not USE_LIVE:
+    os.environ.setdefault("FORCE_FAKE_PLATFORM_LLM", "1")
+    from app.config import settings as _settings
+
+    _settings.SMS_SEND_INTERVAL_SEC = 0
 BASE = os.environ.get("VERIFY_API_BASE", "http://127.0.0.1:8000/api/v1")
 
 _client = None
@@ -113,6 +118,15 @@ def reset_all_tenant_quotas() -> None:
         db.close()
 
 
+def clear_sms_rate_limits() -> None:
+    """清除内存短信频控，避免同进程连跑 M5/M6/M8 时 forgot send-code 429。"""
+    from app.config import settings
+    from app.services import sms_service
+
+    settings.SMS_SEND_INTERVAL_SEC = 0
+    sms_service._store.clear()
+
+
 def ensure_fake_platform(admin_token: str) -> None:
     """仅 FORCE_FAKE_PLATFORM_LLM=1 时写入 fake（CI/离线验收）；否则不覆盖真实配置。"""
     if os.environ.get("FORCE_FAKE_PLATFORM_LLM") != "1":
@@ -129,3 +143,39 @@ def ensure_fake_platform(admin_token: str) -> None:
             "is_active": True,
         },
     )
+
+
+def restore_platform_deepseek(admin_token: str, *, force: bool = False) -> None:
+    """验收后恢复平台 DeepSeek，并清除测试写入的 fake-key。"""
+    if not force and os.environ.get("FORCE_FAKE_PLATFORM_LLM") == "1":
+        return
+    from app.config import settings
+    from app.database import SessionLocal
+    from app.models import PlatformLLMConfig
+    from app.services.crypto import encrypt_api_key
+
+    db = SessionLocal()
+    try:
+        row = db.query(PlatformLLMConfig).order_by(PlatformLLMConfig.updated_at.desc()).first()
+        if row:
+            row.provider = "deepseek"
+            row.base_url = settings.DEEPSEEK_BASE_URL or "https://api.deepseek.com"
+            row.model = settings.DEEPSEEK_MODEL or "deepseek-chat"
+            row.is_active = True
+            if settings.DEEPSEEK_API_KEY:
+                row.api_key_encrypted = encrypt_api_key(settings.DEEPSEEK_API_KEY)
+            else:
+                row.api_key_encrypted = ""
+            db.commit()
+    finally:
+        db.close()
+
+    body: dict = {
+        "provider": "deepseek",
+        "base_url": settings.DEEPSEEK_BASE_URL or "https://api.deepseek.com",
+        "model": settings.DEEPSEEK_MODEL or "deepseek-chat",
+        "is_active": True,
+    }
+    if settings.DEEPSEEK_API_KEY:
+        body["api_key"] = settings.DEEPSEEK_API_KEY
+    req("PATCH", "/admin/platform-llm", token=admin_token, body=body)

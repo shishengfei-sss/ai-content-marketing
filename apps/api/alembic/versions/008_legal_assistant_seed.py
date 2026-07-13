@@ -74,7 +74,7 @@ def upgrade() -> None:
               disclaimer, default_tone, welcome_message, sort_order, is_active
             ) VALUES (
               :id, 'legal', '法律服务/律所', :desc, :role, :rules,
-              :disclaimer, '专业严谨', :welcome, 10, 1
+              :disclaimer, '专业严谨', :welcome, 10, true
             )
             """
         ),
@@ -95,7 +95,7 @@ def upgrade() -> None:
                 INSERT INTO content_templates (
                   id, industry_code, platform, scene, name, prompt_hint, is_active
                 ) VALUES (
-                  :id, 'legal', :platform, :scene, :name, :hint, 1
+                  :id, 'legal', :platform, :scene, :name, :hint, true
                 )
                 """
             ),

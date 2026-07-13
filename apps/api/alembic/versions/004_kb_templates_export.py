@@ -63,7 +63,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("code", sa.String(length=50), nullable=False),
         sa.Column("name", sa.String(length=200), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("code"),
     )
@@ -76,7 +76,7 @@ def upgrade() -> None:
         sa.Column("scene", sa.String(length=100), nullable=False),
         sa.Column("name", sa.String(length=200), nullable=False),
         sa.Column("prompt_hint", sa.Text(), nullable=False, server_default=""),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_content_templates_lookup", "content_templates", ["industry_code", "platform", "scene"])

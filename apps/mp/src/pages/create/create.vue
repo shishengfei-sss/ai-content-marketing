@@ -2,19 +2,13 @@
 
   <view class="page">
 
-    <view
-      class="assistant-picker"
-      :class="{ 'assistant-picker--clickable': assistants.length > 1 }"
-      @click="showAssistantPicker"
-    >
+    <view class="assistant-picker">
       <view class="assistant-picker__avatar">AI</view>
       <view class="assistant-picker__body">
         <view class="assistant-picker__row">
-          <text class="assistant-picker__name">{{ selectedAssistant?.name || '智营 AI 创作助手' }}</text>
-          <text v-if="assistants.length > 1" class="assistant-picker__badge">切换助手</text>
-          <text v-if="assistants.length > 1" class="assistant-picker__arrow">▼</text>
+          <text class="assistant-picker__name">{{ advisorName }}</text>
         </view>
-        <text class="assistant-picker__desc">{{ selectedAssistant?.description || '先出方案 · 再生成正文' }}</text>
+        <text class="assistant-picker__desc">{{ advisorDesc }}</text>
       </view>
       <text class="assistant-picker__history" @click.stop="openSessionHistory">历史</text>
     </view>
@@ -225,7 +219,7 @@
           <input
             v-model="inputText"
             class="compose-input__field"
-            placeholder="描述想创作的内容，Enter 发送…"
+            placeholder="任意题材均可，如：少儿编程招生、火锅店开业…"
             confirm-type="send"
             :disabled="generating || proposing"
             @confirm="handleSend"
@@ -277,7 +271,7 @@ import { onShow } from '@dcloudio/uni-app'
 
 
 
-import { BASE_URL, assistantsApi, authApi, agentApi, contentApi, llmApi, wechatApi } from '@/utils/api'
+import { BASE_URL, assistantsApi, agentApi, contentApi, llmApi, wechatApi } from '@/utils/api'
 import { ensureSession } from '@/utils/session'
 
 const agentFallback = import.meta.env.VITE_AGENT_FALLBACK === '1'
@@ -301,15 +295,11 @@ const wechatSettings = ref({ can_auto_publish: false })
 
 const pendingTopic = ref('')
 
-const assistants = ref([])
-
-const industryCode = ref('finance')
+const advisor = ref(null)
 
 const llmSource = ref('platform')
 
 const llmQuota = ref({ remaining: 100, quota_limit: 100, has_tenant_key: false })
-
-const CUSTOM_SCENE = 'custom'
 
 const agentSessionId = ref(uni.getStorageSync('agent_session_id') || '')
 const sessionPanelVisible = ref(false)
@@ -375,7 +365,6 @@ function startNewChat() {
 async function createAgentSession() {
   try {
     const data = await agentApi.createSession({
-      industry_code: industryCode.value || 'finance',
       title: '营销创作',
     })
     agentSessionId.value = data.id
@@ -458,12 +447,13 @@ async function agentChat(message, { selectedProposalIndex = null, retried = fals
   }
 }
 
-const defaultWelcome = '您好！请选择平台与内容形态，在输入框描述创作主题与要点；信息不足时我会先请您补充，再给出方案。'
+const defaultWelcome =
+  '你好！我是小营，你的 AI 营销创作顾问。请选择平台与内容形态，描述想写的主题（任意行业/题材）；信息不足时我会先请您补充，再给出方案。'
 
-function buildWelcomeText() {
-  const name = selectedAssistant.value?.name || '智营 AI 创作助手'
-  return `您好，我是${name}。请选择平台与内容形态，在输入框描述创作主题与要点；信息不足时我会先请您补充，再给出方案。`
-}
+const advisorName = computed(() => advisor.value?.name || '小营 · 营销创作顾问')
+const advisorDesc = computed(
+  () => advisor.value?.description || '通用营销创作顾问，支持公众号 / 小红书 / 抖音',
+)
 
 const GREETING_RE = /^(你好|您好|hi|hello|在吗|试试|测试|help)[!.?。！？\s]*$/i
 const TOO_VAGUE_RE = /^(写(一)?篇|帮我写|生成(一个)?|来(一)?个|写个|写脚本|写笔记|创作)[!.?。！？\s]*$/i
@@ -586,95 +576,16 @@ const formatOptions = computed(() => formatOptionsForPlatform(platform.value))
 
 
 
-const selectedAssistant = computed(
-
-  () => assistants.value.find((a) => a.code === industryCode.value) || null,
-
-)
-
-
-
-function syncWelcomeMessage() {
-
-  const welcome = buildWelcomeText()
-
-  const first = messages.value.find((m) => m.role === 'assistant' && m.type === 'text')
-
-  if (first) first.content = welcome
-
-}
-
-
-
-async function loadAssistants() {
+async function loadAdvisor() {
   try {
-
     const data = await assistantsApi.list()
-
-    assistants.value = data
-
-    try {
-
-      const me = await authApi.me()
-
-      const tenantCode = me.tenant?.industry_code
-
-      if (tenantCode && data.some((a) => a.code === tenantCode)) {
-
-        industryCode.value = tenantCode
-
-      } else if (data.length) {
-
-        industryCode.value = data[0].code
-
-      }
-
-    } catch {
-
-      if (data.length) industryCode.value = data[0].code
-
-    }
-
-    syncWelcomeMessage()
-
+    advisor.value = data?.[0] || null
+    const welcome = advisor.value?.welcome_message || defaultWelcome
+    const first = messages.value.find((m) => m.role === 'assistant' && m.type === 'text')
+    if (first) first.content = welcome
   } catch {
-
     /* ignore */
-
   }
-
-}
-
-
-
-function pickAssistant(code) {
-
-  industryCode.value = code
-
-  syncWelcomeMessage()
-
-}
-
-
-
-function showAssistantPicker() {
-
-  if (assistants.value.length <= 1) return
-
-  uni.showActionSheet({
-
-    itemList: assistants.value.map((a) => a.name),
-
-    success(res) {
-
-      const picked = assistants.value[res.tapIndex]
-
-      if (picked) pickAssistant(picked.code)
-
-    },
-
-  })
-
 }
 
 
@@ -709,11 +620,10 @@ function buildPayload(topic, selectedProposal = null) {
   const usePlatform = platform.value || 'wechat'
   const useFormat = contentFormat.value || defaultContentFormat(usePlatform)
   return {
-    industry_code: industryCode.value || 'finance',
     platform: usePlatform,
-    scene: CUSTOM_SCENE,
     topic,
     content_format: useFormat,
+    industry_code: 'marketing',
     llm_source: llmSource.value,
     selected_proposal: selectedProposal,
   }
@@ -757,11 +667,11 @@ function pushClarifyMessage(question) {
 function buildWorkflowInput(topic, proposalCount = null) {
   const payload = buildPayload(topic)
   const input = {
-    industry_code: payload.industry_code,
     platform: payload.platform,
     scene: payload.scene,
     topic: payload.topic,
     content_format: payload.content_format,
+    industry_code: 'marketing',
     llm_source: payload.llm_source,
     search_query: payload.topic,
   }
@@ -1189,7 +1099,7 @@ onShow(async () => {
   const user = await ensureSession()
   if (!user) return
   await loadWechatSettings()
-  await loadAssistants()
+  await loadAdvisor()
   await loadLlmQuota()
   await ensureAgentSession()
 })
@@ -1567,47 +1477,6 @@ onShow(async () => {
 }
 
 
-
-.quick-list {
-
-  display: flex;
-
-  flex-wrap: wrap;
-
-  gap: 12rpx;
-
-}
-
-
-
-.quick-item {
-
-  width: calc(50% - 6rpx);
-
-  box-sizing: border-box;
-
-  background: #fff;
-
-  border: 1rpx solid #e8e8e8;
-
-  padding: 24rpx 20rpx;
-
-  border-radius: 16rpx;
-
-  font-size: 26rpx;
-
-  line-height: 1.4;
-
-  min-height: 88rpx;
-
-  display: flex;
-
-  align-items: center;
-
-}
-
-
-
 .proposals {
 
   background: #fff;
@@ -1960,7 +1829,9 @@ onShow(async () => {
 
   gap: 16rpx;
 
-  padding: 16rpx 20rpx;
+  padding: 16rpx 20rpx 20rpx;
+
+  border-top: 1rpx solid #f0f2f5;
 
 }
 
@@ -1988,23 +1859,23 @@ onShow(async () => {
 
   min-width: 128rpx;
 
-  height: 80rpx;
+  height: 72rpx;
 
-  line-height: 80rpx;
+  line-height: 72rpx;
 
-  background: #1677ff;
+  padding: 0 28rpx;
 
-  color: #fff;
+  border-radius: 18rpx;
 
   font-size: 28rpx;
 
   font-weight: 600;
 
-  border-radius: 16rpx;
+  background: #1677ff;
+
+  color: #fff;
 
   margin: 0;
-
-  padding: 0 28rpx;
 
 }
 

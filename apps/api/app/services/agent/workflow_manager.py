@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.database import uuid_eq
 from app.dependencies import TenantContext
-from app.models import AgentWorkflow, AgentWorkflowStep
+from app.models import AgentSession, AgentWorkflow, AgentWorkflowStep
 from app.services.agent.compliance_revise import (
     MAX_COMPLIANCE_REVISE_ROUNDS,
     build_compliance_revise_instruction,
@@ -24,6 +24,7 @@ from app.services.agent.supervisor_service import (
     extract_handoffs,
 )
 from app.services.agent.tools import _perm_ctx, execute_tool
+from app.services.assistant_service import MARKETING_ADVISOR_CODE, normalize_advisor_code
 
 
 def _dump(data: dict) -> str:
@@ -79,11 +80,25 @@ def create_workflow(
         raise HTTPException(status_code=400, detail=f"未知 pipeline: {pipeline_code}")
     _validate_pipeline_input(pipeline_code, input_data)
 
+    safe_session_id = session_id
+    if safe_session_id is not None:
+        exists = (
+            db.query(AgentSession.id)
+            .filter(
+                uuid_eq(AgentSession.id, safe_session_id),
+                uuid_eq(AgentSession.tenant_id, ctx.tenant_id),
+                uuid_eq(AgentSession.user_id, ctx.user.id),
+            )
+            .first()
+        )
+        if not exists:
+            safe_session_id = None
+
     steps_def = get_pipeline(pipeline_code)
     workflow = AgentWorkflow(
         tenant_id=ctx.tenant_id,
         user_id=ctx.user.id,
-        session_id=session_id,
+        session_id=safe_session_id,
         pipeline_code=pipeline_code,
         status="pending",
         current_step=0,
@@ -157,11 +172,11 @@ def get_workflow_handoffs(db: Session, workflow_id: UUID, ctx: TenantContext) ->
 
 
 def _build_tool_args(step: AgentWorkflowStep, workflow: AgentWorkflow, ctx_data: dict) -> dict:
-    industry = ctx_data.get("industry_code") or "finance"
+    industry = normalize_advisor_code(ctx_data.get("industry_code") or MARKETING_ADVISOR_CODE)
     llm_source = ctx_data.get("llm_source") or "platform"
     platform = ctx_data.get("platform") or "wechat"
     topic = ctx_data.get("topic") or ""
-    scene = ctx_data.get("scene") or "bookkeeping_intro"
+    scene = ctx_data.get("scene") or "brand_intro"
     content_format = ctx_data.get("content_format") or "article"
 
     if step.tool_name == "search_knowledge":
@@ -312,7 +327,7 @@ async def _run_tool_step(
         workflow.error_message = step.error_message
         workflow.current_step = step.step_index
         db.commit()
-        raise
+        return {}
     except Exception as exc:
         step.status = "failed"
         step.error_message = str(exc)
@@ -321,14 +336,25 @@ async def _run_tool_step(
         workflow.error_message = step.error_message
         workflow.current_step = step.step_index
         db.commit()
-        raise
+        return {}
 
     step.status = "completed"
     step.output_json = _dump(result)
     step.finished_at = datetime.now(timezone.utc)
     workflow.current_step = step.step_index + 1
     _apply_step_result(step, workflow, ctx_data, result)
-    db.commit()
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        step.status = "failed"
+        step.error_message = f"步骤保存失败: {exc}"
+        step.finished_at = datetime.now(timezone.utc)
+        workflow.status = "failed"
+        workflow.error_message = step.error_message
+        workflow.current_step = step.step_index
+        db.commit()
+        return {}
     return result
 
 
@@ -364,11 +390,10 @@ async def _supervisor_compliance_revise_loop(
         db.add(revise_step)
         db.commit()
         db.refresh(workflow)
-        try:
-            await _run_tool_step(db, tool_ctx, revise_step, workflow, ctx_data)
-        except (HTTPException, Exception):
+        await _run_tool_step(db, tool_ctx, revise_step, workflow, ctx_data)
+        if workflow.status == "failed":
             db.refresh(workflow)
-            return workflow.status == "failed"
+            return True
 
         recheck_step = AgentWorkflowStep(
             workflow_id=workflow.id,
@@ -381,11 +406,10 @@ async def _supervisor_compliance_revise_loop(
         db.add(recheck_step)
         db.commit()
         db.refresh(workflow)
-        try:
-            result = await _run_tool_step(db, tool_ctx, recheck_step, workflow, ctx_data)
-        except (HTTPException, Exception):
+        result = await _run_tool_step(db, tool_ctx, recheck_step, workflow, ctx_data)
+        if workflow.status == "failed":
             db.refresh(workflow)
-            return workflow.status == "failed"
+            return True
 
         revise_count += 1
         ctx_data["_compliance_revise_count"] = revise_count
@@ -411,7 +435,11 @@ async def run_workflow(db: Session, ctx: TenantContext, workflow_id: UUID) -> Ag
     if workflow.status == "failed":
         raise HTTPException(status_code=400, detail="工作流已失败，请新建")
 
-    tool_ctx = _perm_ctx(ctx, db, industry_code=_load(workflow.input_json).get("industry_code") or "finance")
+    tool_ctx = _perm_ctx(
+        ctx,
+        db,
+        industry_code=normalize_advisor_code(_load(workflow.input_json).get("industry_code") or MARKETING_ADVISOR_CODE),
+    )
     ctx_data = _load(workflow.input_json)
     ctx_data.setdefault("_supervisor_handoffs", [])
     workflow.status = "running"
@@ -427,9 +455,9 @@ async def run_workflow(db: Session, ctx: TenantContext, workflow_id: UUID) -> Ag
             db.commit()
             return workflow
 
-        try:
-            result = await _run_tool_step(db, tool_ctx, step, workflow, ctx_data)
-        except (HTTPException, Exception):
+        result = await _run_tool_step(db, tool_ctx, step, workflow, ctx_data)
+        if workflow.status == "failed":
+            db.rollback()
             db.refresh(workflow)
             return workflow
 

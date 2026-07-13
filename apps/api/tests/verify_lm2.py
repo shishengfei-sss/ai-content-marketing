@@ -124,7 +124,7 @@ def main() -> int:
         "POST",
         "/agent/sessions",
         token=admin_token,
-        body={"industry_code": "finance", "title": "LM2摘要测试"},
+        body={"industry_code": "marketing", "title": "LM2摘要测试"},
     )
     sid = session.get("id")
     if not sid:
@@ -190,7 +190,7 @@ def main() -> int:
     code, _ = req("GET", f"/agent/sessions/{sid}/summary", token=co_token)
     results.append(check("VLM2-5 他人会话摘要404", code == 404, str(code)))
 
-    proc = subprocess.run([sys.executable, "tests/verify_lm1.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_lm1.py"], cwd=API_ROOT)
     results.append(check("VLM2-6 verify_lm1 回归", proc.returncode == 0))
 
     passed = all(results)

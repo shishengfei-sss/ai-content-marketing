@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import uuid
 from pathlib import Path
 
 API_ROOT = Path(__file__).resolve().parents[1]
@@ -9,7 +10,7 @@ WEB_ROOT = API_ROOT.parent / 'web' / 'src'
 MP_ROOT = API_ROOT.parent / 'mp' / 'src'
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import check, req
+from tests.http_client import check, req, clear_sms_rate_limits, reset_test_client
 
 WEB_FILES = [
     'views/SelectTenant.vue',
@@ -37,6 +38,9 @@ def login(phone, password):
 
 def main():
     results = []
+    reset_test_client()
+    clear_sms_rate_limits()
+    m6_phone = f"139{uuid.uuid4().int % 10**8:08d}"
 
     for f in WEB_FILES:
         results.append(check(f'Web 文件 {f}', (WEB_ROOT / f).is_file()))
@@ -58,15 +62,22 @@ def main():
     code, me_m = req('GET', '/auth/me', token=multi_token)
     results.append(check('V6 多公司 tenants', code == 200 and len(me_m.get('tenants', [])) >= 2))
 
-    code, send = req('POST', '/auth/password/forgot/send-code', body={'phone': '13900006666'})
-    if code != 200:
-        req('POST', '/auth/register', body={
-            'phone': '13900006666', 'password': 'Test123456',
-            'tenant_name': 'M6测试公司',
-            'industry_code': 'finance', 'display_name': 'M6',
-        })
-        code, send = req('POST', '/auth/password/forgot/send-code', body={'phone': '13900006666'})
-    results.append(check('V6 forgot send-code', code == 200))
+    clear_sms_rate_limits()
+    reg_code, reg = req(
+        'POST',
+        '/auth/register',
+        body={
+            'phone': m6_phone,
+            'password': 'Test123456',
+            'tenant_name': f'M6测试公司-{m6_phone[-4:]}',
+            'industry_code': 'finance',
+            'display_name': 'M6',
+        },
+    )
+    results.append(check('V6 register forgot-user', reg_code == 200, f'{reg_code} {reg}'))
+    clear_sms_rate_limits()
+    code, send = req('POST', '/auth/password/forgot/send-code', body={'phone': m6_phone})
+    results.append(check('V6 forgot send-code', code == 200, f'{code} {send}'))
 
     editor_token = login('13900008888', 'Test123456')
     code, me_e = req('GET', '/auth/me', token=editor_token)

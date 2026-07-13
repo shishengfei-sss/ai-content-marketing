@@ -29,7 +29,7 @@ def main() -> int:
         "POST",
         "/agent/sessions",
         token=user_token,
-        body={"industry_code": "finance", "title": "B3改稿"},
+        body={"industry_code": "marketing", "title": "B3改稿"},
     )
     sid = session.get("id")
 
@@ -111,7 +111,7 @@ def main() -> int:
     )
     results.append(check("VB3-4 不存在 content 404", code == 404, str(code)))
 
-    proc = subprocess.run([sys.executable, "tests/verify_b2.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_b2.py"], cwd=API_ROOT)
     results.append(check("VB3-5 verify_b2 回归", proc.returncode == 0))
 
     passed = all(results)

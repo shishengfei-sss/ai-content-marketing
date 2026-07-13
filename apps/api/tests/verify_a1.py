@@ -27,7 +27,7 @@ def main() -> int:
         "POST",
         "/agent/sessions",
         token=admin_token,
-        body={"industry_code": "finance", "title": "A1测试会话"},
+        body={"industry_code": "marketing", "title": "A1测试会话"},
     )
     results.append(check("VA1-1 创建会话", code == 200 and session.get("id"), str(session)[:80]))
     sid = session.get("id")
@@ -71,7 +71,7 @@ def main() -> int:
         )
     )
 
-    proc = subprocess.run([sys.executable, "tests/run_m0_m8.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/run_m0_m8.py"], cwd=API_ROOT)
     results.append(check("VA1-5 run_m0_m8", proc.returncode == 0))
 
     passed = all(results)

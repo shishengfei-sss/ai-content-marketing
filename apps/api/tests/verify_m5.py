@@ -7,7 +7,7 @@ from pathlib import Path
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import check, req
+from tests.http_client import check, req, clear_sms_rate_limits
 
 PHONE = "13900007777"
 OLD_PASS = "Test123456"
@@ -24,6 +24,7 @@ def main():
     if code not in (200, 400):
         print("register", code)
 
+    clear_sms_rate_limits()
     code, send = req("POST", "/auth/password/forgot/send-code", body={"phone": PHONE})
     results.append(check("V5-1 send-code", code == 200, str(send)))
 

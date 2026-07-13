@@ -28,7 +28,7 @@ def upgrade() -> None:
         sa.Column("api_key_encrypted", sa.Text(), nullable=False, server_default=""),
         sa.Column("timeout_sec", sa.Integer(), nullable=False, server_default="60"),
         sa.Column("default_free_quota", sa.Integer(), nullable=False, server_default="100"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
@@ -61,7 +61,7 @@ def upgrade() -> None:
                   timeout_sec, default_free_quota, is_active
                 ) VALUES (
                   :id, 'deepseek', 'https://api.deepseek.com', 'deepseek-chat', '',
-                  60, 100, 1
+                  60, 100, true
                 )
                 """
             ),

@@ -12,9 +12,9 @@ from app.models import AgentSession, Content, User
 from app.schemas import AgentChatResponse, ContentGenerateRequest, ContentProposalsRequest
 from app.services.agent.chat_service import _content_out, _last_proposals_from_session, _resolve_content_format
 from app.services.agent.intent_parser import parse_intent
-from app.services.agent.session_service import append_message
+from app.services.agent.session_service import append_message, effective_advisor_code
 from app.services.agent.sse import format_sse
-from app.services.assistant_service import get_profile, require_active_assistant
+from app.services.assistant_service import get_profile, normalize_advisor_code, require_active_assistant
 from app.services.content_generation_service import (
     raise_llm_config_error,
     run_generate_proposals,
@@ -42,15 +42,16 @@ def _build_generate_messages(db: Session, tenant_id, user: User, body: ContentGe
         body.platform,
         body.content_format or default_content_format(body.platform),
     )
-    require_active_assistant(db, body.industry_code)
-    assistant = get_profile(db, body.industry_code)
+    advisor_code = normalize_advisor_code(body.industry_code)
+    require_active_assistant(db, advisor_code)
+    assistant = get_profile(db, advisor_code)
 
     system_prompt = build_system_prompt(body.platform, content_format=content_format, assistant=assistant)
-    template = get_template(db, body.industry_code, body.platform, body.scene)
+    template = get_template(db, advisor_code, body.platform, body.scene)
     rag_chunks = search_knowledge(
         db,
         tenant_id=tenant_id,
-        industry_code=body.industry_code,
+        industry_code=advisor_code,
         query=f"{body.topic} {body.scene}",
     )
     brand = get_brand_profile(db, tenant_id)
@@ -98,7 +99,7 @@ async def stream_chat(
             db,
             session.tenant_id,
             message=message,
-            industry_code=session.industry_code,
+            industry_code=effective_advisor_code(session),
             llm_source=llm_source,
             selected_proposal_index=selected_proposal_index,
         )
@@ -140,9 +141,9 @@ async def stream_chat(
     if intent.action == "proposals":
         topic = intent.topic or message[:200]
         req = ContentProposalsRequest(
-            industry_code=session.industry_code,
+            industry_code=effective_advisor_code(session),
             platform=intent.platform,  # type: ignore[arg-type]
-            scene=intent.scene or "bookkeeping_intro",
+            scene=intent.scene or "brand_intro",
             topic=topic,
             content_format=_resolve_content_format(intent, intent.platform),  # type: ignore[arg-type]
             llm_source=llm_source,
@@ -191,9 +192,9 @@ async def stream_chat(
         selected = proposals[idx]
         topic = intent.topic or selected.title
         req = ContentGenerateRequest(
-            industry_code=session.industry_code,
+            industry_code=effective_advisor_code(session),
             platform=intent.platform or "wechat",  # type: ignore[arg-type]
-            scene=intent.scene or "bookkeeping_intro",
+            scene=intent.scene or "brand_intro",
             topic=topic,
             content_format=_resolve_content_format(intent, intent.platform or "wechat"),
             selected_proposal=selected,

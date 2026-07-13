@@ -43,7 +43,7 @@ class AgentToolContext:
     user: User
     membership: TenantMembership
     permissions: frozenset[str]
-    industry_code: str = "finance"
+    industry_code: str = "marketing"
 
     def as_tenant_context(self) -> TenantContext:
         return TenantContext(user=self.user, tenant_id=self.tenant_id, membership=self.membership)

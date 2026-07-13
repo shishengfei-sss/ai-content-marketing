@@ -123,6 +123,24 @@ def step_m0_1(results: list[bool]) -> None:
 
     )
 
+    results.append(
+
+        check(
+
+            "VM0-1-7 marketing含lead.edit+convert",
+
+            "crm.lead.edit" in MARKETING_DEFAULT_PERMISSIONS
+
+            and "crm.lead.convert" in MARKETING_DEFAULT_PERMISSIONS
+
+            and "crm.customer.list_own" in MARKETING_DEFAULT_PERMISSIONS
+
+            and "crm.customer.view" in MARKETING_DEFAULT_PERMISSIONS,
+
+        )
+
+    )
+
     crm_in_editor = [p for p in EDITOR_DEFAULT_PERMISSIONS if p.startswith("crm.")]
 
     results.append(check("VM0-1-6 editor无CRM", len(crm_in_editor) == 0, str(crm_in_editor)))

@@ -97,7 +97,9 @@ def consume_platform_quota(db: Session, tenant_id: UUID) -> None:
 
 def resolve_platform_api_key(platform: PlatformLLMConfig) -> str:
     if platform.api_key_encrypted:
-        return decrypt_api_key(platform.api_key_encrypted)
+        key = decrypt_api_key(platform.api_key_encrypted)
+        if key and key not in ("fake-key", "fake"):
+            return key
     if settings.DEEPSEEK_API_KEY:
         return settings.DEEPSEEK_API_KEY
     return settings.LLM_API_KEY or ""

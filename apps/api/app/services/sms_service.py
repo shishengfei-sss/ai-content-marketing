@@ -33,7 +33,11 @@ def send_code(db: Session, phone: str, *, scene: str, require_registered: bool =
 
     store_key = _key(phone, scene)
     entry = _store.get(store_key)
-    if entry and _now() - float(entry.get("last_sent_at", 0)) < settings.SMS_SEND_INTERVAL_SEC:
+    if (
+        settings.SMS_SEND_INTERVAL_SEC > 0
+        and entry
+        and _now() - float(entry.get("last_sent_at", 0)) < settings.SMS_SEND_INTERVAL_SEC
+    ):
         raise HTTPException(status_code=429, detail="发送过于频繁，请稍后再试")
 
     if settings.SMS_PROVIDER == "mock":

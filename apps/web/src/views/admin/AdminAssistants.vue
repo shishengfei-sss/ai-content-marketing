@@ -14,18 +14,19 @@ const form = ref(emptyForm())
 
 function emptyForm() {
   return {
-    code: '',
-    name: '',
-    description: '',
+    code: 'marketing',
+    name: '通用营销创作顾问',
+    description: '面向任意题材的营销内容创作与多平台发布准备',
     system_role:
-      '你是一名专业的{industry}营销内容创作助手，撰写{platform}{format}。',
+      '你是通用营销创作顾问，帮助用户完成选题、写稿与发布准备。当前平台：{platform}，形态：{format}。',
     compliance_rules: `1. 内容必须合规，不得夸大承诺或误导用户
 2. 必须包含免责声明（图文文末；视频脚本在最后一镜口播/字幕中体现）：{disclaimer}
 3. 语气{tone}，适合目标受众阅读
 4. 直接输出正文内容，不要输出 JSON 或多余解释`,
     disclaimer: '本文仅供参考，具体以相关部门最新规定为准',
     default_tone: '专业亲切',
-    welcome_message: '您好，我是{assistant_name}。直接告诉我您想创作什么，或点击下方快捷选题开始。',
+    welcome_message:
+      '您好，我是{assistant_name}。告诉我您想创作什么（公众号、小红书、抖音均可），或点击下方快捷选题开始。',
     sort_order: 0,
     is_active: true,
   }
@@ -103,7 +104,7 @@ onMounted(loadItems)
 <template>
   <div class="page-card">
     <el-alert
-      title="AI 助手即行业专家包。用户创作时可选择助手，System Prompt 与合规规则将按助手配置生成内容。占位符：{platform} {format} {disclaimer} {tone} {assistant_name}"
+      title="营销顾问配置：管理通用创作顾问的 System Prompt、合规规则与欢迎语。创作页不再切换助手，统一使用 marketing 顾问。占位符：{platform} {format} {disclaimer} {tone} {assistant_name}"
       type="info"
       :closable="false"
       show-icon
@@ -124,7 +125,6 @@ onMounted(loadItems)
       <el-button type="primary" @click="loadItems">查询</el-button>
       <el-button @click="resetFilters">重置</el-button>
       <div class="toolbar__spacer" />
-      <el-button type="primary" @click="openCreate">新建助手</el-button>
     </div>
 
     <el-table v-loading="loading" :data="items" stripe style="margin-top: 16px">
@@ -148,7 +148,7 @@ onMounted(loadItems)
 
     <el-dialog
       v-model="dialogVisible"
-      :title="editingCode ? `编辑助手 · ${editingCode}` : '新建 AI 助手'"
+      :title="editingCode ? `编辑营销顾问 · ${editingCode}` : '编辑营销顾问'"
       width="640px"
     >
       <el-form label-width="110px">

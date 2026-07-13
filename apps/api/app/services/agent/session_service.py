@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.database import uuid_eq
 from app.models import AgentMessage, AgentSession
+from app.services.assistant_service import MARKETING_ADVISOR_CODE, normalize_advisor_code
 
 
 def create_session(
@@ -18,13 +19,14 @@ def create_session(
     *,
     tenant_id: UUID,
     user_id: UUID,
-    industry_code: str = "finance",
+    industry_code: str | None = None,
     title: str = "",
 ) -> AgentSession:
+    code = normalize_advisor_code(industry_code or MARKETING_ADVISOR_CODE)
     session = AgentSession(
         tenant_id=tenant_id,
         user_id=user_id,
-        industry_code=industry_code,
+        industry_code=code,
         title=title or "新对话",
     )
     db.add(session)
@@ -49,7 +51,16 @@ def get_session(
     session = query.first()
     if not session:
         raise HTTPException(status_code=404, detail="会话不存在")
+    code = normalize_advisor_code(session.industry_code)
+    if session.industry_code != code:
+        session.industry_code = code
+        db.commit()
+        db.refresh(session)
     return session
+
+
+def effective_advisor_code(session: AgentSession) -> str:
+    return normalize_advisor_code(session.industry_code)
 
 
 def list_sessions(

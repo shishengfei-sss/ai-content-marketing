@@ -14,6 +14,38 @@ MOCK_PROPOSALS = json.dumps(
     ],
     ensure_ascii=False,
 )
+
+
+def _extract_proposal_topic(user_text: str) -> str:
+    for marker in ("用户选题：", "主题是", "主题：", "选题："):
+        if marker in user_text:
+            line = user_text.split(marker, 1)[1].split("\n")[0].strip()
+            if line and line not in ("...", "…"):
+                return line[:80]
+    for line in user_text.splitlines():
+        text = line.strip()
+        if len(text) >= 4 and not text.startswith("请为"):
+            return text[:80]
+    return "营销内容"
+
+
+def _build_mock_proposals(user_text: str, *, count: int = 3) -> str:
+    """对齐选题 prompt：仅 title 字段，一句话创作方向。"""
+    topic = _extract_proposal_topic(user_text)
+    platform = "小红书" if ("小红书" in user_text or "xhs" in user_text) else "公众号"
+    if "抖音" in user_text or "douyin" in user_text:
+        platform = "抖音"
+    angles = [
+        f"用真实客户故事切入{topic}，突出前后变化与可复用经验",
+        f"以从业者第一视角拆解{topic}的关键步骤与常见误区",
+        f"用对比清单呈现{topic}的亮点，适合{platform}读者快速扫读",
+        f"从目标受众痛点出发，讲清为什么现在需要关注{topic}",
+        f"结合节日/热点氛围包装{topic}，强调情绪共鸣与行动引导",
+    ]
+    items = [{"title": a[:40]} for a in angles[: max(3, min(count, 5))]]
+    while len(items) < 3:
+        items.append({"title": f"围绕{topic[:20]}给出另一种{platform}创作切入点"[:40]})
+    return json.dumps(items[:count if count >= 3 else 3], ensure_ascii=False)
 MOCK_ARTICLE = "测试正文\n\n本文仅供参考，具体政策以税务机关最新规定为准。"
 MOCK_REVISED = "测试改稿正文\n\n本文仅供参考，具体政策以税务机关最新规定为准。"
 MOCK_PAIN_ANALYSIS = json.dumps(
@@ -51,7 +83,7 @@ MOCK_SEO = json.dumps(
 
 
 def _intent_json(action: str, **kwargs) -> str:
-    payload = {"action": action, "scene": "bookkeeping_intro", "topic": "", "clarify_question": None}
+    payload = {"action": action, "scene": "brand_intro", "topic": "", "clarify_question": None}
     payload.update(kwargs)
     return json.dumps(payload, ensure_ascii=False)
 
@@ -120,7 +152,14 @@ class FakeLLMProvider(LLMProvider):
             else:
                 content = _intent_json("chat", topic=user_text[:100])
         elif "选题策划" in system_text or "JSON 数组" in system_text:
-            content = MOCK_PROPOSALS
+            import re
+
+            m = re.search(r"恰好\s*(\d+)\s*个", user_text)
+            count = int(m.group(1)) if m else 3
+            m2 = re.search(r"(\d+)\s*到\s*(\d+)\s*个", user_text)
+            if m2 and not m:
+                count = int(m2.group(1))
+            content = _build_mock_proposals(user_text, count=max(3, count))
         elif "Agent ReAct" in system_text or "ReAct 编排器" in system_text:
             import re
 
@@ -144,8 +183,8 @@ class FakeLLMProvider(LLMProvider):
                         "tool": "generate_proposals",
                         "arguments": {
                             "platform": "xhs",
-                            "scene": "bookkeeping_intro",
-                            "topic": "代理记账种草",
+                            "scene": "brand_intro",
+                            "topic": "品牌种草笔记",
                             "content_format": "note",
                             "llm_source": "platform",
                         },

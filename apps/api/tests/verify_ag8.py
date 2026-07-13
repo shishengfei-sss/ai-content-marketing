@@ -21,7 +21,7 @@ def main() -> int:
     reset_all_tenant_quotas()
     results: list[bool] = []
 
-    proc_m = subprocess.run([sys.executable, "tests/run_m0_m8.py"], cwd=API_ROOT)
+    proc_m = subprocess.run([sys.executable, "-B", "tests/run_m0_m8.py"], cwd=API_ROOT)
     results.append(check("VAG8-2 run_m0_m8 全 PASS", proc_m.returncode == 0))
 
     pa_token = login("13800000000", "admin123456")
@@ -40,9 +40,9 @@ def main() -> int:
             "input": {
                 "platform": "wechat",
                 "topic": "AG8发布安全闸",
-                "scene": "bookkeeping_intro",
+                "scene": "brand_intro",
                 "content_format": "article",
-                "industry_code": "finance",
+                "industry_code": "marketing",
                 "llm_source": "platform",
             },
         },

@@ -101,6 +101,7 @@ export const contentApi = {
 
 export const agentApi = {
   createSession: (data) => api.post('/api/v1/agent/sessions', data),
+  getSession: (sessionId) => api.get(`/api/v1/agent/sessions/${sessionId}`),
   listSessions: (params) => api.get('/api/v1/agent/sessions', { params }),
   getMessages: (sessionId) => api.get(`/api/v1/agent/sessions/${sessionId}/messages`),
   chat: (sessionId, data) => api.post(`/api/v1/agent/sessions/${sessionId}/chat`, data),

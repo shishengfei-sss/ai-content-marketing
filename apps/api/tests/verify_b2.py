@@ -37,7 +37,7 @@ def main() -> int:
         "POST",
         "/agent/sessions",
         token=user_token,
-        body={"industry_code": "finance", "title": "B2 ReAct"},
+        body={"industry_code": "marketing", "title": "B2 ReAct"},
     )
     sid = session.get("id") if code == 200 else None
     if not sid:
@@ -85,7 +85,7 @@ def main() -> int:
         "POST",
         "/agent/sessions",
         token=user_token,
-        body={"industry_code": "finance", "title": "B2 循环测试"},
+        body={"industry_code": "marketing", "title": "B2 循环测试"},
     )
     sid2 = session2.get("id")
     code, resp_fail = react_chat(user_token, sid2, "INFINITE_LOOP_TEST")
@@ -99,9 +99,9 @@ def main() -> int:
         )
     )
 
-    proc = subprocess.run([sys.executable, "tests/verify_a2.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_a2.py"], cwd=API_ROOT)
     results.append(check("VB2-5 verify_a2 回归", proc.returncode == 0))
-    proc2 = subprocess.run([sys.executable, "tests/run_m0_m8.py"], cwd=API_ROOT)
+    proc2 = subprocess.run([sys.executable, "-B", "tests/run_m0_m8.py"], cwd=API_ROOT)
     results.append(check("VB2-5 run_m0_m8", proc2.returncode == 0))
 
     passed = all(results)

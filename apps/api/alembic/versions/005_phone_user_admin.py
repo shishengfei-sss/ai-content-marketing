@@ -29,7 +29,7 @@ def _hash_password(password: str) -> str:
 def upgrade() -> None:
     with op.batch_alter_table("users") as batch_op:
         batch_op.add_column(sa.Column("phone", sa.String(20), nullable=True))
-        batch_op.add_column(sa.Column("is_active", sa.Boolean(), nullable=False, server_default="1"))
+        batch_op.add_column(sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")))
         batch_op.alter_column("email", existing_type=sa.String(255), nullable=True)
 
     op.create_index("ix_users_phone", "users", ["phone"], unique=True)
@@ -47,7 +47,7 @@ def upgrade() -> None:
         sa.text(
             """
             INSERT INTO users (id, tenant_id, email, phone, hashed_password, display_name, role, is_active)
-            VALUES (:uid, :tid, NULL, :phone, :pwd, '平台管理员', 'platform_admin', 1)
+            VALUES (:uid, :tid, NULL, :phone, :pwd, '平台管理员', 'platform_admin', true)
             """
         ),
         {

@@ -70,7 +70,7 @@ def main() -> int:
         "POST",
         "/agent/sessions",
         token=token,
-        body={"industry_code": "finance", "title": "Preflight E2E"},
+        body={"industry_code": "marketing", "title": "Preflight E2E"},
     )
     sid = session.get("id") if code == 200 else None
 
@@ -113,7 +113,7 @@ def main() -> int:
             )
         )
 
-    proc = subprocess.run([sys.executable, "tests/verify_wf3.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_wf3.py"], cwd=API_ROOT)
     results.append(check("VP1-7 回归 verify_wf3", proc.returncode == 0, str(proc.returncode)))
 
     failed = [i for i, ok in enumerate(results) if not ok]

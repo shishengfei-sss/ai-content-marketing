@@ -71,7 +71,7 @@ def main() -> int:
                 f"{relevant_marker} "
                 "企业应通过电子税局门户完成增值税线上申报缴款；若逾期未缴将产生滞纳金并纳入信用惩戒记录。"
             ),
-            "industry_code": "finance",
+            "industry_code": "marketing",
         },
     )
     req(
@@ -81,7 +81,7 @@ def main() -> int:
         body={
             "title": "C4 噪声文档",
             "text": f"{noise_marker} 周末健身房瑜伽课程优惠活动与私教体验课介绍。",
-            "industry_code": "finance",
+            "industry_code": "marketing",
         },
     )
 
@@ -140,7 +140,7 @@ def main() -> int:
         )
     )
 
-    proc = subprocess.run([sys.executable, "tests/verify_c3.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_c3.py"], cwd=API_ROOT)
     results.append(check("VC4-6 verify_c3 回归", proc.returncode == 0))
 
     passed = all(results)

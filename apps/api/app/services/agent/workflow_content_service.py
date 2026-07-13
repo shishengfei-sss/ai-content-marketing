@@ -12,40 +12,48 @@ from sqlalchemy.orm import Session
 
 from app.models import Content, User
 from app.schemas import ContentProposal
-from app.services.assistant_service import require_active_assistant
+from app.services.assistant_service import normalize_advisor_code, require_active_assistant
 from app.services.content_generation_service import raise_llm_config_error, validate_content_params
 from app.services.content_service import get_content_for_tenant
 from app.services.knowledge_service import get_template
 from app.services.llm.base import LLMMessage
 from app.services.llm_service import llm_service
-from app.services.prompt_builder import default_content_format, parse_proposals_json
+from app.services.prompt_builder import build_constitution_block, default_content_format, parse_proposals_json
 
 logger = logging.getLogger(__name__)
 
-ANALYZE_SYSTEM = """你是营销内容策略分析师。先深度分析用户痛点与受众需求，不要撰写正文。
+_CONSTITUTION = build_constitution_block()
+
+ANALYZE_SYSTEM = f"""{_CONSTITUTION}
+
+你是营销内容策略分析师。先深度分析用户痛点与受众需求，不要撰写正文。
 输出 JSON：
-{
+{{
   "pain_points": ["痛点1", "痛点2"],
   "target_audience": "目标受众描述",
   "analysis_summary": "100字内分析摘要",
   "writing_guidance": "后续写作应聚焦的方向"
-}
+}}
 仅输出 JSON，无 markdown。"""
 
-STRATEGY_SYSTEM = """你是营销选题策略师。基于痛点分析，列出 3 个备选标题方案，并说明为何推荐其中一个。
+STRATEGY_SYSTEM = f"""{_CONSTITUTION}
+
+你是营销选题策略师。基于痛点分析，列出 3 个备选标题方案，并说明为何推荐其中一个。
 输出 JSON：
-{
+{{
   "proposals": [
-    {"title": "标题1", "angle": "切入角度", "outline": "内容大纲"},
-    {"title": "标题2", "angle": "...", "outline": "..."},
-    {"title": "标题3", "angle": "...", "outline": "..."}
+    {{"title": "标题1", "angle": "切入角度", "outline": "内容大纲"}},
+    {{"title": "标题2", "angle": "...", "outline": "..."}},
+    {{"title": "标题3", "angle": "...", "outline": "..."}}
   ],
   "selected_index": 0,
   "selection_rationale": "为何选择该标题的说明"
-}
+}}
 proposals 必须恰好 3 项，selected_index 为 0-2。仅输出 JSON，无 markdown。"""
 
-OPTIMIZE_SYSTEM = """你是内容质检编辑。检查正文逻辑漏洞，精简冗余词汇，输出优化后的完整正文。
+OPTIMIZE_SYSTEM = f"""{_CONSTITUTION}
+
+你是内容质检编辑。检查正文逻辑漏洞，精简冗余词汇，输出优化后的完整正文。
 不要输出 JSON 或解释，直接输出优化后的正文。"""
 
 
@@ -78,7 +86,7 @@ async def run_analyze_pain_points(
     llm_source: str,
     knowledge_results: list[dict] | None = None,
 ) -> dict:
-    require_active_assistant(db, industry_code)
+    require_active_assistant(db, normalize_advisor_code(industry_code))
     template = get_template(db, industry_code, platform, scene)
     knowledge_block = ""
     if knowledge_results:
@@ -137,7 +145,7 @@ async def run_strategy_proposals(
     pain_analysis: dict | None = None,
 ) -> dict:
     content_format = validate_content_params(platform, content_format or default_content_format(platform))
-    require_active_assistant(db, industry_code)
+    require_active_assistant(db, normalize_advisor_code(industry_code))
     template = get_template(db, industry_code, platform, scene)
 
     analysis_text = ""
@@ -176,10 +184,13 @@ async def run_strategy_proposals(
         selected_index = int(data.get("selected_index", 0))
         selected_index = max(0, min(selected_index, len(proposals) - 1))
         rationale = str(data.get("selection_rationale") or "").strip()
+    except json.JSONDecodeError as e:
+        logger.warning("strategy proposals JSON decode failed: %s", e)
+        raise HTTPException(status_code=502, detail="策略构思失败，模型返回格式异常，请重试") from e
     except ValueError as e:
         if str(e) == "PROPOSALS_PARSE_FAILED":
             raise HTTPException(status_code=502, detail="策略构思失败，请重试") from e
-        raise_llm_config_error(e)
+        raise_llm_config_error(e, fallback_detail="策略构思失败，请重试")
     except HTTPException:
         raise
     except httpx.HTTPError as e:

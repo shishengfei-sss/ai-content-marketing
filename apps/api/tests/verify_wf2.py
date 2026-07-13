@@ -59,7 +59,7 @@ def main() -> int:
         "POST",
         "/agent/sessions",
         token=token,
-        body={"industry_code": "finance", "title": "WF2 E2E"},
+        body={"industry_code": "marketing", "title": "WF2 E2E"},
     )
     sid = session.get("id") if code == 200 else None
 
@@ -74,9 +74,9 @@ def main() -> int:
             "input": {
                 "platform": "wechat",
                 "topic": "税务规范",
-                "scene": "bookkeeping_intro",
+                "scene": "brand_intro",
                 "content_format": "article",
-                "industry_code": "finance",
+                "industry_code": "marketing",
                 "llm_source": "platform",
             },
         },
@@ -126,7 +126,7 @@ def main() -> int:
             )
         )
 
-    proc = subprocess.run([sys.executable, "tests/verify_wf_ui.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_wf_ui.py"], cwd=API_ROOT)
     results.append(check("VWF2-8 回归 verify_wf_ui", proc.returncode == 0, str(proc.returncode)))
 
     failed = [i for i, ok in enumerate(results) if not ok]

@@ -70,7 +70,7 @@ def main() -> int:
         body={
             "title": "B1隔离测试",
             "text": f"租户私有知识 {marker} 内容片段用于检索验证",
-            "industry_code": "finance",
+            "industry_code": "marketing",
         },
     )
     code, search = req(
@@ -105,7 +105,7 @@ def main() -> int:
     proc = subprocess.run([sys.executable, "-m", "pytest", "tests/unit/test_agent_tools.py", "-q"], cwd=API_ROOT)
     results.append(check("VB1-4 unit test_agent_tools", proc.returncode == 0))
 
-    proc2 = subprocess.run([sys.executable, "tests/run_m0_m8.py"], cwd=API_ROOT)
+    proc2 = subprocess.run([sys.executable, "-B", "tests/run_m0_m8.py"], cwd=API_ROOT)
     results.append(check("VB1-5 run_m0_m8", proc2.returncode == 0))
 
     passed = all(results)

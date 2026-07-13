@@ -1,5 +1,7 @@
 from uuid import UUID
 
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
@@ -7,9 +9,12 @@ from app.database import get_db
 from app.dependencies import get_current_user, require_active_tenant_id
 from app.models import KnowledgeDocument, User
 from app.schemas import KnowledgeDocumentOut, KnowledgeUploadTextRequest
+from app.services.assistant_service import MARKETING_ADVISOR_CODE, normalize_advisor_code
 from app.services.knowledge_service import index_document, search_knowledge_scored
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
+
+logger = logging.getLogger(__name__)
 
 
 def _doc_out(doc: KnowledgeDocument) -> KnowledgeDocumentOut:
@@ -23,6 +28,26 @@ def _doc_out(doc: KnowledgeDocument) -> KnowledgeDocumentOut:
         chunk_count=doc.chunk_count,
         created_at=doc.created_at,
     )
+
+
+def _resolve_industry_code(raw: str | None) -> str:
+    code = normalize_advisor_code(raw or MARKETING_ADVISOR_CODE)
+    return code if code else MARKETING_ADVISOR_CODE
+
+
+def _safe_index(db: Session, doc: KnowledgeDocument) -> None:
+    try:
+        index_document(db, doc)
+    except Exception as exc:
+        logger.exception("knowledge index failed doc=%s", doc.id)
+        doc.status = "failed"
+        db.commit()
+        msg = str(exc).lower()
+        if "does not exist" in msg or "undefinedtable" in msg or "no such table" in msg:
+            detail = "知识库表未初始化，请在服务器执行 alembic upgrade head"
+        else:
+            detail = f"文档解析失败: {exc}"
+        raise HTTPException(status_code=500, detail=detail) from exc
 
 
 @router.get("/documents", response_model=list[KnowledgeDocumentOut])
@@ -52,7 +77,7 @@ def upload_text(
 ):
     doc = KnowledgeDocument(
         tenant_id=tenant_id,
-        industry_code=body.industry_code,
+        industry_code=_resolve_industry_code(body.industry_code),
         scope="tenant",
         title=body.title,
         file_name=f"{body.title}.txt",
@@ -62,14 +87,14 @@ def upload_text(
     db.add(doc)
     db.commit()
     db.refresh(doc)
-    index_document(db, doc)
+    _safe_index(db, doc)
     return _doc_out(doc)
 
 
 @router.post("/documents/upload", response_model=KnowledgeDocumentOut)
 async def upload_file(
     title: str = Form(...),
-    industry_code: str = Form(default="finance"),
+    industry_code: str = Form(default=MARKETING_ADVISOR_CODE),
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     tenant_id: UUID = Depends(require_active_tenant_id),
@@ -80,7 +105,7 @@ async def upload_file(
         raise HTTPException(status_code=400, detail="文件内容过短或无法解析为文本")
     doc = KnowledgeDocument(
         tenant_id=tenant_id,
-        industry_code=industry_code,
+        industry_code=_resolve_industry_code(industry_code),
         scope="tenant",
         title=title,
         file_name=file.filename or f"{title}.txt",
@@ -90,7 +115,7 @@ async def upload_file(
     db.add(doc)
     db.commit()
     db.refresh(doc)
-    index_document(db, doc)
+    _safe_index(db, doc)
     return _doc_out(doc)
 
 

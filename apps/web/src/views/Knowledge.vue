@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { isBenignEmptyError, knowledgeApi } from '../api/client'
+import { formatApiError } from '../utils/apiError'
 
 const loading = ref(false)
 const uploading = ref(false)
@@ -35,7 +36,7 @@ async function beforeUpload(file) {
     ElMessage.success('上传成功')
     loadDocs()
   } catch (e) {
-    ElMessage.error(e.message || '上传失败')
+    ElMessage.error(formatApiError(e, '上传失败'))
   } finally {
     uploading.value = false
   }
@@ -55,7 +56,7 @@ async function submitPaste() {
     pasteForm.value = { title: '', text: '' }
     loadDocs()
   } catch (e) {
-    ElMessage.error(e.message || '添加失败')
+    ElMessage.error(formatApiError(e, '添加失败'))
   } finally {
     uploading.value = false
   }

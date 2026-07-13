@@ -1,9 +1,13 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { ArrowDown, Clock, Promotion, RefreshRight } from '@element-plus/icons-vue'
+import {
+  Clock,
+  Promotion,
+  RefreshRight,
+} from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { contentApi, agentApi, llmApi, wechatApi, assistantsApi, crmApi } from '../api/client'
-import { formatApiError, isRouteNotFoundError } from '../utils/apiError'
+import { formatApiError, isRouteNotFoundError, workflowErrorMessage } from '../utils/apiError'
 import { useAuthStore } from '../stores/auth'
 import { hasPermission } from '../config/permissions'
 
@@ -63,11 +67,8 @@ function resolveContentFormat(platform, currentFormat) {
 
 const formatOptions = computed(() => formatOptionsForPlatform(platform.value || 'wechat'))
 
-const CUSTOM_SCENE = 'custom'
-
 const publishingId = ref(null)
-const assistants = ref([])
-const industryCode = ref('finance')
+const advisor = ref(null)
 const llmSource = ref('platform')
 const llmQuota = ref({
   remaining: 100,
@@ -84,17 +85,13 @@ const showCampaignPicker = computed(
     hasPermission(auth.permissions, 'crm.campaign.list_own'),
 )
 
-const selectedAssistant = computed(
-  () => assistants.value.find((a) => a.code === industryCode.value) || null,
-)
-
 const defaultWelcome =
-  '您好，我是智营 AI 创作助手。请选择发布平台与内容形态，在输入框描述想创作的主题、目标读者和核心要点——信息不足时我会先请您补充，再生成方案。'
+  '你好！我是小营，你的 AI 营销创作顾问。请选择发布平台与内容形态，描述想写的主题（任意行业/题材）——信息不足时我会先请您补充，再生成方案。'
 
-function buildWelcomeText() {
-  const name = selectedAssistant.value?.name || '智营 AI 创作助手'
-  return `您好，我是${name}。请选择发布平台与内容形态，在输入框描述想创作的主题、目标读者和核心要点——信息不足时我会先请您补充，再生成方案。`
-}
+const advisorName = computed(() => advisor.value?.name || '小营 · 营销创作顾问')
+const advisorDesc = computed(
+  () => advisor.value?.description || '通用营销创作顾问，支持公众号 / 小红书 / 抖音',
+)
 
 const GREETING_RE = /^(你好|您好|hi|hello|在吗|试试|测试|help)[!.?。！？\s]*$/i
 const TOO_VAGUE_RE = /^(写(一)?篇|帮我写|生成(一个)?|来(一)?个|写个|写脚本|写笔记|创作)[!.?。！？\s]*$/i
@@ -185,7 +182,15 @@ async function switchToSession(session) {
 }
 
 async function ensureAgentSession() {
-  if (agentSessionId.value) return agentSessionId.value
+  if (agentSessionId.value) {
+    try {
+      await agentApi.getSession(agentSessionId.value)
+      return agentSessionId.value
+    } catch (e) {
+      if (!isAgentSessionNotFound(e)) throw e
+      clearAgentSession()
+    }
+  }
   return createAgentSession()
 }
 
@@ -203,7 +208,6 @@ function isAgentSessionNotFound(err) {
 async function createAgentSession() {
   try {
     const { data } = await agentApi.createSession({
-      industry_code: industryCode.value || 'finance',
       title: '营销创作',
     })
     agentSessionId.value = data.id
@@ -249,7 +253,7 @@ function pushAgentChatResult(data, requestTopic) {
         platform: platformMap[usePlatform] || usePlatform,
         contentFormat: c.content_format,
         formatLabel: formatMap[c.content_format] || c.content_format,
-        scene: '自定义',
+        scene: sceneLabel(payload.scene),
         model: `${c.llm_provider} · ${c.llm_model}`,
       },
     })
@@ -284,23 +288,17 @@ async function agentChat(message, { selectedProposalIndex = null, retried = fals
   }
 }
 
-function syncWelcomeMessage() {
-  const welcome = buildWelcomeText()
-  const first = messages.value.find((m) => m.role === 'assistant' && m.type === 'text')
-  if (first) first.content = welcome
+function sceneLabel(sceneCode) {
+  return sceneCode || '自定义'
 }
 
-async function loadAssistants() {
+async function loadAdvisor() {
   try {
     const { data } = await assistantsApi.list()
-    assistants.value = data
-    const tenantCode = auth.user?.tenant?.industry_code
-    if (tenantCode && data.some((a) => a.code === tenantCode)) {
-      industryCode.value = tenantCode
-    } else if (data.length) {
-      industryCode.value = data[0].code
-    }
-    syncWelcomeMessage()
+    advisor.value = data?.[0] || null
+    const welcome = advisor.value?.welcome_message || defaultWelcome
+    const first = messages.value.find((m) => m.role === 'assistant' && m.type === 'text')
+    if (first) first.content = welcome
   } catch {
     /* keep defaults */
   }
@@ -338,11 +336,6 @@ function pickLlmSource(source) {
   llmSource.value = source
 }
 
-function pickAssistant(code) {
-  industryCode.value = code
-  syncWelcomeMessage()
-}
-
 onMounted(async () => {
   if (auth.isLoggedIn && !auth.user) await auth.fetchMe()
   try {
@@ -357,7 +350,7 @@ onMounted(async () => {
   } catch {
     /* ignore */
   }
-  await loadAssistants()
+  await loadAdvisor()
   await loadLlmQuota()
   await loadCampaigns()
   await ensureAgentSession()
@@ -397,11 +390,10 @@ function buildGeneratePayload(topic, selectedProposal = null) {
   const usePlatform = platform.value || 'wechat'
   const useFormat = contentFormat.value || defaultContentFormat(usePlatform)
   const payload = {
-    industry_code: industryCode.value || 'finance',
     platform: usePlatform,
-    scene: CUSTOM_SCENE,
     topic,
     content_format: useFormat,
+    industry_code: 'marketing',
     llm_source: llmSource.value,
     selected_proposal: selectedProposal,
   }
@@ -427,6 +419,17 @@ async function runPreflight(text) {
     if (isRouteNotFoundError(e)) {
       return { ready: true, action: 'proceed', topic: text }
     }
+    if (isAgentSessionNotFound(e)) {
+      clearAgentSession()
+      await createAgentSession()
+      const { data } = await agentApi.preflight(agentSessionId.value, {
+        message: text,
+        platform: platform.value || 'wechat',
+        content_format: contentFormat.value || defaultContentFormat(platform.value || 'wechat'),
+        llm_source: llmSource.value,
+      })
+      return data
+    }
     throw e
   }
 }
@@ -442,11 +445,11 @@ function pushClarifyMessage(question) {
 function buildWorkflowInput(topic, proposalCount = null) {
   const payload = buildGeneratePayload(topic)
   const input = {
-    industry_code: payload.industry_code,
     platform: payload.platform,
     scene: payload.scene,
     topic: payload.topic,
     content_format: payload.content_format,
+    industry_code: 'marketing',
     llm_source: payload.llm_source,
     search_query: payload.topic,
   }
@@ -490,7 +493,7 @@ function pushContentResult(content, payload) {
       platform: platformMap[usePlatform] || usePlatform,
       contentFormat: content.content_format,
       formatLabel: formatMap[content.content_format] || content.content_format,
-      scene: '自定义',
+      scene: sceneLabel(payload.scene),
       model: `${content.llm_provider} · ${content.llm_model}`,
     },
   })
@@ -512,7 +515,7 @@ async function runProposeWorkflow(topic, proposalCount = null) {
     return { workflowId: wf.id, proposals }
   }
   if (wf.status === 'failed') {
-    throw new Error(wf.error_message || '方案生成失败')
+    throw new Error(workflowErrorMessage(wf) || '方案生成失败')
   }
   throw new Error('工作流未返回方案')
 }
@@ -780,45 +783,15 @@ function handleCopy(text) {
     <div class="ai-chat-page__card page-card">
       <!-- 顶栏 -->
       <div class="chat-header">
-        <el-dropdown
-          trigger="click"
-          :disabled="assistants.length <= 1"
-          @command="pickAssistant"
-        >
-          <div
-            class="assistant-picker"
-            :class="{ 'assistant-picker--clickable': assistants.length > 1 }"
-          >
-            <el-avatar :size="44" class="assistant-picker__avatar">AI</el-avatar>
-            <div class="assistant-picker__body">
-              <div class="assistant-picker__row">
-                <span class="assistant-picker__name">
-                  {{ selectedAssistant?.name || '智营 AI 创作助手' }}
-                </span>
-                <span v-if="assistants.length > 1" class="assistant-picker__badge">切换助手</span>
-                <el-icon v-if="assistants.length > 1" class="assistant-picker__arrow"><ArrowDown /></el-icon>
-              </div>
-              <div class="assistant-picker__desc">
-                {{ selectedAssistant?.description || '对话式营销内容创作' }}
-              </div>
+        <div class="assistant-picker">
+          <el-avatar :size="44" class="assistant-picker__avatar">AI</el-avatar>
+          <div class="assistant-picker__body">
+            <div class="assistant-picker__row">
+              <span class="assistant-picker__name">{{ advisorName }}</span>
             </div>
+            <div class="assistant-picker__desc">{{ advisorDesc }}</div>
           </div>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-for="a in assistants"
-                :key="a.code"
-                :command="a.code"
-                :class="{ 'is-active-assistant': industryCode === a.code }"
-              >
-                <div class="assistant-option">
-                  <span class="assistant-option__name">{{ a.name }}</span>
-                  <span v-if="a.description" class="assistant-option__desc">{{ a.description }}</span>
-                </div>
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        </div>
         <div class="chat-header__right">
           <el-tag type="success" size="small">{{ modelTag }}</el-tag>
           <el-button circle @click="openSessionHistory" title="历史会话">
@@ -1033,7 +1006,7 @@ function handleCopy(text) {
               v-model="inputText"
               type="textarea"
               :autosize="{ minRows: 1, maxRows: 4 }"
-              placeholder="描述想创作的内容，Enter 发送…"
+              placeholder="任意题材均可，如：少儿编程招生、火锅店开业… Enter 发送"
               :disabled="generating || proposing"
               @keydown="handleKeydown"
             />
@@ -1292,32 +1265,6 @@ function handleCopy(text) {
   40% {
     opacity: 1;
   }
-}
-
-.quick-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  max-width: 520px;
-}
-
-.quick-chip {
-  padding: 12px 16px;
-  min-height: 44px;
-  background: #fff;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  font-size: 13px;
-  color: var(--color-text-primary);
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: left;
-}
-
-.quick-chip:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  background: #e6f4ff;
 }
 
 .result-block {

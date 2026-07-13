@@ -128,7 +128,11 @@ MARKETING_DEFAULT = frozenset(
         "crm.lead.list_own",
         "crm.lead.view",
         "crm.lead.create",
+        "crm.lead.edit",
+        "crm.lead.convert",
         "crm.lead.list_all",
+        "crm.customer.list_own",
+        "crm.customer.view",
         "crm.view.save_own",
     }
 )
@@ -176,7 +180,7 @@ def upgrade() -> None:
             sa.text(
                 """
                 SELECT id FROM tenant_roles
-                WHERE tenant_id = :tid AND code = 'admin' AND is_system = 1
+                WHERE tenant_id = :tid AND code = 'admin' AND is_system = true
                 LIMIT 1
                 """
             ),
@@ -226,7 +230,7 @@ def upgrade() -> None:
                     sa.text(
                         """
                         INSERT INTO tenant_roles (id, tenant_id, code, name, is_system)
-                        VALUES (:id, :tid, :code, :name, 1)
+                        VALUES (:id, :tid, :code, :name, true)
                         """
                     ),
                     {"id": role_id, "tid": tid, "code": code, "name": name},
@@ -238,7 +242,7 @@ def downgrade() -> None:
     conn = op.get_bind()
     for code, _, _ in NEW_ROLES:
         rows = conn.execute(
-            sa.text("SELECT id FROM tenant_roles WHERE code = :code AND is_system = 1"),
+            sa.text("SELECT id FROM tenant_roles WHERE code = :code AND is_system = true"),
             {"code": code},
         ).fetchall()
         for (role_id,) in rows:
@@ -247,7 +251,7 @@ def downgrade() -> None:
                 {"rid": str(role_id)},
             )
         conn.execute(
-            sa.text("DELETE FROM tenant_roles WHERE code = :code AND is_system = 1"),
+            sa.text("DELETE FROM tenant_roles WHERE code = :code AND is_system = true"),
             {"code": code},
         )
     for perm in CRM_PERMISSIONS:

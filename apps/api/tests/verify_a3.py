@@ -48,7 +48,7 @@ def main() -> int:
         "POST",
         "/agent/sessions",
         token=user_token,
-        body={"industry_code": "finance", "title": "A3 E2E"},
+        body={"industry_code": "marketing", "title": "A3 E2E"},
     )
     sid = session.get("id") if code == 200 else None
     results.append(check("VA3-3 创建 Agent 会话", code == 200 and bool(sid), str(code)))
@@ -104,7 +104,7 @@ def main() -> int:
             found = any(str(item.get("id")) == str(content_id) for item in (items or []))
             results.append(check("VA3-3 内容库可见", code == 200 and found, str(content_id)[:8]))
 
-    proc = subprocess.run([sys.executable, "tests/run_m0_m8.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/run_m0_m8.py"], cwd=API_ROOT)
     results.append(check("VA3-6 run_m0_m8", proc.returncode == 0))
 
     passed = all(results)

@@ -79,9 +79,9 @@ def main() -> int:
             "input": {
                 "platform": "wechat",
                 "topic": "报税提醒",
-                "scene": "bookkeeping_intro",
+                "scene": "brand_intro",
                 "content_format": "article",
-                "industry_code": "finance",
+                "industry_code": "marketing",
                 "llm_source": "platform",
                 "search_query": "报税",
             },
@@ -137,7 +137,7 @@ def main() -> int:
     pipeline_tools = [s.tool_name for s in PIPELINE_REGISTRY.get("content_create", [])]
     results.append(check("VC2-8 无 publish 步骤", "publish_content" not in pipeline_tools, str(pipeline_tools)))
 
-    proc = subprocess.run([sys.executable, "tests/verify_c1.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_c1.py"], cwd=API_ROOT)
     results.append(check("VC2-9 verify_c1 回归", proc.returncode == 0))
 
     passed = all(results)

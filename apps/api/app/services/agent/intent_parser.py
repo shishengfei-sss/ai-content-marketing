@@ -13,30 +13,33 @@ from sqlalchemy.orm import Session
 from app.services.llm.base import LLMMessage
 from app.services.llm_service import llm_service
 from app.services.content_generation_service import raise_llm_config_error
+from app.services.assistant_service import normalize_advisor_code
 from app.services.proposal_count import resolve_proposal_count
 
 logger = logging.getLogger(__name__)
 
-PREFLIGHT_SYSTEM_PROMPT = """你是营销创作预检解析器。根据用户描述输出唯一 JSON 对象，字段：
+PREFLIGHT_SYSTEM_PROMPT = """你是通用营销创作预检解析器。根据用户描述输出唯一 JSON 对象，字段：
 - action: proceed | clarify
 - topic: string
 - clarify_question: string | null
 - proposal_count: number | null（用户明确要求的方向/标题/方案个数，1～10；未指定则为 null）
+- input_class: greeting | joke | off_topic | too_short | vague | proceed（输入分类，便于日志）
 
 规则：
 1. 上下文已给出 UI 选择的 platform 与 content_format，禁止追问平台或形态
 2. 若对话历史中有此前 clarify 与用户补充，须合并理解，禁止重复追问已回答内容
-3. 信息不足（过短、纯寒暄、只有动词无主题、缺少可执行主题/受众/要点）→ action=clarify，clarify_question 用中文一次追问 1～2 点
-4. 信息充分 → action=proceed，topic 提炼为一句简洁创作主题（保留用户意图）
-5. 用户说「10个方向/标题」等 → proposal_count 填对应数字（最大 10）；未指定数量 → proposal_count=null
-6. 仅闲聊或与创作无关 → action=clarify
+3. 只要用户表达了明确创作主题（某产品/某话题/某人物/某事件等）→ action=proceed，即使缺少受众或要点也放行，由后续方案生成环节细化；topic 提炼为一句简洁创作主题
+4. 仅以下情况才 clarify：纯寒暄（你好/在吗）、只有动词无主题（"写一篇"/"帮我写"）、完全跑题（股票行情等）、或有效汉字不足 4 个
+5. clarify 时 clarify_question 用中文一次追问 1 点，并给出下一步建议；禁止与历史 clarify 问题重复
+6. 用户说「10个方向/标题」等 → proposal_count 填对应数字（最大 10）；未指定数量 → proposal_count=null
+7. 玩笑、偏题或与创作无关 → action=clarify，礼貌拉回营销创作主线
 仅输出 JSON，无 markdown。"""
 
 
 INTENT_SYSTEM_PROMPT = """你是营销创作意图解析器。根据用户消息输出唯一 JSON 对象，字段：
 - action: proposals | generate | chat | clarify
 - platform: wechat | xhs | douyin | null
-- scene: string | null（默认 bookkeeping_intro）
+- scene: string | null（默认 brand_intro）
 - content_format: article | note | video_script | null
 - topic: string
 - clarify_question: string | null
@@ -60,6 +63,7 @@ class ParsedIntent:
     clarify_question: str | None = None
     selected_proposal_index: int | None = None
     proposal_count: int | None = None
+    input_class: str | None = None
 
 
 def _parse_intent_json(raw: str) -> ParsedIntent:
@@ -92,7 +96,7 @@ def _parse_intent_json(raw: str) -> ParsedIntent:
     return ParsedIntent(
         action=action,
         platform=platform,
-        scene=scene or "bookkeeping_intro",
+        scene=scene or "brand_intro",
         content_format=content_format,
         topic=topic,
         clarify_question=clarify,
@@ -115,7 +119,7 @@ async def parse_intent(
         return ParsedIntent(
             action="generate",
             platform="wechat",
-            scene="bookkeeping_intro",
+            scene="brand_intro",
             content_format="article",
             topic=message or "营销内容",
             selected_proposal_index=selected_proposal_index,
@@ -185,6 +189,7 @@ def _parse_preflight_json(raw: str) -> ParsedIntent:
         topic=topic,
         clarify_question=clarify,
         proposal_count=proposal_count,
+        input_class=(data.get("input_class") or None),
     )
 
 
@@ -203,7 +208,7 @@ async def parse_create_preflight(
     format_labels = {"article": "图文", "note": "笔记", "video_script": "视频脚本"}
     user_text = (conversation_context or message).strip()
     user_content = (
-        f"行业={industry_code}\n"
+        f"顾问=通用营销创作（{normalize_advisor_code(industry_code)}）\n"
         f"UI已选平台={platform}（{platform_labels.get(platform, platform)}）\n"
         f"UI已选形态={content_format}（{format_labels.get(content_format, content_format)}）\n"
         f"用户描述与对话：\n{user_text}"
@@ -226,6 +231,12 @@ async def parse_create_preflight(
         raise
     except Exception as e:
         logger.exception("preflight LLM failed")
+        err = str(e)
+        if "401" in err or "Authorization Required" in err:
+            raise HTTPException(
+                status_code=502,
+                detail="预检失败：平台 DeepSeek API Key 无效或未配置，请在管理后台「平台 AI」或 apps/api/.env 中设置 DEEPSEEK_API_KEY",
+            ) from e
         raise HTTPException(status_code=502, detail=f"预检失败: {e}") from e
 
     intent = _parse_preflight_json(result.content)

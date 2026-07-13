@@ -77,7 +77,7 @@ def main() -> int:
     )
     results.append(check("VLM4-4 显式记忆直接可用", explicit.get("is_confirmed") is True, str(explicit.get("is_confirmed"))))
 
-    proc = subprocess.run([sys.executable, "tests/verify_lm3.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_lm3.py"], cwd=API_ROOT)
     results.append(check("VLM4-5 verify_lm3 回归", proc.returncode == 0))
 
     passed = all(results)

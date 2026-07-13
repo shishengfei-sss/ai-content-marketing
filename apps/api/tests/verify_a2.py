@@ -34,7 +34,7 @@ def main() -> int:
         "POST",
         "/agent/sessions",
         token=user_token,
-        body={"industry_code": "finance", "title": "A2测试"},
+        body={"industry_code": "marketing", "title": "A2测试"},
     )
     if code != 200:
         print("[FAIL] 创建会话", code, session)
@@ -97,7 +97,7 @@ def main() -> int:
         )
     )
 
-    proc = subprocess.run([sys.executable, "tests/run_m0_m8.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/run_m0_m8.py"], cwd=API_ROOT)
     results.append(check("VA2-7 run_m0_m8", proc.returncode == 0))
 
     passed = all(results)

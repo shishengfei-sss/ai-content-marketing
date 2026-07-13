@@ -75,9 +75,9 @@ def main() -> int:
             "input": {
                 "platform": "wechat",
                 "topic": "Supervisor测试",
-                "scene": "bookkeeping_intro",
+                "scene": "brand_intro",
                 "content_format": "article",
-                "industry_code": "finance",
+                "industry_code": "marketing",
                 "llm_source": "platform",
                 "search_query": "报税",
             },
@@ -161,7 +161,7 @@ def main() -> int:
         "POST",
         "/agent/compliance/check",
         token=token,
-        body={"content_id": content_id, "llm_source": "platform", "industry_code": "finance"},
+        body={"content_id": content_id, "llm_source": "platform", "industry_code": "marketing"},
     )
     code_leg, leg = req(
         "POST",
@@ -187,13 +187,16 @@ def main() -> int:
     results.append(
         check(
             "VC5-4 industry 切换影响合规",
-            code_fin == 200 and code_leg2 == 200 and fin.get("status") in ("pass", "warn", "block"),
-            f"finance={fin.get('status')} legal={leg2.get('status')}",
+            code_fin == 200
+            and code_leg2 == 200
+            and fin.get("status") in ("pass", "warn", "block")
+            and leg2.get("status") in ("pass", "warn", "block"),
+            f"marketing={fin.get('status')} legal_legacy={leg2.get('status')}",
         )
     )
 
-    proc1 = subprocess.run([sys.executable, "tests/verify_c1.py"], cwd=API_ROOT)
-    proc4 = subprocess.run([sys.executable, "tests/verify_c4.py"], cwd=API_ROOT)
+    proc1 = subprocess.run([sys.executable, "-B", "tests/verify_c1.py"], cwd=API_ROOT)
+    proc4 = subprocess.run([sys.executable, "-B", "tests/verify_c4.py"], cwd=API_ROOT)
     results.append(check("VC5-5 verify_c1 回归", proc1.returncode == 0))
     results.append(check("VC5-5 verify_c4 回归", proc4.returncode == 0))
 

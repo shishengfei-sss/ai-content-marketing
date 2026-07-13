@@ -15,7 +15,7 @@ const menuItems = [
   { path: '/admin/contents', title: '全站内容', icon: 'Document' },
   { path: '/admin/tenants', title: '企业管理', icon: 'OfficeBuilding' },
   { path: '/admin/users', title: '账号管理', icon: 'User' },
-  { path: '/admin/assistants', title: 'AI 助手', icon: 'MagicStick' },
+  { path: '/admin/assistants', title: '营销顾问配置', icon: 'MagicStick' },
   { path: '/admin/knowledge', title: '公共知识库', icon: 'Collection' },
   { path: '/admin/platform-llm', title: '平台 AI', icon: 'Cpu' },
 ]

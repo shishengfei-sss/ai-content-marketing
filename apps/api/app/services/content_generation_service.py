@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from uuid import UUID
 
@@ -11,7 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.models import Content, User
 from app.schemas import ContentGenerateRequest, ContentProposal, ContentProposalsRequest, ContentProposalsResponse
-from app.services.assistant_service import get_profile, require_active_assistant
+from app.services.assistant_service import (
+    get_profile,
+    normalize_advisor_code,
+    require_active_assistant,
+)
 from app.services.content_service import get_content_for_tenant
 from app.services.knowledge_service import get_brand_profile, get_template, get_user_prompt, search_knowledge
 from app.services.llm.base import LLMMessage
@@ -23,6 +28,7 @@ from app.services.prompt_builder import (
     build_system_prompt,
     build_user_prompt,
     default_content_format,
+    parse_compliance_marks,
     parse_proposals_json,
     validate_platform_format,
 )
@@ -31,7 +37,17 @@ from app.services.proposal_count import resolve_proposal_count
 logger = logging.getLogger(__name__)
 
 
-def raise_llm_config_error(exc: ValueError) -> None:
+_LLM_CONFIG_CODES = frozenset(
+    {
+        "LLM_TENANT_KEY_NOT_CONFIGURED",
+        "LLM_PLATFORM_NOT_CONFIGURED",
+        "INVALID_LLM_SOURCE",
+        "LLM_API_KEY_NOT_CONFIGURED",
+    }
+)
+
+
+def raise_llm_config_error(exc: ValueError, *, fallback_detail: str = "操作失败，请重试") -> None:
     code = str(exc)
     if code == "LLM_TENANT_KEY_NOT_CONFIGURED":
         raise HTTPException(status_code=400, detail="请先在设置中配置我的 API Key") from exc
@@ -41,7 +57,9 @@ def raise_llm_config_error(exc: ValueError) -> None:
         raise HTTPException(status_code=400, detail="无效的 AI 来源") from exc
     if code == "LLM_API_KEY_NOT_CONFIGURED":
         raise HTTPException(status_code=400, detail="请先配置 AI 模型 API Key") from exc
-    raise exc
+    if code in _LLM_CONFIG_CODES:
+        raise HTTPException(status_code=400, detail="AI 配置异常，请检查模型设置") from exc
+    raise HTTPException(status_code=502, detail=fallback_detail) from exc
 
 
 def validate_content_params(platform: str, content_format: str) -> str:
@@ -61,10 +79,11 @@ async def run_generate_proposals(
     body: ContentProposalsRequest,
 ) -> ContentProposalsResponse:
     content_format = validate_content_params(body.platform, body.content_format or default_content_format(body.platform))
-    require_active_assistant(db, body.industry_code)
-    assistant = get_profile(db, body.industry_code)
+    advisor_code = normalize_advisor_code(body.industry_code)
+    require_active_assistant(db, advisor_code)
+    assistant = get_profile(db, advisor_code)
 
-    template = get_template(db, body.industry_code, body.platform, body.scene)
+    template = get_template(db, advisor_code, body.platform, body.scene)
     system_prompt = build_proposals_system_prompt(assistant=assistant)
     user_prompt = build_proposals_user_prompt(
         platform=body.platform,
@@ -98,10 +117,13 @@ async def run_generate_proposals(
                 text=body.topic,
             ),
         )
+    except json.JSONDecodeError as e:
+        logger.warning("proposals JSON decode failed: %s", e)
+        raise HTTPException(status_code=502, detail="方案生成失败，模型返回格式异常，请重试") from e
     except ValueError as e:
         if str(e) == "PROPOSALS_PARSE_FAILED":
             raise HTTPException(status_code=502, detail="方案生成失败，请重试") from e
-        raise_llm_config_error(e)
+        raise_llm_config_error(e, fallback_detail="方案生成失败，请重试")
     except HTTPException:
         raise
     except httpx.HTTPError as e:
@@ -122,15 +144,16 @@ async def run_generate_content(
     body: ContentGenerateRequest,
 ) -> Content:
     content_format = validate_content_params(body.platform, body.content_format or default_content_format(body.platform))
-    require_active_assistant(db, body.industry_code)
-    assistant = get_profile(db, body.industry_code)
+    advisor_code = normalize_advisor_code(body.industry_code)
+    require_active_assistant(db, advisor_code)
+    assistant = get_profile(db, advisor_code)
 
     system_prompt = build_system_prompt(body.platform, content_format=content_format, assistant=assistant)
-    template = get_template(db, body.industry_code, body.platform, body.scene)
+    template = get_template(db, advisor_code, body.platform, body.scene)
     rag_chunks = search_knowledge(
         db,
         tenant_id=tenant_id,
-        industry_code=body.industry_code,
+        industry_code=advisor_code,
         query=f"{body.topic} {body.scene}",
     )
     brand = get_brand_profile(db, tenant_id)
@@ -181,6 +204,7 @@ async def run_generate_content(
         raise HTTPException(status_code=502, detail=f"生成失败: {e}") from e
 
     topic = proposal.title if proposal else body.topic
+    clean_body, compliance_mark = parse_compliance_marks(result.content)
     content = Content(
         tenant_id=tenant_id,
         author_id=user.id,
@@ -188,11 +212,12 @@ async def run_generate_content(
         platform=body.platform,
         scene=body.scene,
         topic=topic,
-        body=result.content,
+        body=clean_body,
         content_format=content_format,
-        status="draft",
+        status="compliance_blocked" if compliance_mark == "block" else "draft",
         llm_provider=result.provider,
         llm_model=result.model,
+        publish_error=f"[COMPLIANCE_{compliance_mark.upper()}]" if compliance_mark else None,
     )
     db.add(content)
     if body.llm_source == "platform":

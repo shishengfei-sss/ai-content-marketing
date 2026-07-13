@@ -184,7 +184,7 @@ def main() -> int:
     code2, _ = req("GET", f"/agent/memories/{user_mem_id}", token=admin_token)
     results.append(check("VLM1-9 DELETE", code == 200 and code2 == 404, f"del={code} get={code2}"))
 
-    proc = subprocess.run([sys.executable, "tests/verify_b4.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_b4.py"], cwd=API_ROOT)
     results.append(check("VLM1-10 verify_b4 回归", proc.returncode == 0))
 
     passed = all(results)

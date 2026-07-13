@@ -12,10 +12,11 @@ ROOT = Path(__file__).resolve().parent
 PY = sys.executable
 sys.path.insert(0, str(API_ROOT))
 
-# 全量离线验收仍使用 FakeLLM；日常开发不覆盖平台 deepseek 配置
+# 全量离线验收：TestClient + FakeLLM（勿连 live API，避免端口 8003 旧代码干扰）
+os.environ["VERIFY_LIVE_API"] = "0"
 os.environ.setdefault("FORCE_FAKE_PLATFORM_LLM", "1")
 
-from tests.http_client import reset_all_tenant_quotas
+from tests.http_client import reset_all_tenant_quotas, reset_test_client, clear_sms_rate_limits
 
 STEPS = [
     ("T0", "verify_t0.py"),
@@ -49,11 +50,13 @@ STEPS = [
 
 
 def main() -> int:
+    reset_test_client()
     reset_all_tenant_quotas()
+    clear_sms_rate_limits()
     failed = []
     for name, script in STEPS:
         print(f"\n{'=' * 40}\n>>> {name}\n{'=' * 40}")
-        r = subprocess.run([PY, str(ROOT / script)], cwd=API_ROOT)
+        r = subprocess.run([PY, "-B", str(ROOT / script)], cwd=API_ROOT)
         if r.returncode != 0:
             failed.append(name)
     print(f"\n{'=' * 40}")

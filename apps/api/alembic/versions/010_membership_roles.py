@@ -66,7 +66,7 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.Uuid(), sa.ForeignKey("tenants.id"), nullable=False),
         sa.Column("code", sa.String(50), nullable=False),
         sa.Column("name", sa.String(100), nullable=False),
-        sa.Column("is_system", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_system", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -90,7 +90,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.Uuid(), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("tenant_id", sa.Uuid(), sa.ForeignKey("tenants.id"), nullable=False),
         sa.Column("role_id", sa.Uuid(), sa.ForeignKey("tenant_roles.id"), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column(
             "joined_at",
             sa.DateTime(timezone=True),
@@ -110,7 +110,7 @@ def upgrade() -> None:
             sa.text(
                 """
                 INSERT INTO tenant_roles (id, tenant_id, code, name, is_system)
-                VALUES (:id, :tid, 'admin', '企业管理员', 1)
+                VALUES (:id, :tid, 'admin', '企业管理员', true)
                 """
             ),
             {"id": admin_role_id, "tid": str(tenant_id)},
@@ -119,7 +119,7 @@ def upgrade() -> None:
             sa.text(
                 """
                 INSERT INTO tenant_roles (id, tenant_id, code, name, is_system)
-                VALUES (:id, :tid, 'editor', '编辑', 1)
+                VALUES (:id, :tid, 'editor', '编辑', true)
                 """
             ),
             {"id": editor_role_id, "tid": str(tenant_id)},
@@ -175,7 +175,7 @@ def upgrade() -> None:
             sa.text(
                 """
                 INSERT INTO tenant_memberships (id, user_id, tenant_id, role_id, is_active)
-                VALUES (:id, :uid, :tid, :rid, 1)
+                VALUES (:id, :uid, :tid, :rid, true)
                 """
             ),
             {

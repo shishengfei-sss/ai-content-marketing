@@ -62,7 +62,7 @@ def main() -> int:
         "POST",
         "/agent/sessions",
         token=user_token,
-        body={"industry_code": "finance", "title": "B4 SSE"},
+        body={"industry_code": "marketing", "title": "B4 SSE"},
     )
     sid = session.get("id")
     if not sid:
@@ -107,7 +107,7 @@ def main() -> int:
     )
     results.append(check("VB4-5 非流式 chat 仍可用", code3 == 200 and data.get("action") == "clarify", str(data.get("action"))))
 
-    proc = subprocess.run([sys.executable, "tests/verify_b3.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_b3.py"], cwd=API_ROOT)
     results.append(check("VB4-6 verify_b3 回归", proc.returncode == 0))
 
     passed = all(results)

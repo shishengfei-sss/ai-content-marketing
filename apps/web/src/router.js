@@ -44,7 +44,7 @@ const routes = [
         path: 'assistants',
         name: 'AdminAssistants',
         component: () => import('./views/admin/AdminAssistants.vue'),
-        meta: { title: 'AI 助手', platformAdmin: true },
+        meta: { title: '营销顾问配置', platformAdmin: true },
       },
       {
         path: 'knowledge',

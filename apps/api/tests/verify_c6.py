@@ -38,9 +38,9 @@ def main() -> int:
             "input": {
                 "platform": "wechat",
                 "topic": f"SEO测试 {marker}",
-                "scene": "bookkeeping_intro",
+                "scene": "brand_intro",
                 "content_format": "article",
-                "industry_code": "finance",
+                "industry_code": "marketing",
                 "llm_source": "platform",
                 "search_query": "报税",
             },
@@ -158,7 +158,7 @@ def main() -> int:
         )
     )
 
-    proc = subprocess.run([sys.executable, "tests/verify_c5.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_c5.py"], cwd=API_ROOT)
     results.append(check("VC6-4 verify_c5 回归", proc.returncode == 0))
 
     passed = all(results)

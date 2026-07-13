@@ -238,7 +238,7 @@ class PlatformLLMTestRequest(BaseModel):
 
 
 class ContentGenerateRequest(BaseModel):
-    industry_code: str = "finance"
+    industry_code: str = "marketing"
     platform: str = Field(pattern="^(wechat|xhs|douyin)$")
     scene: str = ""
     topic: str = Field(min_length=2, max_length=2000)
@@ -257,7 +257,7 @@ class ContentProposal(BaseModel):
 
 
 class ContentProposalsRequest(BaseModel):
-    industry_code: str = "finance"
+    industry_code: str = "marketing"
     platform: str = Field(pattern="^(wechat|xhs|douyin)$")
     scene: str = ""
     topic: str = Field(min_length=2, max_length=2000)
@@ -345,6 +345,7 @@ class TemplateOut(BaseModel):
     scene: str
     platform: str
     name: str
+    prompt_hint: str = ""
 
     model_config = {"from_attributes": True}
 
@@ -365,7 +366,7 @@ class KnowledgeDocumentOut(BaseModel):
 class KnowledgeUploadTextRequest(BaseModel):
     title: str = Field(min_length=2, max_length=300)
     text: str = Field(min_length=10, max_length=200000)
-    industry_code: str = "finance"
+    industry_code: str = "marketing"
 
 
 class BrandSettingsOut(BaseModel):
@@ -496,7 +497,7 @@ class AdminContentListResponse(BaseModel):
 class AdminKnowledgeUploadTextRequest(BaseModel):
     title: str = Field(min_length=2, max_length=300)
     text: str = Field(min_length=10, max_length=200000)
-    industry_code: str = "finance"
+    industry_code: str = "marketing"
 
 
 class AssistantOut(BaseModel):
@@ -548,7 +549,7 @@ class AssistantUpdateRequest(BaseModel):
 
 
 class AgentSessionCreate(BaseModel):
-    industry_code: str = "finance"
+    industry_code: str | None = None
     title: str = ""
 
 
@@ -625,7 +626,7 @@ class AgentToolOut(BaseModel):
 class AgentToolExecuteRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     arguments: dict = Field(default_factory=dict)
-    industry_code: str = "finance"
+    industry_code: str = "marketing"
 
 
 class AgentMemoryCreate(BaseModel):

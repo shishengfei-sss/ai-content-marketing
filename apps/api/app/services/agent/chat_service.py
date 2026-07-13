@@ -19,7 +19,7 @@ from app.schemas import (
 )
 from app.services.agent.intent_parser import ParsedIntent, parse_intent
 from app.services.agent.memory_injection import build_memory_context, format_memory_block
-from app.services.agent.session_service import append_message, list_messages
+from app.services.agent.session_service import append_message, effective_advisor_code, list_messages
 from app.services.content_generation_service import run_generate_content, run_generate_proposals
 from app.services.prompt_builder import default_content_format
 
@@ -90,7 +90,7 @@ async def handle_chat(
         db,
         session.tenant_id,
         message=message,
-        industry_code=session.industry_code,
+        industry_code=effective_advisor_code(session),
         llm_source=llm_source,
         selected_proposal_index=selected_proposal_index,
         memory_context=memory_block,
@@ -130,9 +130,9 @@ async def handle_chat(
     if intent.action == "proposals":
         topic = intent.topic or message[:200]
         req = ContentProposalsRequest(
-            industry_code=session.industry_code,
+            industry_code=effective_advisor_code(session),
             platform=intent.platform,  # type: ignore[arg-type]
-            scene=intent.scene or "bookkeeping_intro",
+            scene=intent.scene or "brand_intro",
             topic=topic,
             content_format=_resolve_content_format(intent, intent.platform),  # type: ignore[arg-type]
             llm_source=llm_source,
@@ -174,9 +174,9 @@ async def handle_chat(
         selected = proposals[idx]
         topic = intent.topic or selected.title
         req = ContentGenerateRequest(
-            industry_code=session.industry_code,
+            industry_code=effective_advisor_code(session),
             platform=intent.platform or "wechat",  # type: ignore[arg-type]
-            scene=intent.scene or "bookkeeping_intro",
+            scene=intent.scene or "brand_intro",
             topic=topic,
             content_format=_resolve_content_format(intent, intent.platform or "wechat"),
             selected_proposal=selected,

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from uuid import UUID
 
@@ -78,8 +79,11 @@ from app.services.agent.session_service import (
     list_messages,
     list_sessions,
 )
+from app.services.assistant_service import MARKETING_ADVISOR_CODE, normalize_advisor_code
 from app.services.agent.tools import _perm_ctx, execute_tool, list_available_tools
 from app.services.permission_service import require_permission
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -99,7 +103,7 @@ def post_session(
         db,
         tenant_id=ctx.tenant_id,
         user_id=ctx.user.id,
-        industry_code=body.industry_code,
+        industry_code=normalize_advisor_code(body.industry_code or MARKETING_ADVISOR_CODE),
         title=body.title,
     )
 
@@ -193,7 +197,7 @@ async def post_session_preflight(
         message=body.message,
         platform=body.platform,
         content_format=body.content_format,
-        industry_code=session.industry_code,
+        industry_code=normalize_advisor_code(session.industry_code),
         llm_source=body.llm_source,
         session=session,
         persist_messages=True,
@@ -231,7 +235,7 @@ def get_agent_tools(
     ctx: TenantContext = Depends(require_permission("content.create")),
     db: Session = Depends(get_db),
 ):
-    tool_ctx = _perm_ctx(ctx, db, industry_code="finance")
+    tool_ctx = _perm_ctx(ctx, db, industry_code=normalize_advisor_code("marketing"))
     return list_available_tools(tool_ctx)
 
 
@@ -241,7 +245,7 @@ async def post_agent_tool_execute(
     ctx: TenantContext = Depends(require_permission("content.create")),
     db: Session = Depends(get_db),
 ):
-    tool_ctx = _perm_ctx(ctx, db, industry_code=body.industry_code)
+    tool_ctx = _perm_ctx(ctx, db, industry_code=normalize_advisor_code(body.industry_code))
     return await execute_tool(tool_ctx, body.name, body.arguments)
 
 
@@ -400,16 +404,22 @@ async def post_agent_workflow(
     ctx: TenantContext = Depends(require_permission("content.create")),
     db: Session = Depends(get_db),
 ):
-    workflow = create_workflow(
-        db,
-        ctx,
-        pipeline_code=body.pipeline_code,
-        input_data=body.input,
-        session_id=body.session_id,
-    )
-    if body.auto_run:
-        workflow = await run_workflow(db, ctx, workflow.id)
-    return _workflow_out(workflow)
+    try:
+        workflow = create_workflow(
+            db,
+            ctx,
+            pipeline_code=body.pipeline_code,
+            input_data=body.input,
+            session_id=body.session_id,
+        )
+        if body.auto_run:
+            workflow = await run_workflow(db, ctx, workflow.id)
+        return _workflow_out(workflow)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("agent workflow failed pipeline=%s", body.pipeline_code)
+        raise HTTPException(status_code=500, detail=f"工作流执行失败: {exc}") from exc
 
 
 @router.get("/workflows/{workflow_id}", response_model=AgentWorkflowOut)

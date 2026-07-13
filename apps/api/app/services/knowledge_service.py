@@ -6,15 +6,17 @@ C4 起默认 hybrid：关键词 + 本地 embedding 余弦；PostgreSQL 可用 pg
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy import inspect, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, attributes
 
 from app.config import settings
 from app.models import ContentTemplate, KnowledgeChunk, KnowledgeDocument, TenantBrandProfile, UserPromptProfile
+from app.services.assistant_service import MARKETING_ADVISOR_CODE, normalize_advisor_code
 from app.services.embedding_service import (
     EMBED_DIM,
     cosine_similarity,
@@ -23,6 +25,14 @@ from app.services.embedding_service import (
     embedding_to_json,
     vector_to_pg_literal,
 )
+
+logger = logging.getLogger(__name__)
+
+PLATFORM_KB_CODES = (MARKETING_ADVISOR_CODE, "universal")
+
+
+def resolve_platform_kb_industry(_industry_code: str | None = None) -> str:
+    return MARKETING_ADVISOR_CODE
 
 
 @dataclass
@@ -59,18 +69,46 @@ def _pgvector_available(db: Session) -> bool:
         return False
     try:
         cols = {c["name"] for c in inspect(db.bind).get_columns("knowledge_chunks")}
-        return "embedding" in cols
+        if "embedding" not in cols:
+            return False
+        ext = db.execute(text("SELECT 1 FROM pg_extension WHERE extname = 'vector'")).fetchone()
+        return ext is not None
     except Exception:
         return False
 
 
+def _chunk_id_params(chunk_id: UUID) -> dict[str, str]:
+    rid = str(chunk_id)
+    return {"rid": rid, "hex": rid.replace("-", "")}
+
+
+def _persist_embedding_json(db: Session, chunk_id: UUID, vec: list[float]) -> str:
+    emb = embedding_to_json(vec)
+    db.execute(
+        text(
+            "UPDATE knowledge_chunks SET embedding_json = :emb "
+            "WHERE CAST(id AS TEXT) = :rid OR CAST(id AS TEXT) = :hex"
+        ),
+        {"emb": emb, **_chunk_id_params(chunk_id)},
+    )
+    return emb
+
+
 def _store_chunk_embedding(db: Session, chunk: KnowledgeChunk, vec: list[float]) -> None:
-    chunk.embedding_json = embedding_to_json(vec)
-    if _pgvector_available(db):
+    emb = _persist_embedding_json(db, chunk.id, vec)
+    attributes.set_committed_value(chunk, "embedding_json", emb)
+    if not _pgvector_available(db):
+        return
+    try:
         db.execute(
-            text("UPDATE knowledge_chunks SET embedding = :vec::vector WHERE id = :id"),
-            {"vec": vector_to_pg_literal(vec), "id": str(chunk.id)},
+            text(
+                "UPDATE knowledge_chunks SET embedding = :vec::vector "
+                "WHERE CAST(id AS TEXT) = :rid OR CAST(id AS TEXT) = :hex"
+            ),
+            {"vec": vector_to_pg_literal(vec), **_chunk_id_params(chunk.id)},
         )
+    except Exception:
+        logger.warning("pgvector store skipped for chunk %s", chunk.id, exc_info=True)
 
 
 def ensure_chunk_embedding(db: Session, chunk: KnowledgeChunk) -> list[float]:
@@ -120,11 +158,7 @@ def index_document(db: Session, document: KnowledgeDocument) -> None:
         )
         db.add(chunk)
         db.flush()
-        if _pgvector_available(db):
-            db.execute(
-                text("UPDATE knowledge_chunks SET embedding = :vec::vector WHERE id = :id"),
-                {"vec": vector_to_pg_literal(vec), "id": str(chunk.id)},
-            )
+        _store_chunk_embedding(db, chunk, vec)
     document.chunk_count = len(pieces)
     document.status = "parsed"
     db.commit()
@@ -192,8 +226,7 @@ def _pgvector_search_scope(
         sql = text(
             """
             SELECT id FROM knowledge_chunks
-            WHERE industry_code = :industry
-              AND scope = 'tenant'
+            WHERE scope = 'tenant'
               AND tenant_id = :tenant_id
               AND embedding IS NOT NULL
             ORDER BY embedding <=> :qvec::vector
@@ -201,7 +234,6 @@ def _pgvector_search_scope(
             """
         )
         params = {
-            "industry": industry_code,
             "tenant_id": str(tenant_id),
             "qvec": vec_lit,
             "lim": limit,
@@ -210,14 +242,14 @@ def _pgvector_search_scope(
         sql = text(
             """
             SELECT id FROM knowledge_chunks
-            WHERE industry_code = :industry
+            WHERE industry_code IN ('marketing', 'universal')
               AND scope = 'platform'
               AND embedding IS NOT NULL
             ORDER BY embedding <=> :qvec::vector
             LIMIT :lim
             """
         )
-        params = {"industry": industry_code, "qvec": vec_lit, "lim": limit}
+        params = {"qvec": vec_lit, "lim": limit}
     ids = [row[0] for row in db.execute(sql, params).fetchall()]
     if not ids:
         return []
@@ -240,12 +272,11 @@ def _python_rank_scope(
     limit: int,
     exclude: set[UUID],
 ) -> list[KnowledgeSearchHit]:
-    q = db.query(KnowledgeChunk).filter(
-        KnowledgeChunk.industry_code == industry_code,
-        KnowledgeChunk.scope == scope,
-    )
+    q = db.query(KnowledgeChunk).filter(KnowledgeChunk.scope == scope)
     if scope == "tenant":
         q = q.filter(KnowledgeChunk.tenant_id == tenant_id)
+    else:
+        q = q.filter(KnowledgeChunk.industry_code.in_(PLATFORM_KB_CODES))
     candidates = q.order_by(KnowledgeChunk.created_at.desc()).limit(max(limit * 20, 50)).all()
     hits: list[KnowledgeSearchHit] = []
     for chunk in candidates:
@@ -367,21 +398,37 @@ def search_knowledge_scored(
 def get_template(
     db: Session, industry_code: str, platform: str, scene: str
 ) -> ContentTemplate | None:
-    return (
+    code = normalize_advisor_code(industry_code)
+    row = (
         db.query(ContentTemplate)
         .filter(
-            ContentTemplate.industry_code == industry_code,
+            ContentTemplate.industry_code == code,
             ContentTemplate.platform == platform,
             ContentTemplate.scene == scene,
             ContentTemplate.is_active.is_(True),
         )
         .first()
     )
+    if row:
+        return row
+    if code != MARKETING_ADVISOR_CODE:
+        return (
+            db.query(ContentTemplate)
+            .filter(
+                ContentTemplate.industry_code == MARKETING_ADVISOR_CODE,
+                ContentTemplate.platform == platform,
+                ContentTemplate.scene == scene,
+                ContentTemplate.is_active.is_(True),
+            )
+            .first()
+        )
+    return None
 
 
 def list_templates(db: Session, industry_code: str, platform: str | None = None) -> list[ContentTemplate]:
+    code = normalize_advisor_code(industry_code)
     query = db.query(ContentTemplate).filter(
-        ContentTemplate.industry_code == industry_code,
+        ContentTemplate.industry_code == code,
         ContentTemplate.is_active.is_(True),
     )
     if platform:

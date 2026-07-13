@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import os
 from pathlib import Path
 
 API_ROOT = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(API_ROOT))
 PY = sys.executable
+
+os.environ["VERIFY_LIVE_API"] = "0"
+os.environ.setdefault("FORCE_FAKE_PLATFORM_LLM", "1")
 
 STEPS = [
     ("M0", "verify_m0.py"),
@@ -36,13 +40,18 @@ def restore_test_data() -> None:
 
 
 def main() -> int:
+    from tests.http_client import clear_sms_rate_limits, reset_all_tenant_quotas
+
+    clear_sms_rate_limits()
+    reset_all_tenant_quotas()
     restore_test_data()
     failed = []
     for name, script in STEPS:
         if name != "M0":
             restore_test_data()
+        clear_sms_rate_limits()
         print(f"\n{'=' * 40}\n>>> {name}\n{'=' * 40}")
-        r = subprocess.run([PY, str(ROOT / script)], cwd=API_ROOT)
+        r = subprocess.run([PY, "-B", str(ROOT / script)], cwd=API_ROOT)
         if r.returncode != 0:
             failed.append(name)
     print(f"\n{'=' * 40}")

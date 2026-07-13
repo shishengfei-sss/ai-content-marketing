@@ -27,7 +27,7 @@ def main() -> int:
     r = _get_test_client().get("/api/v1/agent/health")
     results.append(check("VA0-2 agent health", r.status_code == 200 and r.json().get("status") == "ok"))
 
-    proc2 = subprocess.run([sys.executable, "tests/run_m0_m8.py"], cwd=API_ROOT)
+    proc2 = subprocess.run([sys.executable, "-B", "tests/run_m0_m8.py"], cwd=API_ROOT)
     results.append(check("VA0-3 run_m0_m8", proc2.returncode == 0))
 
     openapi = _get_test_client().get("/openapi.json").json()

@@ -65,7 +65,7 @@ def main() -> int:
         )
     )
 
-    proc = subprocess.run([sys.executable, "tests/verify_lm4.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_lm4.py"], cwd=API_ROOT)
     results.append(check("VLM5-3 verify_lm4 回归", proc.returncode == 0))
 
     passed = all(results)

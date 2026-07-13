@@ -53,9 +53,9 @@ def create_content(token: str) -> str:
             "input": {
                 "platform": "wechat",
                 "topic": "C3发布测试",
-                "scene": "bookkeeping_intro",
+                "scene": "brand_intro",
                 "content_format": "article",
-                "industry_code": "finance",
+                "industry_code": "marketing",
                 "llm_source": "platform",
             },
         },
@@ -146,7 +146,7 @@ def main() -> int:
     code7, pending_list = req("GET", "/agent/ops/pending", token=token)
     results.append(check("VC3-7 pending 列表", code7 == 200 and isinstance(pending_list, list), str(len(pending_list))))
 
-    proc = subprocess.run([sys.executable, "tests/verify_c2.py"], cwd=API_ROOT)
+    proc = subprocess.run([sys.executable, "-B", "tests/verify_c2.py"], cwd=API_ROOT)
     results.append(check("VC3-8 verify_c2 回归", proc.returncode == 0))
 
     passed = all(results)
