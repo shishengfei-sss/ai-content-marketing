@@ -3,6 +3,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.models.crm import (
+    CONTRACT_STATUSES,
+    CONTRACT_TYPES,
+    DEAL_SOURCES,
+    ORDER_SOURCES,
+    ORDER_STATUSES,
+    PAYMENT_METHODS,
+    PAYMENT_STATUSES,
+    QUOTE_STATUSES,
+)
+
 COMMON_FIELDS: list[dict[str, Any]] = [
     {
         "field_key": "created_by_user_id",
@@ -72,6 +83,16 @@ INTENTION_LEVEL_OPTIONS = ["高", "中", "低"]
 LEAD_STATUS_OPTIONS = ["待跟进", "跟进中", "有意向", "无意向", "已转化", "无效"]
 
 LEAD_FIELDS: list[dict[str, Any]] = [
+    {
+        "field_key": "lead_number",
+        "label": "线索编号",
+        "field_type": "text",
+        "is_required": False,
+        "show_in_list_default": True,
+        "is_unique": True,
+        "storage": "db",
+        "sort_order": 5,
+    },
     {
         "field_key": "company_name",
         "label": "公司名称",
@@ -206,6 +227,16 @@ CUSTOMER_LEVEL_OPTIONS = ["A重点", "B普通", "C长尾"]
 SERVICE_TYPE_OPTIONS = ["代理记账", "税务申报", "工商注册", "合规顾问"]
 
 CUSTOMER_FIELDS: list[dict[str, Any]] = [
+    {
+        "field_key": "customer_number",
+        "label": "客户编号",
+        "field_type": "text",
+        "is_required": False,
+        "show_in_list_default": True,
+        "is_unique": True,
+        "storage": "db",
+        "sort_order": 5,
+    },
     {
         "field_key": "company_name",
         "label": "客户名称",
@@ -357,6 +388,16 @@ CONTACT_FIELDS: list[dict[str, Any]] = [
 
 TASK_FIELDS: list[dict[str, Any]] = [
     {
+        "field_key": "task_number",
+        "label": "任务编号",
+        "field_type": "text",
+        "is_required": False,
+        "show_in_list_default": True,
+        "is_unique": True,
+        "storage": "db",
+        "sort_order": 5,
+    },
+    {
         "field_key": "title",
         "label": "任务主题",
         "field_type": "text",
@@ -412,6 +453,16 @@ TASK_FIELDS: list[dict[str, Any]] = [
 
 CAMPAIGN_FIELDS: list[dict[str, Any]] = [
     {
+        "field_key": "campaign_number",
+        "label": "活动编号",
+        "field_type": "text",
+        "is_required": False,
+        "show_in_list_default": True,
+        "is_unique": True,
+        "storage": "db",
+        "sort_order": 5,
+    },
+    {
         "field_key": "name",
         "label": "活动名称",
         "field_type": "text",
@@ -444,12 +495,445 @@ CAMPAIGN_FIELDS: list[dict[str, Any]] = [
     {"field_key": "budget", "label": "预算", "field_type": "currency", "sort_order": 80},
 ]
 
+# ============================================================
+# v0.7 CRM-2/3：商机 / 报价 / 合同 / 订单 / 收款 / 产品
+# ============================================================
+
+DEAL_STATUS_OPTIONS = ["open", "won", "lost", "abandoned"]
+
+DEAL_FIELDS: list[dict[str, Any]] = [
+    {
+        "field_key": "deal_number",
+        "label": "商机编号",
+        "field_type": "text",
+        "is_required": False,
+        "show_in_list_default": True,
+        "is_unique": True,
+        "storage": "db",
+        "sort_order": 5,
+    },
+    {
+        "field_key": "title",
+        "label": "商机名称",
+        "field_type": "text",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 10,
+    },
+    {
+        "field_key": "customer_id",
+        "label": "客户",
+        "field_type": "ref",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 20,
+    },
+    {"field_key": "contact_id", "label": "主要联系人", "field_type": "ref", "storage": "db", "sort_order": 30},
+    {
+        "field_key": "pipeline_id",
+        "label": "销售管道",
+        "field_type": "ref",
+        "is_required": True,
+        "storage": "db",
+        "sort_order": 40,
+    },
+    {
+        "field_key": "stage_id",
+        "label": "阶段",
+        "field_type": "ref",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 50,
+    },
+    {
+        "field_key": "amount",
+        "label": "商机金额",
+        "field_type": "currency",
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 60,
+    },
+    {
+        "field_key": "expected_close_date",
+        "label": "预计成交日",
+        "field_type": "datetime",
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 70,
+    },
+    {
+        "field_key": "probability",
+        "label": "成交概率",
+        "field_type": "number",
+        "storage": "db",
+        "sort_order": 80,
+    },
+    {
+        "field_key": "status",
+        "label": "商机状态",
+        "field_type": "select",
+        "options": DEAL_STATUS_OPTIONS,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 90,
+    },
+    {"field_key": "loss_reason", "label": "输单原因", "field_type": "text", "storage": "db", "sort_order": 100},
+    {
+        "field_key": "source",
+        "label": "商机来源",
+        "field_type": "select",
+        "options": list(DEAL_SOURCES),
+        "storage": "db",
+        "sort_order": 110,
+    },
+    {"field_key": "campaign_id", "label": "营销活动", "field_type": "ref", "storage": "db", "sort_order": 120},
+    {"field_key": "description", "label": "需求描述", "field_type": "textarea", "storage": "db", "sort_order": 125},
+    {"field_key": "next_step", "label": "下一步", "field_type": "text", "storage": "db", "sort_order": 126},
+    {
+        "field_key": "deal_type",
+        "label": "商机类型",
+        "field_type": "select",
+        "options": ["新业务", "续约", "升级", "交叉销售"],
+        "storage": "db",
+        "sort_order": 127,
+    },
+    {
+        "field_key": "priority",
+        "label": "优先级",
+        "field_type": "select",
+        "options": ["high", "medium", "low"],
+        "storage": "db",
+        "show_in_list_default": True,
+        "sort_order": 128,
+    },
+    {"field_key": "competitor", "label": "竞争对手", "field_type": "text", "storage": "db", "sort_order": 129},
+    {
+        "field_key": "contact_role",
+        "label": "联系人角色",
+        "field_type": "select",
+        "options": ["决策者", "影响者", "使用者", "评估者"],
+        "storage": "db",
+        "sort_order": 130,
+    },
+    {"field_key": "converted_from_lead_id", "label": "来源线索", "field_type": "ref", "storage": "db", "sort_order": 135},
+    {"field_key": "converted_order_id", "label": "转出订单", "field_type": "ref", "storage": "db", "sort_order": 140},
+    {"field_key": "closed_at", "label": "成交时间", "field_type": "datetime", "storage": "db", "sort_order": 150},
+]
+
+QUOTE_FIELDS: list[dict[str, Any]] = [
+    {
+        "field_key": "quote_number",
+        "label": "报价单号",
+        "field_type": "text",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 10,
+    },
+    {"field_key": "deal_id", "label": "关联商机", "field_type": "ref", "storage": "db", "sort_order": 20},
+    {
+        "field_key": "customer_id",
+        "label": "客户",
+        "field_type": "ref",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 30,
+    },
+    {"field_key": "contact_id", "label": "联系人", "field_type": "ref", "storage": "db", "sort_order": 40},
+    {
+        "field_key": "subject",
+        "label": "报价主题",
+        "field_type": "text",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 50,
+    },
+    {"field_key": "discount_rate", "label": "整单折扣%", "field_type": "number", "storage": "db", "sort_order": 60},
+    {
+        "field_key": "total_amount",
+        "label": "报价总额",
+        "field_type": "currency",
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 70,
+    },
+    {
+        "field_key": "status",
+        "label": "报价状态",
+        "field_type": "select",
+        "options": list(QUOTE_STATUSES),
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 80,
+    },
+    {"field_key": "valid_until", "label": "有效期", "field_type": "datetime", "storage": "db", "sort_order": 90},
+    {"field_key": "converted_order_id", "label": "转出订单", "field_type": "ref", "storage": "db", "sort_order": 100},
+]
+
+CONTRACT_FIELDS: list[dict[str, Any]] = [
+    {
+        "field_key": "contract_number",
+        "label": "合同编号",
+        "field_type": "text",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 10,
+    },
+    {"field_key": "deal_id", "label": "关联商机", "field_type": "ref", "storage": "db", "sort_order": 20},
+    {
+        "field_key": "customer_id",
+        "label": "客户",
+        "field_type": "ref",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 30,
+    },
+    {"field_key": "quote_id", "label": "来源报价", "field_type": "ref", "storage": "db", "sort_order": 40},
+    {
+        "field_key": "title",
+        "label": "合同标题",
+        "field_type": "text",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 50,
+    },
+    {
+        "field_key": "contract_type",
+        "label": "合同类型",
+        "field_type": "select",
+        "options": list(CONTRACT_TYPES),
+        "storage": "db",
+        "sort_order": 60,
+    },
+    {
+        "field_key": "amount",
+        "label": "合同金额",
+        "field_type": "currency",
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 70,
+    },
+    {"field_key": "signed_amount", "label": "签署金额", "field_type": "currency", "storage": "db", "sort_order": 80},
+    {
+        "field_key": "start_date",
+        "label": "服务开始",
+        "field_type": "datetime",
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 90,
+    },
+    {
+        "field_key": "end_date",
+        "label": "服务结束",
+        "field_type": "datetime",
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 100,
+    },
+    {
+        "field_key": "status",
+        "label": "合同状态",
+        "field_type": "select",
+        "options": list(CONTRACT_STATUSES),
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 110,
+    },
+    {"field_key": "signed_at", "label": "签署时间", "field_type": "datetime", "storage": "db", "sort_order": 120},
+    {"field_key": "file_url", "label": "合同附件", "field_type": "text", "storage": "db", "sort_order": 130},
+]
+
+ORDER_FIELDS: list[dict[str, Any]] = [
+    {
+        "field_key": "order_number",
+        "label": "订单号",
+        "field_type": "text",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 10,
+    },
+    {
+        "field_key": "title",
+        "label": "订单主题",
+        "field_type": "text",
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 20,
+    },
+    {
+        "field_key": "customer_id",
+        "label": "客户",
+        "field_type": "ref",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 30,
+    },
+    {"field_key": "contact_id", "label": "联系人", "field_type": "ref", "storage": "db", "sort_order": 40},
+    {"field_key": "deal_id", "label": "关联商机", "field_type": "ref", "storage": "db", "sort_order": 50},
+    {"field_key": "quote_id", "label": "来源报价", "field_type": "ref", "storage": "db", "sort_order": 60},
+    {"field_key": "contract_id", "label": "来源合同", "field_type": "ref", "storage": "db", "sort_order": 70},
+    {
+        "field_key": "source",
+        "label": "订单来源",
+        "field_type": "select",
+        "options": list(ORDER_SOURCES),
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 80,
+    },
+    {
+        "field_key": "order_date",
+        "label": "下单日期",
+        "field_type": "datetime",
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 90,
+    },
+    {
+        "field_key": "amount",
+        "label": "订单金额",
+        "field_type": "currency",
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 100,
+    },
+    {
+        "field_key": "status",
+        "label": "订单状态",
+        "field_type": "select",
+        "options": list(ORDER_STATUSES),
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 110,
+    },
+]
+
+PAYMENT_METHOD_OPTIONS = list(PAYMENT_METHODS)
+PAYMENT_STATUS_OPTIONS = list(PAYMENT_STATUSES)
+
+PAYMENT_FIELDS: list[dict[str, Any]] = [
+    {
+        "field_key": "payment_number",
+        "label": "回款单号",
+        "field_type": "text",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 10,
+    },
+    {
+        "field_key": "order_id",
+        "label": "关联订单",
+        "field_type": "ref",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 20,
+    },
+    {"field_key": "plan_id", "label": "关联回款计划", "field_type": "ref", "storage": "db", "sort_order": 30},
+    {
+        "field_key": "amount",
+        "label": "回款金额",
+        "field_type": "currency",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 40,
+    },
+    {
+        "field_key": "paid_at",
+        "label": "到账日期",
+        "field_type": "datetime",
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 50,
+    },
+    {
+        "field_key": "method",
+        "label": "回款方式",
+        "field_type": "select",
+        "options": PAYMENT_METHOD_OPTIONS,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 60,
+    },
+    {
+        "field_key": "status",
+        "label": "回款状态",
+        "field_type": "select",
+        "options": PAYMENT_STATUS_OPTIONS,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 70,
+    },
+    {"field_key": "remark", "label": "备注", "field_type": "textarea", "storage": "db", "sort_order": 80},
+]
+
+PRODUCT_FIELDS: list[dict[str, Any]] = [
+    {
+        "field_key": "code",
+        "label": "产品编码",
+        "field_type": "text",
+        "is_required": True,
+        "is_unique": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 10,
+    },
+    {
+        "field_key": "name",
+        "label": "产品名称",
+        "field_type": "text",
+        "is_required": True,
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 20,
+    },
+    {"field_key": "unit", "label": "单位", "field_type": "text", "storage": "db", "sort_order": 30},
+    {
+        "field_key": "list_price",
+        "label": "标价",
+        "field_type": "currency",
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 40,
+    },
+    {"field_key": "cost_price", "label": "成本价", "field_type": "currency", "storage": "db", "sort_order": 50},
+    {
+        "field_key": "is_active",
+        "label": "启用",
+        "field_type": "select",
+        "options": ["是", "否"],
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 60,
+    },
+    {"field_key": "description", "label": "描述", "field_type": "textarea", "storage": "db", "sort_order": 70},
+]
+
 ENTITY_SEED_MAP: dict[str, list[dict[str, Any]]] = {
     "lead": COMMON_FIELDS + LEAD_FIELDS,
     "customer": COMMON_FIELDS + CUSTOMER_FIELDS,
     "contact": CONTACT_FIELDS,
     "task": COMMON_FIELDS + TASK_FIELDS,
     "campaign": COMMON_FIELDS + CAMPAIGN_FIELDS,
+    # v0.7 CRM-2/3
+    "deal": COMMON_FIELDS + DEAL_FIELDS,
+    "quote": COMMON_FIELDS + QUOTE_FIELDS,
+    "contract": COMMON_FIELDS + CONTRACT_FIELDS,
+    "order": COMMON_FIELDS + ORDER_FIELDS,
+    "payment": COMMON_FIELDS + PAYMENT_FIELDS,
+    "product": PRODUCT_FIELDS,
 }
 
 LEAD_LABEL_EXPECTATIONS: dict[str, str] = {

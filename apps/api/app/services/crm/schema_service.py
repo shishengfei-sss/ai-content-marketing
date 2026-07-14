@@ -146,6 +146,19 @@ def ensure_entity_schema(db: Session, tenant_id: UUID, entity_type: str) -> list
     if existing:
         fields = list_active_fields(db, tenant_id, entity_type, include_inactive=True)
         _sync_seed_field_metadata(db, tenant_id, entity_type, fields)
+        # 补种种子中存在但租户尚未拥有的字段（如 v0.8 新增编号字段）
+        existing_keys = {f.field_key for f in fields}
+        seeds = ENTITY_SEED_MAP.get(entity_type, [])
+        for raw in seeds:
+            data = _normalize_seed(raw)
+            if data["field_key"] in existing_keys:
+                continue
+            row = EntityFieldDefinition(tenant_id=tenant_id, entity_type=entity_type, **data)
+            db.add(row)
+            fields.append(row)
+        db.commit()
+        for f in fields:
+            db.refresh(f)
         return fields
 
     seeds = ENTITY_SEED_MAP.get(entity_type, [])

@@ -13,6 +13,7 @@ from app.models import Content
 from app.models.crm import CampaignContent, CrmTask, Lead, MarketingCampaign
 from app.schemas.crm import CampaignCreate, CampaignUpdate, validate_campaign_status
 from app.services.crm.crm_scope_service import assert_can_view_campaign
+from app.services.crm.number_service import generate_number
 
 
 def _perm_set(ctx: TenantContext) -> set[str]:
@@ -62,6 +63,7 @@ def campaign_to_out(db: Session, tenant_id: UUID, campaign: MarketingCampaign) -
     lead_count, task_count, content_count = _counts(db, tenant_id, campaign.id)
     return {
         "id": campaign.id,
+        "campaign_number": campaign.campaign_number,
         "name": campaign.name,
         "status": campaign.status,
         "start_at": campaign.start_at,
@@ -83,6 +85,7 @@ def create_campaign(db: Session, ctx: TenantContext, data: CampaignCreate) -> Ma
     validate_campaign_status(data.status)
     campaign = MarketingCampaign(
         tenant_id=ctx.tenant_id,
+        campaign_number=generate_number(db, ctx.tenant_id, "campaign"),
         name=data.name.strip(),
         status=data.status,
         start_at=data.start_at,

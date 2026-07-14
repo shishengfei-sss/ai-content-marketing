@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     WECHAT_PUBLISHER: str = "mock"
     STORAGE_DIR: str = "./storage"
+    ATTACHMENT_DIR: str = "./storage/attachments"
     PUBLISH_POLL_SEC: int = 30
 
     CORS_ORIGINS: str = (

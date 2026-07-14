@@ -146,7 +146,12 @@ def ensure_fake_platform(admin_token: str) -> None:
 
 
 def restore_platform_deepseek(admin_token: str, *, force: bool = False) -> None:
-    """验收后恢复平台 DeepSeek，并清除测试写入的 fake-key。"""
+    """验收后恢复平台 DeepSeek。
+
+    - 若 .env 提供了 DEEPSEEK_API_KEY（CI 场景）：用 env Key 覆盖。
+    - 否则（本地开发，Key 在管理后台填写）：保留数据库中已有的加密 Key，
+      不再清空，避免每次跑回归脚本都把用户在 UI 填的 Key 抹掉。
+    """
     if not force and os.environ.get("FORCE_FAKE_PLATFORM_LLM") == "1":
         return
     from app.config import settings
@@ -164,8 +169,7 @@ def restore_platform_deepseek(admin_token: str, *, force: bool = False) -> None:
             row.is_active = True
             if settings.DEEPSEEK_API_KEY:
                 row.api_key_encrypted = encrypt_api_key(settings.DEEPSEEK_API_KEY)
-            else:
-                row.api_key_encrypted = ""
+            # 无 env Key 时保留既有 api_key_encrypted，不再清空
             db.commit()
     finally:
         db.close()

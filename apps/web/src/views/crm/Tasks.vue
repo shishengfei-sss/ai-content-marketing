@@ -460,6 +460,11 @@ onMounted(async () => {
 
     <div class="crm-list-table-wrap">
       <el-table v-loading="loading" :data="items" border class="crm-list-table tasks-table">
+        <el-table-column prop="task_number" label="编号" width="150" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="tasks-table__number">{{ row.task_number || '—' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="tasks-table__title-cell">

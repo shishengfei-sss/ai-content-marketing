@@ -83,6 +83,61 @@ CRM_PERMISSIONS: tuple[str, ...] = (
     "crm.view.manage_public",
     "crm.lead.import",
     "crm.customer.import",
+    # v0.7 商机与管道
+    "crm.deal.list_own",
+    "crm.deal.list_team",
+    "crm.deal.list_territory",
+    "crm.deal.list_all",
+    "crm.deal.view",
+    "crm.deal.create",
+    "crm.deal.edit",
+    "crm.deal.assign",
+    "crm.deal.convert",
+    "crm.deal.close",
+    "crm.deal.delete",
+    "crm.pipeline.manage",
+    # v0.7 产品
+    "crm.product.manage",
+    # v0.7 报价
+    "crm.quote.list_own",
+    "crm.quote.list_all",
+    "crm.quote.view",
+    "crm.quote.create",
+    "crm.quote.edit",
+    "crm.quote.send",
+    "crm.quote.accept",
+    "crm.quote.delete",
+    # v0.7 合同
+    "crm.contract.list_own",
+    "crm.contract.list_all",
+    "crm.contract.view",
+    "crm.contract.create",
+    "crm.contract.edit",
+    "crm.contract.sign",
+    "crm.contract.delete",
+    # v0.7 订单
+    "crm.order.list_own",
+    "crm.order.list_team",
+    "crm.order.list_territory",
+    "crm.order.list_all",
+    "crm.order.view",
+    "crm.order.create",
+    "crm.order.edit",
+    "crm.order.assign",
+    "crm.order.place",
+    "crm.order.convert",
+    "crm.order.delete",
+    # v0.7 收款
+    "crm.payment.list_own",
+    "crm.payment.list_team",
+    "crm.payment.list_territory",
+    "crm.payment.list_all",
+    "crm.payment.view",
+    "crm.payment.create",
+    "crm.payment.edit",
+    "crm.payment.confirm",
+    "crm.payment.reverse",
+    "crm.payment.delete",
 )
 
 # 全部权限 code
@@ -121,6 +176,33 @@ SALES_DEFAULT_PERMISSIONS: frozenset[str] = frozenset(
         "crm.view.save_own",
         "crm.lead.import",
         "crm.customer.import",
+        # v0.7 商机
+        "crm.deal.list_own",
+        "crm.deal.view",
+        "crm.deal.create",
+        "crm.deal.edit",
+        "crm.deal.convert",
+        "crm.deal.close",
+        # v0.7 报价
+        "crm.quote.list_own",
+        "crm.quote.view",
+        "crm.quote.create",
+        "crm.quote.edit",
+        # v0.7 合同
+        "crm.contract.list_own",
+        "crm.contract.view",
+        # v0.7 订单
+        "crm.order.list_own",
+        "crm.order.view",
+        "crm.order.create",
+        "crm.order.edit",
+        "crm.order.place",
+        "crm.order.convert",
+        # v0.7 收款
+        "crm.payment.list_own",
+        "crm.payment.view",
+        "crm.payment.create",
+        "crm.payment.edit",
     }
 )
 
@@ -141,6 +223,33 @@ SALES_MANAGER_DEFAULT_PERMISSIONS: frozenset[str] = SALES_DEFAULT_PERMISSIONS | 
         "dashboard.view_all",
         "analytics.view_all",
         "team.member.view",
+        # v0.7 商机
+        "crm.deal.list_team",
+        "crm.deal.list_territory",
+        "crm.deal.assign",
+        "crm.deal.delete",
+        # v0.7 报价
+        "crm.quote.list_all",
+        "crm.quote.send",
+        "crm.quote.accept",
+        "crm.quote.delete",
+        # v0.7 合同
+        "crm.contract.list_all",
+        "crm.contract.create",
+        "crm.contract.edit",
+        "crm.contract.sign",
+        "crm.contract.delete",
+        # v0.7 订单
+        "crm.order.list_team",
+        "crm.order.list_territory",
+        "crm.order.assign",
+        "crm.order.delete",
+        # v0.7 收款
+        "crm.payment.list_team",
+        "crm.payment.list_territory",
+        "crm.payment.confirm",
+        "crm.payment.reverse",
+        "crm.payment.delete",
     }
 )
 
@@ -170,6 +279,19 @@ MARKETING_DEFAULT_PERMISSIONS: frozenset[str] = frozenset(
         "crm.customer.list_own",
         "crm.customer.view",
         "crm.view.save_own",
+        # v0.7 商机（只读 + 新建）
+        "crm.deal.list_own",
+        "crm.deal.view",
+        "crm.deal.create",
+        # v0.7 报价（只读）
+        "crm.quote.list_own",
+        "crm.quote.view",
+        # v0.7 合同（只读）
+        "crm.contract.list_own",
+        "crm.contract.view",
+        # v0.7 订单（只读）
+        "crm.order.list_own",
+        "crm.order.view",
     }
 )
 

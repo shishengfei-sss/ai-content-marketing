@@ -222,6 +222,11 @@ onMounted(loadCampaigns)
     </div>
 
     <el-table v-loading="loading" :data="items" stripe @row-click="goDetail">
+      <el-table-column prop="campaign_number" label="编号" width="150" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span class="name-link">{{ row.campaign_number || '—' }}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="name" label="活动名称" min-width="180" show-overflow-tooltip>
         <template #default="{ row }">
           <span class="name-link">{{ row.name }}</span>

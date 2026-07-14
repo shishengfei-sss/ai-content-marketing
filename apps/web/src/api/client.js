@@ -190,6 +190,7 @@ export const crmApi = {
   createContact: (customerId, data) => api.post(`/api/v1/crm/customers/${customerId}/contacts`, data),
   listActivities: (params) => api.get('/api/v1/crm/activities', { params }),
   createActivity: (data) => api.post('/api/v1/crm/activities', data),
+  updateActivity: (id, data) => api.patch(`/api/v1/crm/activities/${id}`, data),
   deleteActivity: (id) => api.delete(`/api/v1/crm/activities/${id}`),
   listTerritories: () => api.get('/api/v1/crm/territories'),
   createTerritory: (data) => api.post('/api/v1/crm/territories', data),
@@ -256,6 +257,98 @@ export const crmApi = {
     const res = await api.get(`/api/v1/crm/import/jobs/${jobId}/errors`, { responseType: 'blob' })
     return res.data
   },
+  // v0.7 商机与管道
+  listDeals: (params) => api.get('/api/v1/crm/deals', { params }),
+  getDeal: (id) => api.get(`/api/v1/crm/deals/${id}`),
+  createDeal: (data) => api.post('/api/v1/crm/deals', data),
+  updateDeal: (id, data) => api.patch(`/api/v1/crm/deals/${id}`, data),
+  deleteDeal: (id) => api.delete(`/api/v1/crm/deals/${id}`),
+  changeDealStage: (id, data) => api.post(`/api/v1/crm/deals/${id}/stage`, data),
+  closeDeal: (id, data) => api.post(`/api/v1/crm/deals/${id}/close`, data),
+  listDealStageLogs: (id) => api.get(`/api/v1/crm/deals/${id}/stage-logs`),
+  listDealActivities: (id) => api.get(`/api/v1/crm/deals/${id}/activities`),
+  createDealActivity: (id, data) => api.post(`/api/v1/crm/deals/${id}/activities`, data),
+  // v0.8 P1-02 附件
+  listAttachments: (params) => api.get('/api/v1/crm/attachments', { params }),
+  uploadAttachment: (entityType, entityId, file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post('/api/v1/crm/attachments', fd, {
+      params: { entity_type: entityType, entity_id: entityId },
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  deleteAttachment: (id) => api.delete(`/api/v1/crm/attachments/${id}`),
+  downloadAttachment: (id) => api.get(`/api/v1/crm/attachments/${id}/download`, { responseType: 'blob' }),
+  attachmentDownloadUrl: (id) => `/api/v1/crm/attachments/${id}/download`,
+  convertDealToOrder: (id) => api.post(`/api/v1/crm/deals/${id}/convert-to-order`),
+  generateDealQuote: (id) => api.post(`/api/v1/crm/deals/${id}/generate-quote`),
+  dealFunnel: (params) => api.get('/api/v1/analytics/deal-funnel', { params }),
+  dealForecast: (params) => api.get('/api/v1/analytics/deal-forecast', { params }),
+  dealWinLoss: (params) => api.get('/api/v1/analytics/deal-win-loss', { params }),
+  batchUpdateDeals: (data) => api.post('/api/v1/crm/deals/batch-update', data),
+  cloneDeal: (id) => api.post(`/api/v1/crm/deals/${id}/clone`),
+  // v0.8 P1-06 团队
+  listDealTeam: (id) => api.get(`/api/v1/crm/deals/${id}/team`),
+  addDealTeam: (id, data) => api.post(`/api/v1/crm/deals/${id}/team`, data),
+  removeDealTeam: (id, memberId) => api.delete(`/api/v1/crm/deals/${id}/team/${memberId}`),
+  listPipelines: () => api.get('/api/v1/crm/pipelines'),
+  createPipeline: (data) => api.post('/api/v1/crm/pipelines', data),
+  updatePipeline: (id, data) => api.patch(`/api/v1/crm/pipelines/${id}`, data),
+  deletePipeline: (id) => api.delete(`/api/v1/crm/pipelines/${id}`),
+  createPipelineStage: (pipelineId, data) =>
+    api.post(`/api/v1/crm/pipelines/${pipelineId}/stages`, data),
+  updatePipelineStage: (pipelineId, stageId, data) =>
+    api.patch(`/api/v1/crm/pipelines/${pipelineId}/stages/${stageId}`, data),
+  deletePipelineStage: (pipelineId, stageId) =>
+    api.delete(`/api/v1/crm/pipelines/${pipelineId}/stages/${stageId}`),
+  // v0.7 产品
+  listProducts: (params) => api.get('/api/v1/crm/products', { params }),
+  getProduct: (id) => api.get(`/api/v1/crm/products/${id}`),
+  createProduct: (data) => api.post('/api/v1/crm/products', data),
+  updateProduct: (id, data) => api.patch(`/api/v1/crm/products/${id}`, data),
+  deleteProduct: (id) => api.delete(`/api/v1/crm/products/${id}`),
+  // v0.7 报价
+  listQuotes: (params) => api.get('/api/v1/crm/quotes', { params }),
+  getQuote: (id) => api.get(`/api/v1/crm/quotes/${id}`),
+  createQuote: (data) => api.post('/api/v1/crm/quotes', data),
+  updateQuote: (id, data) => api.patch(`/api/v1/crm/quotes/${id}`, data),
+  deleteQuote: (id) => api.delete(`/api/v1/crm/quotes/${id}`),
+  sendQuote: (id) => api.post(`/api/v1/crm/quotes/${id}/send`),
+  acceptQuote: (id) => api.post(`/api/v1/crm/quotes/${id}/accept`),
+  convertQuoteToOrder: (id) => api.post(`/api/v1/crm/quotes/${id}/convert-to-order`),
+  // v0.7 合同
+  listContracts: (params) => api.get('/api/v1/crm/contracts', { params }),
+  getContract: (id) => api.get(`/api/v1/crm/contracts/${id}`),
+  createContract: (data) => api.post('/api/v1/crm/contracts', data),
+  updateContract: (id, data) => api.patch(`/api/v1/crm/contracts/${id}`, data),
+  deleteContract: (id) => api.delete(`/api/v1/crm/contracts/${id}`),
+  signContract: (id, data) => api.post(`/api/v1/crm/contracts/${id}/sign`, data),
+  convertContractToOrder: (id) => api.post(`/api/v1/crm/contracts/${id}/convert-to-order`),
+  // v0.7 订单
+  listOrders: (params) => api.get('/api/v1/crm/orders', { params }),
+  getOrder: (id) => api.get(`/api/v1/crm/orders/${id}`),
+  createOrder: (data) => api.post('/api/v1/crm/orders', data),
+  updateOrder: (id, data) => api.patch(`/api/v1/crm/orders/${id}`, data),
+  deleteOrder: (id) => api.delete(`/api/v1/crm/orders/${id}`),
+  confirmOrder: (id) => api.post(`/api/v1/crm/orders/${id}/confirm`),
+  cancelOrder: (id) => api.post(`/api/v1/crm/orders/${id}/cancel`),
+  // v0.7 回款
+  listPayments: (params) => api.get('/api/v1/crm/payments', { params }),
+  getPayment: (id) => api.get(`/api/v1/crm/payments/${id}`),
+  createPayment: (data) => api.post('/api/v1/crm/payments', data),
+  updatePayment: (id, data) => api.patch(`/api/v1/crm/payments/${id}`, data),
+  deletePayment: (id) => api.delete(`/api/v1/crm/payments/${id}`),
+  confirmPayment: (id) => api.post(`/api/v1/crm/payments/${id}/confirm`),
+  reversePayment: (id) => api.post(`/api/v1/crm/payments/${id}/reverse`),
+  listOrderPaymentPlans: (orderId) => api.get(`/api/v1/crm/payments/orders/${orderId}/plans`),
+  createOrderPaymentPlan: (orderId, data) =>
+    api.post(`/api/v1/crm/payments/orders/${orderId}/plans`, data),
+  deleteOrderPaymentPlan: (planId) => api.delete(`/api/v1/crm/payments/plans/${planId}`),
+  // v0.8 编号规则
+  listNumberRules: () => api.get('/api/v1/crm/number-rules'),
+  updateNumberRule: (entityType, data) =>
+    api.put(`/api/v1/crm/number-rules/${entityType}`, data),
 }
 
 export const adminApi = {

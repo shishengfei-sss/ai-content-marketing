@@ -455,4 +455,14 @@ class AgentPendingAction(Base):
     cancelled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-from app.models.crm import Contact, CrmActivity, Customer, Lead  # noqa: E402, F401
+from app.models.crm import (  # noqa: E402, F401
+    Contact,
+    CrmActivity,
+    CrmTask,
+    Customer,
+    Deal,
+    EntityNumberCounter,
+    EntityNumberRule,
+    Lead,
+    MarketingCampaign,
+)

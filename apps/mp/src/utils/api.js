@@ -102,6 +102,14 @@ export const dashboardApi = {
 
 export const analyticsApi = {
   stats: () => request({ url: '/api/v1/analytics/stats' }),
+  dealFunnel: (params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return request({ url: `/api/v1/analytics/deal-funnel${query ? `?${query}` : ''}` })
+  },
+  dealForecast: (params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return request({ url: `/api/v1/analytics/deal-forecast${query ? `?${query}` : ''}` })
+  },
 }
 
 export const contentApi = {
@@ -189,6 +197,18 @@ export const crmApi = {
     const query = new URLSearchParams(params).toString()
     return request({ url: `/api/v1/crm/tasks${query ? `?${query}` : ''}` })
   },
+  listDeals: (params) => request({ url: `/api/v1/crm/deals${buildCrmQuery(params)}` }),
+  getDeal: (id) => request({ url: `/api/v1/crm/deals/${id}` }),
+  changeDealStage: (id, data) => request({ url: `/api/v1/crm/deals/${id}/stage`, method: 'POST', data }),
+  listDealActivities: (id) => request({ url: `/api/v1/crm/deals/${id}/activities` }),
+  createDealActivity: (id, data) => request({ url: `/api/v1/crm/deals/${id}/activities`, method: 'POST', data }),
+  listPipelines: () => request({ url: '/api/v1/crm/pipelines' }),
+  listOrders: (params) => request({ url: `/api/v1/crm/orders${buildCrmQuery(params)}` }),
+  getOrder: (id) => request({ url: `/api/v1/crm/orders/${id}` }),
+  listQuotes: (params) => request({ url: `/api/v1/crm/quotes${buildCrmQuery(params)}` }),
+  listContracts: (params) => request({ url: `/api/v1/crm/contracts${buildCrmQuery(params)}` }),
+  listPayments: (params) => request({ url: `/api/v1/crm/payments${buildCrmQuery(params)}` }),
+  createPayment: (data) => request({ url: '/api/v1/crm/payments', method: 'POST', data }),
   createTask: (data) => request({ url: '/api/v1/crm/tasks', method: 'POST', data }),
   updateTask: (id, data) => request({ url: `/api/v1/crm/tasks/${id}`, method: 'PATCH', data }),
   getSchema: (entityType) => request({ url: `/api/v1/crm/schema/${entityType}` }),

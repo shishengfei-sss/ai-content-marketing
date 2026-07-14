@@ -8,6 +8,16 @@ export const FORM_SKIP_FIELD_KEYS = new Set([
   'converted_customer_id',
   'next_follow_up_at',
   'converted_from_lead_id',
+  // v0.8 自动编号字段：由后端自动生成，不在表单中录入
+  'lead_number',
+  'customer_number',
+  'task_number',
+  'campaign_number',
+  'deal_number',
+  'quote_number',
+  'contract_number',
+  'order_number',
+  'payment_number',
 ])
 
 export const ENTITY_DB_FIELDS = {

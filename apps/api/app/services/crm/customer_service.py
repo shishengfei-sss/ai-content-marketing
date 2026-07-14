@@ -12,6 +12,7 @@ from app.dependencies import TenantContext
 from app.models.crm import Contact, Customer
 from app.schemas.crm import ContactCreate, CustomerCreate, CustomerUpdate, validate_customer_status
 from app.services.crm.crm_scope_service import assert_can_view_customer
+from app.services.crm.number_service import generate_number
 from app.services.crm.schema_service import validate_extra_data
 
 
@@ -36,6 +37,7 @@ def create_customer(db: Session, ctx: TenantContext, data: CustomerCreate) -> Cu
     extra = validate_extra_data(db, ctx.tenant_id, "customer", data.extra_data, is_create=True)
     customer = Customer(
         tenant_id=ctx.tenant_id,
+        customer_number=generate_number(db, ctx.tenant_id, "customer"),
         company_name=data.company_name.strip(),
         mobile=data.mobile,
         phone=data.phone,

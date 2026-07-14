@@ -146,6 +146,48 @@
       "style": {
         "navigationBarTitleText": "活动详情"
       }
+    },
+    {
+      "path": "pages/crm/deals",
+      "style": {
+        "navigationBarTitleText": "商机"
+      }
+    },
+    {
+      "path": "pages/crm/deal-detail",
+      "style": {
+        "navigationBarTitleText": "商机详情"
+      }
+    },
+    {
+      "path": "pages/crm/orders",
+      "style": {
+        "navigationBarTitleText": "订单"
+      }
+    },
+    {
+      "path": "pages/crm/order-detail",
+      "style": {
+        "navigationBarTitleText": "订单详情"
+      }
+    },
+    {
+      "path": "pages/crm/quotes",
+      "style": {
+        "navigationBarTitleText": "报价"
+      }
+    },
+    {
+      "path": "pages/crm/contracts",
+      "style": {
+        "navigationBarTitleText": "合同"
+      }
+    },
+    {
+      "path": "pages/crm/payments",
+      "style": {
+        "navigationBarTitleText": "回款"
+      }
     }
   ],
   "globalStyle": {

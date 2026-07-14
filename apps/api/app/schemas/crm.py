@@ -147,6 +147,7 @@ class LeadUpdate(BaseModel):
 
 class LeadOut(BaseModel):
     id: UUID
+    lead_number: str | None
     company_name: str
     contact_name: str | None
     mobile: str | None
@@ -201,6 +202,7 @@ class CustomerUpdate(BaseModel):
 
 class CustomerOut(BaseModel):
     id: UUID
+    customer_number: str | None
     company_name: str
     mobile: str | None
     phone: str | None
@@ -263,18 +265,30 @@ class ContactOut(BaseModel):
 class ActivityCreate(BaseModel):
     lead_id: UUID | None = None
     customer_id: UUID | None = None
+    deal_id: UUID | None = None
     activity_type: str
+    subject: str | None = Field(default=None, max_length=200)
     content: str = ""
     next_follow_up_at: datetime | None = None
     status: str | None = None
+
+
+class ActivityUpdate(BaseModel):
+    activity_type: str | None = None
+    subject: str | None = Field(default=None, max_length=200)
+    content: str | None = None
 
 
 class ActivityOut(BaseModel):
     id: UUID
     lead_id: UUID | None
     customer_id: UUID | None
+    deal_id: UUID | None
     activity_type: str
+    subject: str | None
     content: str
+    entity_type: str | None
+    entity_id: str | None
     created_by_user_id: UUID
     created_at: datetime
 
@@ -294,6 +308,19 @@ def validate_customer_status(status: str) -> None:
 def validate_activity_type(activity_type: str) -> None:
     if activity_type not in ACTIVITY_TYPES:
         raise ValueError(f"activity_type 必须是 {ACTIVITY_TYPES} 之一")
+
+
+class AttachmentOut(BaseModel):
+    id: UUID
+    entity_type: str
+    entity_id: UUID
+    file_name: str
+    file_size: int
+    file_type: str | None
+    uploaded_by_user_id: UUID
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class TerritoryCreate(BaseModel):
@@ -381,6 +408,7 @@ class TaskUpdate(BaseModel):
 
 class TaskOut(BaseModel):
     id: UUID
+    task_number: str | None
     title: str
     description: str | None
     status: str
@@ -450,6 +478,7 @@ class CampaignUpdate(BaseModel):
 
 class CampaignOut(BaseModel):
     id: UUID
+    campaign_number: str | None
     name: str
     status: str
     start_at: datetime | None

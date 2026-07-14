@@ -304,11 +304,15 @@ const avatarChar = computed(() => displayName.value.charAt(0))
   background: #fff;
   border-right: 1px solid var(--color-border);
   flex-shrink: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .app-sidebar__menu {
   border-right: none;
   padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .app-sidebar__menu :deep(.el-menu-item.is-active) {

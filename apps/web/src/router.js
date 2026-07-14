@@ -168,6 +168,102 @@ const routes = [
         meta: { title: '活动详情', permission: 'crm.campaign.view' },
       },
       {
+        path: 'crm/deals',
+        name: 'CrmDeals',
+        component: () => import('./views/crm/Deals.vue'),
+        meta: {
+          title: '商机',
+          permissionAny: ['crm.deal.list_own', 'crm.deal.list_team', 'crm.deal.list_territory', 'crm.deal.list_all'],
+        },
+      },
+      {
+        path: 'crm/deals/:id',
+        name: 'CrmDealDetail',
+        component: () => import('./views/crm/DealDetail.vue'),
+        meta: { title: '商机详情', permission: 'crm.deal.view' },
+      },
+      {
+        path: 'crm/deal-funnel',
+        name: 'CrmDealFunnel',
+        component: () => import('./views/crm/DealFunnel.vue'),
+        meta: {
+          title: '销售漏斗',
+          permissionAny: ['crm.deal.list_own', 'crm.deal.list_team', 'crm.deal.list_territory', 'crm.deal.list_all'],
+        },
+      },
+      {
+        path: 'crm/quotes',
+        name: 'CrmQuotes',
+        component: () => import('./views/crm/Quotes.vue'),
+        meta: {
+          title: '报价',
+          permissionAny: ['crm.quote.list_own', 'crm.quote.list_all'],
+        },
+      },
+      {
+        path: 'crm/quotes/:id',
+        name: 'CrmQuoteDetail',
+        component: () => import('./views/crm/QuoteDetail.vue'),
+        meta: { title: '报价详情', permission: 'crm.quote.view' },
+      },
+      {
+        path: 'crm/contracts',
+        name: 'CrmContracts',
+        component: () => import('./views/crm/Contracts.vue'),
+        meta: {
+          title: '合同',
+          permissionAny: ['crm.contract.list_own', 'crm.contract.list_all'],
+        },
+      },
+      {
+        path: 'crm/contracts/:id',
+        name: 'CrmContractDetail',
+        component: () => import('./views/crm/ContractDetail.vue'),
+        meta: { title: '合同详情', permission: 'crm.contract.view' },
+      },
+      {
+        path: 'crm/orders',
+        name: 'CrmOrders',
+        component: () => import('./views/crm/Orders.vue'),
+        meta: {
+          title: '订单',
+          permissionAny: ['crm.order.list_own', 'crm.order.list_team', 'crm.order.list_territory', 'crm.order.list_all'],
+        },
+      },
+      {
+        path: 'crm/orders/:id',
+        name: 'CrmOrderDetail',
+        component: () => import('./views/crm/OrderDetail.vue'),
+        meta: { title: '订单详情', permission: 'crm.order.view' },
+      },
+      {
+        path: 'crm/payments',
+        name: 'CrmPayments',
+        component: () => import('./views/crm/Payments.vue'),
+        meta: {
+          title: '回款',
+          permissionAny: ['crm.payment.list_own', 'crm.payment.list_team', 'crm.payment.list_territory', 'crm.payment.list_all'],
+        },
+      },
+      {
+        path: 'crm/products',
+        name: 'CrmProducts',
+        component: () => import('./views/crm/Products.vue'),
+        meta: { title: '产品目录', permission: 'crm.product.manage' },
+      },
+      {
+        path: 'settings/pipeline',
+        name: 'SettingsPipeline',
+        component: () => import('./views/SettingsPipeline.vue'),
+        meta: { title: '销售管道', permission: 'crm.pipeline.manage' },
+      },
+      {
+        path: 'settings/number-rules',
+        name: 'SettingsNumberRules',
+        component: () => import('./views/SettingsNumberRules.vue'),
+        meta: { title: '编号规则', permission: 'crm.pipeline.manage' },
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('./views/Settings.vue'),

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -9,6 +10,7 @@ from app.dependencies import TenantContext, get_tenant_context
 from app.models import Content
 from app.schemas import AnalyticsStatsOut
 from app.services.scope_service import apply_stats_scope
+from app.services.crm.deal_report_service import deal_funnel_report, deal_forecast_report, deal_win_loss_report
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -72,3 +74,38 @@ def analytics_stats(
         platform_breakdown=platform_breakdown,
         monthly_generation=monthly,
     )
+
+
+@router.get("/deal-funnel")
+def deal_funnel_endpoint(
+    pipeline_id: UUID | None = Query(default=None),
+    owner_id: UUID | None = Query(default=None),
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
+    ctx: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+):
+    return deal_funnel_report(
+        db, ctx, pipeline_id=pipeline_id, owner_id=owner_id,
+        start_date=start_date, end_date=end_date,
+    )
+
+
+@router.get("/deal-forecast")
+def deal_forecast_endpoint(
+    pipeline_id: UUID | None = Query(default=None),
+    owner_id: UUID | None = Query(default=None),
+    ctx: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+):
+    return deal_forecast_report(db, ctx, pipeline_id=pipeline_id, owner_id=owner_id)
+
+
+@router.get("/deal-win-loss")
+def deal_win_loss_endpoint(
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
+    ctx: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+):
+    return deal_win_loss_report(db, ctx, start_date=start_date, end_date=end_date)

@@ -12,6 +12,21 @@ export const LEAD_SORTABLE_KEYS = new Set([
   'next_follow_up_at',
 ])
 
+export const DEAL_SORTABLE_KEYS = new Set([
+  'title',
+  'amount',
+  'status',
+  'probability',
+  'expected_close_date',
+  'created_at',
+  'updated_at',
+  'closed_at',
+])
+
 export function isLeadColumnSortable(col) {
   return col && LEAD_SORTABLE_KEYS.has(col.field_key)
+}
+
+export function isDealColumnSortable(col) {
+  return col && DEAL_SORTABLE_KEYS.has(col.field_key)
 }

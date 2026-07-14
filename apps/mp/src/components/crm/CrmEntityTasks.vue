@@ -100,6 +100,7 @@ async function loadTasks() {
   try {
     const params = { page_size: 50 }
     if (props.entityType === 'lead') params.lead_id = props.entityId
+    else if (props.entityType === 'deal') params.deal_id = props.entityId
     else params.customer_id = props.entityId
     const data = await crmApi.listTasks(params)
     tasks.value = data.items || []
@@ -129,6 +130,7 @@ async function submitCreate() {
     if (planned) payload.planned_start_at = planned
     if (due) payload.due_at = due
     if (props.entityType === 'lead') payload.lead_id = props.entityId
+    else if (props.entityType === 'deal') payload.deal_id = props.entityId
     else payload.customer_id = props.entityId
     await crmApi.createTask(payload)
     uni.showToast({ title: '任务已创建', icon: 'success' })

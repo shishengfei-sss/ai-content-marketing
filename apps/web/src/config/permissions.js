@@ -222,6 +222,8 @@ export const PERMISSION_GROUPS = [
           { code: 'crm.org.manage', label: '销售组织' },
           { code: 'crm.schema.manage', label: '表单字段管理' },
           { code: 'crm.activity.create', label: '写跟进记录' },
+          { code: 'crm.pipeline.manage', label: '销售管道' },
+          { code: 'crm.product.manage', label: '产品目录' },
         ],
       },
       {
@@ -230,6 +232,121 @@ export const PERMISSION_GROUPS = [
         items: [
           { code: 'crm.view.save_own', label: '保存私有' },
           { code: 'crm.view.manage_public', label: '管理公开', requires: 'crm.view.save_own' },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'CRM — 商机',
+    rows: [
+      {
+        type: 'scope',
+        menu: '商机列表',
+        items: [
+          { code: 'crm.deal.list_own', label: '本人' },
+          { code: 'crm.deal.list_team', label: '下级', requires: 'crm.deal.list_own' },
+          { code: 'crm.deal.list_territory', label: '地区', requires: 'crm.deal.list_own' },
+          { code: 'crm.deal.list_all', label: '全公司', requires: 'crm.deal.list_own' },
+        ],
+      },
+      {
+        type: 'inline',
+        items: [
+          { code: 'crm.deal.view', label: '查看', requires: 'crm.deal.list_own' },
+          { code: 'crm.deal.create', label: '新建', requires: 'crm.deal.view' },
+          { code: 'crm.deal.edit', label: '编辑', requires: 'crm.deal.view' },
+          { code: 'crm.deal.assign', label: '分配负责人', requires: 'crm.deal.edit' },
+          { code: 'crm.deal.convert', label: '转订单', requires: 'crm.deal.view' },
+          { code: 'crm.deal.close', label: '关闭赢单/输单', requires: 'crm.deal.edit' },
+          { code: 'crm.deal.delete', label: '删除', requires: 'crm.deal.edit' },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'CRM — 报价',
+    rows: [
+      {
+        type: 'inline',
+        items: [
+          { code: 'crm.quote.list_own', label: '本人列表' },
+          { code: 'crm.quote.list_all', label: '全公司列表', requires: 'crm.quote.list_own' },
+          { code: 'crm.quote.view', label: '查看', requires: 'crm.quote.list_own' },
+          { code: 'crm.quote.create', label: '新建', requires: 'crm.quote.view' },
+          { code: 'crm.quote.edit', label: '编辑', requires: 'crm.quote.view' },
+          { code: 'crm.quote.send', label: '发送', requires: 'crm.quote.edit' },
+          { code: 'crm.quote.accept', label: '标记接受', requires: 'crm.quote.edit' },
+          { code: 'crm.quote.delete', label: '删除', requires: 'crm.quote.edit' },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'CRM — 合同',
+    rows: [
+      {
+        type: 'inline',
+        items: [
+          { code: 'crm.contract.list_own', label: '本人列表' },
+          { code: 'crm.contract.list_all', label: '全公司列表', requires: 'crm.contract.list_own' },
+          { code: 'crm.contract.view', label: '查看', requires: 'crm.contract.list_own' },
+          { code: 'crm.contract.create', label: '新建', requires: 'crm.contract.view' },
+          { code: 'crm.contract.edit', label: '编辑', requires: 'crm.contract.view' },
+          { code: 'crm.contract.sign', label: '签署', requires: 'crm.contract.edit' },
+          { code: 'crm.contract.delete', label: '删除', requires: 'crm.contract.edit' },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'CRM — 订单',
+    rows: [
+      {
+        type: 'scope',
+        menu: '订单列表',
+        items: [
+          { code: 'crm.order.list_own', label: '本人' },
+          { code: 'crm.order.list_team', label: '下级', requires: 'crm.order.list_own' },
+          { code: 'crm.order.list_territory', label: '地区', requires: 'crm.order.list_own' },
+          { code: 'crm.order.list_all', label: '全公司', requires: 'crm.order.list_own' },
+        ],
+      },
+      {
+        type: 'inline',
+        items: [
+          { code: 'crm.order.view', label: '查看', requires: 'crm.order.list_own' },
+          { code: 'crm.order.create', label: '新建', requires: 'crm.order.view' },
+          { code: 'crm.order.edit', label: '编辑', requires: 'crm.order.view' },
+          { code: 'crm.order.assign', label: '分配负责人', requires: 'crm.order.edit' },
+          { code: 'crm.order.place', label: '下单确认', requires: 'crm.order.edit' },
+          { code: 'crm.order.convert', label: '由商机/报价/合同转单', requires: 'crm.order.create' },
+          { code: 'crm.order.delete', label: '删除', requires: 'crm.order.edit' },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'CRM — 收款',
+    rows: [
+      {
+        type: 'scope',
+        menu: '回款列表',
+        items: [
+          { code: 'crm.payment.list_own', label: '本人' },
+          { code: 'crm.payment.list_team', label: '下级', requires: 'crm.payment.list_own' },
+          { code: 'crm.payment.list_territory', label: '地区', requires: 'crm.payment.list_own' },
+          { code: 'crm.payment.list_all', label: '全公司', requires: 'crm.payment.list_own' },
+        ],
+      },
+      {
+        type: 'inline',
+        items: [
+          { code: 'crm.payment.view', label: '查看', requires: 'crm.payment.list_own' },
+          { code: 'crm.payment.create', label: '登记回款', requires: 'crm.payment.view' },
+          { code: 'crm.payment.edit', label: '编辑', requires: 'crm.payment.view' },
+          { code: 'crm.payment.confirm', label: '确认到账', requires: 'crm.payment.edit' },
+          { code: 'crm.payment.reverse', label: '冲销', requires: 'crm.payment.confirm' },
+          { code: 'crm.payment.delete', label: '删除', requires: 'crm.payment.edit' },
         ],
       },
     ],
@@ -276,6 +393,48 @@ export const NAV_ITEMS = [
     title: '营销活动',
     icon: 'Promotion',
     permissionAny: ['crm.campaign.list_own', 'crm.campaign.list_team', 'crm.campaign.list_territory', 'crm.campaign.list_all'],
+  },
+  {
+    path: '/crm/deals',
+    title: '商机',
+    icon: 'TrendCharts',
+    permissionAny: ['crm.deal.list_own', 'crm.deal.list_team', 'crm.deal.list_territory', 'crm.deal.list_all'],
+  },
+  {
+    path: '/crm/deal-funnel',
+    title: '销售漏斗',
+    icon: 'CaretBottom',
+    permissionAny: ['crm.deal.list_own', 'crm.deal.list_team', 'crm.deal.list_territory', 'crm.deal.list_all'],
+  },
+  {
+    path: '/crm/quotes',
+    title: '报价',
+    icon: 'Document',
+    permissionAny: ['crm.quote.list_own', 'crm.quote.list_all'],
+  },
+  {
+    path: '/crm/contracts',
+    title: '合同',
+    icon: 'Notebook',
+    permissionAny: ['crm.contract.list_own', 'crm.contract.list_all'],
+  },
+  {
+    path: '/crm/orders',
+    title: '订单',
+    icon: 'List',
+    permissionAny: ['crm.order.list_own', 'crm.order.list_team', 'crm.order.list_territory', 'crm.order.list_all'],
+  },
+  {
+    path: '/crm/payments',
+    title: '回款',
+    icon: 'Money',
+    permissionAny: ['crm.payment.list_own', 'crm.payment.list_team', 'crm.payment.list_territory', 'crm.payment.list_all'],
+  },
+  {
+    path: '/crm/products',
+    title: '产品',
+    icon: 'Box',
+    permission: 'crm.product.manage',
   },
   { path: '/settings', title: '设置', icon: 'Setting' },
 ]

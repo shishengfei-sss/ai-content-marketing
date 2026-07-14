@@ -12,6 +12,7 @@ from app.dependencies import TenantContext
 from app.models.crm import Contact, CrmActivity, Customer, Lead
 from app.schemas.crm import LeadCreate, LeadUpdate, validate_lead_mobile_value, validate_lead_status
 from app.services.crm.crm_scope_service import assert_can_view_lead, can_view_customer
+from app.services.crm.number_service import generate_number
 from app.services.crm.sales_org_service import get_territory
 from app.services.crm.schema_service import validate_extra_data
 
@@ -42,6 +43,7 @@ def create_lead(db: Session, ctx: TenantContext, data: LeadCreate) -> Lead:
         raise HTTPException(status_code=404, detail="地区不存在")
     lead = Lead(
         tenant_id=ctx.tenant_id,
+        lead_number=generate_number(db, ctx.tenant_id, "lead"),
         company_name=data.company_name.strip(),
         contact_name=data.contact_name,
         mobile=mobile,

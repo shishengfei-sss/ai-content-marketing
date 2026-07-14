@@ -10,7 +10,7 @@ from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import Query, Session
 
 from app.dependencies import TenantContext
-from app.models.crm import Customer, EntityFieldDefinition, EntityListView, Lead
+from app.models.crm import Customer, Deal, EntityFieldDefinition, EntityListView, Lead, Quote, Contract, Order, Payment
 from app.permissions import SYSTEM_ROLE_ADMIN
 from app.services.crm.schema_service import (
     ensure_entity_schema,
@@ -20,7 +20,7 @@ from app.services.crm.schema_service import (
     resolve_list_columns,
 )
 
-VIEW_ENTITY_TYPES = frozenset({"lead", "customer", "task", "campaign"})
+VIEW_ENTITY_TYPES = frozenset({"lead", "customer", "task", "campaign", "deal", "quote", "contract", "order", "payment"})
 
 LEAD_SEARCH_COLUMNS = (
     Lead.company_name,
@@ -29,6 +29,15 @@ LEAD_SEARCH_COLUMNS = (
     Lead.phone,
     Lead.email,
 )
+
+DEAL_SEARCH_COLUMNS = (
+    Deal.title,
+)
+
+QUOTE_SEARCH_COLUMNS = (Quote.subject, Quote.quote_number)
+CONTRACT_SEARCH_COLUMNS = (Contract.title, Contract.contract_number)
+ORDER_SEARCH_COLUMNS = (Order.title, Order.order_number)
+PAYMENT_SEARCH_COLUMNS = (Payment.payment_number,)
 
 
 def _perm_set(ctx: TenantContext) -> set[str]:
@@ -59,6 +68,16 @@ def _model_for_entity(entity_type: str):
         return Lead
     if entity_type == "customer":
         return Customer
+    if entity_type == "deal":
+        return Deal
+    if entity_type == "quote":
+        return Quote
+    if entity_type == "contract":
+        return Contract
+    if entity_type == "order":
+        return Order
+    if entity_type == "payment":
+        return Payment
     raise HTTPException(status_code=400, detail=f"视图筛选暂未支持 {entity_type}")
 
 
@@ -153,6 +172,21 @@ def apply_view_search(query: Query, entity_type: str, search_q: str | None) -> Q
                 Customer.email.like(pattern),
             )
         )
+    if entity_type == "deal":
+        pattern = f"%{search_q.strip()}%"
+        return query.filter(Deal.title.like(pattern))
+    if entity_type == "quote":
+        pattern = f"%{search_q.strip()}%"
+        return query.filter(or_(Quote.subject.like(pattern), Quote.quote_number.like(pattern)))
+    if entity_type == "contract":
+        pattern = f"%{search_q.strip()}%"
+        return query.filter(or_(Contract.title.like(pattern), Contract.contract_number.like(pattern)))
+    if entity_type == "order":
+        pattern = f"%{search_q.strip()}%"
+        return query.filter(or_(Order.title.like(pattern), Order.order_number.like(pattern)))
+    if entity_type == "payment":
+        pattern = f"%{search_q.strip()}%"
+        return query.filter(Payment.payment_number.like(pattern))
     return query
 
 
@@ -162,6 +196,16 @@ def apply_view_sort(query: Query, entity_type: str, sort: list | None):
             return query.order_by(Lead.updated_at.desc())
         if entity_type == "customer":
             return query.order_by(Customer.updated_at.desc())
+        if entity_type == "deal":
+            return query.order_by(Deal.updated_at.desc())
+        if entity_type == "quote":
+            return query.order_by(Quote.updated_at.desc())
+        if entity_type == "contract":
+            return query.order_by(Contract.updated_at.desc())
+        if entity_type == "order":
+            return query.order_by(Order.updated_at.desc())
+        if entity_type == "payment":
+            return query.order_by(Payment.updated_at.desc())
         return query
     model = _model_for_entity(entity_type)
     order_clauses = []
@@ -178,6 +222,16 @@ def apply_view_sort(query: Query, entity_type: str, sort: list | None):
         return query.order_by(Lead.updated_at.desc())
     if entity_type == "customer":
         return query.order_by(Customer.updated_at.desc())
+    if entity_type == "deal":
+        return query.order_by(Deal.updated_at.desc())
+    if entity_type == "quote":
+        return query.order_by(Quote.updated_at.desc())
+    if entity_type == "contract":
+        return query.order_by(Contract.updated_at.desc())
+    if entity_type == "order":
+        return query.order_by(Order.updated_at.desc())
+    if entity_type == "payment":
+        return query.order_by(Payment.updated_at.desc())
     return query
 
 

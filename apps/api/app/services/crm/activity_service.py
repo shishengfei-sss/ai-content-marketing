@@ -8,9 +8,14 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.dependencies import TenantContext
-from app.models.crm import CrmActivity, Customer, Lead
-from app.schemas.crm import ActivityCreate, validate_activity_type, validate_lead_status
-from app.services.crm.crm_scope_service import assert_can_view_customer, assert_can_view_lead
+from app.models.crm import CrmActivity, Customer, Deal, Lead
+from app.permissions import SYSTEM_ROLE_ADMIN
+from app.schemas.crm import ActivityCreate, ActivityUpdate, validate_activity_type, validate_lead_status
+from app.services.crm.crm_scope_service import (
+    assert_can_view_customer,
+    assert_can_view_deal,
+    assert_can_view_lead,
+)
 
 
 def _write_follow_up_meta(
@@ -34,22 +39,24 @@ def _role_permissions(ctx: TenantContext) -> set[str]:
 
 def create_activity(db: Session, ctx: TenantContext, data: ActivityCreate) -> CrmActivity:
     validate_activity_type(data.activity_type)
-    if not data.lead_id and not data.customer_id:
-        raise HTTPException(status_code=400, detail="必须指定 lead_id 或 customer_id")
-    if data.lead_id and data.customer_id:
-        raise HTTPException(status_code=400, detail="不能同时指定 lead_id 与 customer_id")
+    if not data.lead_id and not data.customer_id and not data.deal_id:
+        raise HTTPException(status_code=400, detail="必须指定 lead_id、customer_id 或 deal_id")
+    linked = sum(1 for x in (data.lead_id, data.customer_id, data.deal_id) if x)
+    if linked > 1:
+        raise HTTPException(status_code=400, detail="lead_id / customer_id / deal_id 只能指定其一")
     if data.status is not None and not data.lead_id:
         raise HTTPException(status_code=400, detail="status 仅可在线索跟进时设置")
 
     lead: Lead | None = None
     customer: Customer | None = None
+    deal: Deal | None = None
 
     if data.lead_id:
         lead = db.query(Lead).filter(Lead.id == data.lead_id, Lead.tenant_id == ctx.tenant_id).first()
         if not lead or lead.deleted_at:
             raise HTTPException(status_code=404, detail="线索不存在")
         assert_can_view_lead(ctx, db, lead.owner_user_id, lead.territory_id)
-    else:
+    elif data.customer_id:
         customer = (
             db.query(Customer)
             .filter(Customer.id == data.customer_id, Customer.tenant_id == ctx.tenant_id)
@@ -58,13 +65,22 @@ def create_activity(db: Session, ctx: TenantContext, data: ActivityCreate) -> Cr
         if not customer or customer.deleted_at:
             raise HTTPException(status_code=404, detail="客户不存在")
         assert_can_view_customer(ctx, db, customer.owner_user_id, customer.territory_id)
+    else:
+        deal = db.query(Deal).filter(Deal.id == data.deal_id, Deal.tenant_id == ctx.tenant_id).first()
+        if not deal:
+            raise HTTPException(status_code=404, detail="商机不存在")
+        assert_can_view_deal(ctx, db, deal.owner_user_id, deal.territory_id)
 
     activity = CrmActivity(
         tenant_id=ctx.tenant_id,
         lead_id=data.lead_id,
         customer_id=data.customer_id,
+        deal_id=data.deal_id,
         activity_type=data.activity_type,
+        subject=data.subject,
         content=data.content or "",
+        entity_type=("deal" if deal else "customer" if customer else "lead") if (data.lead_id or data.customer_id or data.deal_id) else None,
+        entity_id=str((data.deal_id or data.customer_id or data.lead_id)) if (data.lead_id or data.customer_id or data.deal_id) else None,
         created_by_user_id=ctx.user.id,
     )
     db.add(activity)
@@ -95,6 +111,7 @@ def list_activities(
     *,
     lead_id: UUID | None = None,
     customer_id: UUID | None = None,
+    deal_id: UUID | None = None,
 ) -> list[CrmActivity]:
     if lead_id:
         lead = db.query(Lead).filter(Lead.id == lead_id, Lead.tenant_id == ctx.tenant_id).first()
@@ -112,14 +129,37 @@ def list_activities(
             raise HTTPException(status_code=404, detail="客户不存在")
         assert_can_view_customer(ctx, db, customer.owner_user_id, customer.territory_id)
         query = db.query(CrmActivity).filter(CrmActivity.customer_id == customer_id)
+    elif deal_id:
+        deal = db.query(Deal).filter(Deal.id == deal_id, Deal.tenant_id == ctx.tenant_id).first()
+        if not deal:
+            raise HTTPException(status_code=404, detail="商机不存在")
+        assert_can_view_deal(ctx, db, deal.owner_user_id, deal.territory_id)
+        query = db.query(CrmActivity).filter(CrmActivity.deal_id == deal_id)
     else:
-        raise HTTPException(status_code=400, detail="必须指定 lead_id 或 customer_id")
+        raise HTTPException(status_code=400, detail="必须指定 lead_id、customer_id 或 deal_id")
     return query.order_by(CrmActivity.created_at.desc()).all()
 
 
-def delete_activity(db: Session, ctx: TenantContext, activity_id: UUID) -> None:
-    from app.permissions import SYSTEM_ROLE_ADMIN
+def update_activity(db: Session, ctx: TenantContext, activity_id: UUID, data: ActivityUpdate) -> CrmActivity:
+    activity = db.query(CrmActivity).filter(CrmActivity.id == activity_id, CrmActivity.tenant_id == ctx.tenant_id).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="跟进记录不存在")
+    is_admin = ctx.membership.role.is_system and ctx.membership.role.code == SYSTEM_ROLE_ADMIN
+    if activity.created_by_user_id != ctx.user.id and not is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权编辑该跟进")
+    if data.activity_type is not None:
+        validate_activity_type(data.activity_type)
+        activity.activity_type = data.activity_type
+    if data.subject is not None:
+        activity.subject = data.subject
+    if data.content is not None:
+        activity.content = data.content
+    db.commit()
+    db.refresh(activity)
+    return activity
 
+
+def delete_activity(db: Session, ctx: TenantContext, activity_id: UUID) -> None:
     activity = db.query(CrmActivity).filter(CrmActivity.id == activity_id, CrmActivity.tenant_id == ctx.tenant_id).first()
     if not activity:
         raise HTTPException(status_code=404, detail="跟进记录不存在")
@@ -136,6 +176,10 @@ def delete_activity(db: Session, ctx: TenantContext, activity_id: UUID) -> None:
         )
         if customer and not customer.deleted_at:
             assert_can_view_customer(ctx, db, customer.owner_user_id, customer.territory_id)
+    elif activity.deal_id:
+        deal = db.query(Deal).filter(Deal.id == activity.deal_id, Deal.tenant_id == ctx.tenant_id).first()
+        if deal:
+            assert_can_view_deal(ctx, db, deal.owner_user_id, deal.territory_id)
 
     is_admin = ctx.membership.role.is_system and ctx.membership.role.code == SYSTEM_ROLE_ADMIN
     if activity.created_by_user_id != ctx.user.id and not is_admin:

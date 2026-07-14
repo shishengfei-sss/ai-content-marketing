@@ -12,6 +12,7 @@ from app.dependencies import TenantContext
 from app.models.crm import CrmTask
 from app.schemas.crm import TaskCreate, TaskUpdate, validate_task_priority, validate_task_status
 from app.services.crm.crm_scope_service import assert_can_view_task
+from app.services.crm.number_service import generate_number
 
 
 def _perm_set(ctx: TenantContext) -> set[str]:
@@ -58,6 +59,7 @@ def create_task(db: Session, ctx: TenantContext, data: TaskCreate) -> CrmTask:
         completed_at = _now()
     task = CrmTask(
         tenant_id=ctx.tenant_id,
+        task_number=generate_number(db, ctx.tenant_id, "task"),
         title=data.title.strip(),
         description=data.description,
         status=data.status,

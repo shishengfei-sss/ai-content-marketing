@@ -8,7 +8,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Query, Session
 
 from app.dependencies import TenantContext
-from app.models.crm import Customer, CrmTask, Lead, MarketingCampaign
+from app.models.crm import Customer, CrmTask, Deal, Lead, MarketingCampaign
 from app.services.crm.sales_org_service import get_accessible_territory_ids, get_subordinate_user_ids
 
 
@@ -307,3 +307,211 @@ def assert_can_view_campaign(
 ) -> None:
     if not can_view_campaign(ctx, db, owner_user_id, territory_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该活动")
+
+
+# ============================================================
+# v0.7 商机 scope（owner_user_id + territory_id 并集规则）
+# ============================================================
+
+
+def has_deal_list_permission(ctx: TenantContext) -> bool:
+    perms = _perm_set(ctx)
+    return bool(
+        perms.intersection(
+            {
+                "crm.deal.list_own",
+                "crm.deal.list_team",
+                "crm.deal.list_territory",
+                "crm.deal.list_all",
+            }
+        )
+    )
+
+
+def _deal_visibility_filter(db: Session, ctx: TenantContext, perms: set[str]):
+    if "crm.deal.list_all" in perms:
+        return None
+    if not perms.intersection(
+        {"crm.deal.list_own", "crm.deal.list_team", "crm.deal.list_territory"}
+    ):
+        return Deal.id.is_(None)
+    parts = [Deal.owner_user_id == ctx.user.id]
+    if "crm.deal.list_team" in perms:
+        subordinate_ids = get_subordinate_user_ids(db, ctx.tenant_id, ctx.membership.id)
+        if subordinate_ids:
+            parts.append(Deal.owner_user_id.in_(subordinate_ids))
+    if "crm.deal.list_territory" in perms:
+        territory_ids = get_accessible_territory_ids(db, ctx.tenant_id, ctx.membership.id)
+        if territory_ids:
+            parts.append(Deal.territory_id.in_(territory_ids))
+    return or_(*parts)
+
+
+def apply_deal_list_scope(query: Query, ctx: TenantContext, db: Session) -> Query:
+    perms = _perm_set(ctx)
+    clause = _deal_visibility_filter(db, ctx, perms)
+    if clause is None:
+        return query
+    return query.filter(clause)
+
+
+def can_view_deal(
+    ctx: TenantContext,
+    db: Session,
+    owner_user_id: UUID,
+    territory_id: UUID | None = None,
+) -> bool:
+    perms = _perm_set(ctx)
+    if "crm.deal.list_all" in perms:
+        return True
+    if owner_user_id == ctx.user.id and perms.intersection(
+        {"crm.deal.list_own", "crm.deal.list_team", "crm.deal.list_territory"}
+    ):
+        return True
+    if "crm.deal.list_team" in perms:
+        subordinate_ids = get_subordinate_user_ids(db, ctx.tenant_id, ctx.membership.id)
+        if owner_user_id in subordinate_ids:
+            return True
+    if "crm.deal.list_territory" in perms and territory_id:
+        territory_ids = get_accessible_territory_ids(db, ctx.tenant_id, ctx.membership.id)
+        if territory_id in territory_ids:
+            return True
+    return False
+
+
+def assert_can_view_deal(
+    ctx: TenantContext,
+    db: Session,
+    owner_user_id: UUID,
+    territory_id: UUID | None = None,
+) -> None:
+    if not can_view_deal(ctx, db, owner_user_id, territory_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该商机")
+
+
+# ============================================================
+# v0.7 交易类实体通用 scope（quote / contract / order / payment）
+# 仅按 owner_user_id + list_team + list_all 控制可见性
+# ============================================================
+
+
+def _build_owner_scoped_visibility(model, own_perm: str, team_perm: str, all_perm: str):
+    def _filter(db: Session, ctx: TenantContext, perms: set[str]):
+        if all_perm in perms:
+            return None
+        if not perms.intersection({own_perm, team_perm}):
+            return model.id.is_(None)
+        parts = [model.owner_user_id == ctx.user.id]
+        if team_perm in perms:
+            subordinate_ids = get_subordinate_user_ids(db, ctx.tenant_id, ctx.membership.id)
+            if subordinate_ids:
+                parts.append(model.owner_user_id.in_(subordinate_ids))
+        return or_(*parts)
+
+    return _filter
+
+
+def _build_owner_scoped_can_view(own_perm: str, team_perm: str, all_perm: str):
+    def _can_view(ctx: TenantContext, db: Session, owner_user_id: UUID) -> bool:
+        perms = _perm_set(ctx)
+        if all_perm in perms:
+            return True
+        if owner_user_id == ctx.user.id and own_perm in perms:
+            return True
+        if team_perm in perms:
+            subordinate_ids = get_subordinate_user_ids(db, ctx.tenant_id, ctx.membership.id)
+            if owner_user_id in subordinate_ids:
+                return True
+        return False
+
+    return _can_view
+
+
+def _build_has_list_perm(own_perm: str, team_perm: str, all_perm: str):
+    def _has(ctx: TenantContext) -> bool:
+        return bool(_perm_set(ctx).intersection({own_perm, team_perm, all_perm}))
+
+    return _has
+
+
+from app.models.crm import Contract, Order, Payment, Quote  # noqa: E402
+
+has_quote_list_permission = _build_has_list_perm(
+    "crm.quote.list_own", "crm.quote.list_own", "crm.quote.list_all"
+)
+has_contract_list_permission = _build_has_list_perm(
+    "crm.contract.list_own", "crm.contract.list_own", "crm.contract.list_all"
+)
+has_order_list_permission = _build_has_list_perm(
+    "crm.order.list_own", "crm.order.list_team", "crm.order.list_all"
+)
+has_payment_list_permission = _build_has_list_perm(
+    "crm.payment.list_own", "crm.payment.list_team", "crm.payment.list_all"
+)
+
+_quote_visibility_filter = _build_owner_scoped_visibility(
+    Quote, "crm.quote.list_own", "crm.quote.list_own", "crm.quote.list_all"
+)
+_contract_visibility_filter = _build_owner_scoped_visibility(
+    Contract, "crm.contract.list_own", "crm.contract.list_own", "crm.contract.list_all"
+)
+_order_visibility_filter = _build_owner_scoped_visibility(
+    Order, "crm.order.list_own", "crm.order.list_team", "crm.order.list_all"
+)
+_payment_visibility_filter = _build_owner_scoped_visibility(
+    Payment, "crm.payment.list_own", "crm.payment.list_team", "crm.payment.list_all"
+)
+
+
+def apply_quote_list_scope(query: Query, ctx: TenantContext, db: Session) -> Query:
+    clause = _quote_visibility_filter(db, ctx, _perm_set(ctx))
+    return query if clause is None else query.filter(clause)
+
+
+def apply_contract_list_scope(query: Query, ctx: TenantContext, db: Session) -> Query:
+    clause = _contract_visibility_filter(db, ctx, _perm_set(ctx))
+    return query if clause is None else query.filter(clause)
+
+
+def apply_order_list_scope(query: Query, ctx: TenantContext, db: Session) -> Query:
+    clause = _order_visibility_filter(db, ctx, _perm_set(ctx))
+    return query if clause is None else query.filter(clause)
+
+
+def apply_payment_list_scope(query: Query, ctx: TenantContext, db: Session) -> Query:
+    clause = _payment_visibility_filter(db, ctx, _perm_set(ctx))
+    return query if clause is None else query.filter(clause)
+
+
+can_view_quote = _build_owner_scoped_can_view(
+    "crm.quote.list_own", "crm.quote.list_own", "crm.quote.list_all"
+)
+can_view_contract = _build_owner_scoped_can_view(
+    "crm.contract.list_own", "crm.contract.list_own", "crm.contract.list_all"
+)
+can_view_order = _build_owner_scoped_can_view(
+    "crm.order.list_own", "crm.order.list_team", "crm.order.list_all"
+)
+can_view_payment = _build_owner_scoped_can_view(
+    "crm.payment.list_own", "crm.payment.list_team", "crm.payment.list_all"
+)
+
+
+def assert_can_view_quote(ctx: TenantContext, db: Session, owner_user_id: UUID) -> None:
+    if not can_view_quote(ctx, db, owner_user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该报价")
+
+
+def assert_can_view_contract(ctx: TenantContext, db: Session, owner_user_id: UUID) -> None:
+    if not can_view_contract(ctx, db, owner_user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该合同")
+
+
+def assert_can_view_order(ctx: TenantContext, db: Session, owner_user_id: UUID) -> None:
+    if not can_view_order(ctx, db, owner_user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该订单")
+
+
+def assert_can_view_payment(ctx: TenantContext, db: Session, owner_user_id: UUID) -> None:
+    if not can_view_payment(ctx, db, owner_user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该回款")

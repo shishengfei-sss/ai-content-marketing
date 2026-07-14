@@ -108,7 +108,7 @@ async function fetchPage(pageNum, append = false) {
 }
 
 function cardMetaItems(item) {
-  return buildCardMetaItems(item, listColumns.value, formatCell)
+  return buildCardMetaItems(item, listColumns.value, formatCell, { entityType: 'lead' })
 }
 
 async function loadData() {
