@@ -43,13 +43,24 @@ def create_customer(db: Session, ctx: TenantContext, data: CustomerCreate) -> Cu
         phone=data.phone,
         email=data.email,
         status=data.status,
+        description=data.description,
+        type=data.type or "客户",
+        parent_customer_id=data.parent_customer_id,
+        tags=list(data.tags or []),
+        source=data.source,
         owner_user_id=ctx.user.id,
         remark=data.remark,
         extra_data=extra,
         created_by_user_id=ctx.user.id,
     )
     db.add(customer)
-    db.commit()
+    db.flush()
+    if data.tags:
+        from app.services.crm.tag_service import sync_customer_tag_names
+
+        sync_customer_tag_names(db, ctx, customer, list(data.tags))
+    else:
+        db.commit()
     db.refresh(customer)
     return customer
 
@@ -71,6 +82,16 @@ def update_customer(db: Session, ctx: TenantContext, customer: Customer, data: C
     if data.status is not None:
         validate_customer_status(data.status)
         customer.status = data.status
+    if data.description is not None:
+        customer.description = data.description
+    if data.type is not None:
+        customer.type = data.type
+    if "parent_customer_id" in data.model_fields_set:
+        customer.parent_customer_id = data.parent_customer_id
+    if data.tags is not None:
+        customer.tags = list(data.tags)
+    if data.source is not None:
+        customer.source = data.source
     if data.remark is not None:
         customer.remark = data.remark
     if data.extra_data is not None:
@@ -102,6 +123,20 @@ def create_contact(db: Session, ctx: TenantContext, customer: Customer, data: Co
             Contact.deleted_at.is_(None),
             Contact.is_primary.is_(True),
         ).update({Contact.is_primary: False})
+    reports_to = None
+    if data.reports_to_contact_id is not None:
+        reports_to = (
+            db.query(Contact)
+            .filter(
+                uuid_eq(Contact.id, data.reports_to_contact_id),
+                Contact.tenant_id == ctx.tenant_id,
+                uuid_eq(Contact.customer_id, customer.id),
+                Contact.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not reports_to:
+            raise HTTPException(status_code=400, detail="汇报对象必须是同客户下的联系人")
     contact = Contact(
         tenant_id=ctx.tenant_id,
         customer_id=customer.id,
@@ -113,7 +148,8 @@ def create_contact(db: Session, ctx: TenantContext, customer: Customer, data: Co
         title=data.title,
         department=data.department,
         is_primary=data.is_primary,
-        is_decision_maker=data.is_decision_maker,
+        contact_role=data.contact_role,
+        reports_to_contact_id=reports_to.id if reports_to else None,
         remark=data.remark,
         extra_data=data.extra_data or {},
     )

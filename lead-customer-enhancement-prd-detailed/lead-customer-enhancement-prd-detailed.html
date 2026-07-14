@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>线索与客户模块增强 — 详细需求规格书 v2.0 — 智营获客 CRM</title>
+<title>线索与客户模块增强 — 详细需求规格书 v2.1 — 智营获客 CRM</title>
 <style>
 @font-face{font-family:'InstrumentSans';src:url('./_shared/fonts/InstrumentSans-Regular.ttf')format('truetype');font-weight:400}
 @font-face{font-family:'InstrumentSans';src:url('./_shared/fonts/InstrumentSans-Bold.ttf')format('truetype');font-weight:700}
@@ -186,15 +186,18 @@ footer .sources .src-url{display:block;font-size:.75rem;color:var(--accent)}
 <article class="page">
 
 <div class="cover">
-  <h1>线索与客户模块增强 — 详细需求规格书 v2.0</h1>
+  <h1>线索与客户模块增强 — 详细需求规格书 v2.1</h1>
   <p class="sub">含完整 API 规范、数据库设计、UI 交互稿、业务逻辑、验收标准及测试指南</p>
-  <p class="meta"><span>版本 v2.0 (详细版)</span><span>2026-07-14</span><span>基于差距分析 + 项目代码深度探索</span></p>
+  <p class="meta"><span>版本 v2.1（对齐跨模块差距分析 v1.1）</span><span>2026-07-14</span><span>基线：Deal v0.8 已上线（Alembic 047）</span></p>
 </div>
+
+<div class="note-green note" style="margin-bottom:1.5rem"><b>v2.1 相对 v2.0 关键变更：</b>① Customer 补 <code>source</code> / <code>converted_lead_score</code>；② 转化增加去重、评分→级别、BANT→Deal；③ 客户360补报价/合同/回款 Tab；④ 附件复用已有 042，不新建表；⑤ 迁移从 048 起；⑥ 锁定 contact_role 语义（contacts=组织角色，deals=商机参与角色，本期不 rename deals 列）；⑦ 增补跨模块 Hook（赢单→客户价值、阶段→活动）。详见 <code>cross-module-gap-analysis</code> 与 <code>docs/v0.9-线索客户增强执行计划.md</code>。</div>
 
 <div class="phase-nav">
   <a href="#lead" class="active">1 线索 Lead</a>
   <a href="#customer">2 客户 Customer</a>
   <a href="#contact">3 联系人+通用</a>
+  <a href="#cross">3.5 跨模块联动</a>
   <a href="#db">4 数据库变更</a>
   <a href="#business">5 业务逻辑</a>
   <a href="#testing">6 测试指南</a>
@@ -295,8 +298,8 @@ footer .sources .src-url{display:block;font-size:.75rem;color:var(--accent)}
     <!-- DB Migration -->
     <div class="card">
       <p class="card-title">1.3 数据库迁移规范</p>
-      <pre class="code-block"># 迁移编号: 050_lead_new_fields
-# 文件: apps/api/alembic/versions/050_lead_new_fields.py
+      <pre class="code-block"># 迁移编号: 048_lead_new_fields
+# 文件: apps/api/alembic/versions/048_lead_new_fields.py
 
 def upgrade():
     op.add_column('leads', sa.Column('title', sa.String(100), nullable=True))
@@ -358,7 +361,7 @@ EntityFieldDefinition(
         <thead><tr><th>步骤</th><th>文件</th><th>变更类型</th><th>说明</th></tr></thead>
         <tbody>
           <tr><td>1</td><td><code>apps/api/app/models/crm.py</code></td><td>修改</td><td>Lead 模型新增 4 个 Column</td></tr>
-          <tr><td>2</td><td><code>alembic/versions/050_lead_new_fields.py</code></td><td>新建</td><td>数据库迁移脚本</td></tr>
+          <tr><td>2</td><td><code>alembic/versions/048_lead_new_fields.py</code></td><td>新建</td><td>数据库迁移脚本</td></tr>
           <tr><td>3</td><td><code>apps/api/app/schemas/crm.py</code></td><td>修改</td><td>LeadCreate/LeadUpdate/LeadOut 新增字段</td></tr>
           <tr><td>4</td><td><code>apps/api/app/services/crm/schema_seeds.py</code></td><td>修改</td><td>LEAD_FIELDS 新增 4 个字段定义</td></tr>
           <tr><td>5</td><td><code>apps/web/src/utils/entityForm.js</code></td><td>修改</td><td>ENTITY_DB_FIELDS.lead 新增 4 个字段</td></tr>
@@ -713,49 +716,42 @@ def load_balanced_assign(team_members, tenant_id):
 
     <!-- P1-06: Convert with Deal -->
     <div class="card">
-      <p class="card-title">P1-06 线索转化增强 — 详细规范</p>
+      <p class="card-title">P1-06 线索转化增强 — 详细规范（v2.1）</p>
       <p style="font-size:.82rem"><strong>API 变更：</strong>扩展 <code>POST /api/v1/crm/leads/{id}/convert</code> 接口。</p>
       <pre class="code-block"># 请求体 (LeadConvertRequest)
 class LeadConvertRequest(BaseModel):
-    create_deal: bool = False              # 是否同时创建商机
-    deal_title: str | None = None          # 商机标题（默认: "{company_name}合作"）
-    deal_amount: Decimal | None = None     # 商机预计金额
-    deal_pipeline_id: UUID | None = None   # 指定商机管道（默认: 第一个管道）
-    deal_stage_id: UUID | None = None      # 指定阶段（默认: 第一个阶段）
+    create_deal: bool = False
+    deal_title: str | None = None
+    deal_amount: Decimal | None = None
+    deal_pipeline_id: UUID | None = None
+    deal_stage_id: UUID | None = None
+    merge_into_customer_id: UUID | None = None  # v2.1：命中去重时合并到已有客户
+    force_create: bool = False                  # v2.1：忽略去重提示强制新建
 
 # 响应 (LeadConvertOut)
 class LeadConvertOut(BaseModel):
     lead_id: UUID
     customer_id: UUID
     contact_id: UUID | None
-    deal_id: UUID | None              # NEW: 创建的商机 ID
+    deal_id: UUID | None
+    merged: bool = False                        # v2.1：是否合并到已有客户
+    duplicate_candidates: list[UUID] | None = None  # 409 冲突时可返回候选
 
-# 实施流程
+# 实施流程（v2.1）
 async def convert_lead_with_deal(db, ctx, lead_id, request):
-    lead = await get_lead(db, ctx.tenant_id, lead_id)
-    # 1. 创建客户 (复用现有逻辑)
-    customer = await create_customer_from_lead(db, ctx, lead)
-    # 2. 创建联系人 (复用现有逻辑)
-    contact = await create_contact_from_lead(db, ctx, customer, lead)
-    # 3. 可选: 创建商机
-    deal = None
-    if request.create_deal:
-        deal = await create_deal(db, ctx, DealCreate(
-            title=request.deal_title or f"{lead.company_name}合作",
-            customer_id=customer.id,
-            contact_id=contact.id,
-            amount=request.deal_amount,
-            source=lead.source,
-            pipeline_id=request.deal_pipeline_id,
-            stage_id=request.deal_stage_id,
-            owner_user_id=lead.owner_user_id
-        ))
-    # 4. 更新线索状态
-    lead.status = "已转化"
-    lead.converted_customer_id = customer.id
-    await db.commit()
-    return LeadConvertOut(lead_id=lead_id, customer_id=customer.id,
-        contact_id=contact.id, deal_id=deal.id if deal else None)</pre>
+    lead = await get_lead(...)
+    # 0. 客户去重：company_name + mobile（及可选信用代码）
+    #    命中且未指定 merge/force → 返回 409 + candidates
+    # 1. 创建或合并 Customer
+    #    - source = lead.source
+    #    - converted_lead_score = lead.lead_score
+    #    - customer_level / status 映射：≥80→A重点 | 60-79→B普通 | <60→C长尾
+    # 2. 创建 Contact（含 title/department）
+    # 3. 可选创建 Deal：
+    #    - source/owner 继承 lead
+    #    - BANT：budget→amount 建议；time→expected_close 建议；need→description；authority→contact_role 建议
+    # 4. 复制 Activity；标记线索已转化</pre>
+      <div class="note-blue note"><b>评分→级别映射：</b>lead_score ≥80 → 客户级别 A；60–79 → B；&lt;60 或缺分 → C。级别字段若尚无独立列，可写入 <code>extra_data.customer_level</code> 或 status 旁标签，执行计划 P0 定稿。</div>
     </div>
 
     <!-- Convert UI -->
@@ -821,9 +817,11 @@ async def convert_lead_with_deal(db, ctx, lead_id, request):
           <tr><td>CUST-01</td><td><code>description</code></td><td>Text</td><td>str | None</td><td>否</td><td>客户详细描述/背景介绍，几乎所有 CRM 标配</td><td><span class="p-high">高</span></td></tr>
           <tr><td>CUST-02</td><td><code>type</code></td><td>String(20)</td><td>str | None</td><td>否</td><td>客户类型：客户/合作伙伴/竞争对手/渠道伙伴</td><td><span class="p-medium">中</span></td></tr>
           <tr><td>CUST-03</td><td><code>parent_customer_id</code></td><td>UUID(FK)</td><td>UUID | None</td><td>否</td><td>母公司外键，支持集团型企业层级管理</td><td><span class="p-medium">中</span></td></tr>
-          <tr><td>CUST-04</td><td><code>total_revenue</code></td><td>Numeric(14,2)</td><td>Decimal | None</td><td>否</td><td>累计成交金额(计算字段，由订单聚合计算)</td><td><span class="p-medium">中</span></td></tr>
+          <tr><td>CUST-04</td><td><code>total_revenue</code></td><td>Numeric(14,2)</td><td>Decimal | None</td><td>否</td><td>累计成交金额(计算字段，由赢单 Hook / 订单聚合更新)</td><td><span class="p-medium">中</span></td></tr>
           <tr><td>CUST-05</td><td><code>last_deal_date</code></td><td>Date</td><td>date | None</td><td>否</td><td>最近成交日期(计算字段)，识别"沉睡客户"</td><td><span class="p-medium">中</span></td></tr>
-          <tr><td>CUST-06</td><td><code>tags</code></td><td>JSON</td><td>list[str] | None</td><td>否</td><td>自定义标签数组，如["高价值","续约在即","技术型"]</td><td><span class="p-medium">中</span></td></tr>
+          <tr><td>CUST-06</td><td><code>tags</code></td><td>JSON</td><td>list[str] | None</td><td>否</td><td>P0 临时标签数组；P1 迁移到 tags+entity_tags 表后只读兼容</td><td><span class="p-medium">中</span></td></tr>
+          <tr><td>CUST-07</td><td><code>source</code></td><td>String(50)</td><td>str | None</td><td>否</td><td><b>v2.1 新增</b>。获客渠道，与全局 CRM_SOURCE_OPTIONS 对齐；转化时从 lead.source 复制</td><td><span class="p-high">高</span></td></tr>
+          <tr><td>CUST-08</td><td><code>converted_lead_score</code></td><td>Integer</td><td>int | None</td><td>否</td><td><b>v2.1 新增</b>。转化时保留历史 lead_score，供级别映射与报表</td><td><span class="p-medium">中</span></td></tr>
         </tbody>
       </table></div>
     </div>
@@ -839,7 +837,8 @@ class CustomerCreate(BaseModel):
     type: str | None = Field(default="客户", max_length=20)
     parent_customer_id: UUID | None = None
     tags: list[str] | None = Field(default_factory=list, max_length=20)
-    # total_revenue 和 last_deal_date 为计算字段，不可手动设置
+    source: str | None = Field(default=None, max_length=50)  # v2.1：CRM_SOURCE_OPTIONS
+    # total_revenue / last_deal_date / converted_lead_score 为系统字段，不可手动设置
     # ─── 原有字段 ───
     mobile: str | None = None
     phone: str | None = None
@@ -854,13 +853,14 @@ class CustomerUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=2000)
     type: str | None = Field(default=None, max_length=20)
     parent_customer_id: UUID | None = None
-    tags: list[str] | None = Field(default=None, max_length=20)</pre>
+    tags: list[str] | None = Field(default=None, max_length=20)
+    source: str | None = Field(default=None, max_length=50)</pre>
     </div>
 
     <!-- DB Migration -->
     <div class="card">
       <p class="card-title">2.3 数据库迁移</p>
-      <pre class="code-block"># 迁移编号: 051_customer_new_fields
+      <pre class="code-block"># 迁移编号: 049_customer_new_fields（接在 048_lead_new_fields 之后）
 def upgrade():
     op.add_column('customers', sa.Column('description', sa.Text(), nullable=True))
     op.add_column('customers', sa.Column('type', sa.String(20), nullable=True,
@@ -872,16 +872,19 @@ def upgrade():
     op.add_column('customers', sa.Column('last_deal_date', sa.Date(), nullable=True))
     op.add_column('customers', sa.Column('tags', sa.JSON(), nullable=True,
         server_default='[]'))
+    op.add_column('customers', sa.Column('source', sa.String(50), nullable=True))
+    op.add_column('customers', sa.Column('converted_lead_score', sa.Integer(), nullable=True))
     op.create_index('ix_customers_parent', 'customers', ['parent_customer_id'])
-    op.create_index('ix_customers_type', 'customers', ['type'])</pre>
+    op.create_index('ix_customers_type', 'customers', ['type'])
+    op.create_index('ix_customers_source', 'customers', ['source'])</pre>
     </div>
   </div>
 
   <!-- 360 View UI -->
   <div class="subsection">
-    <h3>UI：客户360度视图（含商机/订单/文档 Tab）</h3>
+    <h3>UI：客户360度视图（含商机/报价/合同/订单/回款/文档 Tab）</h3>
     <div class="ui-wire">
-      <div class="ui-wire-title">CustomerDetail.vue — 增强后的完整布局</div>
+      <div class="ui-wire-title">CustomerDetail.vue — 增强后的完整布局（v2.1）</div>
       <div class="ui-wire-body">
         <div class="ui-breadcrumb">
           <span>CRM</span> / <span>客户</span> / <span class="current">XX科技有限公司</span>
@@ -892,7 +895,7 @@ def upgrade():
               XX科技有限公司 <span class="ui-tag ui-tag-success">在服</span> <span class="ui-tag ui-tag-info">A级客户</span> <span class="ui-tag ui-tag-primary">客户</span>
             </div>
             <div style="font-size:.75rem;color:var(--ui-text-sec);margin-top:2px;display:flex;gap:.5rem;align-items:center">
-              <span>手机 138****8888</span><span>|</span><span>邮箱 contact@xx.com</span><span>|</span><span>IT/互联网</span><span>|</span><span>累计成交 ¥386,000</span><span class="ui-tag ui-tag-primary">NEW</span>
+              <span>手机 138****8888</span><span>|</span><span>来源 官网</span><span class="ui-tag ui-tag-primary">NEW</span><span>|</span><span>累计成交 ¥386,000</span>
             </div>
           </div>
           <div style="display:flex;gap:.3rem"><span class="ui-btn ui-btn-primary">编辑</span><span class="ui-btn">分配负责人</span></div>
@@ -900,10 +903,13 @@ def upgrade():
         <div class="ui-tab-bar">
           <span class="ui-tab active">资料</span>
           <span class="ui-tab">联系人</span>
-          <span class="ui-tab">商机</span><span class="ui-tag ui-tag-primary" style="font-size:.58rem;margin-left:-4px">NEW</span>
-          <span class="ui-tab">订单</span><span class="ui-tag ui-tag-primary" style="font-size:.58rem;margin-left:-4px">NEW</span>
+          <span class="ui-tab">商机</span>
+          <span class="ui-tab">报价单</span><span class="ui-tag ui-tag-primary" style="font-size:.58rem;margin-left:-4px">v2.1</span>
+          <span class="ui-tab">合同</span><span class="ui-tag ui-tag-primary" style="font-size:.58rem;margin-left:-4px">v2.1</span>
+          <span class="ui-tab">订单</span>
+          <span class="ui-tab">回款</span><span class="ui-tag ui-tag-primary" style="font-size:.58rem;margin-left:-4px">v2.1</span>
           <span class="ui-tab">跟进</span>
-          <span class="ui-tab">文档</span><span class="ui-tag ui-tag-primary" style="font-size:.58rem;margin-left:-4px">NEW</span>
+          <span class="ui-tab">文档</span>
           <span class="ui-tab">任务</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
@@ -1067,6 +1073,7 @@ UniqueConstraint('tenant_id', 'entity_type', 'entity_id', 'tag_id',
 
     <div class="card">
       <p class="card-title">3.1 contact_role 重构 — 详细规范</p>
+      <div class="note-red note"><b>语义锁定（v2.1）：</b>contacts.<code>contact_role</code> = 客户<strong>组织架构</strong>角色（决策者/影响者/使用者/评估者）。deals 表已有同名列表示<strong>商机参与角色</strong>——本期<strong>不 rename</strong> deals 列，UI/文档用文案区分。禁止在实现中混用两套含义。</div>
       <p style="font-size:.82rem"><strong>迁移策略：</strong>将 <code>is_decision_maker</code> (Boolean) 升级为 <code>contact_role</code> (String)。</p>
       <div class="table-wrap"><table>
         <thead><tr><th>contact_role 值</th><th>中文标签</th><th>说明</th><th>对应的旧 is_decision_maker</th></tr></thead>
@@ -1079,7 +1086,7 @@ UniqueConstraint('tenant_id', 'entity_type', 'entity_id', 'tag_id',
           <tr><td><code>initiator</code></td><td>发起者</td><td>最初提出需求的人</td><td><code>false</code></td></tr>
         </tbody>
       </table></div>
-      <pre class="code-block"># 迁移 052_contact_role_refactor
+      <pre class="code-block"># 迁移 050_contact_role_refactor
 def upgrade():
     # 1. 新增 contact_role 列
     op.add_column('contacts', sa.Column('contact_role', sa.String(50), nullable=True))
@@ -1138,29 +1145,11 @@ def downgrade():
 
     <div class="card">
       <p class="card-title">3.3 通用附件管理系统</p>
-      <pre class="code-block"># 附件表
-class Attachment(Base):
-    id = Column(UUID, primary_key=True)
-    tenant_id = Column(UUID, ForeignKey("tenants.id"), nullable=False)
-    entity_type = Column(String(20), nullable=False)  # lead/customer/contact/deal
-    entity_id = Column(UUID, nullable=False)
-    file_name = Column(String(255), nullable=False)
-    file_size = Column(Integer, nullable=False)       # bytes
-    file_type = Column(String(50), nullable=False)    # MIME type
-    storage_path = Column(String(500), nullable=False) # 本地/OSS 存储路径
-    uploaded_by = Column(UUID, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-# 支持的文件类型
-ALLOWED_MIME_TYPES = [
-    "application/pdf",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "image/png", "image/jpeg", "image/gif",
-    "text/plain", "text/csv"
-]
+      <div class="note-green note"><b>v2.1 修正：</b>表 <code>attachments</code> 与上传/下载 API 已在 Deal P1（迁移 <b>042</b>）上线，且为通用 <code>entity_type</code>+<code>entity_id</code>。<b>禁止再建迁移表</b>。本模块仅：① Lead/Customer/Contact 详情挂载同一附件组件；② entity_type 使用 lead/customer/contact/deal。</div>
+      <pre class="code-block"># 已存在模型（复用，勿重建）— 以 apps/api 代码为准
+# entity_type: lead | customer | contact | deal
+# uploaded_by_user_id / storage_path / file_* 字段已就绪
+ALLOWED_MIME_TYPES = [pdf, excel, word, image, text, csv ...]
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB</pre>
 
       <h4>API 端点</h4>
@@ -1203,13 +1192,31 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB</pre>
       <div class="table-wrap"><table>
         <thead><tr><th>能力</th><th>实现方案</th><th>涉及实体</th></tr></thead>
         <tbody>
-          <tr><td><b>智能查重</b></td><td>统一 <code>DuplicateDetectionService</code>，按 entity_type 调用不同规则。Lead: 手机+邮箱+公司名；Customer: 公司名+手机+信用代码；Contact: 手机+邮箱</td><td>Lead/Customer/Contact</td></tr>
-          <tr><td><b>批量操作</b></td><td>CrmListToolbar 增加批量操作区域。支持: 修改负责人/状态/标签/回收至公海/删除。前端勾选收集 IDs，后端事务批量更新</td><td>Lead/Customer</td></tr>
-          <tr><td><b>导入去重</b></td><td>导入 Service 逐行调用 <code>DuplicateDetectionService</code>。重复行标记为"待确认"，导入完成后生成报表</td><td>Lead/Customer</td></tr>
-          <tr><td><b>协作团队</b></td><td>通用 <code>entity_team_members</code> 表。成员权限: 可查看/编辑实体数据，共享跟进记录。权限检查扩展团队范围</td><td>Lead/Customer/Deal</td></tr>
+          <tr><td><b>来源常量</b></td><td>全局 <code>CRM_SOURCE_OPTIONS</code>（含 Webhook），替换 LEAD_SOURCE / DEAL_SOURCES 分歧；Customer.source 共用</td><td>Lead/Customer/Deal</td></tr>
+          <tr><td><b>智能查重</b></td><td>统一 <code>DuplicateDetectionService</code>。Lead: 手机+邮箱+公司名；Customer: 公司名+手机(+信用代码)；转化强制跑客户去重</td><td>Lead/Customer/Contact</td></tr>
+          <tr><td><b>批量操作</b></td><td>CrmListToolbar 通用批量区（与 Deal P2 批量组件对齐）</td><td>Lead/Customer/Deal</td></tr>
+          <tr><td><b>导入去重</b></td><td>导入 Service 逐行调用 DuplicateDetectionService</td><td>Lead/Customer</td></tr>
+          <tr><td><b>协作团队</b></td><td>P1 新建 <code>entity_team_members</code>，迁移合并已有 <code>deal_team_members</code>（045）数据；禁止「删除 045」表述</td><td>Lead/Customer/Deal</td></tr>
         </tbody>
       </table></div>
     </div>
+  </div>
+</div>
+
+<!-- ==================== 3.5 CROSS MODULE ==================== -->
+<div id="cross" class="section">
+  <div class="section-header"><span class="section-num n-red">3.5</span><span class="section-title">跨模块联动（v2.1 新增）</span></div>
+  <div class="card">
+    <p class="card-title">必须实现的 Service Hook</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>触发</th><th>动作</th><th>阶段</th></tr></thead>
+      <tbody>
+        <tr><td>Deal 状态 → won</td><td>Customer.total_revenue += amount；last_deal_date=today；写 Activity「成交商机」；重算生命周期</td><td>P1</td></tr>
+        <tr><td>DealStageLog 变更</td><td>向关联 Customer 插入 crm_activities（activity_type=deal_progress）</td><td>P1</td></tr>
+        <tr><td>线索转化成功</td><td>拷贝 source、converted_lead_score、级别映射；可选 create_deal + BANT 建议字段</td><td>P0/P1</td></tr>
+        <tr><td>Deal 详情展示</td><td>Hero 展示关联 Customer 标签；列表支持按客户标签筛选</td><td>P1</td></tr>
+      </tbody>
+    </table></div>
   </div>
 </div>
 
@@ -1221,22 +1228,23 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB</pre>
     <div class="table-wrap"><table>
       <thead><tr><th>迁移编号</th><th>阶段</th><th>表</th><th>变更类型</th><th>变更内容</th></tr></thead>
       <tbody>
-        <tr><td><code>050</code></td><td>P0</td><td>leads</td><td>新增列</td><td>title String(100), lead_score Integer, department String(100), country String(50) default='中国'</td></tr>
-        <tr><td><code>051</code></td><td>P0</td><td>customers</td><td>新增列</td><td>description Text, type String(20) default='客户', parent_customer_id FK→customers, total_revenue Numeric(14,2), last_deal_date Date, tags JSON</td></tr>
-        <tr><td><code>052</code></td><td>P0</td><td>contacts</td><td>列重构</td><td>新增 contact_role String(50)；数据迁移 is_decision_maker→contact_role；删除 is_decision_maker</td></tr>
-        <tr><td><code>053</code></td><td>P0</td><td>attachments</td><td><span class="badge badge-add">NEW</span></td><td>通用附件表：id, tenant_id, entity_type, entity_id, file_name, file_size, file_type, storage_path, uploaded_by, created_at</td></tr>
-        <tr><td><code>054</code></td><td>P1</td><td>lead_pools</td><td><span class="badge badge-add">NEW</span></td><td>线索池：id, tenant_id, name, territory_id, industry_filter, auto_reclaim_days</td></tr>
-        <tr><td><code>054b</code></td><td>P1</td><td>customer_pools</td><td><span class="badge badge-add">NEW</span></td><td>客户池：同 lead_pools 结构</td></tr>
-        <tr><td><code>055</code></td><td>P1</td><td>lead_scoring_rules</td><td><span class="badge badge-add">NEW</span></td><td>评分规则：id, tenant_id, name, condition_json, score_value, priority, is_active</td></tr>
-        <tr><td><code>056</code></td><td>P1</td><td>assignment_rules</td><td><span class="badge badge-add">NEW</span></td><td>分配规则：id, tenant_id, name, condition_json, assign_type, target_id, priority, is_active</td></tr>
-        <tr><td><code>057</code></td><td>P1</td><td>addresses</td><td><span class="badge badge-add">NEW</span></td><td>多地址：id, tenant_id, entity_type, entity_id, address_type, is_default, province, city, district, address, zip_code, contact_name, contact_phone</td></tr>
-        <tr><td><code>058</code></td><td>P1</td><td>tags</td><td><span class="badge badge-add">NEW</span></td><td>标签：id, tenant_id, name, color, category</td></tr>
-        <tr><td><code>058b</code></td><td>P1</td><td>entity_tags</td><td><span class="badge badge-add">NEW</span></td><td>标签关联：id, tenant_id, entity_type, entity_id, tag_id, created_by</td></tr>
-        <tr><td><code>059</code></td><td>P1</td><td>entity_team_members</td><td><span class="badge badge-add">NEW</span></td><td>协作团队：id, tenant_id, entity_type, entity_id, user_id, role, joined_at</td></tr>
-        <tr><td><code>060</code></td><td>P1</td><td>bant_evaluations</td><td><span class="badge badge-add">NEW</span></td><td>BANT评估：id, tenant_id, lead_id, budget_score, authority_score, need_score, time_score, total_score, note, created_by, created_at</td></tr>
+        <tr><td colspan="5" style="background:#f0fdf4;color:#166534"><b>基线：</b>039–047（Deal）已上线。附件 042、activities 041 已就绪，勿重建。</td></tr>
+        <tr><td><code>048</code></td><td>P0</td><td>leads</td><td>新增列</td><td>title, lead_score, department, country(default='中国')</td></tr>
+        <tr><td><code>049</code></td><td>P0</td><td>customers</td><td>新增列</td><td>description, type, parent_customer_id, total_revenue, last_deal_date, tags(JSON临时), <b>source</b>, <b>converted_lead_score</b></td></tr>
+        <tr><td><code>050</code></td><td>P0</td><td>contacts</td><td>列重构</td><td>新增 contact_role；迁移 is_decision_maker→contact_role；删 is_decision_maker</td></tr>
+        <tr><td><code>—</code></td><td>P0</td><td>attachments</td><td><span class="badge badge-low">复用042</span></td><td>不建新表；Lead/Customer 挂组件即可</td></tr>
+        <tr><td><code>051</code></td><td>P1</td><td>lead_pools</td><td><span class="badge badge-add">NEW</span></td><td>线索池</td></tr>
+        <tr><td><code>052</code></td><td>P1</td><td>customer_pools</td><td><span class="badge badge-add">NEW</span></td><td>客户池</td></tr>
+        <tr><td><code>053</code></td><td>P1</td><td>lead_scoring_rules</td><td><span class="badge badge-add">NEW</span></td><td>评分规则</td></tr>
+        <tr><td><code>054</code></td><td>P1</td><td>assignment_rules</td><td><span class="badge badge-add">NEW</span></td><td>分配规则</td></tr>
+        <tr><td><code>055</code></td><td>P1</td><td>addresses</td><td><span class="badge badge-add">NEW</span></td><td>多地址</td></tr>
+        <tr><td><code>056</code></td><td>P1</td><td>tags + entity_tags</td><td><span class="badge badge-add">NEW</span></td><td>规范标签（替代 JSON 临时）</td></tr>
+        <tr><td><code>057</code></td><td>P1</td><td>entity_team_members</td><td><span class="badge badge-add">NEW</span></td><td>通用协作团队 + 合并 045 数据</td></tr>
+        <tr><td><code>058</code></td><td>P1</td><td>bant_evaluations</td><td><span class="badge badge-add">NEW</span></td><td>BANT评估</td></tr>
+        <tr><td><code>059</code></td><td>P2</td><td>notifications</td><td><span class="badge badge-add">NEW</span></td><td>统一通知中心</td></tr>
       </tbody>
     </table></div>
-    <div class="note" style="margin-top:.5rem"><b>兼容性：</b>所有迁移需兼容 SQLite(开发) 和 PostgreSQL(生产)。JSON 字段使用 SQLAlchemy JSON 类型自动适配。FK 约束在 SQLite 中使用 <code>render_as_batch=True</code>。</div>
+    <div class="note" style="margin-top:.5rem"><b>兼容性：</b>SQLite + PostgreSQL；JSON 用 SQLAlchemy JSON；FK 在 SQLite 用 <code>render_as_batch=True</code>。常量侧新增 <code>CRM_SOURCE_OPTIONS</code>（无独立迁移）。</div>
   </div>
 </div>
 
@@ -1288,7 +1296,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB</pre>
       <span class="flow-arrow">→</span>
       <span class="flow-node end">标记已转化</span>
     </div>
-    <div class="note-blue note"><b>数据复制规则：</b>① Customer 继承 Lead 的 company_name, mobile, phone, email, remark, extra_data；② Contact 继承 Lead 的 contact_name, mobile, email, phone, title, department；③ 商机继承 Lead 的 source, owner_user_id；④ 历史跟进记录复制到 Customer 和 Contact（activity 的 customer_id 和 lead_id 都设置）。</div>
+    <div class="note-blue note"><b>数据复制规则（v2.1）：</b>① Customer 继承 company_name/mobile/phone/email/remark/extra_data，并拷贝 <b>source</b>、<b>converted_lead_score</b>，按 lead_score 映射级别；② Contact 继承 contact_name/mobile/email/phone/title/department；③ 去重命中时合并联系人而非新建客户；④ 商机可选创建：继承 source/owner，BANT 映射 amount/expected_close/description/contact_role 建议；⑤ 历史跟进复制到 Customer（activity 同时保留 lead_id）。</div>
   </div>
 
   <div class="card">
@@ -1419,35 +1427,32 @@ def calculate_lifecycle(customer):
 
   <div class="roadmap">
     <div class="roadmap-card">
-      <h3><span class="phase-tag phase-p0">P0</span> 第1-2周：字段+基础</h3>
+      <h3><span class="phase-tag phase-p0">P0</span> 第1-2周：字段+统一基础</h3>
       <ul>
-        <li><strong>Day 1-2:</strong> Lead 新增字段 DB 迁移 + Schema 更新</li>
-        <li><strong>Day 3-4:</strong> Customer 新增字段 DB 迁移 + Schema 更新</li>
-        <li><strong>Day 5:</strong> Contact 角色重构迁移</li>
-        <li><strong>Day 6-7:</strong> 通用附件表 + 上传/下载 API</li>
-        <li><strong>Day 8-9:</strong> Schema 种子更新 + 前端表单/详情页联动</li>
-        <li><strong>Day 10:</strong> 集成测试 + 回归测试</li>
+        <li><strong>Day 1:</strong> CRM_SOURCE_OPTIONS 统一（含 Deal 补 Webhook）</li>
+        <li><strong>Day 1-2:</strong> Lead 048 迁移 + Schema/种子/表单</li>
+        <li><strong>Day 3-4:</strong> Customer 049（含 source / converted_lead_score）+ 转化拷贝 source</li>
+        <li><strong>Day 5:</strong> Contact 050 角色重构</li>
+        <li><strong>Day 6-7:</strong> 复用 042 附件组件挂到 Lead/Customer</li>
+        <li><strong>Day 8-10:</strong> 前端联动 + verify_lead_customer_p0 + 回归</li>
       </ul>
     </div>
     <div class="roadmap-card">
-      <h3><span class="phase-tag phase-p1">P1</span> 第3-6周：核心功能</h3>
+      <h3><span class="phase-tag phase-p1">P1</span> 第3-6周：核心功能+联动</h3>
       <ul>
-        <li><strong>Week 3:</strong> 线索评分引擎 + 评分规则配置页</li>
-        <li><strong>Week 4:</strong> 线索池/公海 + 认领/回收 + 定时任务</li>
-        <li><strong>Week 5:</strong> 线索去重检测 + 自动分配 + 转化增强</li>
-        <li><strong>Week 5:</strong> BANT 评估 + 客户标签 + 多地址</li>
-        <li><strong>Week 6:</strong> 客户360度视图 + 客户公海 + 协作团队</li>
-        <li><strong>Week 6:</strong> 批量操作 + 通用查重 + 导入去重</li>
+        <li>评分引擎 / 公海 / 去重 / 分配 / BANT</li>
+        <li><b>转化：</b>去重、级别映射、可选 Deal+BANT</li>
+        <li><b>Hook：</b>赢单→价值；阶段→Activity</li>
+        <li>360 视图含报价/合同/回款；标签；多地址</li>
+        <li>可选 entity_team_members 合并 045</li>
       </ul>
     </div>
     <div class="roadmap-card">
       <h3><span class="phase-tag phase-p2">P2</span> 第7-10周：高级增强</h3>
       <ul>
-        <li><strong>Week 7-8:</strong> 线索培育自动化 + 来源ROI分析</li>
-        <li><strong>Week 8:</strong> UTM参数追踪 + 活动时间线增强</li>
-        <li><strong>Week 9:</strong> 客户生命周期 + 价值报表</li>
-        <li><strong>Week 9:</strong> 决策链图谱 + 工商API对接</li>
-        <li><strong>Week 10:</strong> 客户合并 + 导入去重 + 性能优化</li>
+        <li>培育自动化 / 来源 ROI / UTM</li>
+        <li>生命周期报表 / 决策链 / 工商 API</li>
+        <li>统一通知中心 / 全链路漏斗 / 导出 / H5</li>
       </ul>
     </div>
   </div>
@@ -1457,11 +1462,11 @@ def calculate_lifecycle(customer):
   <div class="sources">
     <h2>参考来源</h2>
     <ol>
+      <li><span class="src-title">跨模块补充修改分析 v1.1</span><span class="src-url">cross-module-gap-analysis/</span></li>
+      <li><span class="src-title">v0.9 线索客户增强执行计划</span><span class="src-url">docs/v0.9-线索客户增强执行计划.md</span></li>
+      <li><span class="src-title">v0.8 商机增强执行计划（基线 047）</span><span class="src-url">docs/v0.8-deal增强执行计划.md</span></li>
       <li><span class="src-title">Salesforce Lead Conversion 详解</span><a class="src-url" href="https://cloud.tencent.com/developer/article/2343701" target="_blank" rel="noopener">https://cloud.tencent.com/developer/article/2343701</a></li>
       <li><span class="src-title">纷享销客 - 线索管理常见问题</span><a class="src-url" href="https://www.fxiaoke.com/doc/document-298539.html" target="_blank" rel="noopener">https://www.fxiaoke.com/doc/document-298539.html</a></li>
-      <li><span class="src-title">HubSpot 营销增长策略</span><a class="src-url" href="https://www.woshipm.com/marketing/1041424.html" target="_blank" rel="noopener">https://www.woshipm.com/marketing/1041424.html</a></li>
-      <li><span class="src-title">销售易 NeoAgent 2.0</span><a class="src-url" href="https://www.xiaoshouyi.com/neoai" target="_blank" rel="noopener">https://www.xiaoshouyi.com/neoai</a></li>
-      <li><span class="src-title">Odoo CRM 模块指南</span><a class="src-url" href="https://blog.csdn.net/conquer_qgw/article/details/148188738" target="_blank" rel="noopener">https://blog.csdn.net/conquer_qgw/article/details/148188738</a></li>
     </ol>
   </div>
 </footer>

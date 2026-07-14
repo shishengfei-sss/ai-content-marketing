@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import TenantContext
-from app.models.crm import Payment
+from app.models.crm import Order, Payment
 from app.schemas.crm_deals import (
     PaymentCreate,
     PaymentListResponse,
@@ -51,6 +51,7 @@ def list_payments(
     q: str | None = Query(default=None),
     status: str | None = Query(default=None),
     order_id: UUID | None = Query(default=None),
+    customer_id: UUID | None = Query(default=None),
     filters: str | None = Query(default=None, description="高级筛选 JSON"),
     sort_by: str | None = Query(default=None),
     sort_dir: str | None = Query(default=None, pattern="^(asc|desc)$"),
@@ -97,6 +98,11 @@ def list_payments(
 
     if order_id is not None:
         query = query.filter(Payment.order_id == order_id)
+    if customer_id is not None:
+        query = query.join(Order, Order.id == Payment.order_id).filter(
+            Order.customer_id == customer_id,
+            Order.deleted_at.is_(None),
+        )
 
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()

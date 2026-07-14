@@ -97,12 +97,14 @@ def apply_customer_list_scope(query: Query, ctx: TenantContext, db: Session) -> 
 def can_view_lead(
     ctx: TenantContext,
     db: Session,
-    owner_user_id: UUID,
+    owner_user_id: UUID | None,
     territory_id: UUID | None = None,
 ) -> bool:
     perms = _perm_set(ctx)
     if "crm.lead.list_all" in perms:
         return True
+    if owner_user_id is None:
+        return False
     if owner_user_id == ctx.user.id and perms.intersection(
         {"crm.lead.list_own", "crm.lead.list_team", "crm.lead.list_territory"}
     ):
@@ -121,12 +123,14 @@ def can_view_lead(
 def can_view_customer(
     ctx: TenantContext,
     db: Session,
-    owner_user_id: UUID,
+    owner_user_id: UUID | None,
     territory_id: UUID | None = None,
 ) -> bool:
     perms = _perm_set(ctx)
     if "crm.customer.list_all" in perms:
         return True
+    if owner_user_id is None:
+        return False
     if owner_user_id == ctx.user.id and perms.intersection(
         {"crm.customer.list_own", "crm.customer.list_team", "crm.customer.list_territory"}
     ):

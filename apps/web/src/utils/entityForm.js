@@ -28,12 +28,34 @@ export const ENTITY_DB_FIELDS = {
     'phone',
     'email',
     'source',
+    'source_detail',
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'landing_url',
+    'acquisition_cost',
+    'title',
+    'lead_score',
+    'department',
+    'country',
     'status',
     'remark',
     'campaign_id',
     'territory_id',
   ]),
-  customer: new Set(['company_name', 'mobile', 'phone', 'email', 'status', 'remark']),
+  customer: new Set([
+    'company_name',
+    'mobile',
+    'phone',
+    'email',
+    'status',
+    'description',
+    'type',
+    'parent_customer_id',
+    'tags',
+    'source',
+    'remark',
+  ]),
 }
 
 const SECTION_RULES = [
@@ -72,7 +94,13 @@ const LEAD_FIELD_OVERRIDES = {
   main_business: { sort_order: 170 },
   accounting_need: { sort_order: 180 },
   source: { sort_order: 200 },
-  source_detail: { sort_order: 210 },
+  source_detail: { sort_order: 210, label: '来源说明' },
+  utm_source: { sort_order: 211, label: 'UTM Source' },
+  utm_medium: { sort_order: 212, label: 'UTM Medium' },
+  utm_campaign: { sort_order: 213, label: 'UTM Campaign' },
+  landing_url: { sort_order: 214, label: '落地页' },
+  acquisition_cost: { sort_order: 215, label: '获客成本' },
+  lead_score: { sort_order: 216, label: '线索评分' },
   status: { sort_order: 220 },
   intention_level: { sort_order: 230 },
   campaign_id: { sort_order: 240 },
@@ -222,9 +250,9 @@ export function entityToFormValues(record, fields) {
     const top = record?.[key]
     const extra = record?.extra_data?.[key]
     if (top !== undefined && top !== null && top !== '') {
-      values[key] = top
+      values[key] = Array.isArray(top) && field.field_type === 'text' ? top.join(',') : top
     } else if (extra !== undefined && extra !== null && extra !== '') {
-      values[key] = extra
+      values[key] = Array.isArray(extra) && field.field_type === 'text' ? extra.join(',') : extra
     } else {
       values[key] = defaultFieldValue(field)
     }

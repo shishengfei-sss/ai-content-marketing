@@ -1,0 +1,180 @@
+"""线索自动分配规则。"""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+from fastapi import HTTPException
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.database import uuid_eq
+from app.dependencies import TenantContext
+from app.models import TenantMembership
+from app.models.crm import AssignmentRule, Lead
+from app.services.crm.lead_scoring_service import match_condition
+
+ASSIGN_TYPES = frozenset({"fixed_user", "round_robin", "load_balanced"})
+
+
+def list_rules(db: Session, tenant_id: UUID) -> list[AssignmentRule]:
+    return (
+        db.query(AssignmentRule)
+        .filter(AssignmentRule.tenant_id == tenant_id)
+        .order_by(AssignmentRule.priority.asc(), AssignmentRule.created_at.asc())
+        .all()
+    )
+
+
+def require_rule(db: Session, tenant_id: UUID, rule_id: UUID) -> AssignmentRule:
+    rule = (
+        db.query(AssignmentRule)
+        .filter(uuid_eq(AssignmentRule.id, rule_id), AssignmentRule.tenant_id == tenant_id)
+        .first()
+    )
+    if not rule:
+        raise HTTPException(status_code=404, detail="分配规则不存在")
+    return rule
+
+
+def create_rule(
+    db: Session,
+    ctx: TenantContext,
+    *,
+    name: str,
+    condition_json: dict,
+    assign_type: str,
+    target_id: UUID | None = None,
+    priority: int = 0,
+    is_active: bool = True,
+) -> AssignmentRule:
+    if assign_type not in ASSIGN_TYPES:
+        raise HTTPException(status_code=400, detail=f"assign_type 必须是 {sorted(ASSIGN_TYPES)} 之一")
+    if assign_type == "fixed_user" and target_id is None:
+        raise HTTPException(status_code=400, detail="fixed_user 必须指定 target_id")
+    rule = AssignmentRule(
+        tenant_id=ctx.tenant_id,
+        name=name.strip(),
+        condition_json=condition_json or {},
+        assign_type=assign_type,
+        target_id=target_id,
+        priority=priority,
+        is_active=is_active,
+    )
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+def update_rule(
+    db: Session,
+    ctx: TenantContext,
+    rule: AssignmentRule,
+    *,
+    name: str | None = None,
+    condition_json: dict | None = None,
+    assign_type: str | None = None,
+    target_id: UUID | None = None,
+    priority: int | None = None,
+    is_active: bool | None = None,
+) -> AssignmentRule:
+    if name is not None:
+        rule.name = name.strip()
+    if condition_json is not None:
+        rule.condition_json = condition_json
+    if assign_type is not None:
+        if assign_type not in ASSIGN_TYPES:
+            raise HTTPException(status_code=400, detail=f"assign_type 必须是 {sorted(ASSIGN_TYPES)} 之一")
+        rule.assign_type = assign_type
+    if target_id is not None:
+        rule.target_id = target_id
+    if priority is not None:
+        rule.priority = priority
+    if is_active is not None:
+        rule.is_active = is_active
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+def delete_rule(db: Session, ctx: TenantContext, rule: AssignmentRule) -> None:
+    db.delete(rule)
+    db.commit()
+
+
+def _candidate_user_ids(db: Session, tenant_id: UUID, rule: AssignmentRule) -> list[UUID]:
+    cond = rule.condition_json or {}
+    raw = cond.get("candidates") or cond.get("candidate_user_ids")
+    if isinstance(raw, list) and raw:
+        return [UUID(str(x)) for x in raw]
+    rows = (
+        db.query(TenantMembership.user_id)
+        .filter(TenantMembership.tenant_id == tenant_id, TenantMembership.is_active.is_(True))
+        .order_by(TenantMembership.joined_at.asc())
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
+def _pick_round_robin(db: Session, tenant_id: UUID, candidates: list[UUID]) -> UUID | None:
+    if not candidates:
+        return None
+    counts = {
+        uid: db.query(func.count(Lead.id))
+        .filter(Lead.tenant_id == tenant_id, Lead.owner_user_id == uid, Lead.deleted_at.is_(None))
+        .scalar()
+        or 0
+        for uid in candidates
+    }
+    # 选线索数最少者中靠前的（近似 round robin）
+    return min(candidates, key=lambda u: (counts.get(u, 0), str(u)))
+
+
+def _pick_load_balanced(db: Session, tenant_id: UUID, candidates: list[UUID]) -> UUID | None:
+    return _pick_round_robin(db, tenant_id, candidates)
+
+
+def resolve_owner_for_lead(db: Session, tenant_id: UUID, lead: Lead) -> UUID | None:
+    rules = (
+        db.query(AssignmentRule)
+        .filter(AssignmentRule.tenant_id == tenant_id, AssignmentRule.is_active.is_(True))
+        .order_by(AssignmentRule.priority.asc(), AssignmentRule.created_at.asc())
+        .all()
+    )
+    for rule in rules:
+        if not match_condition(lead, rule.condition_json or {}):
+            continue
+        if rule.assign_type == "fixed_user" and rule.target_id:
+            return rule.target_id
+        candidates = _candidate_user_ids(db, tenant_id, rule)
+        if rule.target_id and rule.target_id not in candidates:
+            candidates = [rule.target_id] + candidates
+        if rule.assign_type == "round_robin":
+            return _pick_round_robin(db, tenant_id, candidates)
+        if rule.assign_type == "load_balanced":
+            return _pick_load_balanced(db, tenant_id, candidates)
+    return None
+
+
+def apply_assignment_rules(db: Session, ctx: TenantContext, lead: Lead) -> Lead:
+    owner = resolve_owner_for_lead(db, ctx.tenant_id, lead)
+    if owner is not None:
+        prev = lead.owner_user_id
+        lead.owner_user_id = owner
+        db.flush()
+        if owner != prev and owner != ctx.user.id:
+            from app.services.crm.notification_service import create_notification
+
+            create_notification(
+                db,
+                tenant_id=ctx.tenant_id,
+                user_id=owner,
+                title="新线索已分配给你",
+                body=f"「{lead.company_name}」已按分配规则指派给你",
+                category="assignment",
+                entity_type="lead",
+                entity_id=lead.id,
+                commit=False,
+            )
+    return lead

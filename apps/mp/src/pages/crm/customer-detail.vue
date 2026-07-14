@@ -15,6 +15,8 @@ const tasks = ref([])
 const taskPanelRef = ref(null)
 const permissions = ref([])
 const members = ref([])
+const decisionChain = ref(null)
+const bizSummary = ref('')
 
 const activityForm = ref({ content: '' })
 const assignVisible = ref(false)
@@ -43,14 +45,16 @@ async function loadDetail() {
         members.value = []
       }
     }
-    const [custData, contactList, timeline] = await Promise.all([
+    const [custData, contactList, timeline, chain] = await Promise.all([
       crmApi.getCustomer(customerId.value),
       crmApi.listContacts(customerId.value),
       crmApi.listActivities({ customer_id: customerId.value }),
+      crmApi.getDecisionChain(customerId.value).catch(() => null),
     ])
     customer.value = custData
     contacts.value = Array.isArray(contactList) ? contactList : []
     activities.value = Array.isArray(timeline) ? timeline : []
+    decisionChain.value = chain
     await taskPanelRef.value?.reload()
   } catch (e) {
     uni.showToast({ title: e.message || '加载失败', icon: 'none' })
@@ -76,6 +80,26 @@ async function submitAssign() {
     loadDetail()
   } catch (e) {
     uni.showToast({ title: e.message || '分配失败', icon: 'none' })
+  }
+}
+
+function contactName(id) {
+  const c = contacts.value.find((x) => String(x.id) === String(id))
+  return c?.name || '联系人'
+}
+
+async function lookupBusiness() {
+  if (!customer.value?.company_name) return
+  try {
+    const data = await crmApi.businessLookup(customer.value.company_name)
+    if (data?.available) {
+      bizSummary.value = `${data.legal_representative || ''} · ${data.credit_code || ''}`
+      uni.showToast({ title: '已查询工商', icon: 'success' })
+    } else {
+      uni.showToast({ title: data?.detail || '不可用', icon: 'none' })
+    }
+  } catch (e) {
+    uni.showToast({ title: e.message || '查询失败', icon: 'none' })
   }
 }
 
@@ -117,14 +141,23 @@ onLoad((query) => {
         <text class="status">{{ customer.status }}</text>
       </view>
       <text class="meta">{{ customer.mobile || '—' }}</text>
+      <text class="meta">来源：{{ customer.source || '—' }} · 累计：¥{{ customer.total_revenue ?? 0 }}</text>
       <text class="meta">负责人：{{ ownerLabel }}</text>
-      <view v-if="canAssign()" class="acts">
-        <button class="btn btn--primary" size="mini" @click="openAssign">分配负责人</button>
+      <text v-if="bizSummary" class="meta">工商：{{ bizSummary }}</text>
+      <view class="acts">
+        <button class="btn" size="mini" @click="lookupBusiness">工商查询</button>
+        <button v-if="canAssign()" class="btn btn--primary" size="mini" @click="openAssign">分配负责人</button>
       </view>
       <view v-if="contacts.length" class="contacts">
         <text v-for="item in contacts" :key="item.id" class="contact">
-          {{ item.name || '联系人' }} · {{ item.mobile || '—' }}
+          {{ item.name || '联系人' }}
+          <text v-if="item.contact_role">（{{ item.contact_role }}）</text>
+          · {{ item.mobile || '—' }}
+          <text v-if="item.reports_to_contact_id"> → {{ contactName(item.reports_to_contact_id) }}</text>
         </text>
+      </view>
+      <view v-if="decisionChain?.edges?.length" class="contacts">
+        <text class="contact">决策链 {{ decisionChain.edges.length }} 条汇报关系</text>
       </view>
     </view>
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -15,6 +16,7 @@ from app.services.crm.crm_scope_service import assert_can_view_lead, can_view_cu
 from app.services.crm.number_service import generate_number
 from app.services.crm.sales_org_service import get_territory
 from app.services.crm.schema_service import validate_extra_data
+from app.services.crm.utm_service import merge_utm_into_lead_fields
 
 
 def _perm_set(ctx: TenantContext) -> set[str]:
@@ -41,6 +43,14 @@ def create_lead(db: Session, ctx: TenantContext, data: LeadCreate) -> Lead:
     extra = validate_extra_data(db, ctx.tenant_id, "lead", data.extra_data, is_create=True)
     if data.territory_id is not None and not get_territory(db, ctx.tenant_id, data.territory_id):
         raise HTTPException(status_code=404, detail="地区不存在")
+    utm = merge_utm_into_lead_fields(
+        source=data.source,
+        source_detail=data.source_detail,
+        utm_source=data.utm_source,
+        utm_medium=data.utm_medium,
+        utm_campaign=data.utm_campaign,
+        landing_url=data.landing_url,
+    )
     lead = Lead(
         tenant_id=ctx.tenant_id,
         lead_number=generate_number(db, ctx.tenant_id, "lead"),
@@ -49,7 +59,17 @@ def create_lead(db: Session, ctx: TenantContext, data: LeadCreate) -> Lead:
         mobile=mobile,
         phone=data.phone,
         email=data.email,
-        source=data.source,
+        source=utm.get("source"),
+        source_detail=utm.get("source_detail"),
+        utm_source=utm.get("utm_source"),
+        utm_medium=utm.get("utm_medium"),
+        utm_campaign=utm.get("utm_campaign"),
+        landing_url=utm.get("landing_url"),
+        acquisition_cost=Decimal(str(data.acquisition_cost)) if data.acquisition_cost is not None else None,
+        title=data.title,
+        lead_score=data.lead_score,
+        department=data.department,
+        country=data.country or "中国",
         status=data.status,
         owner_user_id=ctx.user.id,
         territory_id=data.territory_id,
@@ -59,6 +79,10 @@ def create_lead(db: Session, ctx: TenantContext, data: LeadCreate) -> Lead:
         created_by_user_id=ctx.user.id,
     )
     db.add(lead)
+    db.flush()
+    from app.services.crm.assignment_service import apply_assignment_rules
+
+    apply_assignment_rules(db, ctx, lead)
     db.commit()
     db.refresh(lead)
     return lead
@@ -85,6 +109,42 @@ def update_lead(db: Session, ctx: TenantContext, lead: Lead, data: LeadUpdate) -
         lead.email = data.email
     if data.source is not None:
         lead.source = data.source
+    if data.source_detail is not None:
+        lead.source_detail = data.source_detail
+    if data.utm_source is not None:
+        lead.utm_source = data.utm_source
+    if data.utm_medium is not None:
+        lead.utm_medium = data.utm_medium
+    if data.utm_campaign is not None:
+        lead.utm_campaign = data.utm_campaign
+    if data.landing_url is not None:
+        parsed = merge_utm_into_lead_fields(
+            source=lead.source,
+            source_detail=lead.source_detail,
+            utm_source=lead.utm_source,
+            utm_medium=lead.utm_medium,
+            utm_campaign=lead.utm_campaign,
+            landing_url=data.landing_url,
+        )
+        lead.landing_url = parsed.get("landing_url")
+        if not lead.utm_source and parsed.get("utm_source"):
+            lead.utm_source = parsed.get("utm_source")
+        if not lead.utm_medium and parsed.get("utm_medium"):
+            lead.utm_medium = parsed.get("utm_medium")
+        if not lead.utm_campaign and parsed.get("utm_campaign"):
+            lead.utm_campaign = parsed.get("utm_campaign")
+        if not lead.source_detail and parsed.get("source_detail"):
+            lead.source_detail = parsed.get("source_detail")
+    if data.acquisition_cost is not None:
+        lead.acquisition_cost = Decimal(str(data.acquisition_cost))
+    if data.title is not None:
+        lead.title = data.title
+    if data.lead_score is not None:
+        lead.lead_score = data.lead_score
+    if data.department is not None:
+        lead.department = data.department
+    if data.country is not None:
+        lead.country = data.country
     if data.status is not None:
         validate_lead_status(data.status)
         lead.status = data.status
@@ -118,26 +178,101 @@ def require_lead(db: Session, ctx: TenantContext, lead_id: UUID) -> Lead:
     return lead
 
 
-def convert_lead_to_customer(db: Session, ctx: TenantContext, lead: Lead) -> tuple[Customer, Contact | None]:
+def _map_lead_score_to_level(score: int | None) -> str | None:
+    if score is None:
+        return None
+    if score >= 80:
+        return "A重点"
+    if score >= 60:
+        return "B普通"
+    return "C长尾"
+
+
+def _find_duplicate_customers(db: Session, tenant_id: UUID, lead: Lead) -> list[Customer]:
+    q = db.query(Customer).filter(
+        Customer.tenant_id == tenant_id,
+        Customer.deleted_at.is_(None),
+        Customer.company_name == lead.company_name,
+    )
+    if lead.mobile:
+        q = q.filter(Customer.mobile == lead.mobile)
+    return q.order_by(Customer.created_at.asc()).limit(10).all()
+
+
+def convert_lead_to_customer(
+    db: Session,
+    ctx: TenantContext,
+    lead: Lead,
+    *,
+    create_deal: bool = False,
+    deal_title: str | None = None,
+    deal_amount: float | None = None,
+    deal_pipeline_id: UUID | None = None,
+    deal_stage_id: UUID | None = None,
+    merge_into_customer_id: UUID | None = None,
+    force_create: bool = True,
+) -> tuple[Customer, Contact | None, object | None, bool]:
+    """返回 (customer, contact, deal|None, merged)。"""
     if lead.status == "已转化" or lead.converted_customer_id:
         raise HTTPException(status_code=409, detail="线索已转化")
-    customer = Customer(
-        tenant_id=ctx.tenant_id,
-        company_name=lead.company_name,
-        mobile=lead.mobile,
-        phone=lead.phone,
-        email=lead.email,
-        status="潜在",
-        owner_user_id=lead.owner_user_id,
-        territory_id=lead.territory_id,
-        campaign_id=lead.campaign_id,
-        converted_from_lead_id=lead.id,
-        remark=lead.remark,
-        extra_data=dict(lead.extra_data or {}),
-        created_by_user_id=ctx.user.id,
-    )
-    db.add(customer)
-    db.flush()
+
+    merged = False
+    customer: Customer | None = None
+    if merge_into_customer_id is not None:
+        customer = get_customer_for_convert(db, ctx.tenant_id, merge_into_customer_id)
+        if not customer:
+            raise HTTPException(status_code=404, detail="合并目标客户不存在")
+        merged = True
+    elif not force_create:
+        dups = _find_duplicate_customers(db, ctx.tenant_id, lead)
+        if dups:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "发现疑似重复客户，请选择合并或强制新建",
+                    "duplicate_candidates": [str(c.id) for c in dups],
+                },
+            )
+
+    if customer is None:
+        extra = dict(lead.extra_data or {})
+        level = _map_lead_score_to_level(lead.lead_score)
+        if level:
+            extra["customer_level"] = level
+        customer = Customer(
+            tenant_id=ctx.tenant_id,
+            customer_number=generate_number(db, ctx.tenant_id, "customer"),
+            company_name=lead.company_name,
+            mobile=lead.mobile,
+            phone=lead.phone,
+            email=lead.email,
+            status="潜在",
+            source=lead.source,
+            converted_lead_score=lead.lead_score,
+            owner_user_id=lead.owner_user_id or ctx.user.id,
+            territory_id=lead.territory_id,
+            campaign_id=lead.campaign_id,
+            converted_from_lead_id=lead.id,
+            remark=lead.remark,
+            extra_data=extra,
+            created_by_user_id=ctx.user.id,
+        )
+        db.add(customer)
+        db.flush()
+    else:
+        # 合并：补齐来源等信息（不覆盖已有非空值）
+        if not customer.source and lead.source:
+            customer.source = lead.source
+        if customer.converted_lead_score is None and lead.lead_score is not None:
+            customer.converted_lead_score = lead.lead_score
+        if not customer.converted_from_lead_id:
+            customer.converted_from_lead_id = lead.id
+        level = _map_lead_score_to_level(lead.lead_score)
+        if level:
+            extra = dict(customer.extra_data or {})
+            extra.setdefault("customer_level", level)
+            customer.extra_data = extra
+
     contact = None
     if lead.contact_name:
         contact = Contact(
@@ -147,21 +282,72 @@ def convert_lead_to_customer(db: Session, ctx: TenantContext, lead: Lead) -> tup
             mobile=lead.mobile,
             phone=lead.phone,
             email=lead.email,
-            is_primary=True,
-            extra_data=dict(lead.extra_data or {}),
+            title=lead.title,
+            department=lead.department,
+            is_primary=not merged,
+            extra_data={},
         )
         db.add(contact)
+        db.flush()
+
+    if customer.owner_user_id is None or not can_view_customer(
+        ctx, db, customer.owner_user_id, customer.territory_id
+    ):
+        customer.owner_user_id = ctx.user.id
+
+    deal = None
+    if create_deal:
+        from app.schemas.crm_deals import DealCreate
+        from app.services.crm.bant_service import deal_suggestions_from_bant, latest_evaluation
+        from app.services.crm.deal_service import create_deal as create_deal_svc
+
+        bant = latest_evaluation(db, ctx.tenant_id, lead.id)
+        suggestions = deal_suggestions_from_bant(bant)
+        amount = deal_amount if deal_amount is not None else suggestions.get("amount", 0)
+        close_date = suggestions.get("expected_close_date")
+        if close_date is not None and not isinstance(close_date, datetime):
+            close_date = datetime.combine(close_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+        deal = create_deal_svc(
+            db,
+            ctx,
+            DealCreate(
+                title=deal_title or f"{lead.company_name}合作",
+                customer_id=customer.id,
+                contact_id=contact.id if contact else None,
+                amount=amount or 0,
+                source=lead.source,
+                pipeline_id=deal_pipeline_id,
+                stage_id=deal_stage_id,
+                expected_close_date=close_date,
+                description=suggestions.get("description"),
+                contact_role=suggestions.get("contact_role"),
+            ),
+            commit=False,
+        )
+
     lead.status = "已转化"
     lead.converted_customer_id = customer.id
-    if not can_view_customer(ctx, db, customer.owner_user_id, customer.territory_id):
-        customer.owner_user_id = ctx.user.id
     _copy_lead_activities_to_customer(db, ctx, lead, customer)
     db.commit()
     db.refresh(customer)
     if contact:
         db.refresh(contact)
+    if deal is not None:
+        db.refresh(deal)
     db.refresh(lead)
-    return customer, contact
+    return customer, contact, deal, merged
+
+
+def get_customer_for_convert(db: Session, tenant_id: UUID, customer_id: UUID) -> Customer | None:
+    return (
+        db.query(Customer)
+        .filter(
+            uuid_eq(Customer.id, customer_id),
+            Customer.tenant_id == tenant_id,
+            Customer.deleted_at.is_(None),
+        )
+        .first()
+    )
 
 
 def _copy_lead_activities_to_customer(db: Session, ctx: TenantContext, lead: Lead, customer: Customer) -> None:

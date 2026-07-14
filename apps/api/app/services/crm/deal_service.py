@@ -206,7 +206,7 @@ def _resolve_pipeline_and_stage(
     return pipeline_id, stage_id, probability
 
 
-def create_deal(db: Session, ctx: TenantContext, data: DealCreate) -> Deal:
+def create_deal(db: Session, ctx: TenantContext, data: DealCreate, *, commit: bool = True) -> Deal:
     extra = validate_extra_data(db, ctx.tenant_id, "deal", data.extra_data, is_create=True)
     if data.territory_id is not None and not get_territory(db, ctx.tenant_id, data.territory_id):
         raise HTTPException(status_code=404, detail="地区不存在")
@@ -271,8 +271,12 @@ def create_deal(db: Session, ctx: TenantContext, data: DealCreate) -> Deal:
             role="owner",
         )
     )
-    db.commit()
-    db.refresh(deal)
+    from app.services.crm.entity_team_service import ensure_deal_owner_synced
+
+    ensure_deal_owner_synced(db, ctx, deal.id, owner_user_id)
+    if commit:
+        db.commit()
+        db.refresh(deal)
     return deal
 
 
@@ -379,9 +383,13 @@ def change_stage(
     )
     deal.stage_id = new_stage.id
     deal.probability = new_stage.probability
+    from app.services.crm.customer_deal_hooks import apply_deal_stage_progress_to_customer, apply_deal_won_to_customer
+
+    apply_deal_stage_progress_to_customer(db, ctx, deal, to_stage=new_stage)
     # 若进入赢单/输单终态阶段，自动调用 close_deal
     if new_stage.is_won_stage:
         _close_deal_internal(db, ctx, deal, status_value="won", amount=float(deal.amount))
+        apply_deal_won_to_customer(db, ctx, deal)
     elif new_stage.is_lost_stage:
         _close_deal_internal(
             db, ctx, deal, status_value="lost", amount=None, loss_reason=data.note
@@ -453,6 +461,10 @@ def close_deal(db: Session, ctx: TenantContext, deal: Deal, data: DealClose) -> 
         detail=data.detail,
         improvement=data.improvement,
     )
+    if data.status == "won":
+        from app.services.crm.customer_deal_hooks import apply_deal_won_to_customer
+
+        apply_deal_won_to_customer(db, ctx, deal)
     db.commit()
     db.refresh(deal)
     return deal

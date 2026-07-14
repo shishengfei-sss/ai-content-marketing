@@ -465,4 +465,5 @@ from app.models.crm import (  # noqa: E402, F401
     EntityNumberRule,
     Lead,
     MarketingCampaign,
+    NurtureRule,
 )

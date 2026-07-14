@@ -39,12 +39,25 @@ const contactForm = ref({
   title: '',
   department: '',
   is_primary: false,
-  is_decision_maker: false,
+  contact_role: null,
+  reports_to_contact_id: null,
 })
 const contactVisible = ref(false)
 const contactSaving = ref(false)
+const decisionChain = ref(null)
+const bizLookup = ref(null)
+const bizLoading = ref(false)
 const assignVisible = ref(false)
 const editVisible = ref(false)
+const attachments = ref([])
+const uploading = ref(false)
+const relatedDeals = ref([])
+const relatedQuotes = ref([])
+const relatedContracts = ref([])
+const relatedOrders = ref([])
+const relatedPayments = ref([])
+
+const CONTACT_ROLE_OPTIONS = ['决策者', '影响者', '使用者', '评估者']
 
 const formFields = computed(() => getFormFields(fields.value, 'customer'))
 
@@ -60,6 +73,7 @@ const heroMeta = computed(() => {
   return [
     { label: '手机', value: customer.value.mobile || '—' },
     { label: '邮箱', value: customer.value.email || '—' },
+    { label: '来源', value: customer.value.source || '—' },
     { label: '客户状态', value: customer.value.status || '—' },
     { label: '联系人', value: `${contacts.value.length} 人` },
   ]
@@ -70,7 +84,10 @@ const ownerName = computed(() => resolveMemberName(customer.value?.owner_user_id
 const heroStats = computed(() => [
   { label: '联系人', value: contacts.value.length },
   { label: '跟进记录', value: activities.value.length },
-  { label: '待办任务', value: tasks.value.filter((t) => isActiveTaskStatus(t.status)).length },
+  {
+    label: '累计成交',
+    value: customer.value?.total_revenue != null ? `¥${Number(customer.value.total_revenue).toLocaleString()}` : '—',
+  },
   { label: '客户级别', value: customer.value?.extra_data?.customer_level || '—' },
 ])
 
@@ -91,12 +108,111 @@ async function loadDetail() {
     customer.value = cust
     contacts.value = Array.isArray(contactList) ? contactList : []
     activities.value = Array.isArray(timeline) ? timeline : []
+    try {
+      const { data: chain } = await crmApi.getDecisionChain(route.params.id)
+      decisionChain.value = chain
+    } catch {
+      decisionChain.value = null
+    }
+    await loadAttachments()
+    await loadRelated()
     await taskPanelRef.value?.reload()
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
     router.replace('/crm/customers')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadRelated() {
+  const id = route.params.id
+  try {
+    const [dealsRes, quotesRes, contractsRes, ordersRes, paymentsRes] = await Promise.all([
+      crmApi.listDeals({ customer_id: id, page_size: 50 }),
+      crmApi.listQuotes({ customer_id: id, page_size: 50 }),
+      crmApi.listContracts({ customer_id: id, page_size: 50 }),
+      crmApi.listOrders({ customer_id: id, page_size: 50 }),
+      crmApi.listPayments({ customer_id: id, page_size: 50 }),
+    ])
+    relatedDeals.value = dealsRes.data?.items || []
+    relatedQuotes.value = quotesRes.data?.items || []
+    relatedContracts.value = contractsRes.data?.items || []
+    relatedOrders.value = ordersRes.data?.items || []
+    relatedPayments.value = paymentsRes.data?.items || []
+  } catch {
+    relatedDeals.value = []
+    relatedQuotes.value = []
+    relatedContracts.value = []
+    relatedOrders.value = []
+    relatedPayments.value = []
+  }
+}
+
+function formatFileSize(n) {
+  if (!n && n !== 0) return '—'
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
+async function loadAttachments() {
+  try {
+    const { data } = await crmApi.listAttachments({ entity_type: 'customer', entity_id: route.params.id })
+    attachments.value = Array.isArray(data) ? data : []
+  } catch {
+    attachments.value = []
+  }
+}
+
+async function onUploadFile(ev) {
+  const file = ev.target.files?.[0]
+  if (!file) return
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.warning('文件超过 50MB')
+    return
+  }
+  uploading.value = true
+  try {
+    await crmApi.uploadAttachment('customer', route.params.id, file)
+    ElMessage.success('已上传')
+    await loadAttachments()
+  } catch (e) {
+    ElMessage.error(e.message || '上传失败')
+  } finally {
+    uploading.value = false
+    ev.target.value = ''
+  }
+}
+
+async function downloadAttachment(att) {
+  try {
+    const { data } = await crmApi.downloadAttachment(att.id)
+    const url = window.URL.createObjectURL(data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = att.file_name
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    ElMessage.error(e.message || '下载失败')
+  }
+}
+
+async function removeAttachment(att) {
+  try {
+    await ElMessageBox.confirm(`确定删除附件「${att.file_name}」？`, '删除', { type: 'warning' })
+  } catch {
+    return
+  }
+  try {
+    await crmApi.deleteAttachment(att.id)
+    await loadAttachments()
+    ElMessage.success('已删除')
+  } catch (e) {
+    ElMessage.error(e.message || '删除失败')
   }
 }
 
@@ -146,6 +262,12 @@ function onTasksChanged(list) {
   tasks.value = list
 }
 
+function contactNameById(id) {
+  if (!id) return '—'
+  const c = contacts.value.find((x) => String(x.id) === String(id))
+  return c?.name || '—'
+}
+
 function openContactDialog() {
   contactForm.value = {
     name: '',
@@ -156,7 +278,8 @@ function openContactDialog() {
     title: '',
     department: '',
     is_primary: contacts.value.length === 0,
-    is_decision_maker: false,
+    contact_role: null,
+    reports_to_contact_id: null,
   }
   contactVisible.value = true
 }
@@ -177,17 +300,37 @@ async function submitContact() {
       title: contactForm.value.title.trim() || null,
       department: contactForm.value.department.trim() || null,
       is_primary: !!contactForm.value.is_primary,
-      is_decision_maker: !!contactForm.value.is_decision_maker,
+      contact_role: contactForm.value.contact_role || null,
+      reports_to_contact_id: contactForm.value.reports_to_contact_id || null,
     }
     await crmApi.createContact(route.params.id, payload)
     ElMessage.success('已添加联系人')
     contactVisible.value = false
-    const { data } = await crmApi.listContacts(route.params.id)
+    const [{ data }, { data: chain }] = await Promise.all([
+      crmApi.listContacts(route.params.id),
+      crmApi.getDecisionChain(route.params.id),
+    ])
     contacts.value = Array.isArray(data) ? data : []
+    decisionChain.value = chain
   } catch (e) {
     ElMessage.error(e.message || '添加失败')
   } finally {
     contactSaving.value = false
+  }
+}
+
+async function lookupBusiness() {
+  if (!customer.value?.company_name) return
+  bizLoading.value = true
+  try {
+    const { data } = await crmApi.businessLookup(customer.value.company_name)
+    bizLookup.value = data
+    if (data?.available) ElMessage.success('已查询工商信息（stub）')
+    else ElMessage.warning(data?.detail || '工商查询不可用')
+  } catch (e) {
+    ElMessage.error(e.message || '查询失败')
+  } finally {
+    bizLoading.value = false
   }
 }
 
@@ -224,10 +367,22 @@ onMounted(async () => {
       :stats="heroStats"
     >
       <template #actions>
+        <el-button v-if="canEdit()" :loading="bizLoading" @click="lookupBusiness">工商查询</el-button>
         <el-button v-if="canEdit()" @click="editVisible = true">编辑资料</el-button>
         <el-button v-if="canAssign()" @click="assignVisible = true">分配负责人</el-button>
       </template>
     </CrmDetailHero>
+
+    <section v-if="bizLookup?.available" class="page-card biz-card">
+      <div class="crm-panel__title">工商信息（{{ bizLookup.provider }}）</div>
+      <el-descriptions :column="2" border size="small">
+        <el-descriptions-item label="信用代码">{{ bizLookup.credit_code }}</el-descriptions-item>
+        <el-descriptions-item label="法人">{{ bizLookup.legal_representative }}</el-descriptions-item>
+        <el-descriptions-item label="注册资本">{{ bizLookup.registered_capital }}</el-descriptions-item>
+        <el-descriptions-item label="成立日期">{{ bizLookup.established_date }}</el-descriptions-item>
+        <el-descriptions-item label="经营范围" :span="2">{{ bizLookup.business_scope }}</el-descriptions-item>
+      </el-descriptions>
+    </section>
 
     <section v-if="customer" class="page-card crm-detail-tabs">
       <el-tabs v-model="activeTab">
@@ -253,24 +408,33 @@ onMounted(async () => {
             <el-table-column prop="phone" label="电话" min-width="110" />
             <el-table-column prop="email" label="邮箱" min-width="140" show-overflow-tooltip />
             <el-table-column prop="wechat" label="微信" min-width="100" />
-            <el-table-column label="标签" width="140">
+            <el-table-column label="标签" width="160">
               <template #default="{ row }">
                 <el-tag v-if="row.is_primary" size="small" type="primary" effect="light" round>首要</el-tag>
                 <el-tag
-                  v-if="row.is_decision_maker"
+                  v-if="row.contact_role"
                   size="small"
                   type="warning"
                   effect="plain"
                   round
                   style="margin-left: 4px"
                 >
-                  决策人
+                  {{ row.contact_role }}
                 </el-tag>
-                <span v-if="!row.is_primary && !row.is_decision_maker">—</span>
+                <span v-if="!row.is_primary && !row.contact_role">—</span>
               </template>
             </el-table-column>
+            <el-table-column label="汇报给" min-width="120">
+              <template #default="{ row }">{{ contactNameById(row.reports_to_contact_id) }}</template>
+            </el-table-column>
           </el-table>
-          <el-empty v-else description="暂无联系人，点击上方按钮添加" />
+          <div v-if="decisionChain?.edges?.length" class="chain-box">
+            <div class="crm-panel__title">决策链</div>
+            <div v-for="(edge, idx) in decisionChain.edges" :key="idx" class="chain-line">
+              {{ contactNameById(edge.from) }} → {{ contactNameById(edge.to) }}
+            </div>
+          </div>
+          <el-empty v-else-if="!contacts.length" description="暂无联系人，点击上方按钮添加" />
         </el-tab-pane>
 
         <el-tab-pane label="跟进" name="activities">
@@ -317,6 +481,87 @@ onMounted(async () => {
             </el-timeline-item>
           </el-timeline>
           <el-empty v-else description="暂无跟进记录" />
+        </el-tab-pane>
+
+        <el-tab-pane label="商机" name="deals">
+          <el-table v-if="relatedDeals.length" :data="relatedDeals" stripe class="crm-table" @row-click="(row) => router.push(`/crm/deals/${row.id}`)">
+            <el-table-column prop="title" label="标题" min-width="180" />
+            <el-table-column prop="amount" label="金额" width="120" />
+            <el-table-column prop="status" label="状态" width="100" />
+            <el-table-column prop="expected_close_date" label="预计成交" width="140" />
+          </el-table>
+          <el-empty v-else description="暂无关联商机" />
+        </el-tab-pane>
+
+        <el-tab-pane label="报价单" name="quotes">
+          <el-table v-if="relatedQuotes.length" :data="relatedQuotes" stripe class="crm-table" @row-click="(row) => router.push(`/crm/quotes/${row.id}`)">
+            <el-table-column prop="quote_number" label="编号" width="140" />
+            <el-table-column prop="title" label="标题" min-width="160" />
+            <el-table-column prop="total_amount" label="金额" width="120" />
+            <el-table-column prop="status" label="状态" width="100" />
+          </el-table>
+          <el-empty v-else description="暂无报价单" />
+        </el-tab-pane>
+
+        <el-tab-pane label="合同" name="contracts">
+          <el-table v-if="relatedContracts.length" :data="relatedContracts" stripe class="crm-table" @row-click="(row) => router.push(`/crm/contracts/${row.id}`)">
+            <el-table-column prop="contract_number" label="编号" width="140" />
+            <el-table-column prop="title" label="标题" min-width="160" />
+            <el-table-column prop="amount" label="金额" width="120" />
+            <el-table-column prop="status" label="状态" width="100" />
+          </el-table>
+          <el-empty v-else description="暂无合同" />
+        </el-tab-pane>
+
+        <el-tab-pane label="订单" name="orders">
+          <el-table v-if="relatedOrders.length" :data="relatedOrders" stripe class="crm-table" @row-click="(row) => router.push(`/crm/orders/${row.id}`)">
+            <el-table-column prop="order_number" label="编号" width="140" />
+            <el-table-column prop="title" label="标题" min-width="160" />
+            <el-table-column prop="total_amount" label="金额" width="120" />
+            <el-table-column prop="status" label="状态" width="100" />
+          </el-table>
+          <el-empty v-else description="暂无订单" />
+        </el-tab-pane>
+
+        <el-tab-pane label="回款" name="payments">
+          <el-table v-if="relatedPayments.length" :data="relatedPayments" stripe class="crm-table">
+            <el-table-column prop="payment_number" label="编号" width="140" />
+            <el-table-column prop="amount" label="金额" width="120" />
+            <el-table-column prop="status" label="状态" width="100" />
+            <el-table-column prop="paid_at" label="回款日期" width="160" />
+          </el-table>
+          <el-empty v-else description="暂无回款" />
+        </el-tab-pane>
+
+        <el-tab-pane label="文档" name="attachments">
+          <div class="crm-panel">
+            <div class="crm-panel__head">
+              <div class="crm-panel__title">文档附件</div>
+              <label v-if="canEdit()" class="crm-upload-btn">
+                <input type="file" :disabled="uploading" @change="onUploadFile" />
+                <el-button type="primary" size="small" :loading="uploading">上传附件</el-button>
+              </label>
+            </div>
+          </div>
+          <el-table v-if="attachments.length" :data="attachments" stripe class="crm-table">
+            <el-table-column prop="file_name" label="文件名" min-width="220" show-overflow-tooltip />
+            <el-table-column label="大小" width="110">
+              <template #default="{ row }">{{ formatFileSize(row.file_size) }}</template>
+            </el-table-column>
+            <el-table-column label="上传人" width="120">
+              <template #default="{ row }">{{ resolveMemberName(row.uploaded_by_user_id) }}</template>
+            </el-table-column>
+            <el-table-column label="上传时间" width="160">
+              <template #default="{ row }">{{ new Date(row.created_at).toLocaleString('zh-CN') }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="140" align="center">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="downloadAttachment(row)">下载</el-button>
+                <el-button v-if="canEdit()" link type="danger" size="small" @click="removeAttachment(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-else description="暂无附件" />
         </el-tab-pane>
 
         <el-tab-pane label="任务" name="tasks">
@@ -370,9 +615,27 @@ onMounted(async () => {
             </el-form-item>
           </el-col>
           <el-col :span="12">
+            <el-form-item label="组织角色">
+              <el-select v-model="contactForm.contact_role" clearable placeholder="选择角色" style="width: 100%">
+                <el-option v-for="role in CONTACT_ROLE_OPTIONS" :key="role" :label="role" :value="role" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="汇报给">
+              <el-select
+                v-model="contactForm.reports_to_contact_id"
+                clearable
+                placeholder="选择上级联系人"
+                style="width: 100%"
+              >
+                <el-option v-for="c in contacts" :key="c.id" :label="c.name" :value="c.id" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="标签">
               <el-checkbox v-model="contactForm.is_primary">首要联系人</el-checkbox>
-              <el-checkbox v-model="contactForm.is_decision_maker">决策人</el-checkbox>
             </el-form-item>
           </el-col>
         </el-row>
@@ -406,6 +669,25 @@ onMounted(async () => {
   margin-bottom: 16px;
 }
 
+.biz-card {
+  margin-top: 12px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+}
+
+.chain-box {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--el-fill-color-lighter);
+}
+
+.chain-line {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+}
+
 .crm-panel {
   margin-bottom: 16px;
   padding: 14px 16px;
@@ -423,6 +705,19 @@ onMounted(async () => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.crm-upload-btn {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.crm-upload-btn input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .crm-panel__hint {

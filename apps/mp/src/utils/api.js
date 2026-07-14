@@ -176,7 +176,28 @@ export const crmApi = {
   getLead: (id) => request({ url: `/api/v1/crm/leads/${id}` }),
   createLead: (data) => request({ url: '/api/v1/crm/leads', method: 'POST', data }),
   updateLead: (id, data) => request({ url: `/api/v1/crm/leads/${id}`, method: 'PATCH', data }),
-  convertLead: (id) => request({ url: `/api/v1/crm/leads/${id}/convert`, method: 'POST' }),
+  convertLead: (id, data = {}) =>
+    request({ url: `/api/v1/crm/leads/${id}/convert`, method: 'POST', data }),
+  listNotifications: (params) =>
+    request({ url: '/api/v1/crm/notifications', method: 'GET', data: params }),
+  unreadNotificationCount: () =>
+    request({ url: '/api/v1/crm/notifications/unread-count', method: 'GET' }),
+  markNotificationRead: (id) =>
+    request({ url: `/api/v1/crm/notifications/${id}/read`, method: 'POST' }),
+  salesBoard: () => request({ url: '/api/v1/analytics/sales-board', method: 'GET' }),
+  leadFunnel: (params) =>
+    request({ url: '/api/v1/analytics/lead-funnel', method: 'GET', data: params }),
+  sourceRoi: (params) =>
+    request({ url: '/api/v1/analytics/source-roi', method: 'GET', data: params }),
+  lifecycleReport: () =>
+    request({ url: '/api/v1/analytics/lifecycle-report', method: 'GET' }),
+  getDecisionChain: (customerId) =>
+    request({ url: `/api/v1/crm/customers/${customerId}/decision-chain`, method: 'GET' }),
+  businessLookup: (companyName) =>
+    request({
+      url: `/api/v1/crm/customers/business-lookup?company_name=${encodeURIComponent(companyName)}`,
+      method: 'GET',
+    }),
   updateCustomer: (id, data) => request({ url: `/api/v1/crm/customers/${id}`, method: 'PATCH', data }),
   listViews: (entityType) => request({ url: `/api/v1/crm/views?entity_type=${entityType}` }),
   listCampaigns: (params) => {

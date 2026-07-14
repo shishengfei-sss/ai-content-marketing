@@ -17,7 +17,7 @@ from app.services.crm.attachment_service import (
     list_attachments,
     upload_attachment,
 )
-from app.services.permission_service import require_permission
+from app.services.permission_service import require_any_permission
 
 router = APIRouter(prefix="/attachments", tags=["crm-attachments"])
 
@@ -26,7 +26,9 @@ router = APIRouter(prefix="/attachments", tags=["crm-attachments"])
 def list_attachments_endpoint(
     entity_type: str = Query(..., min_length=1, max_length=20),
     entity_id: uuid.UUID = Query(...),
-    ctx: TenantContext = Depends(require_permission("crm.deal.view")),
+    ctx: TenantContext = Depends(
+        require_any_permission("crm.deal.view", "crm.lead.view", "crm.customer.view")
+    ),
     db: Session = Depends(get_db),
 ):
     items = list_attachments(db, ctx, entity_type=entity_type, entity_id=entity_id)
@@ -38,7 +40,9 @@ def upload_attachment_endpoint(
     entity_type: str = Query(..., min_length=1, max_length=20),
     entity_id: uuid.UUID = Query(...),
     file: UploadFile = File(...),
-    ctx: TenantContext = Depends(require_permission("crm.deal.edit")),
+    ctx: TenantContext = Depends(
+        require_any_permission("crm.deal.edit", "crm.lead.edit", "crm.customer.edit")
+    ),
     db: Session = Depends(get_db),
 ):
     att = upload_attachment(
@@ -50,7 +54,9 @@ def upload_attachment_endpoint(
 @router.get("/{attachment_id}/download")
 def download_attachment_endpoint(
     attachment_id: uuid.UUID,
-    ctx: TenantContext = Depends(require_permission("crm.deal.view")),
+    ctx: TenantContext = Depends(
+        require_any_permission("crm.deal.view", "crm.lead.view", "crm.customer.view")
+    ),
     db: Session = Depends(get_db),
 ):
     att = get_attachment(db, ctx, attachment_id)
@@ -65,7 +71,9 @@ def download_attachment_endpoint(
 @router.delete("/{attachment_id}", status_code=204)
 def delete_attachment_endpoint(
     attachment_id: uuid.UUID,
-    ctx: TenantContext = Depends(require_permission("crm.deal.edit")),
+    ctx: TenantContext = Depends(
+        require_any_permission("crm.deal.edit", "crm.lead.edit", "crm.customer.edit")
+    ),
     db: Session = Depends(get_db),
 ):
     delete_attachment(db, ctx, attachment_id)

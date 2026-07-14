@@ -15,9 +15,11 @@ from app.schemas.crm import (
     CustomerCreate,
     CustomerListResponse,
     CustomerOut,
+    CustomerReclaimRequest,
     CustomerUpdate,
 )
 from app.services.crm.crm_scope_service import apply_customer_list_scope, has_customer_list_permission
+from app.services.crm import customer_pool_service
 from app.services.crm.customer_service import (
     create_contact,
     create_customer,
@@ -26,6 +28,8 @@ from app.services.crm.customer_service import (
     soft_delete_customer,
     update_customer,
 )
+from app.services.crm.business_lookup_service import lookup_company
+from app.services.crm.decision_chain_service import get_decision_chain
 from app.services.crm.view_service import (
     apply_view_filters,
     apply_view_search,
@@ -38,6 +42,15 @@ from app.services.crm.filter_query import parse_list_filters_param
 from app.services.permission_service import require_any_permission, require_permission
 
 router = APIRouter(prefix="/customers", tags=["crm-customers"])
+
+
+@router.get("/business-lookup")
+def business_lookup(
+    company_name: str = Query(..., min_length=1, max_length=200),
+    ctx: TenantContext = Depends(require_permission("crm.customer.view")),
+):
+    _ = ctx
+    return lookup_company(company_name)
 
 
 @router.get("", response_model=CustomerListResponse)
@@ -113,8 +126,12 @@ def get_customer_detail(
     ctx: TenantContext = Depends(require_permission("crm.customer.view")),
     db: Session = Depends(get_db),
 ):
+    from app.services.crm.tag_service import resolve_customer_tags
+
     customer = require_customer(db, ctx, customer_id)
-    return CustomerOut.model_validate(customer)
+    out = CustomerOut.model_validate(customer)
+    out.tags = resolve_customer_tags(db, customer)
+    return out
 
 
 @router.patch("/{customer_id}", response_model=CustomerOut)
@@ -126,6 +143,18 @@ def patch_customer(
 ):
     customer = require_customer(db, ctx, customer_id)
     customer = update_customer(db, ctx, customer, body)
+    return CustomerOut.model_validate(customer)
+
+
+@router.post("/{customer_id}/reclaim-to-pool", response_model=CustomerOut)
+def reclaim_customer(
+    customer_id: UUID,
+    body: CustomerReclaimRequest,
+    ctx: TenantContext = Depends(require_permission("crm.customer.edit")),
+    db: Session = Depends(get_db),
+):
+    customer = require_customer(db, ctx, customer_id)
+    customer = customer_pool_service.reclaim_customer_to_pool(db, ctx, customer, body.pool_id)
     return CustomerOut.model_validate(customer)
 
 
@@ -159,3 +188,13 @@ def post_contact(
     customer = require_customer(db, ctx, customer_id)
     contact = create_contact(db, ctx, customer, body)
     return ContactOut.model_validate(contact)
+
+
+@router.get("/{customer_id}/decision-chain")
+def decision_chain(
+    customer_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.customer.view")),
+    db: Session = Depends(get_db),
+):
+    require_customer(db, ctx, customer_id)
+    return get_decision_chain(db, ctx.tenant_id, customer_id)

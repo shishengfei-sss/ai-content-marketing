@@ -11,6 +11,13 @@ from app.models import Content
 from app.schemas import AnalyticsStatsOut
 from app.services.scope_service import apply_stats_scope
 from app.services.crm.deal_report_service import deal_funnel_report, deal_forecast_report, deal_win_loss_report
+from app.services.crm.lead_report_service import (
+    lead_customer_funnel_report,
+    sales_board_report,
+    source_roi_report,
+)
+from app.services.crm.lifecycle_service import lifecycle_report
+from app.services.permission_service import require_any_permission
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -109,3 +116,66 @@ def deal_win_loss_endpoint(
     db: Session = Depends(get_db),
 ):
     return deal_win_loss_report(db, ctx, start_date=start_date, end_date=end_date)
+
+
+@router.get("/lead-funnel")
+def lead_funnel_endpoint(
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
+    ctx: TenantContext = Depends(
+        require_any_permission(
+            "crm.lead.list_own",
+            "crm.lead.list_all",
+            "crm.customer.list_own",
+            "analytics.view_all",
+        )
+    ),
+    db: Session = Depends(get_db),
+):
+    return lead_customer_funnel_report(db, ctx, start_date=start_date, end_date=end_date)
+
+
+@router.get("/sales-board")
+def sales_board_endpoint(
+    ctx: TenantContext = Depends(
+        require_any_permission(
+            "crm.lead.list_own",
+            "crm.deal.list_own",
+            "crm.lead.view",
+            "analytics.view_all",
+        )
+    ),
+    db: Session = Depends(get_db),
+):
+    return sales_board_report(db, ctx)
+
+
+@router.get("/source-roi")
+def source_roi_endpoint(
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
+    ctx: TenantContext = Depends(
+        require_any_permission(
+            "crm.lead.list_own",
+            "crm.lead.list_all",
+            "crm.customer.list_own",
+            "analytics.view_all",
+        )
+    ),
+    db: Session = Depends(get_db),
+):
+    return source_roi_report(db, ctx, start_date=start_date, end_date=end_date)
+
+
+@router.get("/lifecycle-report")
+def lifecycle_report_endpoint(
+    ctx: TenantContext = Depends(
+        require_any_permission(
+            "crm.customer.list_own",
+            "crm.customer.list_all",
+            "analytics.view_all",
+        )
+    ),
+    db: Session = Depends(get_db),
+):
+    return lifecycle_report(db, ctx)

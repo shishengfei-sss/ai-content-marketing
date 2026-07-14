@@ -407,6 +407,18 @@ export const NAV_ITEMS = [
     permissionAny: ['crm.deal.list_own', 'crm.deal.list_team', 'crm.deal.list_territory', 'crm.deal.list_all'],
   },
   {
+    path: '/crm/lead-insights',
+    title: '线索洞察',
+    icon: 'DataAnalysis',
+    permissionAny: [
+      'crm.lead.list_own',
+      'crm.lead.list_all',
+      'crm.customer.list_own',
+      'crm.customer.list_all',
+      'analytics.view_all',
+    ],
+  },
+  {
     path: '/crm/quotes',
     title: '报价',
     icon: 'Document',

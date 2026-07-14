@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -83,6 +83,16 @@ class LeadCreate(BaseModel):
     phone: str | None = None
     email: str | None = None
     source: str | None = None
+    source_detail: str | None = Field(default=None, max_length=200)
+    utm_source: str | None = Field(default=None, max_length=100)
+    utm_medium: str | None = Field(default=None, max_length=100)
+    utm_campaign: str | None = Field(default=None, max_length=100)
+    landing_url: str | None = Field(default=None, max_length=500)
+    acquisition_cost: float | None = Field(default=None, ge=0)
+    title: str | None = Field(default=None, max_length=100)
+    lead_score: int | None = Field(default=None, ge=0, le=100)
+    department: str | None = Field(default=None, max_length=100)
+    country: str | None = Field(default="中国", max_length=50)
     status: str = "待跟进"
     remark: str | None = None
     extra_data: dict = Field(default_factory=dict)
@@ -123,6 +133,16 @@ class LeadUpdate(BaseModel):
     phone: str | None = None
     email: str | None = None
     source: str | None = None
+    source_detail: str | None = Field(default=None, max_length=200)
+    utm_source: str | None = Field(default=None, max_length=100)
+    utm_medium: str | None = Field(default=None, max_length=100)
+    utm_campaign: str | None = Field(default=None, max_length=100)
+    landing_url: str | None = Field(default=None, max_length=500)
+    acquisition_cost: float | None = Field(default=None, ge=0)
+    title: str | None = Field(default=None, max_length=100)
+    lead_score: int | None = Field(default=None, ge=0, le=100)
+    department: str | None = Field(default=None, max_length=100)
+    country: str | None = Field(default=None, max_length=50)
     status: str | None = None
     owner_user_id: UUID | None = None
     remark: str | None = None
@@ -154,8 +174,20 @@ class LeadOut(BaseModel):
     phone: str | None
     email: str | None
     source: str | None
+    source_detail: str | None = None
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    landing_url: str | None = None
+    acquisition_cost: float | None = None
+    title: str | None = None
+    lead_score: int | None = None
+    department: str | None = None
+    country: str | None = None
     status: str
-    owner_user_id: UUID
+    owner_user_id: UUID | None = None
+    pool_id: UUID | None = None
+    claimed_at: datetime | None = None
     territory_id: UUID | None = None
     campaign_id: UUID | None = None
     next_follow_up_at: datetime | None = None
@@ -185,8 +217,25 @@ class CustomerCreate(BaseModel):
     phone: str | None = None
     email: str | None = None
     status: str = "潜在"
+    description: str | None = Field(default=None, max_length=2000)
+    type: str | None = Field(default="客户", max_length=20)
+    parent_customer_id: UUID | None = None
+    tags: list[str] | None = None
+    source: str | None = Field(default=None, max_length=50)
     remark: str | None = None
     extra_data: dict = Field(default_factory=dict)
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _coerce_tags(cls, value: object) -> list[str] | None:
+        if value is None or value == "":
+            return None
+        if isinstance(value, list):
+            return [str(v).strip() for v in value if str(v).strip()]
+        if isinstance(value, str):
+            parts = value.replace("，", ",").split(",")
+            return [p.strip() for p in parts if p.strip()]
+        return None
 
 
 class CustomerUpdate(BaseModel):
@@ -196,8 +245,25 @@ class CustomerUpdate(BaseModel):
     email: str | None = None
     status: str | None = None
     owner_user_id: UUID | None = None
+    description: str | None = Field(default=None, max_length=2000)
+    type: str | None = Field(default=None, max_length=20)
+    parent_customer_id: UUID | None = None
+    tags: list[str] | None = None
+    source: str | None = Field(default=None, max_length=50)
     remark: str | None = None
     extra_data: dict | None = None
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _coerce_tags(cls, value: object) -> list[str] | None:
+        if value is None or value == "":
+            return None
+        if isinstance(value, list):
+            return [str(v).strip() for v in value if str(v).strip()]
+        if isinstance(value, str):
+            parts = value.replace("，", ",").split(",")
+            return [p.strip() for p in parts if p.strip()]
+        return None
 
 
 class CustomerOut(BaseModel):
@@ -208,7 +274,17 @@ class CustomerOut(BaseModel):
     phone: str | None
     email: str | None
     status: str
-    owner_user_id: UUID
+    description: str | None = None
+    type: str | None = None
+    parent_customer_id: UUID | None = None
+    total_revenue: float | None = None
+    last_deal_date: date | None = None
+    tags: list | None = None
+    source: str | None = None
+    converted_lead_score: int | None = None
+    owner_user_id: UUID | None = None
+    pool_id: UUID | None = None
+    claimed_at: datetime | None = None
     converted_from_lead_id: UUID | None
     remark: str | None
     extra_data: dict
@@ -237,7 +313,8 @@ class ContactCreate(BaseModel):
     title: str | None = None
     department: str | None = None
     is_primary: bool = False
-    is_decision_maker: bool = False
+    contact_role: str | None = None
+    reports_to_contact_id: UUID | None = None
     remark: str | None = None
     extra_data: dict = Field(default_factory=dict)
 
@@ -253,7 +330,8 @@ class ContactOut(BaseModel):
     title: str | None
     department: str | None
     is_primary: bool
-    is_decision_maker: bool
+    contact_role: str | None = None
+    reports_to_contact_id: UUID | None = None
     remark: str | None
     extra_data: dict
     created_at: datetime
@@ -437,10 +515,24 @@ class TaskListResponse(BaseModel):
     page_size: int
 
 
+class LeadConvertRequest(BaseModel):
+    create_deal: bool = False
+    deal_title: str | None = Field(default=None, max_length=200)
+    deal_amount: float | None = None
+    deal_pipeline_id: UUID | None = None
+    deal_stage_id: UUID | None = None
+    merge_into_customer_id: UUID | None = None
+    # 默认 True 保持旧行为不破坏已有转化；去重检测时显式传 False
+    force_create: bool = True
+
+
 class LeadConvertOut(BaseModel):
     lead_id: UUID
     customer_id: UUID
     contact_id: UUID | None
+    deal_id: UUID | None = None
+    merged: bool = False
+    duplicate_candidates: list[UUID] | None = None
 
 
 def validate_task_status(status: str) -> None:
@@ -506,6 +598,266 @@ class CampaignListResponse(BaseModel):
 
 class CampaignContentLink(BaseModel):
     content_id: UUID
+
+
+class LeadPoolCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    territory_id: UUID | None = None
+    industry_filter: str | None = None
+    auto_reclaim_days: int | None = Field(default=None, ge=1)
+
+
+class LeadPoolUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    territory_id: UUID | None = None
+    industry_filter: str | None = None
+    auto_reclaim_days: int | None = Field(default=None, ge=1)
+
+
+class LeadPoolOut(BaseModel):
+    id: UUID
+    name: str
+    territory_id: UUID | None = None
+    industry_filter: str | None = None
+    auto_reclaim_days: int | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class LeadPoolClaimRequest(BaseModel):
+    lead_id: UUID
+
+
+class LeadReclaimRequest(BaseModel):
+    pool_id: UUID
+
+
+class CustomerPoolCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    territory_id: UUID | None = None
+    industry_filter: str | None = None
+    auto_reclaim_days: int | None = Field(default=None, ge=1)
+
+
+class CustomerPoolOut(BaseModel):
+    id: UUID
+    name: str
+    territory_id: UUID | None = None
+    industry_filter: str | None = None
+    auto_reclaim_days: int | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CustomerPoolClaimRequest(BaseModel):
+    customer_id: UUID
+
+
+class CustomerReclaimRequest(BaseModel):
+    pool_id: UUID
+
+
+class LeadScoringRuleCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    condition_json: dict
+    score_value: int = Field(ge=-100, le=100)
+    priority: int = 0
+    is_active: bool = True
+
+
+class LeadScoringRuleUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    condition_json: dict | None = None
+    score_value: int | None = Field(default=None, ge=-100, le=100)
+    priority: int | None = None
+    is_active: bool | None = None
+
+
+class LeadScoringRuleOut(BaseModel):
+    id: UUID
+    name: str
+    condition_json: dict
+    score_value: int
+    priority: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AssignmentRuleCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    condition_json: dict = Field(default_factory=dict)
+    assign_type: str = "fixed_user"
+    target_id: UUID | None = None
+    priority: int = 0
+    is_active: bool = True
+
+
+class AssignmentRuleUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    condition_json: dict | None = None
+    assign_type: str | None = None
+    target_id: UUID | None = None
+    priority: int | None = None
+    is_active: bool | None = None
+
+
+class AssignmentRuleOut(BaseModel):
+    id: UUID
+    name: str
+    condition_json: dict
+    assign_type: str
+    target_id: UUID | None = None
+    priority: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class NurtureRuleCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    condition_json: dict = Field(default_factory=dict)
+    action_type: str = "create_task"
+    action_config: dict = Field(default_factory=dict)
+    priority: int = 0
+    is_active: bool = True
+
+
+class NurtureRuleOut(BaseModel):
+    id: UUID
+    name: str
+    condition_json: dict
+    action_type: str
+    action_config: dict
+    priority: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AddressCreate(BaseModel):
+    entity_type: str
+    entity_id: UUID
+    address: str = Field(min_length=1, max_length=300)
+    address_type: str = "office"
+    is_default: bool = False
+    province: str | None = None
+    city: str | None = None
+    district: str | None = None
+    zip_code: str | None = None
+    contact_name: str | None = None
+    contact_phone: str | None = None
+
+
+class AddressUpdate(BaseModel):
+    address: str | None = Field(default=None, min_length=1, max_length=300)
+    address_type: str | None = None
+    is_default: bool | None = None
+    province: str | None = None
+    city: str | None = None
+    district: str | None = None
+    zip_code: str | None = None
+    contact_name: str | None = None
+    contact_phone: str | None = None
+
+
+class AddressOut(BaseModel):
+    id: UUID
+    entity_type: str
+    entity_id: UUID
+    address_type: str
+    is_default: bool
+    province: str | None = None
+    city: str | None = None
+    district: str | None = None
+    address: str
+    zip_code: str | None = None
+    contact_name: str | None = None
+    contact_phone: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TagCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+    color: str | None = None
+    category: str | None = None
+
+
+class TagOut(BaseModel):
+    id: UUID
+    name: str
+    color: str | None = None
+    category: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class EntityTagBind(BaseModel):
+    entity_type: str
+    entity_id: UUID
+    tag_id: UUID | None = None
+    tag_name: str | None = None
+
+
+class EntityTagOut(BaseModel):
+    id: UUID
+    entity_type: str
+    entity_id: UUID
+    tag_id: UUID
+    tag_name: str | None = None
+    created_at: datetime
+
+
+class EntityTeamMemberAdd(BaseModel):
+    entity_type: str
+    entity_id: UUID
+    user_id: UUID
+    role: str = "member"
+
+
+class EntityTeamMemberOut(BaseModel):
+    id: UUID
+    entity_type: str
+    entity_id: UUID
+    user_id: UUID
+    role: str
+    joined_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class BantEvaluationCreate(BaseModel):
+    budget_score: int = Field(ge=1, le=5)
+    authority_score: int = Field(ge=1, le=5)
+    need_score: int = Field(ge=1, le=5)
+    time_score: int = Field(ge=1, le=5)
+    note: str | None = None
+
+
+class BantEvaluationOut(BaseModel):
+    id: UUID
+    lead_id: UUID
+    budget_score: int
+    authority_score: int
+    need_score: int
+    time_score: int
+    total_score: float
+    note: str | None = None
+    created_by_user_id: UUID
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 def validate_campaign_status(status: str) -> None:

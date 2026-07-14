@@ -20,7 +20,15 @@ from app.dependencies import TenantContext
 
 from app.models.crm import Lead
 
-from app.schemas.crm import LeadCreate, LeadListResponse, LeadOut, LeadUpdate, LeadConvertOut
+from app.schemas.crm import (
+    LeadCreate,
+    LeadListResponse,
+    LeadOut,
+    LeadUpdate,
+    LeadConvertOut,
+    LeadConvertRequest,
+    LeadReclaimRequest,
+)
 
 from app.services.crm.crm_scope_service import apply_lead_list_scope, has_lead_list_permission
 
@@ -37,6 +45,8 @@ from app.services.crm.lead_service import (
     update_lead,
 
 )
+from app.services.crm import lead_pool_service, lead_scoring_service
+
 
 from app.services.crm.view_service import (
 
@@ -271,33 +281,95 @@ def patch_lead(
 
 
 @router.post("/{lead_id}/convert", response_model=LeadConvertOut, status_code=201)
-
 def convert_lead(
-
     lead_id: UUID,
-
+    body: LeadConvertRequest | None = None,
     ctx: TenantContext = Depends(require_permission("crm.lead.convert")),
-
     db: Session = Depends(get_db),
-
 ):
-
     lead = require_lead(db, ctx, lead_id)
-
-    customer, contact = convert_lead_to_customer(db, ctx, lead)
-
+    req = body or LeadConvertRequest()
+    customer, contact, deal, merged = convert_lead_to_customer(
+        db,
+        ctx,
+        lead,
+        create_deal=req.create_deal,
+        deal_title=req.deal_title,
+        deal_amount=req.deal_amount,
+        deal_pipeline_id=req.deal_pipeline_id,
+        deal_stage_id=req.deal_stage_id,
+        merge_into_customer_id=req.merge_into_customer_id,
+        force_create=req.force_create,
+    )
     return LeadConvertOut(
-
         lead_id=lead.id,
-
         customer_id=customer.id,
-
         contact_id=contact.id if contact else None,
-
+        deal_id=deal.id if deal else None,
+        merged=merged,
     )
 
 
+@router.post("/{lead_id}/reclaim-to-pool", response_model=LeadOut)
+def reclaim_lead(
+    lead_id: UUID,
+    body: LeadReclaimRequest,
+    ctx: TenantContext = Depends(require_permission("crm.lead.edit")),
+    db: Session = Depends(get_db),
+):
+    lead = require_lead(db, ctx, lead_id)
+    lead = lead_pool_service.reclaim_lead_to_pool(db, ctx, lead, body.pool_id)
+    return LeadOut.model_validate(lead)
 
+
+@router.post("/{lead_id}/recalculate-score", response_model=LeadOut)
+def recalculate_score(
+    lead_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.lead.edit")),
+    db: Session = Depends(get_db),
+):
+    lead = require_lead(db, ctx, lead_id)
+    lead = lead_scoring_service.recalculate_lead_score(db, ctx, lead)
+    return LeadOut.model_validate(lead)
+
+
+@router.get("/{lead_id}/bant", response_model=list)
+def list_bant(
+    lead_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.lead.view")),
+    db: Session = Depends(get_db),
+):
+    from app.schemas.crm import BantEvaluationOut
+    from app.services.crm import bant_service
+
+    lead = require_lead(db, ctx, lead_id)
+    rows = bant_service.list_evaluations(db, ctx.tenant_id, lead.id)
+    return [BantEvaluationOut.model_validate(r) for r in rows]
+
+
+@router.post("/{lead_id}/bant", response_model=dict, status_code=201)
+def create_bant(
+    lead_id: UUID,
+    body: dict,
+    ctx: TenantContext = Depends(require_permission("crm.lead.edit")),
+    db: Session = Depends(get_db),
+):
+    from app.schemas.crm import BantEvaluationCreate, BantEvaluationOut
+    from app.services.crm import bant_service
+
+    lead = require_lead(db, ctx, lead_id)
+    payload = BantEvaluationCreate.model_validate(body)
+    row = bant_service.create_evaluation(
+        db,
+        ctx,
+        lead,
+        budget_score=payload.budget_score,
+        authority_score=payload.authority_score,
+        need_score=payload.need_score,
+        time_score=payload.time_score,
+        note=payload.note,
+    )
+    return BantEvaluationOut.model_validate(row).model_dump()
 
 
 @router.delete("/{lead_id}", status_code=204)

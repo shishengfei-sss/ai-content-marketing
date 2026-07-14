@@ -192,6 +192,21 @@ const routes = [
         },
       },
       {
+        path: 'crm/lead-insights',
+        name: 'CrmLeadInsights',
+        component: () => import('./views/crm/LeadInsights.vue'),
+        meta: {
+          title: '线索洞察',
+          permissionAny: [
+            'crm.lead.list_own',
+            'crm.lead.list_all',
+            'crm.customer.list_own',
+            'crm.customer.list_all',
+            'analytics.view_all',
+          ],
+        },
+      },
+      {
         path: 'crm/quotes',
         name: 'CrmQuotes',
         component: () => import('./views/crm/Quotes.vue'),

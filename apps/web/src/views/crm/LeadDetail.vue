@@ -7,7 +7,7 @@ import { useAuthStore } from '../../stores/auth'
 import { hasPermission } from '../../config/permissions'
 import { useEntitySchema } from '../../composables/useEntitySchema'
 import { useTeamMembers } from '../../composables/useTeamMembers'
-import { formatFieldDisplay, getFormFields, LEAD_STATUS_OPTIONS } from '../../utils/entityForm'
+import { getFormFields, LEAD_STATUS_OPTIONS } from '../../utils/entityForm'
 import CrmAssignOwner from '../../components/crm/CrmAssignOwner.vue'
 import CrmDetailHero from '../../components/crm/CrmDetailHero.vue'
 import CrmDetailShell from '../../components/crm/CrmDetailShell.vue'
@@ -28,6 +28,8 @@ const lead = ref(null)
 const campaignName = ref('')
 const activities = ref([])
 const tasks = ref([])
+const attachments = ref([])
+const uploading = ref(false)
 const activityForm = ref({ activity_type: 'call', content: '', next_follow_up_at: '', status: '' })
 const taskPanelRef = ref(null)
 const assignVisible = ref(false)
@@ -49,6 +51,7 @@ const heroMeta = computed(() => {
     { label: '联系人', value: lead.value.contact_name || '—' },
     { label: '手机', value: lead.value.mobile || '—' },
     { label: '来源', value: lead.value.source || '—' },
+    { label: '评分', value: lead.value.lead_score ?? '—' },
     { label: '线索状态', value: lead.value.status || '—' },
   ]
 })
@@ -58,10 +61,7 @@ const ownerName = computed(() => resolveMemberName(lead.value?.owner_user_id))
 const heroStats = computed(() => [
   { label: '跟进记录', value: activities.value.length },
   { label: '待办任务', value: tasks.value.filter((t) => isActiveTaskStatus(t.status)).length },
-  {
-    label: '意向等级',
-    value: formatFieldDisplay({ field_key: 'intention_level', field_type: 'select' }, lead.value),
-  },
+  { label: '职位', value: lead.value?.title || '—' },
   { label: '市场活动', value: campaignName.value || '—' },
 ])
 
@@ -101,12 +101,80 @@ async function loadDetail() {
     lead.value = leadData
     activities.value = Array.isArray(timeline) ? timeline : []
     await loadCampaignName()
+    await loadAttachments()
     await taskPanelRef.value?.reload()
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
     router.replace('/crm/leads')
   } finally {
     loading.value = false
+  }
+}
+
+function formatFileSize(n) {
+  if (!n && n !== 0) return '—'
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
+async function loadAttachments() {
+  try {
+    const { data } = await crmApi.listAttachments({ entity_type: 'lead', entity_id: route.params.id })
+    attachments.value = Array.isArray(data) ? data : []
+  } catch {
+    attachments.value = []
+  }
+}
+
+async function onUploadFile(ev) {
+  const file = ev.target.files?.[0]
+  if (!file) return
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.warning('文件超过 50MB')
+    return
+  }
+  uploading.value = true
+  try {
+    await crmApi.uploadAttachment('lead', route.params.id, file)
+    ElMessage.success('已上传')
+    await loadAttachments()
+  } catch (e) {
+    ElMessage.error(e.message || '上传失败')
+  } finally {
+    uploading.value = false
+    ev.target.value = ''
+  }
+}
+
+async function downloadAttachment(att) {
+  try {
+    const { data } = await crmApi.downloadAttachment(att.id)
+    const url = window.URL.createObjectURL(data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = att.file_name
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    ElMessage.error(e.message || '下载失败')
+  }
+}
+
+async function removeAttachment(att) {
+  try {
+    await ElMessageBox.confirm(`确定删除附件「${att.file_name}」？`, '删除', { type: 'warning' })
+  } catch {
+    return
+  }
+  try {
+    await crmApi.deleteAttachment(att.id)
+    await loadAttachments()
+    ElMessage.success('已删除')
+  } catch (e) {
+    ElMessage.error(e.message || '删除失败')
   }
 }
 
@@ -166,16 +234,76 @@ async function deleteActivity(item) {
 async function handleConvert() {
   try {
     await ElMessageBox.confirm(
-      '线索需转化为客户后，才会出现在客户列表。确定现在转化？',
+      '线索转化为客户后会出现在客户列表。可同时创建商机。',
       '转化客户',
-      { confirmButtonText: '转化', cancelButtonText: '取消' },
+      { confirmButtonText: '继续', cancelButtonText: '取消' },
     )
-    const { data } = await crmApi.convertLead(route.params.id)
-    ElMessage.success('已转化为客户')
+    let createDeal = false
+    try {
+      await ElMessageBox.confirm('是否同步创建商机？', '创建商机', {
+        confirmButtonText: '创建商机',
+        cancelButtonText: '仅转客户',
+        distinguishCancelAndClose: true,
+      })
+      createDeal = true
+    } catch (e) {
+      if (e === 'close') return
+      createDeal = false
+    }
+
+    const tryConvert = async (body) => {
+      try {
+        return await crmApi.convertLead(route.params.id, body)
+      } catch (err) {
+        const detail = err?.response?.data?.detail
+        if (err?.response?.status === 409 && detail?.duplicate_candidates?.length) {
+          return { duplicate: detail }
+        }
+        throw err
+      }
+    }
+
+    let result = await tryConvert({ force_create: false, create_deal: createDeal })
+    if (result.duplicate) {
+      const candidates = result.duplicate.duplicate_candidates
+      try {
+        await ElMessageBox.confirm(
+          `发现疑似重复客户（${candidates.length} 个）。合并到已有客户，或强制新建？`,
+          '去重提示',
+          { confirmButtonText: '合并到已有', cancelButtonText: '强制新建', distinguishCancelAndClose: true },
+        )
+        result = await crmApi.convertLead(route.params.id, {
+          force_create: false,
+          merge_into_customer_id: candidates[0],
+          create_deal: createDeal,
+        })
+      } catch (e) {
+        if (e === 'close') return
+        if (e === 'cancel') {
+          result = await crmApi.convertLead(route.params.id, {
+            force_create: true,
+            create_deal: createDeal,
+          })
+        } else {
+          throw e
+        }
+      }
+    }
+
+    const data = result.data || result
+    ElMessage.success(
+      data.deal_id
+        ? data.merged
+          ? '已合并到客户并创建商机'
+          : '已转化为客户并创建商机'
+        : data.merged
+          ? '已合并到已有客户'
+          : '已转化为客户',
+    )
     await loadDetail()
     router.push(`/crm/customers/${data.customer_id}`)
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '转化失败')
+    if (e !== 'cancel' && e !== 'close') ElMessage.error(e.message || '转化失败')
   }
 }
 
@@ -302,6 +430,37 @@ onMounted(async () => {
           <el-empty v-else description="暂无跟进记录，写一条跟进开始吧" />
         </el-tab-pane>
 
+        <el-tab-pane label="文档" name="attachments">
+          <div class="crm-panel">
+            <div class="crm-panel__head">
+              <div class="crm-panel__title">文档附件</div>
+              <label v-if="canEdit()" class="crm-upload-btn">
+                <input type="file" :disabled="uploading" @change="onUploadFile" />
+                <el-button type="primary" size="small" :loading="uploading">上传附件</el-button>
+              </label>
+            </div>
+          </div>
+          <el-table v-if="attachments.length" :data="attachments" stripe class="crm-table">
+            <el-table-column prop="file_name" label="文件名" min-width="220" show-overflow-tooltip />
+            <el-table-column label="大小" width="110">
+              <template #default="{ row }">{{ formatFileSize(row.file_size) }}</template>
+            </el-table-column>
+            <el-table-column label="上传人" width="120">
+              <template #default="{ row }">{{ resolveMemberName(row.uploaded_by_user_id) }}</template>
+            </el-table-column>
+            <el-table-column label="上传时间" width="160">
+              <template #default="{ row }">{{ new Date(row.created_at).toLocaleString('zh-CN') }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="140" align="center">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="downloadAttachment(row)">下载</el-button>
+                <el-button v-if="canEdit()" link type="danger" size="small" @click="removeAttachment(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-else description="暂无附件" />
+        </el-tab-pane>
+
         <el-tab-pane label="任务" name="tasks">
           <CrmEntityTasks
             ref="taskPanelRef"
@@ -348,6 +507,27 @@ onMounted(async () => {
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 12px;
   background: var(--el-fill-color-lighter);
+}
+
+.crm-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.crm-upload-btn {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.crm-upload-btn input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .crm-panel__title {

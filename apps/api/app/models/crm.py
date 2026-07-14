@@ -6,6 +6,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -24,6 +25,21 @@ from app.database import Base
 
 LEAD_STATUSES = ("待跟进", "跟进中", "有意向", "无意向", "已转化", "无效")
 CUSTOMER_STATUSES = ("潜在", "意向", "成交", "在服", "暂停", "流失")
+CUSTOMER_TYPES = ("客户", "合作伙伴", "竞争对手", "渠道伙伴")
+CONTACT_ROLES = ("决策者", "影响者", "使用者", "评估者")
+CRM_SOURCE_OPTIONS = (
+    "官网",
+    "公众号",
+    "小红书",
+    "抖音",
+    "线下",
+    "转介绍",
+    "电话",
+    "导入",
+    "Webhook",
+    "营销活动",
+    "其他",
+)
 ACTIVITY_TYPES = ("call", "visit", "wechat", "email", "other")
 TASK_STATUSES = ("open", "in_progress", "on_hold", "done", "cancelled")
 TASK_PRIORITIES = ("low", "normal", "high")
@@ -42,10 +58,24 @@ class Lead(Base):
     phone: Mapped[str] = mapped_column(String(30), nullable=True)
     email: Mapped[str] = mapped_column(String(255), nullable=True)
     source: Mapped[str] = mapped_column(String(50), nullable=True)
+    title: Mapped[str] = mapped_column(String(100), nullable=True)
+    lead_score: Mapped[int] = mapped_column(Integer, nullable=True)
+    department: Mapped[str] = mapped_column(String(100), nullable=True)
+    country: Mapped[str] = mapped_column(String(50), nullable=True, default="中国")
+    source_detail: Mapped[str] = mapped_column(String(200), nullable=True)
+    utm_source: Mapped[str] = mapped_column(String(100), nullable=True)
+    utm_medium: Mapped[str] = mapped_column(String(100), nullable=True)
+    utm_campaign: Mapped[str] = mapped_column(String(100), nullable=True)
+    landing_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    acquisition_cost: Mapped[object] = mapped_column(Numeric(14, 2), nullable=True)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="待跟进")
-    owner_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=True, index=True)
     territory_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=True)
     campaign_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=True)
+    pool_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("lead_pools.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     next_follow_up_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     remark: Mapped[str] = mapped_column(Text, nullable=True)
     converted_customer_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=True)
@@ -56,6 +86,18 @@ class Lead(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LeadPool(Base):
+    __tablename__ = "lead_pools"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    territory_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=True)
+    industry_filter: Mapped[str] = mapped_column(String(100), nullable=True)
+    auto_reclaim_days: Mapped[int] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Customer(Base):
@@ -69,9 +111,23 @@ class Customer(Base):
     phone: Mapped[str] = mapped_column(String(30), nullable=True)
     email: Mapped[str] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="潜在")
-    owner_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    type: Mapped[str] = mapped_column(String(20), nullable=True, default="客户")
+    parent_customer_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    total_revenue: Mapped[object] = mapped_column(Numeric(14, 2), nullable=True, default=0)
+    last_deal_date: Mapped[object] = mapped_column(Date, nullable=True)
+    tags: Mapped[object] = mapped_column(JSON, nullable=True)
+    source: Mapped[str] = mapped_column(String(50), nullable=True)
+    converted_lead_score: Mapped[int] = mapped_column(Integer, nullable=True)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=True, index=True)
     territory_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=True)
     campaign_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=True)
+    pool_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("customer_pools.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     converted_from_lead_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("leads.id"), nullable=True)
     next_follow_up_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     remark: Mapped[str] = mapped_column(Text, nullable=True)
@@ -84,6 +140,161 @@ class Customer(Base):
     deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
     contacts: Mapped[list["Contact"]] = relationship(back_populates="customer")
+
+
+class CustomerPool(Base):
+    __tablename__ = "customer_pools"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    territory_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=True)
+    industry_filter: Mapped[str] = mapped_column(String(100), nullable=True)
+    auto_reclaim_days: Mapped[int] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LeadScoringRule(Base):
+    __tablename__ = "lead_scoring_rules"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    condition_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    score_value: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class AssignmentRule(Base):
+    __tablename__ = "assignment_rules"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    condition_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    assign_type: Mapped[str] = mapped_column(String(30), nullable=False, default="fixed_user")
+    target_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=True)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Address(Base):
+    __tablename__ = "addresses"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    address_type: Mapped[str] = mapped_column(String(30), nullable=False, default="office")
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    province: Mapped[str] = mapped_column(String(50), nullable=True)
+    city: Mapped[str] = mapped_column(String(50), nullable=True)
+    district: Mapped[str] = mapped_column(String(50), nullable=True)
+    address: Mapped[str] = mapped_column(String(300), nullable=False)
+    zip_code: Mapped[str] = mapped_column(String(20), nullable=True)
+    contact_name: Mapped[str] = mapped_column(String(100), nullable=True)
+    contact_phone: Mapped[str] = mapped_column(String(30), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Tag(Base):
+    __tablename__ = "tags"
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_tags_tenant_name"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    color: Mapped[str] = mapped_column(String(20), nullable=True)
+    category: Mapped[str] = mapped_column(String(50), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EntityTag(Base):
+    __tablename__ = "entity_tags"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "entity_type", "entity_id", "tag_id", name="uq_entity_tags"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    tag_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tags.id", ondelete="CASCADE"), nullable=False)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EntityTeamMember(Base):
+    __tablename__ = "entity_team_members"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "entity_type", "entity_id", "user_id", name="uq_entity_team_member"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    role: Mapped[str] = mapped_column(String(30), nullable=False, default="member")
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class BantEvaluation(Base):
+    __tablename__ = "bant_evaluations"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    lead_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("leads.id", ondelete="CASCADE"), nullable=False, index=True)
+    budget_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    authority_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    need_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    time_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_score: Mapped[object] = mapped_column(Numeric(3, 1), nullable=False)
+    note: Mapped[str] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(40), nullable=False, default="system")
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=True)
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=True)
+    entity_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class NurtureRule(Base):
+    __tablename__ = "nurture_rules"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    condition_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    action_type: Mapped[str] = mapped_column(String(40), nullable=False, default="create_task")
+    action_config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Contact(Base):
@@ -100,7 +311,10 @@ class Contact(Base):
     title: Mapped[str] = mapped_column(String(100), nullable=True)
     department: Mapped[str] = mapped_column(String(100), nullable=True)
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    is_decision_maker: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    contact_role: Mapped[str] = mapped_column(String(50), nullable=True)
+    reports_to_contact_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("contacts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     remark: Mapped[str] = mapped_column(Text, nullable=True)
     extra_data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -383,7 +597,7 @@ Index("ix_crm_tasks_tenant_assignee", CrmTask.tenant_id, CrmTask.assignee_user_i
 # ============================================================
 
 DEAL_STATUSES = ("open", "won", "lost", "abandoned")
-DEAL_SOURCES = ("官网", "公众号", "小红书", "抖音", "线下", "转介绍", "电话", "导入", "营销活动", "其他")
+DEAL_SOURCES = CRM_SOURCE_OPTIONS  # 与线索/客户统一
 QUOTE_STATUSES = ("draft", "sent", "accepted", "rejected", "expired", "ordered")
 CONTRACT_STATUSES = ("draft", "sent", "signed", "executing", "expired", "terminated")
 CONTRACT_TYPES = ("new", "renewal", "addon")

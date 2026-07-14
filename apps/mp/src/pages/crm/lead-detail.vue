@@ -145,9 +145,31 @@ function onTasksChanged(list) {
 async function handleConvert() {
   if (!canConvert()) return
   try {
-    await crmApi.convertLead(leadId.value)
-    uni.showToast({ title: '已转化', icon: 'success' })
-    loadDetail()
+    const { confirm } = await new Promise((resolve) => {
+      uni.showModal({
+        title: '转化客户',
+        content: '是否同时创建商机？',
+        confirmText: '创建商机',
+        cancelText: '仅转客户',
+        success: resolve,
+        fail: () => resolve({ confirm: false, cancel: true }),
+      })
+    })
+    const data = await crmApi.convertLead(leadId.value, {
+      force_create: true,
+      create_deal: !!confirm,
+    })
+    uni.showToast({
+      title: data?.deal_id ? '已转化并创建商机' : '已转化为客户',
+      icon: 'success',
+    })
+    if (data?.customer_id) {
+      setTimeout(() => {
+        uni.navigateTo({ url: `/pages/crm/customer-detail?id=${data.customer_id}` })
+      }, 400)
+    } else {
+      loadDetail()
+    }
   } catch (e) {
     uni.showToast({ title: e.message || '转化失败', icon: 'none' })
   }
@@ -168,6 +190,15 @@ onLoad((query) => {
         <text class="status">{{ lead.status }}</text>
       </view>
       <text class="meta">{{ lead.contact_name || '—' }} · {{ lead.mobile || '—' }}</text>
+      <text class="meta">来源：{{ lead.source || '—' }} · 评分：{{ lead.lead_score ?? '—' }}</text>
+      <text v-if="lead.utm_source || lead.landing_url" class="meta">
+        UTM：{{ lead.utm_source || '—' }}
+        <text v-if="lead.utm_campaign"> / {{ lead.utm_campaign }}</text>
+      </text>
+      <text v-if="lead.landing_url" class="meta utm-url">落地页：{{ lead.landing_url }}</text>
+      <text v-if="lead.title || lead.department" class="meta">
+        {{ [lead.title, lead.department].filter(Boolean).join(' · ') }}
+      </text>
       <text class="meta">负责人：{{ ownerLabel }}</text>
       <view v-if="extraFields.length" class="extra">
         <text v-for="item in extraFields" :key="item.label" class="extra__line">
