@@ -6,6 +6,7 @@ import { NAV_ITEMS, hasAnyPermission, hasPermission } from '../config/permission
 import { useAuthStore } from '../stores/auth'
 import { usePinnedViews } from '../composables/usePinnedViews'
 import { unpinSavedView } from '../composables/useCrmSavedViews'
+import CrmNotificationBell from '../components/crm/CrmNotificationBell.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -131,6 +132,7 @@ const avatarChar = computed(() => displayName.value.charAt(0))
         />
       </div>
       <div class="app-header__right">
+        <CrmNotificationBell v-if="auth.isLoggedIn" />
         <el-dropdown trigger="click">
           <div class="app-header__user">
             <el-avatar :size="32" style="background: #4096ff">{{ avatarChar }}</el-avatar>

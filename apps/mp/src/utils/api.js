@@ -32,8 +32,9 @@ export async function request(options) {
           resolve(res.data)
         } else {
           const detail = res.data?.detail || '请求失败'
-          const error = new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
+          const error = new Error(typeof detail === 'string' ? detail : (detail.message || JSON.stringify(detail)))
           error.status = res.statusCode
+          error.detail = detail
           reject(error)
         }
       },

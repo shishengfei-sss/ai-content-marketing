@@ -155,12 +155,43 @@ async function handleConvert() {
         fail: () => resolve({ confirm: false, cancel: true }),
       })
     })
-    const data = await crmApi.convertLead(leadId.value, {
-      force_create: true,
-      create_deal: !!confirm,
-    })
+    const createDeal = !!confirm
+
+    const doConvert = (body) => crmApi.convertLead(leadId.value, body)
+
+    let data
+    try {
+      data = await doConvert({ force_create: false, create_deal: createDeal })
+    } catch (err) {
+      const candidates = err?.detail?.duplicate_candidates
+      if (err.status === 409 && Array.isArray(candidates) && candidates.length) {
+        const choice = await new Promise((resolve) => {
+          uni.showModal({
+            title: '发现重复客户',
+            content: `疑似重复 ${candidates.length} 个。合并到已有客户，或强制新建？`,
+            confirmText: '合并',
+            cancelText: '强制新建',
+            success: (r) => resolve(r.confirm ? 'merge' : r.cancel ? 'force' : 'close'),
+            fail: () => resolve('close'),
+          })
+        })
+        if (choice === 'close') return
+        if (choice === 'merge') {
+          data = await doConvert({
+            force_create: false,
+            merge_into_customer_id: candidates[0],
+            create_deal: createDeal,
+          })
+        } else {
+          data = await doConvert({ force_create: true, create_deal: createDeal })
+        }
+      } else {
+        throw err
+      }
+    }
+
     uni.showToast({
-      title: data?.deal_id ? '已转化并创建商机' : '已转化为客户',
+      title: data?.deal_id ? '已转化并创建商机' : data?.merged ? '已合并到客户' : '已转化为客户',
       icon: 'success',
     })
     if (data?.customer_id) {

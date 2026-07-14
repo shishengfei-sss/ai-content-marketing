@@ -311,6 +311,22 @@ function onImportCommand(command) {
   if (command === 'history') importHistoryVisible.value = true
 }
 
+async function onExportCommand(format) {
+  try {
+    const { data } = await crmApi.exportLeads(format)
+    const blob = data instanceof Blob ? data : new Blob([data])
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `leads.${format === 'xlsx' ? 'xlsx' : 'csv'}`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('导出已开始')
+  } catch (e) {
+    ElMessage.error(e.message || '导出失败')
+  }
+}
+
 function openCreate() {
   createVisible.value = true
 }
@@ -381,6 +397,18 @@ onBeforeUnmount(() => {
             <el-dropdown-menu>
               <el-dropdown-item command="import">导入线索</el-dropdown-item>
               <el-dropdown-item command="history">导入历史</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-dropdown trigger="click" @command="onExportCommand">
+          <el-button>
+            导出
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="csv">导出 CSV</el-dropdown-item>
+              <el-dropdown-item command="xlsx">导出 Excel</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>

@@ -523,7 +523,7 @@ class LeadConvertRequest(BaseModel):
     deal_stage_id: UUID | None = None
     merge_into_customer_id: UUID | None = None
     # 默认 True 保持旧行为不破坏已有转化；去重检测时显式传 False
-    force_create: bool = True
+    force_create: bool = False
 
 
 class LeadConvertOut(BaseModel):

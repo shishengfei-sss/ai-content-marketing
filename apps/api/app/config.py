@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     STORAGE_DIR: str = "./storage"
     ATTACHMENT_DIR: str = "./storage/attachments"
     PUBLISH_POLL_SEC: int = 30
+    CRM_RECLAIM_POLL_SEC: int = 300
 
     CORS_ORIGINS: str = (
         "http://127.0.0.1:5173,http://localhost:5173,"

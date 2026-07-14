@@ -9,6 +9,7 @@ const funnel = ref(null)
 const roiItems = ref([])
 const lifecycle = ref(null)
 const nurtureRules = ref([])
+const salesBoard = ref(null)
 const running = ref(false)
 const ruleForm = ref({
   name: '',
@@ -44,9 +45,19 @@ async function loadNurture() {
   nurtureRules.value = Array.isArray(data) ? data : []
 }
 
+async function loadSalesBoard() {
+  try {
+    const { data } = await crmApi.salesBoard()
+    salesBoard.value = data
+  } catch {
+    salesBoard.value = null
+  }
+}
+
 async function loadActive() {
   loading.value = true
   try {
+    await loadSalesBoard()
     if (activeTab.value === 'funnel') await loadFunnel()
     else if (activeTab.value === 'roi') await loadRoi()
     else if (activeTab.value === 'lifecycle') await loadLifecycle()
@@ -119,6 +130,29 @@ onMounted(loadActive)
       <div>
         <h2 class="lead-insights__title">线索洞察</h2>
         <p class="lead-insights__desc">全链路漏斗、来源 ROI、客户生命周期与培育规则</p>
+      </div>
+    </div>
+
+    <div v-if="salesBoard" class="metrics board-metrics">
+      <div class="metric">
+        <div class="metric__label">我的跟进线索</div>
+        <div class="metric__value">{{ salesBoard.open_leads ?? 0 }}</div>
+      </div>
+      <div class="metric">
+        <div class="metric__label">在途商机</div>
+        <div class="metric__value">{{ salesBoard.open_deals ?? 0 }}</div>
+      </div>
+      <div class="metric">
+        <div class="metric__label">赢单金额</div>
+        <div class="metric__value">¥{{ Number(salesBoard.won_amount || 0).toLocaleString() }}</div>
+      </div>
+      <div class="metric">
+        <div class="metric__label">待办任务</div>
+        <div class="metric__value">{{ salesBoard.open_tasks ?? 0 }}</div>
+      </div>
+      <div class="metric">
+        <div class="metric__label">近7日新线索</div>
+        <div class="metric__value">{{ salesBoard.new_leads_7d ?? 0 }}</div>
       </div>
     </div>
 
@@ -249,6 +283,9 @@ onMounted(loadActive)
   flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 16px;
+}
+.board-metrics {
+  margin-bottom: 20px;
 }
 .metric {
   min-width: 120px;

@@ -59,6 +59,11 @@ const territoryName = computed(() => {
   const t = territories.value.find((x) => String(x.id) === String(deal.value?.territory_id))
   return t?.name || ''
 })
+const customerTags = computed(() => {
+  const tags = customer.value?.tags
+  if (!Array.isArray(tags)) return []
+  return tags.map((t) => (typeof t === 'string' ? t : t?.name || t?.label)).filter(Boolean)
+})
 const priorityLabel = (v) => ({ high: '高', medium: '中', low: '低' })[v] || v || '-'
 const priorityTagType = (v) => ({ high: 'danger', medium: 'warning', low: 'info' })[v] || ''
 
@@ -376,6 +381,7 @@ onMounted(async () => {
           <el-tag :type="statusTagType(deal.status)">{{ statusLabel(deal.status) }}</el-tag>
           <el-tag v-if="currentStage" type="warning">{{ currentStage.name }}</el-tag>
           <el-tag v-if="deal.priority" :type="priorityTagType(deal.priority)" size="small">优先级：{{ priorityLabel(deal.priority) }}</el-tag>
+          <el-tag v-for="tag in customerTags" :key="tag" size="small" type="info" effect="plain">{{ tag }}</el-tag>
           <span class="deal-detail__amount">¥{{ formatAmount(deal.amount) }}</span>
           <span class="deal-detail__owner">负责人：{{ resolveMemberName(deal.owner_user_id) }}</span>
         </div>
@@ -406,6 +412,9 @@ onMounted(async () => {
               {{ customer.company_name }}
             </el-link>
             <span v-else>{{ deal.customer_id }}</span>
+            <div v-if="customerTags.length" style="margin-top: 6px">
+              <el-tag v-for="tag in customerTags" :key="tag" size="small" style="margin-right: 4px">{{ tag }}</el-tag>
+            </div>
           </el-descriptions-item>
           <el-descriptions-item label="销售管道">{{ currentPipeline?.name || '-' }}</el-descriptions-item>
           <el-descriptions-item label="阶段">

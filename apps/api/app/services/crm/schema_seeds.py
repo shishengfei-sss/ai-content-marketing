@@ -189,12 +189,19 @@ LEAD_FIELDS: list[dict[str, Any]] = [
     {"field_key": "utm_campaign", "label": "UTM Campaign", "field_type": "text", "storage": "db", "sort_order": 213},
     {"field_key": "landing_url", "label": "落地页", "field_type": "text", "storage": "db", "sort_order": 214},
     {
+        "field_key": "acquisition_cost",
+        "label": "获客成本",
+        "field_type": "currency",
+        "storage": "db",
+        "sort_order": 215,
+    },
+    {
         "field_key": "lead_score",
         "label": "线索评分",
         "field_type": "number",
         "storage": "db",
         "show_in_list_default": True,
-        "sort_order": 215,
+        "sort_order": 216,
     },
     {
         "field_key": "status",
@@ -298,6 +305,13 @@ CUSTOMER_FIELDS: list[dict[str, Any]] = [
         "storage": "db",
         "show_in_list_default": True,
         "sort_order": 42,
+    },
+    {
+        "field_key": "parent_customer_id",
+        "label": "母公司",
+        "field_type": "ref",
+        "storage": "db",
+        "sort_order": 43,
     },
     {
         "field_key": "source",

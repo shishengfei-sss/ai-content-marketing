@@ -12,6 +12,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.routers import admin, agent, analytics, assistants, auth, brand_settings, content, crm, dashboard, knowledge, llm_settings, me, team, templates, tenant, wechat_settings
 from app.services.publish_service import process_due_scheduled_async
+from app.services.crm.pool_reclaim_job import process_auto_reclaim
 
 logger = logging.getLogger(__name__)
 
@@ -30,16 +31,33 @@ async def _publish_scheduler_loop() -> None:
             db.close()
 
 
+async def _crm_reclaim_scheduler_loop() -> None:
+    """公海自动回收（默认每 5 分钟）。"""
+    interval = max(60, int(getattr(settings, "CRM_RECLAIM_POLL_SEC", 300) or 300))
+    while True:
+        await asyncio.sleep(interval)
+        db = SessionLocal()
+        try:
+            process_auto_reclaim(db)
+        except Exception:
+            logger.exception("CRM reclaim scheduler error")
+        finally:
+            db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.storage_published_dir.mkdir(parents=True, exist_ok=True)
     task = asyncio.create_task(_publish_scheduler_loop())
+    reclaim_task = asyncio.create_task(_crm_reclaim_scheduler_loop())
     yield
     task.cancel()
-    try:
-        await task
-    except asyncio.CancelledError:
-        pass
+    reclaim_task.cancel()
+    for t in (task, reclaim_task):
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="智营获客 API", version="0.1.0", lifespan=lifespan)
