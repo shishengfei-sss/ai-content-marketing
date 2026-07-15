@@ -581,17 +581,14 @@ CAMPAIGN_FIELDS: list[dict[str, Any]] = [
     },
     {"field_key": "start_at", "label": "开始日期", "field_type": "datetime", "storage": "db", "sort_order": 30},
     {"field_key": "end_at", "label": "结束日期", "field_type": "datetime", "storage": "db", "sort_order": 40},
-    {"field_key": "channels", "label": "渠道", "field_type": "multiselect", "sort_order": 50},
-    {"field_key": "goal", "label": "目标", "field_type": "textarea", "storage": "db", "sort_order": 60},
     {
-        "field_key": "owner_user_id",
-        "label": "负责人",
-        "field_type": "user_ref",
-        "show_in_list_default": True,
+        "field_key": "channels",
+        "label": "渠道",
+        "field_type": "multiselect",
         "storage": "db",
-        "sort_order": 70,
+        "sort_order": 50,
     },
-    {"field_key": "budget", "label": "预算", "field_type": "currency", "sort_order": 80},
+    {"field_key": "goal", "label": "目标", "field_type": "textarea", "storage": "db", "sort_order": 60},
 ]
 
 # ============================================================
@@ -1009,10 +1006,18 @@ PRODUCT_FIELDS: list[dict[str, Any]] = [
     },
     {"field_key": "cost_price", "label": "成本价", "field_type": "currency", "storage": "db", "sort_order": 50},
     {
+        "field_key": "category_id",
+        "label": "分类",
+        "field_type": "ref",
+        "show_in_list_default": True,
+        "storage": "db",
+        "sort_order": 55,
+    },
+    {
         "field_key": "is_active",
         "label": "启用",
         "field_type": "select",
-        "options": ["是", "否"],
+        "options": ["true", "false"],
         "show_in_list_default": True,
         "storage": "db",
         "sort_order": 60,

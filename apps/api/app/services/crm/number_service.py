@@ -27,6 +27,10 @@ DEFAULT_RULE_SEEDS: dict[str, dict] = {
     "order": {"prefix": "DD", "date_format": "%Y%m%d", "seq_width": 3, "reset_period": "once"},
     "payment": {"prefix": "HK", "date_format": "%Y%m%d", "seq_width": 3, "reset_period": "once"},
     "product": {"prefix": "CP", "date_format": "%Y%m%d", "seq_width": 3, "reset_period": "once"},
+    "delivery": {"prefix": "FH", "date_format": "%Y%m%d", "seq_width": 3, "reset_period": "once"},
+    "invoice": {"prefix": "FP", "date_format": "%Y%m%d", "seq_width": 3, "reset_period": "once"},
+    "contract_amendment": {"prefix": "BC", "date_format": "%Y%m%d", "seq_width": 3, "reset_period": "once"},
+    "refund": {"prefix": "TK", "date_format": "%Y%m%d", "seq_width": 3, "reset_period": "once"},
 }
 
 RESET_PERIOD_LABELS: dict[str, str] = {

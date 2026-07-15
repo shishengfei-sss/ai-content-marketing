@@ -54,6 +54,7 @@ def create_product(db: Session, ctx: TenantContext, data: ProductCreate) -> Prod
         unit=data.unit,
         list_price=data.list_price,
         cost_price=data.cost_price,
+        category_id=data.category_id,
         is_active=data.is_active,
         description=data.description,
         extra_data=extra,
@@ -76,6 +77,8 @@ def update_product(db: Session, ctx: TenantContext, product: Product, data: Prod
         product.list_price = data.list_price
     if data.cost_price is not None:
         product.cost_price = data.cost_price
+    if data.category_id is not None:
+        product.category_id = data.category_id
     if data.is_active is not None:
         product.is_active = data.is_active
     if data.description is not None:

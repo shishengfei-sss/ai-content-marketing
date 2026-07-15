@@ -163,8 +163,12 @@ def ensure_entity_schema(db: Session, tenant_id: UUID, entity_type: str) -> list
 
     seeds = ENTITY_SEED_MAP.get(entity_type, [])
     created: list[EntityFieldDefinition] = []
+    seen_keys: set[str] = set()
     for raw in seeds:
         data = _normalize_seed(raw)
+        if data["field_key"] in seen_keys:
+            continue
+        seen_keys.add(data["field_key"])
         row = EntityFieldDefinition(tenant_id=tenant_id, entity_type=entity_type, **data)
         db.add(row)
         created.append(row)

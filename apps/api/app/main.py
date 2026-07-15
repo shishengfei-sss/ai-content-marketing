@@ -13,6 +13,7 @@ from app.database import SessionLocal
 from app.routers import admin, agent, analytics, assistants, auth, brand_settings, content, crm, dashboard, knowledge, llm_settings, me, team, templates, tenant, wechat_settings
 from app.services.publish_service import process_due_scheduled_async
 from app.services.crm.pool_reclaim_job import process_auto_reclaim
+from app.services.crm.contract_expiry_job import process_contract_expiry
 
 logger = logging.getLogger(__name__)
 
@@ -45,15 +46,31 @@ async def _crm_reclaim_scheduler_loop() -> None:
             db.close()
 
 
+async def _crm_contract_expiry_scheduler_loop() -> None:
+    """合同到期提醒（默认每小时）。"""
+    interval = max(60, int(getattr(settings, "CRM_CONTRACT_EXPIRY_POLL_SEC", 3600) or 3600))
+    while True:
+        await asyncio.sleep(interval)
+        db = SessionLocal()
+        try:
+            process_contract_expiry(db)
+        except Exception:
+            logger.exception("CRM contract expiry scheduler error")
+        finally:
+            db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.storage_published_dir.mkdir(parents=True, exist_ok=True)
     task = asyncio.create_task(_publish_scheduler_loop())
     reclaim_task = asyncio.create_task(_crm_reclaim_scheduler_loop())
+    expiry_task = asyncio.create_task(_crm_contract_expiry_scheduler_loop())
     yield
     task.cancel()
     reclaim_task.cancel()
-    for t in (task, reclaim_task):
+    expiry_task.cancel()
+    for t in (task, reclaim_task, expiry_task):
         try:
             await t
         except asyncio.CancelledError:

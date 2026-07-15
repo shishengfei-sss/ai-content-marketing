@@ -12,9 +12,21 @@ from app.services.llm.base import LLMMessage, LLMProvider, LLMResponse
 
 MOCK_PROPOSALS_JSON = json.dumps(
     [
-        {"title": "稳健理财三原则：先保障再增值", "angle": "", "outline": ""},
-        {"title": "2026年家庭资产配置入门指南", "angle": "", "outline": ""},
-        {"title": "普通人如何避开理财常见误区", "angle": "", "outline": ""},
+        {
+            "title": "稳健理财三原则：先保障再增值",
+            "angle": "用家庭资产负债表拆解优先级",
+            "outline": "先保障；再建应急金；闲钱再增值；结尾免责声明",
+        },
+        {
+            "title": "2026年家庭资产配置入门指南",
+            "angle": "按人生阶段给出可执行配比",
+            "outline": "目标分层；风险承受力；品种搭配；常见误区",
+        },
+        {
+            "title": "普通人如何避开理财常见误区",
+            "angle": "用反例引发共鸣再给方法",
+            "outline": "追涨杀跌；单一押注；忽视流动性；行动清单",
+        },
     ],
     ensure_ascii=False,
 )

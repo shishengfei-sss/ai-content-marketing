@@ -71,6 +71,10 @@ def campaign_to_out(db: Session, tenant_id: UUID, campaign: MarketingCampaign) -
         "goal": campaign.goal,
         "channels": campaign.channels or [],
         "description": campaign.description,
+        "budget": float(campaign.budget) if campaign.budget is not None else None,
+        "spent": float(campaign.spent or 0),
+        "currency": campaign.currency or "CNY",
+        "target_segment_id": campaign.target_segment_id,
         "owner_user_id": campaign.owner_user_id,
         "territory_id": campaign.territory_id,
         "created_at": campaign.created_at,
@@ -93,6 +97,10 @@ def create_campaign(db: Session, ctx: TenantContext, data: CampaignCreate) -> Ma
         goal=data.goal,
         channels=data.channels or [],
         description=data.description,
+        budget=data.budget,
+        spent=data.spent if data.spent is not None else 0,
+        currency=data.currency or "CNY",
+        target_segment_id=data.target_segment_id,
         owner_user_id=ctx.user.id,
         territory_id=data.territory_id,
     )
@@ -129,6 +137,14 @@ def update_campaign(
         campaign.description = data.description
     if data.territory_id is not None:
         campaign.territory_id = data.territory_id
+    if data.budget is not None:
+        campaign.budget = data.budget
+    if data.spent is not None:
+        campaign.spent = data.spent
+    if data.currency is not None:
+        campaign.currency = data.currency
+    if data.target_segment_id is not None:
+        campaign.target_segment_id = data.target_segment_id
     db.commit()
     db.refresh(campaign)
     return campaign

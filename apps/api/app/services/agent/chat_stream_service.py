@@ -46,7 +46,12 @@ def _build_generate_messages(db: Session, tenant_id, user: User, body: ContentGe
     require_active_assistant(db, advisor_code)
     assistant = get_profile(db, advisor_code)
 
-    system_prompt = build_system_prompt(body.platform, content_format=content_format, assistant=assistant)
+    system_prompt = build_system_prompt(
+        body.platform,
+        content_format=content_format,
+        assistant=assistant,
+        video_duration_sec=body.video_duration_sec,
+    )
     template = get_template(db, advisor_code, body.platform, body.scene)
     rag_chunks = search_knowledge(
         db,
@@ -75,6 +80,7 @@ def _build_generate_messages(db: Session, tenant_id, user: User, body: ContentGe
         selected_proposal_title=proposal.title if proposal else "",
         selected_proposal_angle=proposal.angle if proposal else "",
         selected_proposal_outline=proposal.outline if proposal else "",
+        video_duration_sec=body.video_duration_sec,
     )
     messages = [
         LLMMessage(role="system", content=system_prompt),
@@ -91,6 +97,11 @@ async def stream_chat(
     message: str,
     llm_source: str = "platform",
     selected_proposal_index: int | None = None,
+    campaign_id=None,
+    platform: str | None = None,
+    content_format: str | None = None,
+    tenant_ctx=None,
+    video_duration_sec: int | None = None,
 ) -> AsyncIterator[str]:
     append_message(db, session, role="user", content=message)
 
@@ -106,6 +117,11 @@ async def stream_chat(
     except HTTPException as exc:
         yield format_sse("error", {"detail": exc.detail})
         return
+
+    if platform:
+        intent.platform = platform
+    if content_format:
+        intent.content_format = content_format
 
     if intent.action == "clarify" or (intent.action == "proposals" and not intent.platform):
         question = intent.clarify_question or "请问要发布到哪个平台？主题是什么？"
@@ -147,6 +163,8 @@ async def stream_chat(
             topic=topic,
             content_format=_resolve_content_format(intent, intent.platform),  # type: ignore[arg-type]
             llm_source=llm_source,
+            proposal_count=intent.proposal_count,
+            video_duration_sec=video_duration_sec,
         )
         result = await run_generate_proposals(db, session.tenant_id, req)
         summary = f"已生成 {len(result.proposals)} 个选题方案，请选择其一继续生成正文。"
@@ -199,6 +217,8 @@ async def stream_chat(
             content_format=_resolve_content_format(intent, intent.platform or "wechat"),
             selected_proposal=selected,
             llm_source=llm_source,
+            campaign_id=campaign_id,
+            video_duration_sec=video_duration_sec,
         )
         messages, content_format, proposal = _build_generate_messages(db, session.tenant_id, user, req)
         parts: list[str] = []
@@ -218,7 +238,7 @@ async def stream_chat(
             raise
         except Exception as e:
             logger.exception("LLM stream generate failed")
-            raise HTTPException(status_code=502, detail=f"生成失败: {e}") from e
+            raise HTTPException(status_code=502, detail="生成失败，请重试") from e
 
         full_body = "".join(parts)
         topic_title = proposal.title if proposal else req.topic
@@ -242,8 +262,27 @@ async def stream_chat(
         db.commit()
         db.refresh(content)
         content = get_content_for_tenant(db, content.id, session.tenant_id)
+        from app.services.content_generation_service import maybe_link_campaign
 
-        summary = f"正文已生成：《{content.topic}》"
+        maybe_link_campaign(db, session.tenant_id, user, campaign_id, content.id)
+        content = get_content_for_tenant(db, content.id, session.tenant_id)
+        revise_note = ""
+        if tenant_ctx is not None:
+            from app.services.agent.compliance_revise_service import revise_until_pass
+
+            content, info = await revise_until_pass(
+                db,
+                tenant_ctx,
+                content.id,
+                llm_source=llm_source,
+            )
+            if info["rounds"]:
+                if info["still_blocked"]:
+                    revise_note = f"（合规仍未通过，已自动改稿 {info['rounds']} 轮）"
+                else:
+                    revise_note = f"（已自动合规改稿 {info['rounds']} 轮）"
+
+        summary = f"正文已生成{revise_note}：《{content.topic}》"
         assistant = append_message(
             db,
             session,

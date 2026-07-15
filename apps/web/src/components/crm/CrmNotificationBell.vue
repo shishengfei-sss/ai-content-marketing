@@ -22,7 +22,7 @@ async function refreshCount() {
     const { data } = await crmApi.unreadNotificationCount()
     unread.value = Number(data?.count || 0)
   } catch {
-    /* ignore */
+    /* 旧 API / 无权限时静默 */
   }
 }
 
@@ -33,7 +33,10 @@ async function loadList() {
     items.value = Array.isArray(data?.items) ? data.items : []
     unread.value = Number(data?.unread || 0)
   } catch (e) {
-    ElMessage.error(e.message || '加载通知失败')
+    items.value = []
+    if (e?.status !== 404) {
+      ElMessage.error(e.message || '加载通知失败')
+    }
   } finally {
     loading.value = false
   }
@@ -78,6 +81,8 @@ function navigateEntity(row) {
     lead: `/crm/leads/${row.entity_id}`,
     customer: `/crm/customers/${row.entity_id}`,
     deal: `/crm/deals/${row.entity_id}`,
+    contract: `/crm/contracts/${row.entity_id}`,
+    order: `/crm/orders/${row.entity_id}`,
   }
   const path = map[row.entity_type]
   if (path) {

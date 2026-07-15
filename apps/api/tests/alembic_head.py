@@ -1,6 +1,6 @@
 """Alembic head revision expected by milestone verify scripts."""
 
-EXPECTED_HEAD = "062"
+EXPECTED_HEAD = "077"
 
 
 def is_at_expected_head(alembic_output: str) -> bool:

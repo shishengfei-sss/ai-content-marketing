@@ -77,6 +77,10 @@ function setStatusTab(tab) {
   statusTab.value = tab
 }
 
+function goDetail(item) {
+  uni.navigateTo({ url: `/pages/crm/payment-detail?id=${item.id}` })
+}
+
 onShow(ensurePerms)
 </script>
 
@@ -93,6 +97,7 @@ onShow(ensurePerms)
       :format-status="(s) => PAYMENT_STATUS_LABEL[s] || s"
       :fetch-list="(params) => crmApi.listPayments(params)"
       :extra-params="() => (statusTab ? { status: statusTab } : {})"
+      @card-click="goDetail"
     >
       <template #toolbar-top>
         <view class="status-tabs">

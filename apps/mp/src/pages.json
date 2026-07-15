@@ -184,9 +184,27 @@
       }
     },
     {
+      "path": "pages/crm/contract-detail",
+      "style": {
+        "navigationBarTitleText": "合同详情"
+      }
+    },
+    {
       "path": "pages/crm/payments",
       "style": {
         "navigationBarTitleText": "回款"
+      }
+    },
+    {
+      "path": "pages/crm/payment-detail",
+      "style": {
+        "navigationBarTitleText": "回款详情"
+      }
+    },
+    {
+      "path": "pages/crm/products",
+      "style": {
+        "navigationBarTitleText": "产品"
       }
     }
   ],

@@ -82,21 +82,23 @@ def req(method: str, path: str, token: str | None = None, body: dict | None = No
         )
     data_bytes = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
     request = urllib.request.Request(url, data=data_bytes, headers=headers, method=method)
+    def _parse_body(status: int, raw_bytes: bytes):
+        if not raw_bytes:
+            return status, {}
+        # csv 可能带 UTF-8 BOM；xlsx 等二进制用 replace 避免崩，验收脚本多半只看 status
+        raw = raw_bytes.decode("utf-8-sig", errors="replace")
+        if not raw.strip():
+            return status, {}
+        try:
+            return status, json.loads(raw)
+        except json.JSONDecodeError:
+            return status, raw
+
     try:
         with urllib.request.urlopen(request, timeout=120) as resp:
-            raw = resp.read().decode()
-            if not raw.strip():
-                return resp.status, {}
-            return resp.status, json.loads(raw)
+            return _parse_body(resp.status, resp.read())
     except urllib.error.HTTPError as e:
-        raw = e.read().decode()
-        if not raw.strip():
-            return e.code, {}
-        try:
-            detail = json.loads(raw)
-        except json.JSONDecodeError:
-            detail = raw
-        return e.code, detail
+        return _parse_body(e.code, e.read())
 
 
 def check(name: str, ok: bool, detail: str = "") -> bool:

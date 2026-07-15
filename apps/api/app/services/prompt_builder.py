@@ -124,6 +124,19 @@ FORMAT_LABELS = {
 
 
 VIDEO_SCRIPT_MAX_SECONDS = 30
+ALLOWED_VIDEO_DURATION_SEC = frozenset({15, 30, 45, 60})
+
+
+def resolve_video_duration_sec(value: int | None = None) -> int:
+    """FR-CREATE-13：视频脚本时长上限，默认 30；仅允许 15/30/45/60。"""
+    try:
+        sec = int(value) if value is not None else VIDEO_SCRIPT_MAX_SECONDS
+    except (TypeError, ValueError):
+        return VIDEO_SCRIPT_MAX_SECONDS
+    if sec in ALLOWED_VIDEO_DURATION_SEC:
+        return sec
+    return VIDEO_SCRIPT_MAX_SECONDS
+
 
 
 
@@ -177,6 +190,7 @@ def build_layered_system_prompt(
     content_format: str = "article",
     persona_variant: str = "",
     extra_blocks: list[str] | None = None,
+    video_duration_sec: int | None = None,
 ) -> str:
     """FR-ADVISOR-15: 7 层分层 system prompt（宪法/角色/人格/任务/KB/零断点/内部保护）。
 
@@ -205,9 +219,10 @@ def build_layered_system_prompt(
     layers.append(KB_DIRECTIVE_BLOCK)
     layers.append(f"【角色描述】\n{role}\n\n【硬性要求】\n{rules}")
     if content_format == "video_script":
+        dur = resolve_video_duration_sec(video_duration_sec)
         layers.append(
             f"【视频脚本约束】\n5. 输出完整分镜脚本，含镜号、画面描述、旁白、字幕、建议时长\n"
-            f"6. 全片总时长不得超过 {VIDEO_SCRIPT_MAX_SECONDS} 秒，各镜建议时长之和须 ≤ {VIDEO_SCRIPT_MAX_SECONDS} 秒"
+            f"6. 全片总时长不得超过 {dur} 秒，各镜建议时长之和须 ≤ {dur} 秒"
         )
     layers.append(ZERO_BREAK_BLOCK)
     layers.append(INTERNAL_GUARD_BLOCK)
@@ -223,6 +238,7 @@ def build_system_prompt(
     content_format: str = "article",
     assistant: AssistantProfile | None = None,
     persona_variant: str = "",
+    video_duration_sec: int | None = None,
 ) -> str:
     """生成正文 system prompt（v0.6.1 起为分层结构的外壳）。"""
     return build_layered_system_prompt(
@@ -230,6 +246,7 @@ def build_system_prompt(
         platform=platform,
         content_format=content_format,
         persona_variant=persona_variant,
+        video_duration_sec=video_duration_sec,
     )
 
 
@@ -243,7 +260,7 @@ def build_proposals_system_prompt(*, assistant: AssistantProfile | None = None) 
 
 你是一名{name}方向的选题策划助手。用户将选定其中一个方向后再撰写正文。
 
-每个方案只需一句话点明创作方向，不要标题、不要大纲、不要展开。
+每个方案须包含 title（创作方向）、angle（切入角度）、outline（内容大纲要点），不要写成完整正文。
 
 只输出 JSON 数组，不要 markdown 代码块，不要任何解释文字。"""
 
@@ -269,6 +286,8 @@ def build_proposals_user_prompt(
 
     proposal_count: int | None = None,
 
+    video_duration_sec: int | None = None,
+
 ) -> str:
 
     scene_label = scene_name or (scene if scene and scene not in ("", "custom", "brand_intro") else "") or "通用营销"
@@ -287,23 +306,23 @@ def build_proposals_user_prompt(
 
     if proposal_count is not None:
         parts.append(
-            f"请给出恰好 {proposal_count} 个不同创作方向，JSON 数组长度必须等于 {proposal_count}，每项仅一个字段："
+            f"请给出恰好 {proposal_count} 个不同创作方向，JSON 数组长度必须等于 {proposal_count}，每项三个字段："
         )
     else:
-        parts.append("请给出 3 到 5 个不同创作方向，JSON 数组，每项仅一个字段：")
+        parts.append("请给出 3 到 5 个不同创作方向，JSON 数组，每项三个字段：")
 
-    parts.append(
-        '- "title"：一句话创作方向（15～40 字，只说切入点，不要标题、不要分点、不要大纲）'
-    )
+    parts.append('- "title"：创作方向标题（15～40 字）')
+    parts.append('- "angle"：切入角度（一句话）')
+    parts.append('- "outline"：内容大纲（3～5 个要点，可用分号分隔）')
 
     if template_hint:
 
         parts.append(f"场景参考：{template_hint}")
 
     if content_format == "video_script":
-
+        dur = resolve_video_duration_sec(video_duration_sec)
         parts.append(
-            f"方向须适合 {VIDEO_SCRIPT_MAX_SECONDS} 秒内竖屏短视频口播。"
+            f"方向须适合 {dur} 秒内竖屏短视频口播。"
         )
 
     return "\n".join(parts)
@@ -312,13 +331,13 @@ def build_proposals_user_prompt(
 
 
 
-def _format_instruction(platform: str, content_format: str) -> str:
+def _format_instruction(platform: str, content_format: str, video_duration_sec: int | None = None) -> str:
 
     if content_format == "video_script":
-
+        dur = resolve_video_duration_sec(video_duration_sec)
         duration_rule = (
-            f"全片总时长不超过 {VIDEO_SCRIPT_MAX_SECONDS} 秒，"
-            f"每镜标注建议时长，各镜时长之和须 ≤ {VIDEO_SCRIPT_MAX_SECONDS} 秒"
+            f"全片总时长不超过 {dur} 秒，"
+            f"每镜标注建议时长，各镜时长之和须 ≤ {dur} 秒"
         )
 
         if platform == "wechat":
@@ -393,6 +412,8 @@ def build_user_prompt(
 
     selected_proposal_outline: str = "",
 
+    video_duration_sec: int | None = None,
+
 ) -> str:
 
     scene_label = scene_name or (scene if scene and scene not in ("", "custom", "brand_intro") else "") or "通用营销"
@@ -415,13 +436,13 @@ def build_user_prompt(
 
     if selected_proposal_title:
 
-        parts.append(
-
-            f"用户已选定创作方向：{selected_proposal_title}\n"
-
-            f"请按该方向撰写完整正文。"
-
-        )
+        block = f"用户已选定创作方向：{selected_proposal_title}"
+        if selected_proposal_angle:
+            block += f"\n切入角度：{selected_proposal_angle}"
+        if selected_proposal_outline:
+            block += f"\n内容大纲：{selected_proposal_outline}"
+        block += "\n请按该方向、角度与大纲撰写完整正文。"
+        parts.append(block)
 
 
 
@@ -459,7 +480,7 @@ def build_user_prompt(
 
 
 
-    parts.append(_format_instruction(platform, content_format))
+    parts.append(_format_instruction(platform, content_format, video_duration_sec=video_duration_sec))
 
 
 
@@ -528,6 +549,7 @@ def _extract_titles_fallback(text: str, *, max_items: int) -> list[dict[str, str
 
 
 def parse_proposals_json(raw: str, *, proposal_count: int | None = None) -> list[dict[str, str]]:
+    """解析方案 JSON；数量不足时降级返回已解析项（至少 1 条），避免整请求 502。"""
     text = _strip_json_fence(raw)
     max_items = proposal_count if proposal_count is not None else 5
     data = _load_json_array(text)
@@ -537,16 +559,16 @@ def parse_proposals_json(raw: str, *, proposal_count: int | None = None) -> list
             if not isinstance(item, dict):
                 continue
             title = str(item.get("title") or item.get("direction") or "").strip()
+            angle = str(item.get("angle") or "").strip()
+            outline = str(item.get("outline") or "").strip()
             if len(title) >= 2:
-                proposals.append({"title": title, "angle": "", "outline": ""})
+                proposals.append({"title": title, "angle": angle, "outline": outline})
     if not proposals:
         proposals = _extract_titles_fallback(text, max_items=max_items)
-    if proposal_count is not None:
-        if len(proposals) < proposal_count:
-            raise ValueError("PROPOSALS_PARSE_FAILED")
-        return proposals[:proposal_count]
-    if len(proposals) < 3:
+    if not proposals:
         raise ValueError("PROPOSALS_PARSE_FAILED")
+    if proposal_count is not None:
+        return proposals[:proposal_count]
     return proposals[:5]
 
 

@@ -27,7 +27,13 @@ def list_attachments_endpoint(
     entity_type: str = Query(..., min_length=1, max_length=20),
     entity_id: uuid.UUID = Query(...),
     ctx: TenantContext = Depends(
-        require_any_permission("crm.deal.view", "crm.lead.view", "crm.customer.view")
+        require_any_permission(
+            "crm.deal.view",
+            "crm.lead.view",
+            "crm.customer.view",
+            "crm.contract.view",
+            "crm.order.view",
+        )
     ),
     db: Session = Depends(get_db),
 ):
@@ -41,7 +47,13 @@ def upload_attachment_endpoint(
     entity_id: uuid.UUID = Query(...),
     file: UploadFile = File(...),
     ctx: TenantContext = Depends(
-        require_any_permission("crm.deal.edit", "crm.lead.edit", "crm.customer.edit")
+        require_any_permission(
+            "crm.deal.edit",
+            "crm.lead.edit",
+            "crm.customer.edit",
+            "crm.contract.edit",
+            "crm.order.edit",
+        )
     ),
     db: Session = Depends(get_db),
 ):
@@ -55,7 +67,13 @@ def upload_attachment_endpoint(
 def download_attachment_endpoint(
     attachment_id: uuid.UUID,
     ctx: TenantContext = Depends(
-        require_any_permission("crm.deal.view", "crm.lead.view", "crm.customer.view")
+        require_any_permission(
+            "crm.deal.view",
+            "crm.lead.view",
+            "crm.customer.view",
+            "crm.contract.view",
+            "crm.order.view",
+        )
     ),
     db: Session = Depends(get_db),
 ):
@@ -72,7 +90,13 @@ def download_attachment_endpoint(
 def delete_attachment_endpoint(
     attachment_id: uuid.UUID,
     ctx: TenantContext = Depends(
-        require_any_permission("crm.deal.edit", "crm.lead.edit", "crm.customer.edit")
+        require_any_permission(
+            "crm.deal.edit",
+            "crm.lead.edit",
+            "crm.customer.edit",
+            "crm.contract.edit",
+            "crm.order.edit",
+        )
     ),
     db: Session = Depends(get_db),
 ):

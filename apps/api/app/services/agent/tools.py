@@ -131,6 +131,7 @@ async def _generate_proposals(ctx: AgentToolContext, args: dict[str, Any]) -> di
         content_format=args.get("content_format") or "article",
         llm_source=args.get("llm_source") or "platform",
         proposal_count=proposal_count,
+        video_duration_sec=args.get("video_duration_sec"),
     )
     result = await run_generate_proposals(ctx.db, ctx.tenant_id, body)
     return {"proposals": [p.model_dump() for p in result.proposals]}
@@ -149,6 +150,8 @@ async def _generate_content(ctx: AgentToolContext, args: dict[str, Any]) -> dict
         llm_source=args.get("llm_source") or "platform",
         selected_proposal=proposal,
         ephemeral_instruction=str(args.get("ephemeral_instruction") or ""),
+        campaign_id=args.get("campaign_id"),
+        video_duration_sec=args.get("video_duration_sec"),
     )
     content = await run_generate_content(ctx.db, ctx.tenant_id, ctx.user, body)
     return {

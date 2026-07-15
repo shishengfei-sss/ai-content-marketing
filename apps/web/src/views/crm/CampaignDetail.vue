@@ -46,6 +46,12 @@ const tasksLoading = ref(false)
 
 const contents = ref([])
 const contentsLoading = ref(false)
+const executions = ref([])
+const executionsLoading = ref(false)
+const performance = ref(null)
+const execDialog = ref(false)
+const execSaving = ref(false)
+const execForm = ref({ channel: '', content_type: 'post', cost: 0, impressions: 0, clicks: 0, leads_generated: 0, status: 'planned' })
 
 const editVisible = ref(false)
 const editSaving = ref(false)
@@ -57,6 +63,7 @@ const editForm = ref({
   goal: '',
   channels: [],
   description: '',
+  budget: null,
 })
 
 const leadCreateVisible = ref(false)
@@ -87,7 +94,12 @@ const summaryCards = computed(() => [
   { label: '关联线索', value: campaign.value?.lead_count ?? leadsTotal.value ?? 0 },
   { label: '关联任务', value: campaign.value?.task_count ?? tasksTotal.value ?? 0 },
   { label: '关联内容', value: campaign.value?.content_count ?? contents.value.length ?? 0 },
-  { label: '活动状态', value: campaignStatusLabel(campaign.value?.status) },
+  {
+    label: '预算/花费',
+    value: campaign.value?.budget != null
+      ? `¥${Number(campaign.value.budget).toLocaleString()} / ¥${Number(campaign.value.spent || 0).toLocaleString()}`
+      : `花费 ¥${Number(campaign.value?.spent || 0).toLocaleString()}`,
+  },
 ])
 
 const leadInitialValues = computed(() => ({
@@ -150,17 +162,75 @@ async function loadContents() {
   }
 }
 
+async function loadExecutions() {
+  executionsLoading.value = true
+  try {
+    const { data } = await crmApi.listCampaignExecutions(route.params.id)
+    executions.value = Array.isArray(data) ? data : []
+  } catch {
+    executions.value = []
+  } finally {
+    executionsLoading.value = false
+  }
+}
+
+async function loadPerformance() {
+  try {
+    const { data } = await crmApi.getCampaignPerformance(route.params.id)
+    performance.value = data
+  } catch {
+    performance.value = null
+  }
+}
+
 async function loadDetail() {
   loading.value = true
   try {
     await loadCampaign()
-    await Promise.all([loadLeads(), loadTasks(), loadContents()])
+    await Promise.all([loadLeads(), loadTasks(), loadContents(), loadExecutions(), loadPerformance()])
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
     router.replace('/crm/campaigns')
   } finally {
     loading.value = false
   }
+}
+
+function openExecDialog() {
+  execForm.value = { channel: '', content_type: 'post', cost: 0, impressions: 0, clicks: 0, leads_generated: 0, status: 'planned' }
+  execDialog.value = true
+}
+
+async function submitExec() {
+  if (!execForm.value.channel.trim()) { ElMessage.warning('请填写渠道'); return }
+  execSaving.value = true
+  try {
+    await crmApi.createCampaignExecution(route.params.id, {
+      ...execForm.value,
+      channel: execForm.value.channel.trim(),
+    })
+    ElMessage.success('已添加渠道执行')
+    execDialog.value = false
+    await Promise.all([loadExecutions(), loadPerformance(), loadCampaign()])
+  } catch (e) {
+    ElMessage.error(e.message || '保存失败')
+  } finally {
+    execSaving.value = false
+  }
+}
+
+async function removeExec(row) {
+  try {
+    await crmApi.deleteCampaignExecution(row.id)
+    ElMessage.success('已删除')
+    await Promise.all([loadExecutions(), loadPerformance(), loadCampaign()])
+  } catch (e) {
+    ElMessage.error(e.message || '删除失败')
+  }
+}
+
+function formatMoney(v) {
+  return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function onLeadsPageChange(p) {
@@ -195,6 +265,7 @@ function openEdit() {
     goal: campaign.value.goal || '',
     channels: [...(campaign.value.channels || [])],
     description: campaign.value.description || '',
+    budget: campaign.value.budget != null ? Number(campaign.value.budget) : null,
   }
   editVisible.value = true
 }
@@ -213,6 +284,7 @@ async function submitEdit() {
       goal: editForm.value.goal?.trim() || null,
       channels: editForm.value.channels || [],
       description: editForm.value.description?.trim() || null,
+      budget: editForm.value.budget,
     }
     if (canManage()) payload.status = editForm.value.status
     await crmApi.updateCampaign(route.params.id, payload)
@@ -396,6 +468,10 @@ onMounted(loadDetail)
               {{ formatCampaignChannels(campaign?.channels) }}
             </el-descriptions-item>
             <el-descriptions-item label="负责人">{{ ownerLabel(campaign?.owner_user_id) }}</el-descriptions-item>
+            <el-descriptions-item label="预算">
+              {{ campaign?.budget != null ? '¥' + formatMoney(campaign.budget) : '—' }}
+              <span v-if="campaign" class="muted"> / 已花 ¥{{ formatMoney(campaign.spent) }}</span>
+            </el-descriptions-item>
             <el-descriptions-item label="更新时间">
               {{ campaign?.updated_at ? new Date(campaign.updated_at).toLocaleString('zh-CN') : '—' }}
             </el-descriptions-item>
@@ -498,6 +574,52 @@ onMounted(loadDetail)
             />
           </div>
         </el-tab-pane>
+
+        <el-tab-pane :label="`渠道执行（${executions.length}）`" name="executions">
+          <div v-if="canEdit()" style="margin-bottom: 12px">
+            <el-button type="primary" @click="openExecDialog">添加渠道执行</el-button>
+          </div>
+          <el-table v-loading="executionsLoading" :data="executions" border size="small" empty-text="暂无渠道执行">
+            <el-table-column prop="channel" label="渠道" width="120" />
+            <el-table-column prop="content_type" label="类型" width="90" />
+            <el-table-column label="成本" width="110" align="right">
+              <template #default="{ row }">¥{{ formatMoney(row.cost) }}</template>
+            </el-table-column>
+            <el-table-column prop="impressions" label="曝光" width="90" align="right" />
+            <el-table-column prop="clicks" label="点击" width="90" align="right" />
+            <el-table-column prop="leads_generated" label="线索" width="90" align="right" />
+            <el-table-column prop="status" label="状态" width="100" />
+            <el-table-column v-if="canEdit()" label="操作" width="80" align="center">
+              <template #default="{ row }">
+                <el-button link type="danger" @click="removeExec(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <el-tab-pane label="ROI 分析" name="roi">
+          <div v-if="performance" class="roi-grid">
+            <div class="roi-card"><span>总投入</span><strong>¥{{ formatMoney(performance.total_cost) }}</strong></div>
+            <div class="roi-card"><span>线索</span><strong>{{ performance.leads_count }}</strong></div>
+            <div class="roi-card"><span>转化客户</span><strong>{{ performance.customers_count }}</strong></div>
+            <div class="roi-card"><span>ROI</span><strong>{{ performance.roi }}%</strong></div>
+            <div class="roi-card"><span>CPL</span><strong>¥{{ formatMoney(performance.cost_per_lead) }}</strong></div>
+            <div class="roi-card"><span>转化率</span><strong>{{ performance.conversion_rate }}%</strong></div>
+          </div>
+          <el-table v-if="performance" :data="performance.by_channel || []" border size="small" empty-text="暂无渠道数据" style="margin-top: 12px">
+            <el-table-column prop="channel" label="渠道" />
+            <el-table-column label="投入" align="right">
+              <template #default="{ row }">¥{{ formatMoney(row.cost) }}</template>
+            </el-table-column>
+            <el-table-column prop="impressions" label="曝光" align="right" />
+            <el-table-column prop="clicks" label="点击" align="right" />
+            <el-table-column prop="leads_generated" label="线索" align="right" />
+            <el-table-column label="CPL" align="right">
+              <template #default="{ row }">¥{{ formatMoney(row.cost_per_lead) }}</template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-else description="暂无效果数据" :image-size="64" />
+        </el-tab-pane>
       </el-tabs>
     </div>
 
@@ -542,6 +664,9 @@ onMounted(loadDetail)
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="预算">
+          <el-input-number v-model="editForm.budget" :min="0" :precision="2" :controls="false" style="width: 100%" />
+        </el-form-item>
         <el-form-item label="活动目标">
           <el-input v-model="editForm.goal" type="textarea" :rows="2" />
         </el-form-item>
@@ -552,6 +677,37 @@ onMounted(loadDetail)
       <template #footer>
         <el-button @click="editVisible = false">取消</el-button>
         <el-button type="primary" :loading="editSaving" @click="submitEdit">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="execDialog" title="添加渠道执行" width="480px" destroy-on-close>
+      <el-form label-width="96px">
+        <el-form-item label="渠道" required>
+          <el-input v-model="execForm.channel" placeholder="如 公众号 / 小红书" />
+        </el-form-item>
+        <el-form-item label="类型">
+          <el-select v-model="execForm.content_type" style="width: 100%">
+            <el-option label="帖子" value="post" />
+            <el-option label="广告" value="ad" />
+            <el-option label="文章" value="article" />
+            <el-option label="邮件" value="email" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="成本"><el-input-number v-model="execForm.cost" :min="0" :precision="2" :controls="false" style="width: 100%" /></el-form-item>
+        <el-form-item label="曝光"><el-input-number v-model="execForm.impressions" :min="0" :controls="false" style="width: 100%" /></el-form-item>
+        <el-form-item label="点击"><el-input-number v-model="execForm.clicks" :min="0" :controls="false" style="width: 100%" /></el-form-item>
+        <el-form-item label="线索数"><el-input-number v-model="execForm.leads_generated" :min="0" :controls="false" style="width: 100%" /></el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="execForm.status" style="width: 100%">
+            <el-option label="计划中" value="planned" />
+            <el-option label="已发布" value="published" />
+            <el-option label="已暂停" value="paused" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="execDialog = false">取消</el-button>
+        <el-button type="primary" :loading="execSaving" @click="submitExec">保存</el-button>
       </template>
     </el-dialog>
 
@@ -711,10 +867,30 @@ onMounted(loadDetail)
   justify-content: flex-end;
 }
 
+.muted { color: var(--el-text-color-secondary); font-size: 12px; margin-left: 6px; }
+.roi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.roi-card {
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+}
+.roi-card span {
+  display: block;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 4px;
+}
+.roi-card strong { font-size: 16px; }
+
 @media (max-width: 900px) {
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .roi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 640px) {

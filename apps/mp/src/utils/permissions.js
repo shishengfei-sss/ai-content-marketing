@@ -301,6 +301,14 @@ export const CRM_MENU = [
     ],
   },
   {
+    title: '产品',
+    desc: '产品目录',
+    url: '/pages/crm/products',
+    icon: '📦',
+    iconColor: '#13c2c2',
+    permissionAny: ['crm.product.manage'],
+  },
+  {
     title: '我的任务',
     desc: '待办与回访',
     url: '/pages/crm/tasks',

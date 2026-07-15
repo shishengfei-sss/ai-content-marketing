@@ -10,15 +10,21 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.crm import (
+    CONTRACT_AMENDMENT_CHANGE_TYPES,
+    CONTRACT_AMENDMENT_STATUSES,
     CONTRACT_STATUSES,
     CONTRACT_TYPES,
     DEAL_SOURCES,
     DEAL_STATUSES,
+    DELIVERY_NOTE_STATUSES,
+    INVOICE_STATUSES,
+    INVOICE_TYPES,
     ORDER_SOURCES,
     ORDER_STATUSES,
     PAYMENT_METHODS,
     PAYMENT_STATUSES,
     QUOTE_STATUSES,
+    REFUND_STATUSES,
 )
 
 
@@ -343,6 +349,7 @@ class ProductCreate(BaseModel):
     unit: str | None = None
     list_price: float = Field(default=0, ge=0)
     cost_price: float | None = Field(default=None, ge=0)
+    category_id: UUID | None = None
     is_active: bool = True
     description: str | None = None
     extra_data: dict = Field(default_factory=dict)
@@ -354,6 +361,7 @@ class ProductUpdate(BaseModel):
     unit: str | None = None
     list_price: float | None = Field(default=None, ge=0)
     cost_price: float | None = Field(default=None, ge=0)
+    category_id: UUID | None = None
     is_active: bool | None = None
     description: str | None = None
     extra_data: dict | None = None
@@ -367,9 +375,13 @@ class ProductOut(BaseModel):
     unit: str | None
     list_price: float
     cost_price: float | None
+    category_id: UUID | None = None
     is_active: bool
     description: str | None
     extra_data: dict
+    total_ordered_quantity: int = 0
+    total_revenue: float = 0
+    last_order_date: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -382,7 +394,127 @@ class ProductListResponse(BaseModel):
     page: int
     page_size: int
     list_fields: list[dict] | None = None
+    view_id: UUID | None = None
     filters_applied: bool | None = None
+
+
+class ProductVariantCreate(BaseModel):
+    sku: str = Field(min_length=1, max_length=50)
+    variant_name: str = Field(min_length=1, max_length=100)
+    attributes: dict = Field(default_factory=dict)
+    list_price: float = Field(default=0, ge=0)
+    cost_price: float | None = Field(default=None, ge=0)
+    is_active: bool = True
+
+
+class ProductVariantUpdate(BaseModel):
+    sku: str | None = Field(default=None, min_length=1, max_length=50)
+    variant_name: str | None = Field(default=None, min_length=1, max_length=100)
+    attributes: dict | None = None
+    list_price: float | None = Field(default=None, ge=0)
+    cost_price: float | None = Field(default=None, ge=0)
+    is_active: bool | None = None
+
+
+class ProductVariantOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    product_id: UUID
+    sku: str
+    variant_name: str
+    attributes: dict
+    list_price: float
+    cost_price: float | None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PriceBookCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+    is_default: bool = False
+    is_active: bool = True
+
+
+class PriceBookUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+    is_default: bool | None = None
+    is_active: bool | None = None
+
+
+class PriceBookOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    name: str
+    description: str | None
+    is_default: bool
+    is_active: bool
+    created_by_user_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PriceBookEntryCreate(BaseModel):
+    product_id: UUID
+    variant_id: UUID | None = None
+    unit_price: float = Field(ge=0)
+    min_quantity: int = Field(default=1, ge=1)
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    customer_levels: list[str] | None = None
+
+
+class PriceBookEntryOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    price_book_id: UUID
+    product_id: UUID
+    variant_id: UUID | None
+    unit_price: float
+    min_quantity: int
+    valid_from: datetime | None
+    valid_to: datetime | None
+    customer_levels: list | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProductCategoryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    parent_id: UUID | None = None
+    description: str | None = Field(default=None, max_length=500)
+    sort_order: int = 0
+    is_active: bool = True
+
+
+class ProductCategoryUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    parent_id: UUID | None = None
+    description: str | None = Field(default=None, max_length=500)
+    sort_order: int | None = None
+    is_active: bool | None = None
+
+
+class ProductCategoryOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    name: str
+    parent_id: UUID | None
+    description: str | None
+    sort_order: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 # ============================================================
@@ -559,6 +691,56 @@ class ContractCreate(BaseModel):
         return v
 
 
+class ContractTemplateCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    category: str | None = Field(default=None, max_length=50)
+    content: str = Field(min_length=1)
+    variables: list[str] = Field(default_factory=list)
+    is_active: bool = True
+
+
+class ContractTemplateUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    category: str | None = Field(default=None, max_length=50)
+    content: str | None = Field(default=None, min_length=1)
+    variables: list[str] | None = None
+    is_active: bool | None = None
+
+
+class ContractTemplateOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    name: str
+    category: str | None
+    content: str
+    variables: list
+    is_active: bool
+    created_by_user_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ContractFromTemplateRequest(BaseModel):
+    template_id: UUID
+    customer_id: UUID
+    deal_id: UUID | None = None
+    title: str | None = Field(default=None, max_length=200)
+    contract_type: str = "new"
+    amount: float | None = Field(default=None, ge=0)
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+    variable_values: dict = Field(default_factory=dict)
+    extra_data: dict = Field(default_factory=dict)
+
+    @field_validator("contract_type")
+    @classmethod
+    def _valid_type(cls, v: str) -> str:
+        validate_contract_type(v)
+        return v
+
+
 class ContractUpdate(BaseModel):
     deal_id: UUID | None = None
     customer_id: UUID | None = None
@@ -641,6 +823,8 @@ class OrderLineCreate(BaseModel):
     quantity: float = Field(default=1, ge=0)
     unit_price: float = Field(default=0, ge=0)
     discount_rate: float | None = Field(default=None, ge=0, le=100)
+    tax_rate: float | None = Field(default=None, ge=0, le=100)
+    tax_amount: float | None = Field(default=None, ge=0)
     line_total: float = Field(default=0, ge=0)
     sort_order: int = 0
     remark: str | None = None
@@ -655,6 +839,8 @@ class OrderLineOut(BaseModel):
     quantity: float
     unit_price: float
     discount_rate: float | None
+    tax_rate: float | None
+    tax_amount: float | None
     line_total: float
     sort_order: int
     remark: str | None
@@ -747,6 +933,9 @@ class OrderOut(BaseModel):
     order_date: datetime
     amount: float
     status: str
+    parent_order_id: UUID | None = None
+    version: int = 1
+    revision_reason: str | None = None
     owner_user_id: UUID
     territory_id: UUID | None
     extra_data: dict
@@ -766,6 +955,68 @@ class OrderListResponse(BaseModel):
     list_fields: list[dict] | None = None
     view_id: UUID | None = None
     filters_applied: bool | None = None
+
+
+class OrderRejectBody(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class OrderReviseBody(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+    lines: list[OrderLineCreate] | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class OrderApprovalRuleCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    min_amount: float = Field(ge=0)
+    max_amount: float | None = Field(default=None, ge=0)
+    approver_role: str = Field(default="sales_manager", min_length=1, max_length=50)
+    approval_type: str = Field(default="sequential", pattern="^(sequential|any)$")
+    is_active: bool = True
+
+
+class OrderApprovalRuleUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    min_amount: float | None = Field(default=None, ge=0)
+    max_amount: float | None = Field(default=None, ge=0)
+    approver_role: str | None = Field(default=None, min_length=1, max_length=50)
+    approval_type: str | None = Field(default=None, pattern="^(sequential|any)$")
+    is_active: bool | None = None
+
+
+class OrderApprovalRuleOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    name: str
+    min_amount: float
+    max_amount: float | None
+    approver_role: str
+    approval_type: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ApprovalInstanceOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    entity_type: str
+    entity_id: UUID
+    rule_id: UUID | None
+    status: str
+    current_step: int
+    steps_json: list
+    submitted_by_user_id: UUID
+    submitted_at: datetime | None
+    resolved_at: datetime | None
+    reject_reason: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 # ============================================================
@@ -866,6 +1117,10 @@ class PaymentOut(BaseModel):
     created_by_user_id: UUID
     created_at: datetime
     updated_at: datetime
+    # 列表汇总（订单维度，可选）
+    order_plan_total: float | None = None
+    order_paid_total: float | None = None
+    order_overdue_amount: float | None = None
 
     model_config = {"from_attributes": True}
 
@@ -878,6 +1133,254 @@ class PaymentListResponse(BaseModel):
     list_fields: list[dict] | None = None
     view_id: UUID | None = None
     filters_applied: bool | None = None
+
+
+# ============================================================
+# 发货 / 发票（v1.0 P1）
+# ============================================================
+
+
+def validate_delivery_status(value: str) -> None:
+    if value not in DELIVERY_NOTE_STATUSES:
+        raise ValueError(f"status 必须是 {DELIVERY_NOTE_STATUSES} 之一")
+
+
+def validate_invoice_type(value: str) -> None:
+    if value not in INVOICE_TYPES:
+        raise ValueError(f"invoice_type 必须是 {INVOICE_TYPES} 之一")
+
+
+def validate_invoice_status(value: str) -> None:
+    if value not in INVOICE_STATUSES:
+        raise ValueError(f"status 必须是 {INVOICE_STATUSES} 之一")
+
+
+class DeliveryItemCreate(BaseModel):
+    order_line_id: UUID
+    quantity: float = Field(gt=0)
+
+
+class DeliveryItemOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    delivery_note_id: UUID
+    order_line_id: UUID
+    quantity: float
+
+    model_config = {"from_attributes": True}
+
+
+class DeliveryCreate(BaseModel):
+    tracking_number: str | None = Field(default=None, max_length=100)
+    carrier: str | None = Field(default=None, max_length=50)
+    remark: str | None = Field(default=None, max_length=500)
+    items: list[DeliveryItemCreate] = Field(default_factory=list)
+
+
+class DeliveryUpdate(BaseModel):
+    tracking_number: str | None = Field(default=None, max_length=100)
+    carrier: str | None = Field(default=None, max_length=50)
+    remark: str | None = Field(default=None, max_length=500)
+    status: str | None = None
+
+    @field_validator("status")
+    @classmethod
+    def _valid_status(cls, v: str | None) -> str | None:
+        if v is not None:
+            validate_delivery_status(v)
+        return v
+
+
+class DeliveryOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    order_id: UUID
+    delivery_number: str
+    status: str
+    shipped_at: datetime | None
+    delivered_at: datetime | None
+    tracking_number: str | None
+    carrier: str | None
+    remark: str | None
+    created_by_user_id: UUID
+    created_at: datetime
+    updated_at: datetime
+    items: list[DeliveryItemOut] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class InvoiceCreate(BaseModel):
+    invoice_type: str = "vat"
+    amount: float = Field(ge=0)
+    tax_amount: float = Field(default=0, ge=0)
+    total_amount: float | None = Field(default=None, ge=0)
+    extra_data: dict = Field(default_factory=dict)
+
+    @field_validator("invoice_type")
+    @classmethod
+    def _valid_type(cls, v: str) -> str:
+        validate_invoice_type(v)
+        return v
+
+
+class InvoiceUpdate(BaseModel):
+    invoice_type: str | None = None
+    amount: float | None = Field(default=None, ge=0)
+    tax_amount: float | None = Field(default=None, ge=0)
+    total_amount: float | None = Field(default=None, ge=0)
+    extra_data: dict | None = None
+
+    @field_validator("invoice_type")
+    @classmethod
+    def _valid_type(cls, v: str | None) -> str | None:
+        if v is not None:
+            validate_invoice_type(v)
+        return v
+
+
+class InvoiceOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    order_id: UUID
+    invoice_number: str
+    invoice_type: str
+    amount: float
+    tax_amount: float
+    total_amount: float
+    status: str
+    issued_at: datetime | None
+    extra_data: dict
+    created_by_user_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class InvoicePaymentCreate(BaseModel):
+    payment_id: UUID
+    matched_amount: float = Field(gt=0)
+
+
+class InvoicePaymentOut(BaseModel):
+    invoice_id: UUID
+    payment_id: UUID
+    matched_amount: float
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ============================================================
+# 合同补充协议 / 退款 / 应收（v1.0 P1 D-F）
+# ============================================================
+
+
+class ContractAmendmentCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    change_type: str = "amount_change"
+    original_value: str | None = None
+    new_value: str | None = None
+    amount_delta: float | None = None
+
+    @field_validator("change_type")
+    @classmethod
+    def _valid_type(cls, v: str) -> str:
+        if v not in CONTRACT_AMENDMENT_CHANGE_TYPES:
+            raise ValueError(f"change_type 必须是 {CONTRACT_AMENDMENT_CHANGE_TYPES} 之一")
+        return v
+
+
+class ContractAmendmentUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    change_type: str | None = None
+    original_value: str | None = None
+    new_value: str | None = None
+    amount_delta: float | None = None
+    status: str | None = None
+
+    @field_validator("change_type")
+    @classmethod
+    def _valid_type(cls, v: str | None) -> str | None:
+        if v is not None and v not in CONTRACT_AMENDMENT_CHANGE_TYPES:
+            raise ValueError(f"change_type 无效")
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def _valid_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in CONTRACT_AMENDMENT_STATUSES:
+            raise ValueError(f"status 无效")
+        return v
+
+
+class ContractAmendmentOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    parent_contract_id: UUID
+    amendment_number: str
+    title: str
+    change_type: str
+    original_value: str | None
+    new_value: str | None
+    amount_delta: float | None
+    status: str
+    created_by_user_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ContractRenewOut(BaseModel):
+    contract_id: UUID
+    deal_id: UUID
+
+
+class RefundCreate(BaseModel):
+    order_id: UUID
+    original_payment_id: UUID | None = None
+    amount: float = Field(gt=0)
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class RefundOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    order_id: UUID
+    original_payment_id: UUID | None
+    refund_number: str
+    amount: float
+    reason: str | None
+    status: str
+    approved_by_user_id: UUID | None
+    approved_at: datetime | None
+    created_by_user_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ReceivableItemOut(BaseModel):
+    order_id: UUID
+    order_number: str | None = None
+    order_title: str | None = None
+    plan_id: UUID
+    installment_no: int
+    plan_date: datetime
+    plan_amount: float
+    paid_amount: float
+    outstanding: float
+    days_overdue: int
+    aging_bucket: str  # current | d30 | d60 | d90plus
+
+
+class ReceivableSummaryOut(BaseModel):
+    items: list[ReceivableItemOut]
+    buckets: dict[str, float]
+    total_outstanding: float
 
 
 # ---------------- 实体自动编号规则（v0.8） ----------------
@@ -961,12 +1464,44 @@ __all__ = [
     "OrderUpdate",
     "OrderOut",
     "OrderListResponse",
+    "OrderRejectBody",
+    "OrderReviseBody",
+    "OrderApprovalRuleCreate",
+    "OrderApprovalRuleUpdate",
+    "OrderApprovalRuleOut",
+    "ApprovalInstanceOut",
     "PaymentPlanCreate",
     "PaymentPlanOut",
     "PaymentCreate",
     "PaymentUpdate",
     "PaymentOut",
     "PaymentListResponse",
+    "DeliveryItemCreate",
+    "DeliveryItemOut",
+    "DeliveryCreate",
+    "DeliveryUpdate",
+    "DeliveryOut",
+    "InvoiceCreate",
+    "InvoiceUpdate",
+    "InvoiceOut",
+    "InvoicePaymentCreate",
+    "InvoicePaymentOut",
+    "ContractAmendmentCreate",
+    "ContractAmendmentUpdate",
+    "ContractAmendmentOut",
+    "ContractRenewOut",
+    "RefundCreate",
+    "RefundOut",
+    "ReceivableItemOut",
+    "ReceivableSummaryOut",
+    "ProductVariantCreate",
+    "ProductVariantUpdate",
+    "ProductVariantOut",
+    "PriceBookCreate",
+    "PriceBookUpdate",
+    "PriceBookOut",
+    "PriceBookEntryCreate",
+    "PriceBookEntryOut",
     "EntityNumberRuleOut",
     "EntityNumberRuleUpdate",
     "ENTITY_NUMBER_TYPES",

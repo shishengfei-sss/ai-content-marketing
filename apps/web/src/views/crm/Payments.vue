@@ -114,7 +114,31 @@ async function handleDelete(row) {
   } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '删除失败') }
 }
 
+const pageSummary = computed(() => {
+  const rows = items.value || []
+  // 按 order_id 去重后汇总计划/已回/逾期
+  const byOrder = new Map()
+  for (const row of rows) {
+    if (!row.order_id || byOrder.has(row.order_id)) continue
+    byOrder.set(row.order_id, {
+      plan: Number(row.order_plan_total || 0),
+      paid: Number(row.order_paid_total || 0),
+      overdue: Number(row.order_overdue_amount || 0),
+    })
+  }
+  let plan = 0, paid = 0, overdue = 0
+  for (const v of byOrder.values()) {
+    plan += v.plan
+    paid += v.paid
+    overdue += v.overdue
+  }
+  const pageAmount = rows.reduce((acc, r) => acc + Number(r.amount || 0), 0)
+  const pageConfirmed = rows.filter((r) => r.status === 'confirmed').reduce((acc, r) => acc + Number(r.amount || 0), 0)
+  return { plan, paid, overdue, pageAmount, pageConfirmed, orderCount: byOrder.size }
+})
+
 function goOrder(row) { router.push(`/crm/orders/${row.order_id}`) }
+function goDetail(row) { router.push(`/crm/payments/${row.id}`) }
 function formatAmount(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function formatDate(v) { return v ? String(v).replace('T', ' ').slice(0, 16) : '' }
 
@@ -195,6 +219,27 @@ onMounted(async () => {
       @apply="applyAdvancedFilters"
     />
 
+    <div class="pay-summary">
+      <div class="pay-summary__item">
+        <span class="pay-summary__label">本页回款</span>
+        <strong>¥{{ formatAmount(pageSummary.pageAmount) }}</strong>
+        <em>已确认 ¥{{ formatAmount(pageSummary.pageConfirmed) }}</em>
+      </div>
+      <div class="pay-summary__item">
+        <span class="pay-summary__label">关联订单计划（去重）</span>
+        <strong>¥{{ formatAmount(pageSummary.plan) }}</strong>
+        <em>{{ pageSummary.orderCount }} 单</em>
+      </div>
+      <div class="pay-summary__item">
+        <span class="pay-summary__label">已回合计</span>
+        <strong class="is-ok">¥{{ formatAmount(pageSummary.paid) }}</strong>
+      </div>
+      <div class="pay-summary__item">
+        <span class="pay-summary__label">逾期</span>
+        <strong class="is-warn">¥{{ formatAmount(pageSummary.overdue) }}</strong>
+      </div>
+    </div>
+
     <div class="crm-list-table-wrap">
       <el-table
         :key="tableSortKey"
@@ -205,16 +250,33 @@ onMounted(async () => {
         :default-sort="defaultTableSort"
         :header-cell-class-name="() => 'crm-list-table__header-cell'"
       >
-        <el-table-column prop="payment_number" label="回款号" width="160" fixed="left" show-overflow-tooltip />
-        <el-table-column label="订单" min-width="200">
+        <el-table-column prop="payment_number" label="回款号" width="160" fixed="left" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-link type="primary" @click="goDetail(row)">{{ row.payment_number }}</el-link>
+          </template>
+        </el-table-column>
+        <el-table-column label="订单" min-width="160">
           <template #default="{ row }">
             <el-link type="primary" @click="goOrder(row)">{{ row.order_id }}</el-link>
           </template>
         </el-table-column>
-        <el-table-column label="金额" width="140" align="right">
+        <el-table-column label="金额" width="120" align="right">
           <template #default="{ row }">¥{{ formatAmount(row.amount) }}</template>
         </el-table-column>
-        <el-table-column label="到账日" width="150">
+        <el-table-column label="订单计划" width="120" align="right">
+          <template #default="{ row }">{{ row.order_plan_total != null ? '¥' + formatAmount(row.order_plan_total) : '—' }}</template>
+        </el-table-column>
+        <el-table-column label="订单已回" width="120" align="right">
+          <template #default="{ row }">{{ row.order_paid_total != null ? '¥' + formatAmount(row.order_paid_total) : '—' }}</template>
+        </el-table-column>
+        <el-table-column label="订单逾期" width="110" align="right">
+          <template #default="{ row }">
+            <span :class="{ 'is-overdue': Number(row.order_overdue_amount || 0) > 0 }">
+              {{ row.order_overdue_amount != null ? '¥' + formatAmount(row.order_overdue_amount) : '—' }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="到账日" width="140">
           <template #default="{ row }">{{ formatDate(row.paid_at) }}</template>
         </el-table-column>
         <el-table-column label="方式" width="80" align="center">
@@ -226,8 +288,9 @@ onMounted(async () => {
         <el-table-column label="负责人" width="110" fixed="right">
           <template #default="{ row }">{{ resolveMemberName(row.owner_user_id) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right" align="center">
+        <el-table-column label="操作" width="220" fixed="right" align="center">
           <template #default="{ row }">
+            <el-button link type="primary" @click="goDetail(row)">详情</el-button>
             <el-button v-if="canConfirm() && row.status === 'pending'" link type="success" @click="handleConfirm(row)">确认</el-button>
             <el-button v-if="canReverse() && row.status === 'confirmed'" link type="warning" @click="handleReverse(row)">冲销</el-button>
             <el-button v-if="canDelete()" link type="danger" @click="handleDelete(row)">删除</el-button>
@@ -304,4 +367,36 @@ onMounted(async () => {
   vertical-align: middle;
 }
 .crm-list-status-filter { width: 120px; }
+.pay-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 12px;
+}
+.pay-summary__item {
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+}
+.pay-summary__label {
+  display: block;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 4px;
+}
+.pay-summary__item strong { font-size: 16px; }
+.pay-summary__item em {
+  display: block;
+  margin-top: 2px;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.pay-summary__item .is-ok { color: var(--el-color-success); }
+.pay-summary__item .is-warn { color: var(--el-color-warning); }
+.is-overdue { color: var(--el-color-danger); font-weight: 600; }
+@media (max-width: 960px) {
+  .pay-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 </style>

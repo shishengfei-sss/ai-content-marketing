@@ -436,6 +436,10 @@ class MarketingCampaign(Base):
     goal: Mapped[str] = mapped_column(Text, nullable=True)
     channels: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     description: Mapped[str] = mapped_column(Text, nullable=True)
+    budget: Mapped[float] = mapped_column(Numeric(14, 2), nullable=True)
+    spent: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    currency: Mapped[str] = mapped_column(String(10), nullable=False, default="CNY")
+    target_segment_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=True)
     owner_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
     territory_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -443,6 +447,52 @@ class MarketingCampaign(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+CHANNEL_EXECUTION_STATUSES = ("planned", "published", "paused")
+CHANNEL_CONTENT_TYPES = ("post", "ad", "article", "email")
+
+
+class CampaignChannelExecution(Base):
+    __tablename__ = "campaign_channel_executions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("marketing_campaigns.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    channel: Mapped[str] = mapped_column(String(50), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(20), nullable=False, default="post")
+    content_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    cost: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    impressions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    clicks: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    leads_generated: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="planned")
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class CustomerSegment(Base):
+    __tablename__ = "customer_segments"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str] = mapped_column(String(500), nullable=True)
+    rules: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    estimated_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class CampaignContent(Base):
@@ -601,10 +651,29 @@ DEAL_SOURCES = CRM_SOURCE_OPTIONS  # 与线索/客户统一
 QUOTE_STATUSES = ("draft", "sent", "accepted", "rejected", "expired", "ordered")
 CONTRACT_STATUSES = ("draft", "sent", "signed", "executing", "expired", "terminated")
 CONTRACT_TYPES = ("new", "renewal", "addon")
-ORDER_STATUSES = ("draft", "confirmed", "executing", "completed", "cancelled")
+ORDER_STATUSES = (
+    "draft",
+    "pending_approval",
+    "approved",
+    "rejected",
+    "confirmed",
+    "executing",
+    "completed",
+    "cancelled",
+    "superseded",
+)
 ORDER_SOURCES = ("deal", "quote", "contract")
+APPROVAL_INSTANCE_STATUSES = ("pending", "approved", "rejected", "cancelled")
+APPROVER_ROLES = ("sales_manager", "director", "cfo", "admin")
+
 PAYMENT_STATUSES = ("pending", "confirmed", "reversed")
 PAYMENT_METHODS = ("bank", "wechat", "alipay", "cash", "other")
+DELIVERY_NOTE_STATUSES = ("preparing", "shipped", "delivered", "returned")
+INVOICE_TYPES = ("vat", "normal", "electronic")
+INVOICE_STATUSES = ("draft", "issued", "void")
+CONTRACT_AMENDMENT_CHANGE_TYPES = ("amount_change", "term_change", "party_change", "other")
+CONTRACT_AMENDMENT_STATUSES = ("draft", "approved", "executed", "cancelled")
+REFUND_STATUSES = ("pending", "approved", "completed", "rejected")
 
 
 class SalesPipeline(Base):
@@ -755,6 +824,24 @@ class DealCloseAnalysis(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ProductCategory(Base):
+    __tablename__ = "product_categories"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    parent_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("product_categories.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    description: Mapped[str] = mapped_column(String(500), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class Product(Base):
     __tablename__ = "products"
 
@@ -765,14 +852,98 @@ class Product(Base):
     unit: Mapped[str] = mapped_column(String(30), nullable=True)
     list_price: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     cost_price: Mapped[float] = mapped_column(Numeric(14, 2), nullable=True)
+    category_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("product_categories.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=True)
     extra_data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    total_ordered_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_revenue: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    last_order_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ProductVariant(Base):
+    __tablename__ = "product_variants"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sku: Mapped[str] = mapped_column(String(50), nullable=False)
+    variant_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    attributes: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    list_price: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    cost_price: Mapped[float] = mapped_column(Numeric(14, 2), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class PriceBook(Base):
+    __tablename__ = "price_books"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str] = mapped_column(String(500), nullable=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class PriceBookEntry(Base):
+    __tablename__ = "price_book_entries"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    price_book_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("price_books.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    variant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True
+    )
+    unit_price: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    min_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    customer_levels: Mapped[list] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ContractTemplate(Base):
+    __tablename__ = "contract_templates"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    category: Mapped[str] = mapped_column(String(50), nullable=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    variables: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Quote(Base):
@@ -853,6 +1024,28 @@ class Contract(Base):
     deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class ContractAmendment(Base):
+    __tablename__ = "contract_amendments"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    parent_contract_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    amendment_number: Mapped[str] = mapped_column(String(50), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    change_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    original_value: Mapped[str] = mapped_column(Text, nullable=True)
+    new_value: Mapped[str] = mapped_column(Text, nullable=True)
+    amount_delta: Mapped[float] = mapped_column(Numeric(14, 2), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class Order(Base):
     __tablename__ = "orders"
 
@@ -869,6 +1062,11 @@ class Order(Base):
     order_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    parent_order_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    revision_reason: Mapped[str] = mapped_column(String(500), nullable=True)
     owner_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
     territory_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=True)
     extra_data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
@@ -900,9 +1098,128 @@ class OrderLine(Base):
     quantity: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=1)
     unit_price: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     discount_rate: Mapped[float] = mapped_column(Numeric(5, 2), nullable=True)
+    tax_rate: Mapped[float] = mapped_column(Numeric(5, 2), nullable=True)
+    tax_amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=True)
     line_total: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     sort_order: Mapped[int] = mapped_column(default=0, nullable=False)
     remark: Mapped[str] = mapped_column(Text, nullable=True)
+
+
+class OrderApprovalRule(Base):
+    __tablename__ = "order_approval_rules"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    min_amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    max_amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=True)
+    approver_role: Mapped[str] = mapped_column(String(50), nullable=False)
+    approval_type: Mapped[str] = mapped_column(String(20), nullable=False, default="sequential")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ApprovalInstance(Base):
+    __tablename__ = "approval_instances"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    rule_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("order_approval_rules.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    current_step: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    steps_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    submitted_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    reject_reason: Mapped[str] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class DeliveryNote(Base):
+    __tablename__ = "delivery_notes"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    delivery_number: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="preparing")
+    shipped_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    tracking_number: Mapped[str] = mapped_column(String(100), nullable=True)
+    carrier: Mapped[str] = mapped_column(String(50), nullable=True)
+    remark: Mapped[str] = mapped_column(String(500), nullable=True)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    items: Mapped[list["DeliveryItem"]] = relationship(
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+class DeliveryItem(Base):
+    __tablename__ = "delivery_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    delivery_note_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("delivery_notes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    order_line_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("order_lines.id"), nullable=False)
+    quantity: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+
+
+class Invoice(Base):
+    __tablename__ = "invoices"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    invoice_number: Mapped[str] = mapped_column(String(50), nullable=False)
+    invoice_type: Mapped[str] = mapped_column(String(20), nullable=False, default="vat")
+    amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    tax_amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    total_amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    extra_data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class InvoicePayment(Base):
+    __tablename__ = "invoice_payments"
+
+    invoice_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("invoices.id", ondelete="CASCADE"), primary_key=True
+    )
+    payment_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("payments.id", ondelete="CASCADE"), primary_key=True
+    )
+    matched_amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class PaymentPlan(Base):
@@ -940,6 +1257,31 @@ class Payment(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     remark: Mapped[str] = mapped_column(String(500), nullable=True)
     owner_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    created_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Refund(Base):
+    __tablename__ = "refunds"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id"), nullable=False, index=True)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    original_payment_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("payments.id", ondelete="SET NULL"), nullable=True
+    )
+    refund_number: Mapped[str] = mapped_column(String(50), nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    approved_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

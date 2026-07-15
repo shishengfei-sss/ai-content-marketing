@@ -77,6 +77,10 @@ async def handle_chat(
     llm_source: str = "platform",
     selected_proposal_index: int | None = None,
     tenant_ctx: TenantContext | None = None,
+    campaign_id: UUID | None = None,
+    platform: str | None = None,
+    content_format: str | None = None,
+    video_duration_sec: int | None = None,
 ) -> AgentChatResponse:
     append_message(db, session, role="user", content=message)
 
@@ -95,6 +99,10 @@ async def handle_chat(
         selected_proposal_index=selected_proposal_index,
         memory_context=memory_block,
     )
+    if platform:
+        intent.platform = platform
+    if content_format:
+        intent.content_format = content_format
 
     if intent.action == "clarify" or (intent.action == "proposals" and not intent.platform):
         question = intent.clarify_question or "请问要发布到哪个平台？主题是什么？"
@@ -136,6 +144,8 @@ async def handle_chat(
             topic=topic,
             content_format=_resolve_content_format(intent, intent.platform),  # type: ignore[arg-type]
             llm_source=llm_source,
+            proposal_count=intent.proposal_count,
+            video_duration_sec=video_duration_sec,
         )
         result = await run_generate_proposals(db, session.tenant_id, req)
         summary = f"已生成 {len(result.proposals)} 个选题方案，请选择其一继续生成正文。"
@@ -181,9 +191,26 @@ async def handle_chat(
             content_format=_resolve_content_format(intent, intent.platform or "wechat"),
             selected_proposal=selected,
             llm_source=llm_source,
+            campaign_id=campaign_id,
+            video_duration_sec=video_duration_sec,
         )
         content = await run_generate_content(db, session.tenant_id, user, req)
-        summary = f"正文已生成：《{content.topic}》"
+        revise_note = ""
+        if tenant_ctx is not None:
+            from app.services.agent.compliance_revise_service import revise_until_pass
+
+            content, info = await revise_until_pass(
+                db,
+                tenant_ctx,
+                content.id,
+                llm_source=llm_source,
+            )
+            if info["rounds"]:
+                if info["still_blocked"]:
+                    revise_note = f"（合规仍未通过，已自动改稿 {info['rounds']} 轮）"
+                else:
+                    revise_note = f"（已自动合规改稿 {info['rounds']} 轮）"
+        summary = f"正文已生成{revise_note}：《{content.topic}》"
         assistant = append_message(
             db,
             session,

@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.database import uuid_eq
 from app.dependencies import TenantContext
-from app.models.crm import Payment, PaymentPlan
-from app.schemas.crm_deals import PaymentCreate, PaymentPlanCreate, PaymentUpdate
+from app.models.crm import Order, Payment, PaymentPlan
+from app.schemas.crm_deals import PaymentCreate, PaymentPlanCreate, PaymentUpdate, ReceivableItemOut, ReceivableSummaryOut
 from app.services.crm.crm_scope_service import assert_can_view_payment, assert_can_view_order, _perm_set
 from app.services.crm.number_service import generate_number
 from app.services.crm.order_service import require_order
@@ -21,6 +21,96 @@ from app.services.crm.order_service import require_order
 
 def _generate_payment_number(db: Session, tenant_id: UUID) -> str:
     return generate_number(db, tenant_id, "payment")
+
+
+def _aging_bucket(days_overdue: int) -> str:
+    if days_overdue <= 0:
+        return "current"
+    if days_overdue <= 30:
+        return "d30"
+    if days_overdue <= 60:
+        return "d60"
+    return "d90plus"
+
+
+def list_receivables(db: Session, ctx: TenantContext) -> ReceivableSummaryOut:
+    """按回款计划计算应收：outstanding = max(0, plan - order已确认回款分摊简化为订单级已回后按计划顺序冲销)。
+
+    简化算法：订单已回总额按 plan.installment_no 顺序冲销各期计划，未冲完且已到期的计入账龄。
+    """
+    now = datetime.now(timezone.utc)
+    plans = (
+        db.query(PaymentPlan)
+        .join(Order, Order.id == PaymentPlan.order_id)
+        .filter(
+            PaymentPlan.tenant_id == ctx.tenant_id,
+            Order.tenant_id == ctx.tenant_id,
+            Order.deleted_at.is_(None),
+            Order.status.notin_(("draft", "cancelled", "superseded")),
+        )
+        .order_by(PaymentPlan.order_id, PaymentPlan.installment_no)
+        .all()
+    )
+    if not plans:
+        return ReceivableSummaryOut(items=[], buckets={"current": 0, "d30": 0, "d60": 0, "d90plus": 0}, total_outstanding=0)
+
+    order_ids = list({p.order_id for p in plans})
+    orders = {
+        o.id: o
+        for o in db.query(Order).filter(Order.id.in_(order_ids), Order.tenant_id == ctx.tenant_id).all()
+    }
+    pays = (
+        db.query(Payment)
+        .filter(
+            Payment.tenant_id == ctx.tenant_id,
+            Payment.order_id.in_(order_ids),
+            Payment.deleted_at.is_(None),
+            Payment.status == "confirmed",
+        )
+        .all()
+    )
+    paid_by_order: dict[UUID, float] = {oid: 0.0 for oid in order_ids}
+    for p in pays:
+        paid_by_order[p.order_id] = paid_by_order.get(p.order_id, 0.0) + float(p.amount or 0)
+
+    remaining_paid = dict(paid_by_order)
+    items: list[ReceivableItemOut] = []
+    buckets = {"current": 0.0, "d30": 0.0, "d60": 0.0, "d90plus": 0.0}
+
+    for pl in plans:
+        plan_amt = float(pl.plan_amount or 0)
+        covered = min(plan_amt, remaining_paid.get(pl.order_id, 0.0))
+        remaining_paid[pl.order_id] = max(0.0, remaining_paid.get(pl.order_id, 0.0) - covered)
+        outstanding = round(plan_amt - covered, 2)
+        if outstanding <= 0:
+            continue
+        plan_dt = pl.plan_date
+        if plan_dt is not None and plan_dt.tzinfo is None:
+            plan_dt = plan_dt.replace(tzinfo=timezone.utc)
+        days_overdue = 0
+        if plan_dt is not None and plan_dt < now:
+            days_overdue = (now.date() - plan_dt.date()).days
+        bucket = _aging_bucket(days_overdue)
+        order = orders.get(pl.order_id)
+        items.append(
+            ReceivableItemOut(
+                order_id=pl.order_id,
+                order_number=order.order_number if order else None,
+                order_title=order.title if order else None,
+                plan_id=pl.id,
+                installment_no=pl.installment_no,
+                plan_date=pl.plan_date,
+                plan_amount=plan_amt,
+                paid_amount=covered,
+                outstanding=outstanding,
+                days_overdue=days_overdue,
+                aging_bucket=bucket,
+            )
+        )
+        buckets[bucket] = round(buckets[bucket] + outstanding, 2)
+
+    total = round(sum(i.outstanding for i in items), 2)
+    return ReceivableSummaryOut(items=items, buckets=buckets, total_outstanding=total)
 
 
 # ---------------- 回款计划 ----------------
@@ -33,6 +123,56 @@ def list_plans_for_order(db: Session, tenant_id: UUID, order_id: UUID) -> list[P
         .order_by(PaymentPlan.installment_no)
         .all()
     )
+
+
+def order_payment_summary(
+    db: Session, tenant_id: UUID, order_ids: list[UUID]
+) -> dict[UUID, dict[str, float]]:
+    """批量计算订单：计划合计 / 已回合计 / 逾期（已过期计划金额 − 已回，下限 0）。"""
+    if not order_ids:
+        return {}
+    now = datetime.now(timezone.utc)
+    plans = (
+        db.query(PaymentPlan)
+        .filter(PaymentPlan.tenant_id == tenant_id, PaymentPlan.order_id.in_(order_ids))
+        .all()
+    )
+    pays = (
+        db.query(Payment)
+        .filter(
+            Payment.tenant_id == tenant_id,
+            Payment.order_id.in_(order_ids),
+            Payment.deleted_at.is_(None),
+            Payment.status == "confirmed",
+        )
+        .all()
+    )
+    summary: dict[UUID, dict[str, float]] = {
+        oid: {"plan_total": 0.0, "paid_total": 0.0, "overdue_amount": 0.0} for oid in order_ids
+    }
+    overdue_plan: dict[UUID, float] = {oid: 0.0 for oid in order_ids}
+    for pl in plans:
+        oid = pl.order_id
+        if oid not in summary:
+            continue
+        amt = float(pl.plan_amount or 0)
+        summary[oid]["plan_total"] += amt
+        plan_dt = pl.plan_date
+        if plan_dt is not None:
+            if plan_dt.tzinfo is None:
+                plan_dt = plan_dt.replace(tzinfo=timezone.utc)
+            if plan_dt < now:
+                overdue_plan[oid] += amt
+    for p in pays:
+        oid = p.order_id
+        if oid not in summary:
+            continue
+        summary[oid]["paid_total"] += float(p.amount or 0)
+    for oid, s in summary.items():
+        s["plan_total"] = round(s["plan_total"], 2)
+        s["paid_total"] = round(s["paid_total"], 2)
+        s["overdue_amount"] = round(max(0.0, overdue_plan[oid] - s["paid_total"]), 2)
+    return summary
 
 
 def create_plan(db: Session, ctx: TenantContext, order_id: UUID, data: PaymentPlanCreate) -> PaymentPlan:

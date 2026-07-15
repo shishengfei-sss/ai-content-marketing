@@ -105,6 +105,68 @@ export const agentApi = {
   listSessions: (params) => api.get('/api/v1/agent/sessions', { params }),
   getMessages: (sessionId) => api.get(`/api/v1/agent/sessions/${sessionId}/messages`),
   chat: (sessionId, data) => api.post(`/api/v1/agent/sessions/${sessionId}/chat`, data),
+  /**
+   * SSE 流式聊天（不走 axios JSON 拦截器）。
+   * onEvent(eventName, data)；返回最终 done payload。
+   */
+  chatStream: async (sessionId, body, { onEvent } = {}) => {
+    const base = api.defaults.baseURL || ''
+    const token = localStorage.getItem('token')
+    const res = await fetch(`${base}/api/v1/agent/sessions/${sessionId}/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      let detail = `流式请求失败 (${res.status})`
+      try {
+        const errBody = await res.json()
+        if (typeof errBody?.detail === 'string') detail = errBody.detail
+      } catch { /* ignore */ }
+      throw new Error(detail)
+    }
+    const reader = res.body?.getReader()
+    if (!reader) throw new Error('浏览器不支持流式响应')
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let currentEvent = 'message'
+    let donePayload = null
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split('\n')
+      buffer = parts.pop() || ''
+      for (const rawLine of parts) {
+        const line = rawLine.replace(/\r$/, '')
+        if (!line) continue
+        if (line.startsWith('event:')) {
+          currentEvent = line.slice(6).trim()
+          continue
+        }
+        if (line.startsWith('data:')) {
+          const raw = line.slice(5).trim()
+          let data
+          try {
+            data = JSON.parse(raw)
+          } catch {
+            data = { raw }
+          }
+          if (currentEvent === 'error') {
+            throw new Error(typeof data?.detail === 'string' ? data.detail : '流式生成失败')
+          }
+          onEvent?.(currentEvent, data)
+          if (currentEvent === 'done') donePayload = data
+          currentEvent = 'message'
+        }
+      }
+    }
+    if (!donePayload) throw new Error('流式结束但未收到完成事件')
+    return donePayload
+  },
   preflight: (sessionId, data) =>
     api.post(`/api/v1/agent/sessions/${sessionId}/preflight`, data),
   createWorkflow: (data) => api.post('/api/v1/agent/workflows', data),
@@ -260,6 +322,15 @@ export const crmApi = {
     api.post(`/api/v1/crm/campaigns/${campaignId}/contents`, { content_id: contentId }),
   unlinkCampaignContent: (campaignId, contentId) =>
     api.delete(`/api/v1/crm/campaigns/${campaignId}/contents/${contentId}`),
+  listCampaignExecutions: (id) => api.get(`/api/v1/crm/campaigns/${id}/channel-executions`),
+  createCampaignExecution: (id, data) => api.post(`/api/v1/crm/campaigns/${id}/channel-executions`, data),
+  updateCampaignExecution: (id, data) => api.patch(`/api/v1/crm/campaigns/channel-executions/${id}`, data),
+  deleteCampaignExecution: (id) => api.delete(`/api/v1/crm/campaigns/channel-executions/${id}`),
+  getCampaignPerformance: (id) => api.get(`/api/v1/crm/campaigns/${id}/performance`),
+  listSegments: () => api.get('/api/v1/crm/segments'),
+  createSegment: (data) => api.post('/api/v1/crm/segments', data),
+  updateSegment: (id, data) => api.patch(`/api/v1/crm/segments/${id}`, data),
+  deleteSegment: (id) => api.delete(`/api/v1/crm/segments/${id}`),
   getSchema: (entityType) => api.get(`/api/v1/crm/schema/${entityType}`),
   createSchemaField: (entityType, data) =>
     api.post(`/api/v1/crm/schema/${entityType}/fields`, data),
@@ -351,10 +422,29 @@ export const crmApi = {
     api.delete(`/api/v1/crm/pipelines/${pipelineId}/stages/${stageId}`),
   // v0.7 产品
   listProducts: (params) => api.get('/api/v1/crm/products', { params }),
+  listProductCategories: (params) => api.get('/api/v1/crm/product-categories', { params }),
+  createProductCategory: (data) => api.post('/api/v1/crm/product-categories', data),
+  updateProductCategory: (id, data) => api.patch(`/api/v1/crm/product-categories/${id}`, data),
+  deleteProductCategory: (id) => api.delete(`/api/v1/crm/product-categories/${id}`),
+  listContractTemplates: (params) => api.get('/api/v1/crm/contract-templates', { params }),
+  createContractTemplate: (data) => api.post('/api/v1/crm/contract-templates', data),
+  createContractFromTemplate: (data) => api.post('/api/v1/crm/contracts/from-template', data),
   getProduct: (id) => api.get(`/api/v1/crm/products/${id}`),
   createProduct: (data) => api.post('/api/v1/crm/products', data),
   updateProduct: (id, data) => api.patch(`/api/v1/crm/products/${id}`, data),
   deleteProduct: (id) => api.delete(`/api/v1/crm/products/${id}`),
+  listProductVariants: (id) => api.get(`/api/v1/crm/products/${id}/variants`),
+  createProductVariant: (id, data) => api.post(`/api/v1/crm/products/${id}/variants`, data),
+  updateProductVariant: (id, data) => api.patch(`/api/v1/crm/products/variants/${id}`, data),
+  deleteProductVariant: (id) => api.delete(`/api/v1/crm/products/variants/${id}`),
+  listProductPriceEntries: (id) => api.get(`/api/v1/crm/products/${id}/price-entries`),
+  listPriceBooks: () => api.get('/api/v1/crm/price-books'),
+  createPriceBook: (data) => api.post('/api/v1/crm/price-books', data),
+  updatePriceBook: (id, data) => api.patch(`/api/v1/crm/price-books/${id}`, data),
+  deletePriceBook: (id) => api.delete(`/api/v1/crm/price-books/${id}`),
+  listPriceBookEntries: (id) => api.get(`/api/v1/crm/price-books/${id}/entries`),
+  createPriceBookEntry: (id, data) => api.post(`/api/v1/crm/price-books/${id}/entries`, data),
+  deletePriceBookEntry: (id) => api.delete(`/api/v1/crm/price-books/entries/${id}`),
   // v0.7 报价
   listQuotes: (params) => api.get('/api/v1/crm/quotes', { params }),
   getQuote: (id) => api.get(`/api/v1/crm/quotes/${id}`),
@@ -372,6 +462,11 @@ export const crmApi = {
   deleteContract: (id) => api.delete(`/api/v1/crm/contracts/${id}`),
   signContract: (id, data) => api.post(`/api/v1/crm/contracts/${id}/sign`, data),
   convertContractToOrder: (id) => api.post(`/api/v1/crm/contracts/${id}/convert-to-order`),
+  renewContract: (id) => api.post(`/api/v1/crm/contracts/${id}/renew`),
+  listContractAmendments: (id) => api.get(`/api/v1/crm/contracts/${id}/amendments`),
+  createContractAmendment: (id, data) => api.post(`/api/v1/crm/contracts/${id}/amendments`, data),
+  approveContractAmendment: (id) => api.post(`/api/v1/crm/contracts/amendments/${id}/approve`),
+  executeContractAmendment: (id) => api.post(`/api/v1/crm/contracts/amendments/${id}/execute`),
   // v0.7 订单
   listOrders: (params) => api.get('/api/v1/crm/orders', { params }),
   getOrder: (id) => api.get(`/api/v1/crm/orders/${id}`),
@@ -380,6 +475,23 @@ export const crmApi = {
   deleteOrder: (id) => api.delete(`/api/v1/crm/orders/${id}`),
   confirmOrder: (id) => api.post(`/api/v1/crm/orders/${id}/confirm`),
   cancelOrder: (id) => api.post(`/api/v1/crm/orders/${id}/cancel`),
+  submitOrder: (id) => api.post(`/api/v1/crm/orders/${id}/submit`),
+  approveOrder: (id) => api.post(`/api/v1/crm/orders/${id}/approve`),
+  rejectOrder: (id, data) => api.post(`/api/v1/crm/orders/${id}/reject`, data),
+  listOrderApprovals: (id) => api.get(`/api/v1/crm/orders/${id}/approvals`),
+  reviseOrder: (id, data) => api.post(`/api/v1/crm/orders/${id}/revise`, data),
+  listOrderRevisions: (id) => api.get(`/api/v1/crm/orders/${id}/revisions`),
+  listOrderDeliveries: (id) => api.get(`/api/v1/crm/orders/${id}/deliveries`),
+  createOrderDelivery: (id, data) => api.post(`/api/v1/crm/orders/${id}/deliveries`, data),
+  shipDelivery: (id) => api.post(`/api/v1/crm/deliveries/${id}/ship`),
+  completeDelivery: (id) => api.post(`/api/v1/crm/deliveries/${id}/deliver`),
+  deleteDelivery: (id) => api.delete(`/api/v1/crm/deliveries/${id}`),
+  listOrderInvoices: (id) => api.get(`/api/v1/crm/orders/${id}/invoices`),
+  createOrderInvoice: (id, data) => api.post(`/api/v1/crm/orders/${id}/invoices`, data),
+  issueInvoice: (id) => api.post(`/api/v1/crm/invoices/${id}/issue`),
+  voidInvoice: (id) => api.post(`/api/v1/crm/invoices/${id}/void`),
+  matchInvoicePayment: (id, data) => api.post(`/api/v1/crm/invoices/${id}/payments`, data),
+  listApprovalRules: () => api.get('/api/v1/crm/approval-rules'),
   // v0.7 回款
   listPayments: (params) => api.get('/api/v1/crm/payments', { params }),
   getPayment: (id) => api.get(`/api/v1/crm/payments/${id}`),
@@ -392,6 +504,12 @@ export const crmApi = {
   createOrderPaymentPlan: (orderId, data) =>
     api.post(`/api/v1/crm/payments/orders/${orderId}/plans`, data),
   deleteOrderPaymentPlan: (planId) => api.delete(`/api/v1/crm/payments/plans/${planId}`),
+  listReceivables: () => api.get('/api/v1/crm/payments/receivables'),
+  listOrderRefunds: (orderId) => api.get(`/api/v1/crm/payments/orders/${orderId}/refunds`),
+  createRefund: (data) => api.post('/api/v1/crm/payments/refunds', data),
+  approveRefund: (id) => api.post(`/api/v1/crm/payments/refunds/${id}/approve`),
+  completeRefund: (id) => api.post(`/api/v1/crm/payments/refunds/${id}/complete`),
+  rejectRefund: (id) => api.post(`/api/v1/crm/payments/refunds/${id}/reject`),
   // v0.8 编号规则
   listNumberRules: () => api.get('/api/v1/crm/number-rules'),
   updateNumberRule: (entityType, data) =>

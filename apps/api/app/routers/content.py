@@ -158,17 +158,6 @@ async def generate_content(
     db: Session = Depends(get_db),
 ):
     content = await run_generate_content(db, tenant_id, current_user, body)
-    if body.campaign_id:
-        from app.services.crm.campaign_service import get_campaign, link_content
-        from app.dependencies import TenantContext
-        from app.services.membership_service import get_membership
-
-        membership = get_membership(db, current_user.id, tenant_id)
-        if membership:
-            ctx = TenantContext(user=current_user, tenant_id=tenant_id, membership=membership)
-            campaign = get_campaign(db, tenant_id, body.campaign_id)
-            if campaign:
-                link_content(db, ctx, campaign, content.id)
     return _content_out(content)
 
 

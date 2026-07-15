@@ -10,7 +10,19 @@ from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import Query, Session
 
 from app.dependencies import TenantContext
-from app.models.crm import Customer, Deal, EntityFieldDefinition, EntityListView, Lead, Quote, Contract, Order, Payment
+from app.models.crm import (
+    Customer,
+    Deal,
+    EntityFieldDefinition,
+    EntityListView,
+    Lead,
+    MarketingCampaign,
+    Product,
+    Quote,
+    Contract,
+    Order,
+    Payment,
+)
 from app.permissions import SYSTEM_ROLE_ADMIN
 from app.services.crm.schema_service import (
     ensure_entity_schema,
@@ -20,7 +32,20 @@ from app.services.crm.schema_service import (
     resolve_list_columns,
 )
 
-VIEW_ENTITY_TYPES = frozenset({"lead", "customer", "task", "campaign", "deal", "quote", "contract", "order", "payment"})
+VIEW_ENTITY_TYPES = frozenset(
+    {
+        "lead",
+        "customer",
+        "task",
+        "campaign",
+        "deal",
+        "quote",
+        "contract",
+        "order",
+        "payment",
+        "product",
+    }
+)
 
 LEAD_SEARCH_COLUMNS = (
     Lead.company_name,
@@ -78,6 +103,10 @@ def _model_for_entity(entity_type: str):
         return Order
     if entity_type == "payment":
         return Payment
+    if entity_type == "campaign":
+        return MarketingCampaign
+    if entity_type == "product":
+        return Product
     raise HTTPException(status_code=400, detail=f"视图筛选暂未支持 {entity_type}")
 
 
@@ -86,13 +115,31 @@ def _field_expr(model, field_def: EntityFieldDefinition):
     # 业务表列优先：历史租户 schema 可能仍标记为 seed，但数据在 ORM 列上
     if hasattr(model, key):
         return getattr(model, key)
-    return func.json_extract(model.extra_data, f"$.{key}")
+    if hasattr(model, "extra_data"):
+        return func.json_extract(model.extra_data, f"$.{key}")
+    return None
 
 
 def _apply_condition(query: Query, model, field_def: EntityFieldDefinition, cond: dict) -> Query:
     op = cond.get("op", "eq")
     value = cond.get("value")
     expr = _field_expr(model, field_def)
+    if expr is None:
+        return query
+
+    # JSON 筛选项常以字符串传入 UUID；转为 UUID 避免 dialect bind 报错
+    def _coerce(v):
+        if isinstance(v, str) and len(v) in (32, 36):
+            try:
+                return UUID(v)
+            except (ValueError, TypeError, AttributeError):
+                return v
+        return v
+
+    if op in ("eq", "neq", "gt", "gte", "lt", "lte"):
+        value = _coerce(value)
+    if op == "in":
+        value = [_coerce(v) for v in (value if isinstance(value, list) else [value])]
 
     if op == "eq":
         return query.filter(expr == value)
@@ -187,26 +234,41 @@ def apply_view_search(query: Query, entity_type: str, search_q: str | None) -> Q
     if entity_type == "payment":
         pattern = f"%{search_q.strip()}%"
         return query.filter(Payment.payment_number.like(pattern))
+    if entity_type == "campaign":
+        pattern = f"%{search_q.strip()}%"
+        return query.filter(
+            or_(MarketingCampaign.name.like(pattern), MarketingCampaign.campaign_number.like(pattern))
+        )
+    if entity_type == "product":
+        pattern = f"%{search_q.strip()}%"
+        return query.filter(or_(Product.name.like(pattern), Product.code.like(pattern)))
     return query
 
 
 def apply_view_sort(query: Query, entity_type: str, sort: list | None):
-    if not sort:
+    def _default_order(q: Query) -> Query:
         if entity_type == "lead":
-            return query.order_by(Lead.updated_at.desc())
+            return q.order_by(Lead.updated_at.desc())
         if entity_type == "customer":
-            return query.order_by(Customer.updated_at.desc())
+            return q.order_by(Customer.updated_at.desc())
         if entity_type == "deal":
-            return query.order_by(Deal.updated_at.desc())
+            return q.order_by(Deal.updated_at.desc())
         if entity_type == "quote":
-            return query.order_by(Quote.updated_at.desc())
+            return q.order_by(Quote.updated_at.desc())
         if entity_type == "contract":
-            return query.order_by(Contract.updated_at.desc())
+            return q.order_by(Contract.updated_at.desc())
         if entity_type == "order":
-            return query.order_by(Order.updated_at.desc())
+            return q.order_by(Order.updated_at.desc())
         if entity_type == "payment":
-            return query.order_by(Payment.updated_at.desc())
-        return query
+            return q.order_by(Payment.updated_at.desc())
+        if entity_type == "campaign":
+            return q.order_by(MarketingCampaign.updated_at.desc())
+        if entity_type == "product":
+            return q.order_by(Product.updated_at.desc())
+        return q
+
+    if not sort:
+        return _default_order(query)
     model = _model_for_entity(entity_type)
     order_clauses = []
     for item in sort:
@@ -218,21 +280,7 @@ def apply_view_sort(query: Query, entity_type: str, sort: list | None):
         order_clauses.append(col.desc() if direction == "desc" else col.asc())
     if order_clauses:
         return query.order_by(*order_clauses)
-    if entity_type == "lead":
-        return query.order_by(Lead.updated_at.desc())
-    if entity_type == "customer":
-        return query.order_by(Customer.updated_at.desc())
-    if entity_type == "deal":
-        return query.order_by(Deal.updated_at.desc())
-    if entity_type == "quote":
-        return query.order_by(Quote.updated_at.desc())
-    if entity_type == "contract":
-        return query.order_by(Contract.updated_at.desc())
-    if entity_type == "order":
-        return query.order_by(Order.updated_at.desc())
-    if entity_type == "payment":
-        return query.order_by(Payment.updated_at.desc())
-    return query
+    return _default_order(query)
 
 
 def list_visible_views(

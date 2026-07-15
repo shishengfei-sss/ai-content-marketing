@@ -5,42 +5,65 @@ param(
 
 $ErrorActionPreference = "SilentlyContinue"
 $apiRoot = Join-Path $PSScriptRoot ".." "apps" "api" | Resolve-Path
+$apiRootEscaped = [regex]::Escape($apiRoot.Path)
 
-Write-Host "Stopping all uvicorn (app.main:app) for this project ..."
-Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -match "uvicorn app\.main:app" -and $_.CommandLine -match [regex]::Escape($apiRoot.Path) } |
-    ForEach-Object {
-        Write-Host "  taskkill uvicorn PID $($_.ProcessId)"
-        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-    }
+function Stop-ProjectApiProcesses {
+    Write-Host "Stopping all uvicorn / spawn workers for this project ..."
+    Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
+        Where-Object {
+            $cmd = $_.CommandLine
+            if (-not $cmd) { return $false }
+            # 主进程 / reload 子进程 / multiprocessing.spawn worker
+            return (
+                ($cmd -match "uvicorn app\.main:app" -and $cmd -match $apiRootEscaped) -or
+                ($cmd -match "multiprocessing\.spawn" -and $cmd -match "spawn_main")
+            )
+        } |
+        ForEach-Object {
+            Write-Host "  taskkill python PID $($_.ProcessId)"
+            taskkill /F /T /PID $_.ProcessId 2>$null | Out-Null
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+}
 
-foreach ($cleanupPort in @(8002, 8003, $Port)) {
+Stop-ProjectApiProcesses
+
+foreach ($cleanupPort in (@(8002, 8003, $Port) | Select-Object -Unique)) {
     Write-Host "Stopping listeners on port $cleanupPort ..."
-    for ($attempt = 1; $attempt -le 3; $attempt++) {
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
         $pids = @()
         try {
-            $pids = Get-NetTCPConnection -LocalPort $cleanupPort -State Listen -ErrorAction SilentlyContinue |
+            $pids += Get-NetTCPConnection -LocalPort $cleanupPort -State Listen -ErrorAction SilentlyContinue |
                 Select-Object -ExpandProperty OwningProcess -Unique
-        } catch {
-            $lines = netstat -ano | Select-String ":$cleanupPort\s+.*LISTENING"
-            foreach ($line in $lines) {
-                $procId = ($line -replace '\s+', ' ').Trim().Split(' ')[-1]
-                if ($procId -match '^\d+$') { $pids += [int]$procId }
-            }
+        } catch {}
+        $lines = netstat -ano | Select-String ":$cleanupPort\s+.*LISTENING"
+        foreach ($line in $lines) {
+            $procId = ($line -replace '\s+', ' ').Trim().Split(' ')[-1]
+            if ($procId -match '^\d+$') { $pids += [int]$procId }
         }
         $pids = $pids | Where-Object { $_ -gt 0 } | Select-Object -Unique
         if (-not $pids) { break }
         foreach ($procId in $pids) {
-            if (Get-Process -Id $procId -ErrorAction SilentlyContinue) {
-                Write-Host "  taskkill PID $procId"
-                taskkill /F /T /PID $procId 2>$null | Out-Null
-            }
+            Write-Host "  taskkill port-owner PID $procId (attempt $attempt)"
+            taskkill /F /T /PID $procId 2>$null | Out-Null
+            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
         }
+        # spawn worker 可能挂在已杀父进程下，再扫一轮
+        Stop-ProjectApiProcesses
         Start-Sleep -Seconds 1
     }
 }
 
 Start-Sleep -Seconds 1
+try {
+    $still = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/health" -UseBasicParsing -TimeoutSec 2
+    if ($still) {
+        Write-Host "WARN: port $Port still answering health — check lingering python manually"
+    }
+} catch {
+    Write-Host "Port $Port is free."
+}
+
 Write-Host ""
 Write-Host "Starting API on http://127.0.0.1:$Port ..."
 Write-Host "Web/H5 代理请指向: VITE_API_PROXY_TARGET=http://127.0.0.1:$Port"

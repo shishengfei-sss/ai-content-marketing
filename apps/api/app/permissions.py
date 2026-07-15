@@ -125,6 +125,7 @@ CRM_PERMISSIONS: tuple[str, ...] = (
     "crm.order.edit",
     "crm.order.assign",
     "crm.order.place",
+    "crm.order.approve",
     "crm.order.convert",
     "crm.order.delete",
     # v0.7 收款
@@ -243,6 +244,7 @@ SALES_MANAGER_DEFAULT_PERMISSIONS: frozenset[str] = SALES_DEFAULT_PERMISSIONS | 
         "crm.order.list_team",
         "crm.order.list_territory",
         "crm.order.assign",
+        "crm.order.approve",
         "crm.order.delete",
         # v0.7 收款
         "crm.payment.list_team",

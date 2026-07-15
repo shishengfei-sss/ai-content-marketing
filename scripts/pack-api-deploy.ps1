@@ -19,14 +19,19 @@ $staging = Join-Path $env:TEMP ("ai-marketing-api-pack-" + [guid]::NewGuid().ToS
 New-Item -ItemType Directory -Path $staging -Force | Out-Null
 
 try {
+    # 打包时排除本地数据与密钥，避免覆盖生产环境数据
     $excludeDirs = @(".venv", ".ven", "__pycache__", ".pytest_cache", "storage", "node_modules")
-    $excludeFiles = @("dev.db", ".env")
+    $excludeFiles = @(".env")
+    $excludeFileGlobs = @("*.db", "*.db-journal", "*.sqlite", "*.sqlite3")
 
     Get-ChildItem -Path $apiDir -Force | ForEach-Object {
         if ($_.PSIsContainer) {
             if ($excludeDirs -contains $_.Name) { return }
         } else {
             if ($excludeFiles -contains $_.Name) { return }
+            foreach ($g in $excludeFileGlobs) {
+                if ($_.Name -like $g) { return }
+            }
         }
         Copy-Item -Path $_.FullName -Destination (Join-Path $staging $_.Name) -Recurse -Force
     }

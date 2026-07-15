@@ -37,12 +37,14 @@ function emptyForm() {
   }
 }
 function emptyLine() {
-  return { product_id: '', name: '', unit: '', quantity: 1, unit_price: 0, discount_rate: null, line_total: 0 }
+  return { product_id: '', name: '', unit: '', quantity: 1, unit_price: 0, discount_rate: null, tax_rate: null, tax_amount: null, line_total: 0 }
 }
 
 const isEdit = computed(() => !!props.record?.id)
 const dialogTitle = computed(() => (isEdit.value ? '编辑订单' : '新建订单'))
 const grandTotal = computed(() => form.value.lines.reduce((acc, l) => acc + Number(l.line_total || 0), 0))
+const taxGrandTotal = computed(() => form.value.lines.reduce((acc, l) => acc + Number(l.tax_amount || 0), 0))
+const inclGrandTotal = computed(() => grandTotal.value + taxGrandTotal.value)
 
 async function searchCustomers(q = '') {
   customerLoading.value = true
@@ -70,6 +72,8 @@ function recomputeLine(line) {
   const price = Number(line.unit_price || 0)
   const disc = Number(line.discount_rate || 0)
   line.line_total = Math.round(qty * price * (1 - disc / 100) * 100) / 100
+  const taxRate = Number(line.tax_rate || 0)
+  line.tax_amount = Math.round(line.line_total * (taxRate / 100) * 100) / 100
 }
 
 function resetForm() {
@@ -100,6 +104,8 @@ async function loadOrder() {
         quantity: Number(l.quantity),
         unit_price: Number(l.unit_price),
         discount_rate: l.discount_rate != null ? Number(l.discount_rate) : null,
+        tax_rate: l.tax_rate != null ? Number(l.tax_rate) : null,
+        tax_amount: l.tax_amount != null ? Number(l.tax_amount) : null,
         line_total: Number(l.line_total),
       })),
     }
@@ -129,6 +135,8 @@ async function submit() {
       quantity: Number(l.quantity),
       unit_price: Number(l.unit_price),
       discount_rate: l.discount_rate,
+      tax_rate: l.tax_rate,
+      tax_amount: l.tax_amount,
       line_total: Number(l.line_total),
     })),
   }
@@ -160,7 +168,7 @@ watch(dialogVisible, async (v) => {
 </script>
 
 <template>
-  <el-dialog v-model="dialogVisible" :title="dialogTitle" width="860px" destroy-on-close align-center>
+  <el-dialog v-model="dialogVisible" :title="dialogTitle" width="980px" destroy-on-close align-center>
     <el-form label-width="88px" :model="form">
       <el-form-item label="订单标题" required><el-input v-model="form.title" maxlength="200" /></el-form-item>
       <el-form-item label="客户" required>
@@ -174,30 +182,38 @@ watch(dialogVisible, async (v) => {
       <el-form-item label="明细">
         <div class="order-lines">
           <el-table :data="form.lines" border size="small">
-            <el-table-column label="产品" width="200">
+            <el-table-column label="产品" width="180">
               <template #default="{ row }">
                 <el-select v-model="row.product_id" filterable placeholder="选产品" size="small" @change="onProductChange(row)">
                   <el-option v-for="p in productOptions" :key="p.id" :label="`${p.name} (${p.code})`" :value="p.id" />
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="名称" min-width="160"><template #default="{ row }"><el-input v-model="row.name" size="small" /></template></el-table-column>
-            <el-table-column label="单位" width="80"><template #default="{ row }"><el-input v-model="row.unit" size="small" /></template></el-table-column>
-            <el-table-column label="数量" width="100">
+            <el-table-column label="名称" min-width="140"><template #default="{ row }"><el-input v-model="row.name" size="small" /></template></el-table-column>
+            <el-table-column label="单位" width="70"><template #default="{ row }"><el-input v-model="row.unit" size="small" /></template></el-table-column>
+            <el-table-column label="数量" width="90">
               <template #default="{ row }"><el-input-number v-model="row.quantity" :min="0" :precision="2" :controls="false" size="small" @change="recomputeLine(row)" /></template>
             </el-table-column>
-            <el-table-column label="单价" width="120">
+            <el-table-column label="单价" width="100">
               <template #default="{ row }"><el-input-number v-model="row.unit_price" :min="0" :precision="2" :controls="false" size="small" @change="recomputeLine(row)" /></template>
             </el-table-column>
-            <el-table-column label="折扣%" width="90">
+            <el-table-column label="折扣%" width="80">
               <template #default="{ row }"><el-input-number v-model="row.discount_rate" :min="0" :max="100" :precision="2" :controls="false" size="small" @change="recomputeLine(row)" /></template>
             </el-table-column>
-            <el-table-column label="小计" width="120" align="right"><template #default="{ row }">¥{{ Number(row.line_total || 0).toFixed(2) }}</template></el-table-column>
-            <el-table-column label="" width="60" align="center"><template #default="{ $index }"><el-button link type="danger" size="small" @click="removeLine($index)">删</el-button></template></el-table-column>
+            <el-table-column label="税率%" width="80">
+              <template #default="{ row }"><el-input-number v-model="row.tax_rate" :min="0" :max="100" :precision="2" :controls="false" size="small" @change="recomputeLine(row)" /></template>
+            </el-table-column>
+            <el-table-column label="税额" width="90" align="right"><template #default="{ row }">¥{{ Number(row.tax_amount || 0).toFixed(2) }}</template></el-table-column>
+            <el-table-column label="未税" width="100" align="right"><template #default="{ row }">¥{{ Number(row.line_total || 0).toFixed(2) }}</template></el-table-column>
+            <el-table-column label="" width="50" align="center"><template #default="{ $index }"><el-button link type="danger" size="small" @click="removeLine($index)">删</el-button></template></el-table-column>
           </el-table>
           <div class="order-lines__bar">
             <el-button size="small" @click="addLine">+ 添加明细</el-button>
-            <div class="order-lines__total">合计：<b>¥{{ grandTotal.toFixed(2) }}</b></div>
+            <div class="order-lines__total">
+              未税 <b>¥{{ grandTotal.toFixed(2) }}</b>
+              <span class="order-lines__tax">税额 ¥{{ taxGrandTotal.toFixed(2) }}</span>
+              <span>含税 <b>¥{{ inclGrandTotal.toFixed(2) }}</b></span>
+            </div>
           </div>
         </div>
       </el-form-item>
@@ -211,7 +227,8 @@ watch(dialogVisible, async (v) => {
 
 <style scoped>
 .order-lines { width: 100%; }
-.order-lines__bar { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-.order-lines__total { font-size: 14px; }
+.order-lines__bar { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 12px; flex-wrap: wrap; }
+.order-lines__total { font-size: 14px; display: flex; gap: 14px; align-items: center; }
 .order-lines__total b { color: var(--el-color-primary); font-size: 16px; }
+.order-lines__tax { color: var(--el-text-color-secondary); }
 </style>

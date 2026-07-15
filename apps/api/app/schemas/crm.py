@@ -344,6 +344,9 @@ class ActivityCreate(BaseModel):
     lead_id: UUID | None = None
     customer_id: UUID | None = None
     deal_id: UUID | None = None
+    # 订单/合同跟进：复用 entity_type + entity_id（无独立外键列）
+    entity_type: str | None = None
+    entity_id: UUID | None = None
     activity_type: str
     subject: str | None = Field(default=None, max_length=200)
     content: str = ""
@@ -554,6 +557,10 @@ class CampaignCreate(BaseModel):
     channels: list[str] = Field(default_factory=list)
     description: str | None = None
     territory_id: UUID | None = None
+    budget: float | None = Field(default=None, ge=0)
+    spent: float | None = Field(default=None, ge=0)
+    currency: str = Field(default="CNY", max_length=10)
+    target_segment_id: UUID | None = None
 
 
 class CampaignUpdate(BaseModel):
@@ -566,6 +573,10 @@ class CampaignUpdate(BaseModel):
     description: str | None = None
     owner_user_id: UUID | None = None
     territory_id: UUID | None = None
+    budget: float | None = Field(default=None, ge=0)
+    spent: float | None = Field(default=None, ge=0)
+    currency: str | None = Field(default=None, max_length=10)
+    target_segment_id: UUID | None = None
 
 
 class CampaignOut(BaseModel):
@@ -578,6 +589,10 @@ class CampaignOut(BaseModel):
     goal: str | None
     channels: list
     description: str | None
+    budget: float | None = None
+    spent: float = 0
+    currency: str = "CNY"
+    target_segment_id: UUID | None = None
     owner_user_id: UUID
     territory_id: UUID | None
     created_at: datetime
@@ -594,10 +609,117 @@ class CampaignListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+    list_fields: list[dict] | None = None
+    view_id: UUID | None = None
+    filters_applied: bool | None = None
 
 
 class CampaignContentLink(BaseModel):
     content_id: UUID
+
+
+class ChannelExecutionCreate(BaseModel):
+    channel: str = Field(min_length=1, max_length=50)
+    content_type: str = "post"
+    content_url: str | None = Field(default=None, max_length=500)
+    scheduled_at: datetime | None = None
+    published_at: datetime | None = None
+    cost: float = Field(default=0, ge=0)
+    impressions: int = Field(default=0, ge=0)
+    clicks: int = Field(default=0, ge=0)
+    leads_generated: int = Field(default=0, ge=0)
+    status: str = "planned"
+
+
+class ChannelExecutionUpdate(BaseModel):
+    channel: str | None = Field(default=None, min_length=1, max_length=50)
+    content_type: str | None = None
+    content_url: str | None = Field(default=None, max_length=500)
+    scheduled_at: datetime | None = None
+    published_at: datetime | None = None
+    cost: float | None = Field(default=None, ge=0)
+    impressions: int | None = Field(default=None, ge=0)
+    clicks: int | None = Field(default=None, ge=0)
+    leads_generated: int | None = Field(default=None, ge=0)
+    status: str | None = None
+
+
+class ChannelExecutionOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    campaign_id: UUID
+    channel: str
+    content_type: str
+    content_url: str | None
+    scheduled_at: datetime | None
+    published_at: datetime | None
+    cost: float
+    impressions: int
+    clicks: int
+    leads_generated: int
+    status: str
+    created_by_user_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CampaignChannelRoiOut(BaseModel):
+    channel: str
+    cost: float
+    impressions: int
+    clicks: int
+    leads_generated: int
+    cost_per_lead: float
+    roi: float | None = None
+
+
+class CampaignPerformanceOut(BaseModel):
+    campaign_id: UUID
+    total_cost: float
+    budget: float | None
+    spent: float
+    leads_count: int
+    customers_count: int
+    revenue: float
+    cost_per_lead: float
+    cost_per_customer: float
+    cost_per_click: float
+    roi: float
+    conversion_rate: float
+    by_channel: list[CampaignChannelRoiOut]
+
+
+class CustomerSegmentCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+    rules: dict = Field(default_factory=dict)
+    estimated_count: int = Field(default=0, ge=0)
+    is_active: bool = True
+
+
+class CustomerSegmentUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+    rules: dict | None = None
+    estimated_count: int | None = Field(default=None, ge=0)
+    is_active: bool | None = None
+
+
+class CustomerSegmentOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    name: str
+    description: str | None
+    rules: dict
+    estimated_count: int
+    is_active: bool
+    created_by_user_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class LeadPoolCreate(BaseModel):

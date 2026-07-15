@@ -13,12 +13,24 @@ from app.database import get_db
 from app.dependencies import TenantContext
 from app.models.crm import Contract
 from app.schemas.crm_deals import (
+    ContractAmendmentCreate,
+    ContractAmendmentOut,
     ContractConvertToOrderOut,
     ContractCreate,
+    ContractFromTemplateRequest,
     ContractListResponse,
     ContractOut,
+    ContractRenewOut,
     ContractUpdate,
 )
+from app.services.crm.contract_amendment_service import (
+    approve_amendment,
+    create_amendment,
+    execute_amendment,
+    get_amendment,
+    list_amendments,
+)
+from app.services.crm.contract_expiry_job import create_renewal_deal_for_contract
 from app.services.crm.contract_service import (
     convert_contract_to_order,
     create_contract,
@@ -27,6 +39,7 @@ from app.services.crm.contract_service import (
     soft_delete_contract,
     update_contract,
 )
+from app.services.crm.contract_template_service import create_contract_from_template
 from app.services.crm.crm_scope_service import apply_contract_list_scope, has_contract_list_permission
 from app.services.crm.filter_query import parse_list_filters_param
 from app.services.crm.view_service import (
@@ -123,6 +136,16 @@ def post_contract(
     return ContractOut.model_validate(c)
 
 
+@router.post("/from-template", response_model=ContractOut, status_code=201)
+def post_contract_from_template(
+    body: ContractFromTemplateRequest,
+    ctx: TenantContext = Depends(require_permission("crm.contract.create")),
+    db: Session = Depends(get_db),
+):
+    c = create_contract_from_template(db, ctx, body)
+    return ContractOut.model_validate(c)
+
+
 @router.get("/{contract_id}", response_model=ContractOut)
 def get_contract_detail(
     contract_id: UUID,
@@ -166,6 +189,67 @@ def convert_contract_to_order_endpoint(
     c = require_contract(db, ctx, contract_id)
     order = convert_contract_to_order(db, ctx, c)
     return ContractConvertToOrderOut(contract_id=c.id, order_id=order.id)
+
+
+@router.post("/{contract_id}/renew", response_model=ContractRenewOut, status_code=201)
+def renew_contract_endpoint(
+    contract_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.deal.create")),
+    db: Session = Depends(get_db),
+):
+    c = require_contract(db, ctx, contract_id)
+    deal = create_renewal_deal_for_contract(db, c)
+    if not deal:
+        raise HTTPException(status_code=409, detail="续约商机已存在或创建失败")
+    db.commit()
+    return ContractRenewOut(contract_id=c.id, deal_id=deal.id)
+
+
+@router.get("/{contract_id}/amendments", response_model=list[ContractAmendmentOut])
+def list_amendments_endpoint(
+    contract_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.contract.view")),
+    db: Session = Depends(get_db),
+):
+    items = list_amendments(db, ctx, contract_id)
+    return [ContractAmendmentOut.model_validate(i) for i in items]
+
+
+@router.post("/{contract_id}/amendments", response_model=ContractAmendmentOut, status_code=201)
+def create_amendment_endpoint(
+    contract_id: UUID,
+    body: ContractAmendmentCreate,
+    ctx: TenantContext = Depends(require_permission("crm.contract.edit")),
+    db: Session = Depends(get_db),
+):
+    row = create_amendment(db, ctx, contract_id, body)
+    return ContractAmendmentOut.model_validate(row)
+
+
+@router.post("/amendments/{amendment_id}/approve", response_model=ContractAmendmentOut)
+def approve_amendment_endpoint(
+    amendment_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.contract.edit")),
+    db: Session = Depends(get_db),
+):
+    row = get_amendment(db, ctx.tenant_id, amendment_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="补充协议不存在")
+    row = approve_amendment(db, ctx, row)
+    return ContractAmendmentOut.model_validate(row)
+
+
+@router.post("/amendments/{amendment_id}/execute", response_model=ContractAmendmentOut)
+def execute_amendment_endpoint(
+    amendment_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.contract.edit")),
+    db: Session = Depends(get_db),
+):
+    row = get_amendment(db, ctx.tenant_id, amendment_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="补充协议不存在")
+    row = execute_amendment(db, ctx, row)
+    return ContractAmendmentOut.model_validate(row)
 
 
 @router.delete("/{contract_id}", status_code=204)

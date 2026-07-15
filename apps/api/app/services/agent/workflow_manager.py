@@ -222,6 +222,8 @@ def _build_tool_args(step: AgentWorkflowStep, workflow: AgentWorkflow, ctx_data:
             "industry_code": industry,
             "llm_source": llm_source,
             "ephemeral_instruction": "\n".join(instruction_parts),
+            "campaign_id": ctx_data.get("campaign_id"),
+            "video_duration_sec": ctx_data.get("video_duration_sec"),
         }
     if step.tool_name == "optimize_content":
         content_id = ctx_data.get("content_id")
@@ -266,6 +268,8 @@ def _build_tool_args(step: AgentWorkflowStep, workflow: AgentWorkflow, ctx_data:
         }
         if ctx_data.get("proposal_count") is not None:
             args["proposal_count"] = ctx_data["proposal_count"]
+        if ctx_data.get("video_duration_sec") is not None:
+            args["video_duration_sec"] = ctx_data["video_duration_sec"]
         return args
     raise HTTPException(status_code=500, detail=f"未配置工具参数: {step.tool_name}")
 

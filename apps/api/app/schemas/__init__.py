@@ -248,6 +248,7 @@ class ContentGenerateRequest(BaseModel):
     selected_proposal: "ContentProposal | None" = None
     llm_source: str = Field(default="platform", pattern="^(platform|tenant)$")
     campaign_id: UUID | None = None
+    video_duration_sec: int | None = Field(default=None, description="视频脚本时长上限：15/30/45/60")
 
 
 class ContentProposal(BaseModel):
@@ -265,6 +266,7 @@ class ContentProposalsRequest(BaseModel):
     apply_user_prompt: bool = False
     llm_source: str = Field(default="platform", pattern="^(platform|tenant)$")
     proposal_count: int | None = Field(default=None, ge=1, le=10)
+    video_duration_sec: int | None = Field(default=None, description="视频脚本时长上限：15/30/45/60")
 
 
 class ContentProposalsResponse(BaseModel):
@@ -590,6 +592,10 @@ class AgentChatRequest(BaseModel):
     llm_source: str = Field(default="platform", pattern="^(platform|tenant)$")
     selected_proposal_index: int | None = Field(default=None, ge=0, le=20)
     mode: str = Field(default="legacy", pattern="^(legacy|react)$")
+    campaign_id: UUID | None = None
+    platform: str | None = Field(default=None, pattern="^(wechat|xhs|douyin)$")
+    content_format: str | None = Field(default=None, pattern="^(article|note|video_script)$")
+    video_duration_sec: int | None = Field(default=None, description="视频脚本时长上限：15/30/45/60")
 
 
 class AgentChatResponse(BaseModel):

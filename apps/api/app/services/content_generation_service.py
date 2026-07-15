@@ -84,6 +84,10 @@ async def run_generate_proposals(
     assistant = get_profile(db, advisor_code)
 
     template = get_template(db, advisor_code, body.platform, body.scene)
+    proposal_count = resolve_proposal_count(
+        explicit=body.proposal_count,
+        text=body.topic,
+    )
     system_prompt = build_proposals_system_prompt(assistant=assistant)
     user_prompt = build_proposals_user_prompt(
         platform=body.platform,
@@ -92,10 +96,8 @@ async def run_generate_proposals(
         content_format=content_format,
         scene_name=template.name if template else "",
         template_hint=template.prompt_hint if template else "",
-        proposal_count=resolve_proposal_count(
-            explicit=body.proposal_count,
-            text=body.topic,
-        ),
+        proposal_count=proposal_count,
+        video_duration_sec=body.video_duration_sec,
     )
     messages = [
         LLMMessage(role="system", content=system_prompt),
@@ -112,10 +114,7 @@ async def run_generate_proposals(
         )
         raw_items = parse_proposals_json(
             result.content,
-            proposal_count=resolve_proposal_count(
-                explicit=body.proposal_count,
-                text=body.topic,
-            ),
+            proposal_count=proposal_count,
         )
     except json.JSONDecodeError as e:
         logger.warning("proposals JSON decode failed: %s", e)
@@ -131,7 +130,7 @@ async def run_generate_proposals(
         raise HTTPException(status_code=502, detail="模型连接失败，请检查 API Key 与网络") from e
     except Exception as e:
         logger.exception("LLM proposals request failed")
-        raise HTTPException(status_code=502, detail=f"方案生成失败: {e}") from e
+        raise HTTPException(status_code=502, detail="方案生成失败，请重试") from e
 
     proposals = [ContentProposal(**item) for item in raw_items]
     return ContentProposalsResponse(proposals=proposals)
@@ -148,7 +147,12 @@ async def run_generate_content(
     require_active_assistant(db, advisor_code)
     assistant = get_profile(db, advisor_code)
 
-    system_prompt = build_system_prompt(body.platform, content_format=content_format, assistant=assistant)
+    system_prompt = build_system_prompt(
+        body.platform,
+        content_format=content_format,
+        assistant=assistant,
+        video_duration_sec=body.video_duration_sec,
+    )
     template = get_template(db, advisor_code, body.platform, body.scene)
     rag_chunks = search_knowledge(
         db,
@@ -177,6 +181,7 @@ async def run_generate_content(
         selected_proposal_title=proposal.title if proposal else "",
         selected_proposal_angle=proposal.angle if proposal else "",
         selected_proposal_outline=proposal.outline if proposal else "",
+        video_duration_sec=body.video_duration_sec,
     )
 
     messages = [
@@ -201,7 +206,7 @@ async def run_generate_content(
         raise HTTPException(status_code=502, detail="模型连接失败，请检查 API Key 与网络") from e
     except Exception as e:
         logger.exception("LLM request failed")
-        raise HTTPException(status_code=502, detail=f"生成失败: {e}") from e
+        raise HTTPException(status_code=502, detail="生成失败，请重试") from e
 
     topic = proposal.title if proposal else body.topic
     clean_body, compliance_mark = parse_compliance_marks(result.content)
@@ -224,4 +229,30 @@ async def run_generate_content(
         consume_platform_quota(db, tenant_id)
     db.commit()
     db.refresh(content)
+    content = get_content_for_tenant(db, content.id, tenant_id)
+    maybe_link_campaign(db, tenant_id, user, body.campaign_id, content.id)
     return get_content_for_tenant(db, content.id, tenant_id)
+
+
+def maybe_link_campaign(
+    db: Session,
+    tenant_id: UUID,
+    user: User,
+    campaign_id: UUID | None,
+    content_id: UUID,
+) -> None:
+    """幂等关联活动↔内容；非法活动 → 400。"""
+    if not campaign_id:
+        return
+    from app.dependencies import TenantContext
+    from app.services.crm.campaign_service import get_campaign, link_content
+    from app.services.membership_service import get_membership
+
+    membership = get_membership(db, user.id, tenant_id)
+    if not membership:
+        raise HTTPException(status_code=403, detail="无租户成员身份，无法关联活动")
+    campaign = get_campaign(db, tenant_id, campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=400, detail="关联活动不存在或不可用")
+    ctx = TenantContext(user=user, tenant_id=tenant_id, membership=membership)
+    link_content(db, ctx, campaign, content_id)

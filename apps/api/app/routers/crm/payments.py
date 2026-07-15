@@ -17,6 +17,9 @@ from app.schemas.crm_deals import (
     PaymentPlanCreate,
     PaymentPlanOut,
     PaymentUpdate,
+    ReceivableSummaryOut,
+    RefundCreate,
+    RefundOut,
 )
 from app.services.crm.crm_scope_service import apply_payment_list_scope, has_payment_list_permission
 from app.services.crm.filter_query import parse_list_filters_param
@@ -25,10 +28,20 @@ from app.services.crm.payment_service import (
     create_payment,
     create_plan,
     delete_plan,
+    list_receivables,
+    order_payment_summary,
     require_payment,
     reverse_payment,
     soft_delete_payment,
     update_payment,
+)
+from app.services.crm.refund_service import (
+    approve_refund,
+    complete_refund,
+    create_refund,
+    list_order_refunds,
+    reject_refund,
+    require_refund,
 )
 from app.services.crm.view_service import (
     apply_view_filters,
@@ -106,8 +119,18 @@ def list_payments(
 
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
+    order_ids = list({p.order_id for p in items})
+    summary_map = order_payment_summary(db, ctx.tenant_id, order_ids)
+    out_items: list[PaymentOut] = []
+    for p in items:
+        row = PaymentOut.model_validate(p)
+        sm = summary_map.get(p.order_id) or {}
+        row.order_plan_total = sm.get("plan_total", 0.0)
+        row.order_paid_total = sm.get("paid_total", 0.0)
+        row.order_overdue_amount = sm.get("overdue_amount", 0.0)
+        out_items.append(row)
     return PaymentListResponse(
-        items=[PaymentOut.model_validate(i) for i in items],
+        items=out_items,
         total=total,
         page=page,
         page_size=page_size,
@@ -125,6 +148,74 @@ def post_payment(
 ):
     p = create_payment(db, ctx, body)
     return PaymentOut.model_validate(p)
+
+
+@router.get("/receivables", response_model=ReceivableSummaryOut)
+def get_receivables(
+    ctx: TenantContext = Depends(
+        require_any_permission(
+            "crm.payment.list_own",
+            "crm.payment.list_team",
+            "crm.payment.list_territory",
+            "crm.payment.list_all",
+        )
+    ),
+    db: Session = Depends(get_db),
+):
+    return list_receivables(db, ctx)
+
+
+@router.post("/refunds", response_model=RefundOut, status_code=201)
+def post_refund(
+    body: RefundCreate,
+    ctx: TenantContext = Depends(require_permission("crm.payment.create")),
+    db: Session = Depends(get_db),
+):
+    r = create_refund(db, ctx, body)
+    return RefundOut.model_validate(r)
+
+
+@router.get("/orders/{order_id}/refunds", response_model=list[RefundOut])
+def list_refunds_for_order(
+    order_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.payment.view")),
+    db: Session = Depends(get_db),
+):
+    items = list_order_refunds(db, ctx, order_id)
+    return [RefundOut.model_validate(i) for i in items]
+
+
+@router.post("/refunds/{refund_id}/approve", response_model=RefundOut)
+def approve_refund_endpoint(
+    refund_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.payment.confirm")),
+    db: Session = Depends(get_db),
+):
+    r = require_refund(db, ctx, refund_id)
+    r = approve_refund(db, ctx, r)
+    return RefundOut.model_validate(r)
+
+
+@router.post("/refunds/{refund_id}/complete", response_model=RefundOut)
+def complete_refund_endpoint(
+    refund_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.payment.confirm")),
+    db: Session = Depends(get_db),
+):
+    r = require_refund(db, ctx, refund_id)
+    r = complete_refund(db, ctx, r)
+    return RefundOut.model_validate(r)
+
+
+@router.post("/refunds/{refund_id}/reject", response_model=RefundOut)
+def reject_refund_endpoint(
+    refund_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.payment.confirm")),
+    db: Session = Depends(get_db),
+):
+    r = require_refund(db, ctx, refund_id)
+    r = reject_refund(db, ctx, r)
+    return RefundOut.model_validate(r)
 
 
 @router.get("/{payment_id}", response_model=PaymentOut)

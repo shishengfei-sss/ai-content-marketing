@@ -9,6 +9,9 @@ export const DEAL_STATUS_LABEL = {
 
 export const ORDER_STATUS_LABEL = {
   draft: '草稿',
+  pending_approval: '待审批',
+  approved: '已审批',
+  rejected: '已驳回',
   confirmed: '已确认',
   executing: '执行中',
   completed: '已完成',

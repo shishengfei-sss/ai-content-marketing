@@ -2,6 +2,10 @@
 import { crmApi } from '@/utils/api'
 import { CONTRACT_STATUS_LABEL } from '@/utils/crmConstants'
 import CrmEntityListPage from '@/components/crm/CrmEntityListPage.vue'
+
+function goDetail(item) {
+  uni.navigateTo({ url: `/pages/crm/contract-detail?id=${item.id}` })
+}
 </script>
 
 <template>
@@ -15,6 +19,7 @@ import CrmEntityListPage from '@/components/crm/CrmEntityListPage.vue'
       title-field="title"
       :format-status="(s) => CONTRACT_STATUS_LABEL[s] || s"
       :fetch-list="(params) => crmApi.listContracts(params)"
+      @card-click="goDetail"
     />
   </view>
 </template>

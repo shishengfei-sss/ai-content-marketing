@@ -261,10 +261,22 @@ const routes = [
         },
       },
       {
+        path: 'crm/payments/:id',
+        name: 'CrmPaymentDetail',
+        component: () => import('./views/crm/PaymentDetail.vue'),
+        meta: { title: '回款详情', permission: 'crm.payment.view' },
+      },
+      {
         path: 'crm/products',
         name: 'CrmProducts',
         component: () => import('./views/crm/Products.vue'),
         meta: { title: '产品目录', permission: 'crm.product.manage' },
+      },
+      {
+        path: 'crm/products/:id',
+        name: 'CrmProductDetail',
+        component: () => import('./views/crm/ProductDetail.vue'),
+        meta: { title: '产品详情', permission: 'crm.product.manage' },
       },
       {
         path: 'settings/pipeline',

@@ -11,16 +11,19 @@ import { useCrmViewList } from '../../composables/useCrmViewList'
 import CrmListToolbar from '../../components/crm/CrmListToolbar.vue'
 import CrmViewSwitcher from '../../components/crm/CrmViewSwitcher.vue'
 import CrmAdvancedFilterDialog from '../../components/crm/CrmAdvancedFilterDialog.vue'
+import CrmColumnSettingsDialog from '../../components/crm/CrmColumnSettingsDialog.vue'
 import OrderFormDialog from './OrderFormDialog.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
-const { fields, loadSchema } = useEntitySchema('order')
+const { fields, loadSchema, loadColumnSettingsDraft, saveListColumns, applyListColumns } = useEntitySchema('order')
 const { resolveMemberName, loadMembers, members } = useTeamMembers()
 
 const statusFilter = ref('')
 const formVisible = ref(false)
 const editingRecord = ref(null)
+const columnVisible = ref(false)
+const columnDraft = ref([])
 
 const canCreate = () => hasPermission(auth.permissions, 'crm.order.create')
 const canEdit = () => hasPermission(auth.permissions, 'crm.order.edit')
@@ -52,9 +55,35 @@ const {
   onResetExtra: () => { statusFilter.value = '' },
   fetcher: async (params) => {
     const { data } = await crmApi.listOrders(params)
+    if (data.list_fields?.length) applyListColumns(data.list_fields)
     return { items: data.items || [], total: data.total || 0, filters_applied: data.filters_applied }
   },
 })
+
+async function openColumnSettings() {
+  try {
+    columnDraft.value = await loadColumnSettingsDraft()
+    columnVisible.value = true
+  } catch (e) {
+    ElMessage.error(e.message || '加载列设置失败')
+  }
+}
+
+async function submitColumnSettings() {
+  try {
+    const columns = columnDraft.value.map((c, i) => ({
+      field_key: c.field_key,
+      visible: c.visible,
+      order: i,
+    }))
+    await saveListColumns(columns)
+    ElMessage.success('列设置已保存')
+    columnVisible.value = false
+    load()
+  } catch (e) {
+    ElMessage.error(e.message || '保存失败')
+  }
+}
 
 function openCreate() { editingRecord.value = null; formVisible.value = true }
 async function openEdit(row) { editingRecord.value = row; formVisible.value = true }
@@ -106,6 +135,7 @@ onMounted(async () => {
       @clear-filters="clearTemporaryFilters"
     >
       <template #actions>
+        <el-button @click="openColumnSettings">列设置</el-button>
         <el-button v-if="canCreate()" type="primary" @click="openCreate">新建订单</el-button>
       </template>
 
@@ -160,6 +190,12 @@ onMounted(async () => {
       :members="members"
       :model-value="advancedFilters"
       @apply="applyAdvancedFilters"
+    />
+
+    <CrmColumnSettingsDialog
+      v-model:visible="columnVisible"
+      v-model:columns="columnDraft"
+      @save="submitColumnSettings"
     />
 
     <div class="crm-list-table-wrap">

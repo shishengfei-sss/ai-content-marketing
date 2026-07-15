@@ -180,6 +180,10 @@ async def post_session_chat(
         llm_source=body.llm_source,
         selected_proposal_index=body.selected_proposal_index,
         tenant_ctx=ctx,
+        campaign_id=body.campaign_id,
+        platform=body.platform,
+        content_format=body.content_format,
+        video_duration_sec=body.video_duration_sec,
     )
 
 
@@ -224,6 +228,11 @@ async def post_session_chat_stream(
             message=body.message,
             llm_source=body.llm_source,
             selected_proposal_index=body.selected_proposal_index,
+            campaign_id=body.campaign_id,
+            platform=body.platform,
+            content_format=body.content_format,
+            tenant_ctx=ctx,
+            video_duration_sec=body.video_duration_sec,
         ):
             yield chunk
 

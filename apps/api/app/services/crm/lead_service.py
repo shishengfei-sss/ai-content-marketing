@@ -6,17 +6,28 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.database import uuid_eq
 from app.dependencies import TenantContext
-from app.models.crm import Contact, CrmActivity, Customer, Lead
+from app.models.crm import CRM_SOURCE_OPTIONS, Contact, CrmActivity, Customer, Lead
 from app.schemas.crm import LeadCreate, LeadUpdate, validate_lead_mobile_value, validate_lead_status
 from app.services.crm.crm_scope_service import assert_can_view_lead, can_view_customer
 from app.services.crm.number_service import generate_number
 from app.services.crm.sales_org_service import get_territory
 from app.services.crm.schema_service import validate_extra_data
 from app.services.crm.utm_service import merge_utm_into_lead_fields
+
+
+def _normalize_crm_source(value: str | None) -> str | None:
+    """空串/非法来源归一为 None，避免转化建商机时 DealCreate 校验抛 500。"""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text not in CRM_SOURCE_OPTIONS:
+        return None
+    return text
 
 
 def _perm_set(ctx: TenantContext) -> set[str]:
@@ -247,7 +258,7 @@ def convert_lead_to_customer(
             phone=lead.phone,
             email=lead.email,
             status="潜在",
-            source=lead.source,
+            source=_normalize_crm_source(lead.source),
             converted_lead_score=lead.lead_score,
             owner_user_id=lead.owner_user_id or ctx.user.id,
             territory_id=lead.territory_id,
@@ -261,8 +272,8 @@ def convert_lead_to_customer(
         db.flush()
     else:
         # 合并：补齐来源等信息（不覆盖已有非空值）
-        if not customer.source and lead.source:
-            customer.source = lead.source
+        if not customer.source and _normalize_crm_source(lead.source):
+            customer.source = _normalize_crm_source(lead.source)
         if customer.converted_lead_score is None and lead.lead_score is not None:
             customer.converted_lead_score = lead.lead_score
         if not customer.converted_from_lead_id:
@@ -307,21 +318,25 @@ def convert_lead_to_customer(
         close_date = suggestions.get("expected_close_date")
         if close_date is not None and not isinstance(close_date, datetime):
             close_date = datetime.combine(close_date, datetime.min.time()).replace(tzinfo=timezone.utc)
-        deal = create_deal_svc(
-            db,
-            ctx,
-            DealCreate(
+        try:
+            deal_payload = DealCreate(
                 title=deal_title or f"{lead.company_name}合作",
                 customer_id=customer.id,
                 contact_id=contact.id if contact else None,
-                amount=amount or 0,
-                source=lead.source,
+                amount=float(amount or 0),
+                source=_normalize_crm_source(lead.source),
                 pipeline_id=deal_pipeline_id,
                 stage_id=deal_stage_id,
                 expected_close_date=close_date,
                 description=suggestions.get("description"),
                 contact_role=suggestions.get("contact_role"),
-            ),
+            )
+        except ValidationError as exc:
+            raise HTTPException(status_code=400, detail=f"创建商机参数无效: {exc.errors()}") from exc
+        deal = create_deal_svc(
+            db,
+            ctx,
+            deal_payload,
             commit=False,
         )
 
@@ -353,13 +368,15 @@ def get_customer_for_convert(db: Session, tenant_id: UUID, customer_id: UUID) ->
 def _copy_lead_activities_to_customer(db: Session, ctx: TenantContext, lead: Lead, customer: Customer) -> None:
     activities = db.query(CrmActivity).filter(CrmActivity.lead_id == lead.id).order_by(CrmActivity.created_at).all()
     for act in activities:
+        created_by = act.created_by_user_id or ctx.user.id
         db.add(
             CrmActivity(
                 tenant_id=ctx.tenant_id,
                 customer_id=customer.id,
-                activity_type=act.activity_type,
-                content=act.content,
-                created_by_user_id=act.created_by_user_id,
+                activity_type=act.activity_type or "other",
+                subject=act.subject,
+                content=act.content or "",
+                created_by_user_id=created_by,
             )
         )
     db.flush()

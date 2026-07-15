@@ -15,9 +15,14 @@ const auth = useAuthStore()
 
 const platform = ref('wechat')
 const contentFormat = ref('article')
+const videoDurationSec = ref(30)
+const VIDEO_DURATION_OPTIONS = [15, 30, 45, 60]
+const SESSION_PREFS_PREFIX = 'create_session_prefs_v1:'
 const inputText = ref('')
 const generating = ref(false)
 const proposing = ref(false)
+const streamBuffer = ref('')
+const workflowStep = ref('')
 const messagesEndRef = ref(null)
 const modelTag = ref('未配置模型')
 const wechatSettings = ref({ bound: false, can_auto_publish: false, account_type: 'service' })
@@ -162,6 +167,7 @@ async function switchToSession(session) {
   agentSessionId.value = session.id
   localStorage.setItem(AGENT_SESSION_KEY, session.id)
   sessionDrawerVisible.value = false
+  const restored = restoreSessionPrefs(session.id)
   try {
     const { data } = await agentApi.getMessages(session.id)
     const mapped = mapApiMessagesToUi(data)
@@ -175,9 +181,57 @@ async function switchToSession(session) {
               content: `已打开会话「${session.title || '未命名'}」，继续输入即可。`,
             },
           ]
+    if (restored) {
+      ElMessage.info('已恢复平台 / 形态 / 活动设置')
+    }
     await scrollToBottom()
   } catch {
     ElMessage.error('加载会话消息失败')
+  }
+}
+
+function sessionPrefsKey(sessionId) {
+  return `${SESSION_PREFS_PREFIX}${sessionId}`
+}
+
+function saveSessionPrefs(sessionId = agentSessionId.value) {
+  if (!sessionId) return
+  try {
+    localStorage.setItem(
+      sessionPrefsKey(sessionId),
+      JSON.stringify({
+        platform: platform.value,
+        contentFormat: contentFormat.value,
+        campaignId: campaignId.value,
+        videoDurationSec: videoDurationSec.value,
+      }),
+    )
+  } catch {
+    /* ignore quota */
+  }
+}
+
+function restoreSessionPrefs(sessionId) {
+  if (!sessionId) return false
+  try {
+    const raw = localStorage.getItem(sessionPrefsKey(sessionId))
+    if (!raw) return false
+    const prefs = JSON.parse(raw)
+    if (prefs.platform && platformMap[prefs.platform]) {
+      platform.value = prefs.platform
+    }
+    contentFormat.value = resolveContentFormat(platform.value, prefs.contentFormat)
+    if (VIDEO_DURATION_OPTIONS.includes(Number(prefs.videoDurationSec))) {
+      videoDurationSec.value = Number(prefs.videoDurationSec)
+    }
+    if (prefs.campaignId) {
+      campaignId.value = prefs.campaignId
+    } else {
+      campaignId.value = null
+    }
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -212,6 +266,7 @@ async function createAgentSession() {
     })
     agentSessionId.value = data.id
     localStorage.setItem(AGENT_SESSION_KEY, data.id)
+    saveSessionPrefs(data.id)
     return data.id
   } catch (e) {
     if (isAgentSessionNotFound(e)) {
@@ -253,7 +308,7 @@ function pushAgentChatResult(data, requestTopic) {
         platform: platformMap[usePlatform] || usePlatform,
         contentFormat: c.content_format,
         formatLabel: formatMap[c.content_format] || c.content_format,
-        scene: sceneLabel(payload.scene),
+        scene: sceneLabel(c.scene),
         model: `${c.llm_provider} · ${c.llm_model}`,
       },
     })
@@ -267,22 +322,43 @@ function pushAgentChatResult(data, requestTopic) {
   })
 }
 
-async function agentChat(message, { selectedProposalIndex = null, retried = false } = {}) {
-  const sessionId = await ensureAgentSession()
+function buildAgentChatBody(message, { selectedProposalIndex = null } = {}) {
   const body = {
     message,
     llm_source: llmSource.value,
+    platform: platform.value || 'wechat',
+    content_format: contentFormat.value || defaultContentFormat(platform.value || 'wechat'),
   }
   if (selectedProposalIndex !== null) {
     body.selected_proposal_index = selectedProposalIndex
   }
+  if (campaignId.value) body.campaign_id = campaignId.value
+  if (body.content_format === 'video_script') {
+    body.video_duration_sec = videoDurationSec.value || 30
+  }
+  return body
+}
+
+async function agentChat(message, { selectedProposalIndex = null, retried = false, stream = true } = {}) {
+  const sessionId = await ensureAgentSession()
+  const body = buildAgentChatBody(message, { selectedProposalIndex })
   try {
+    // ReAct 不走 stream；legacy 默认 SSE
+    if (stream) {
+      return await agentApi.chatStream(sessionId, body, {
+        onEvent: (event, data) => {
+          if (event === 'delta' && data?.text) {
+            streamBuffer.value += data.text
+          }
+        },
+      })
+    }
     const { data } = await agentApi.chat(sessionId, body)
     return data
   } catch (e) {
     if (!retried && isAgentSessionNotFound(e)) {
       clearAgentSession()
-      return agentChat(message, { selectedProposalIndex, retried: true })
+      return agentChat(message, { selectedProposalIndex, retried: true, stream })
     }
     throw e
   }
@@ -354,6 +430,9 @@ onMounted(async () => {
   await loadLlmQuota()
   await loadCampaigns()
   await ensureAgentSession()
+  if (agentSessionId.value) {
+    restoreSessionPrefs(agentSessionId.value)
+  }
 })
 
 async function loadCampaigns() {
@@ -374,10 +453,17 @@ async function scrollToBottom() {
 function pickPlatform(p) {
   platform.value = p
   contentFormat.value = resolveContentFormat(p, contentFormat.value)
+  saveSessionPrefs()
 }
 
 function pickContentFormat(f) {
   contentFormat.value = f
+  saveSessionPrefs()
+}
+
+function pickVideoDuration(sec) {
+  videoDurationSec.value = sec
+  saveSessionPrefs()
 }
 
 function buildUserPrompt(text) {
@@ -398,6 +484,9 @@ function buildGeneratePayload(topic, selectedProposal = null) {
     selected_proposal: selectedProposal,
   }
   if (campaignId.value) payload.campaign_id = campaignId.value
+  if (useFormat === 'video_script') {
+    payload.video_duration_sec = videoDurationSec.value || 30
+  }
   return payload
 }
 
@@ -446,13 +535,14 @@ function buildWorkflowInput(topic, proposalCount = null) {
   const payload = buildGeneratePayload(topic)
   const input = {
     platform: payload.platform,
-    scene: payload.scene,
     topic: payload.topic,
     content_format: payload.content_format,
     industry_code: 'marketing',
     llm_source: payload.llm_source,
     search_query: payload.topic,
   }
+  if (payload.campaign_id) input.campaign_id = payload.campaign_id
+  if (payload.video_duration_sec) input.video_duration_sec = payload.video_duration_sec
   if (proposalCount != null && proposalCount >= 1) {
     input.proposal_count = proposalCount
   }
@@ -493,7 +583,7 @@ function pushContentResult(content, payload) {
       platform: platformMap[usePlatform] || usePlatform,
       contentFormat: content.content_format,
       formatLabel: formatMap[content.content_format] || content.content_format,
-      scene: sceneLabel(payload.scene),
+      scene: sceneLabel(content.scene),
       model: `${content.llm_provider} · ${content.llm_model}`,
     },
   })
@@ -502,6 +592,7 @@ function pushContentResult(content, payload) {
 
 async function runProposeWorkflow(topic, proposalCount = null) {
   await ensureAgentSession()
+  workflowStep.value = '预检完成 · 正在生成方案…'
   const { data: wf } = await agentApi.createWorkflow({
     pipeline_code: 'content_propose',
     auto_run: true,
@@ -512,6 +603,7 @@ async function runProposeWorkflow(topic, proposalCount = null) {
     const output = parseWorkflowOutput(wf)
     const proposals = output.proposals || []
     if (!proposals.length) throw new Error('未生成选题方案')
+    workflowStep.value = ''
     return { workflowId: wf.id, proposals }
   }
   if (wf.status === 'failed') {
@@ -521,15 +613,18 @@ async function runProposeWorkflow(topic, proposalCount = null) {
 }
 
 async function runFinishWorkflow(workflowId, proposalIndex) {
+  workflowStep.value = '已选方案 · 正在生成正文…'
   const { data: wf } = await agentApi.resumeWorkflow(workflowId, {
     selected_proposal_index: proposalIndex >= 0 ? proposalIndex : 0,
   })
   if (wf.status !== 'completed') {
     throw new Error(wf.error_message || '生成正文失败')
   }
+  workflowStep.value = '合规检查完成'
   const output = parseWorkflowOutput(wf)
   if (!output.content_id) throw new Error('未生成正文')
   const { data: content } = await contentApi.get(output.content_id)
+  workflowStep.value = ''
   return { workflow: wf, content, output }
 }
 
@@ -557,6 +652,8 @@ async function handleSend() {
   messages.value.push({ role: 'user', type: 'text', content: buildUserPrompt(text) })
   inputText.value = ''
   proposing.value = true
+  streamBuffer.value = ''
+  workflowStep.value = useWorkflow ? '预检中…' : '正在生成方案…'
   scrollToBottom()
 
   try {
@@ -598,6 +695,8 @@ async function handleSend() {
     }
   } finally {
     proposing.value = false
+    streamBuffer.value = ''
+    workflowStep.value = ''
     await scrollToBottom()
   }
 }
@@ -605,6 +704,8 @@ async function handleSend() {
 async function handleSelectProposal(proposal, requestTopic, msg) {
   if (generating.value) return
   generating.value = true
+  streamBuffer.value = ''
+  workflowStep.value = useWorkflow && msg?.workflowId ? '已选方案 · 正在生成正文…' : '正在流式生成正文…'
   scrollToBottom()
   const proposalIndex = msg?.proposals?.findIndex((p) => p.title === proposal.title) ?? 0
   const payload = buildGeneratePayload(requestTopic, proposal)
@@ -642,6 +743,8 @@ async function handleSelectProposal(proposal, requestTopic, msg) {
     }
   } finally {
     generating.value = false
+    streamBuffer.value = ''
+    workflowStep.value = ''
     await scrollToBottom()
   }
 }
@@ -855,6 +958,8 @@ function handleCopy(text) {
                 class="proposal-card"
               >
                 <div class="proposal-card__direction">{{ item.title }}</div>
+                <div v-if="item.angle" class="proposal-card__angle">角度：{{ item.angle }}</div>
+                <div v-if="item.outline" class="proposal-card__outline">{{ item.outline }}</div>
                 <el-button
                   type="primary"
                   size="small"
@@ -919,11 +1024,13 @@ function handleCopy(text) {
           </el-avatar>
         </div>
 
-        <!-- 打字中 -->
+        <!-- 打字中 / 进度 -->
         <div v-if="proposing || generating" class="chat-row chat-row--assistant">
           <el-avatar :size="36" style="background: #1677ff">AI</el-avatar>
-          <div class="bubble bubble--assistant bubble--typing">
-            <span /><span /><span />
+          <div class="bubble bubble--assistant">
+            <div v-if="workflowStep" class="typing-hint">{{ workflowStep }}</div>
+            <div v-if="streamBuffer" class="stream-preview">{{ streamBuffer }}</div>
+            <div v-else class="bubble--typing"><span /><span /><span /></div>
           </div>
         </div>
 
@@ -987,6 +1094,21 @@ function handleCopy(text) {
                 </button>
               </div>
             </div>
+            <div v-if="contentFormat === 'video_script'" class="meta-track">
+              <span class="meta-track__label">时长</span>
+              <div class="meta-pills">
+                <button
+                  v-for="sec in VIDEO_DURATION_OPTIONS"
+                  :key="sec"
+                  type="button"
+                  class="meta-pill"
+                  :class="{ 'meta-pill--active': videoDurationSec === sec }"
+                  @click="pickVideoDuration(sec)"
+                >
+                  {{ sec }}秒
+                </button>
+              </div>
+            </div>
             <div v-if="showCampaignPicker" class="meta-track">
               <span class="meta-track__label">活动</span>
               <el-select
@@ -995,6 +1117,7 @@ function handleCopy(text) {
                 placeholder="所属活动（可选）"
                 size="small"
                 style="width: 200px"
+                @change="saveSessionPrefs()"
               >
                 <el-option v-for="c in campaigns" :key="c.id" :label="c.name" :value="c.id" />
               </el-select>
@@ -1022,7 +1145,7 @@ function handleCopy(text) {
             </el-button>
           </div>
         </div>
-        <div class="chat-footer__hint">先出 3～5 个方案 · 选定后再生成正文 · 服务号图文可自动发布</div>
+        <div class="chat-footer__hint">先出多个方案 · 选定后再生成正文 · 服务号图文可自动发布</div>
       </div>
     </div>
   </div>
@@ -1324,6 +1447,27 @@ function handleCopy(text) {
 }
 
 .proposal-card__direction {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.proposal-card__angle,
+.proposal-card__outline {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+.typing-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 6px;
+}
+.stream-preview {
+  white-space: pre-wrap;
+  line-height: 1.5;
+  max-height: 180px;
+  overflow: auto;
+}
   font-size: 14px;
   line-height: 1.6;
   margin-bottom: 12px;

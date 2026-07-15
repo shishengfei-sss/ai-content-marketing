@@ -26,10 +26,20 @@ def get_activities(
     lead_id: UUID | None = Query(default=None),
     customer_id: UUID | None = Query(default=None),
     deal_id: UUID | None = Query(default=None),
+    entity_type: str | None = Query(default=None),
+    entity_id: UUID | None = Query(default=None),
     ctx: TenantContext = Depends(require_permission("crm.activity.create")),
     db: Session = Depends(get_db),
 ):
-    items = list_activities(db, ctx, lead_id=lead_id, customer_id=customer_id, deal_id=deal_id)
+    items = list_activities(
+        db,
+        ctx,
+        lead_id=lead_id,
+        customer_id=customer_id,
+        deal_id=deal_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+    )
     return [ActivityOut.model_validate(i) for i in items]
 
 
