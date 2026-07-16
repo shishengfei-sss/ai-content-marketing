@@ -10,6 +10,7 @@ from app.models import Content
 from app.models.crm import CrmTask, Lead
 from app.schemas import DashboardStatsOut
 from app.services.crm.crm_scope_service import apply_lead_list_scope, apply_task_list_scope
+from app.services.crm.dashboard_reminder_service import dashboard_crm_reminders
 from app.services.scope_service import apply_stats_scope
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -72,6 +73,8 @@ def get_stats(
     ).count()
     crm_tasks_overdue = task_q.filter(CrmTask.due_at < today_start).count()
 
+    reminders = dashboard_crm_reminders(db, ctx)
+
     return DashboardStatsOut(
         draft_count=draft_count,
         pending_review=0,
@@ -81,4 +84,7 @@ def get_stats(
         crm_new_leads=crm_new_leads,
         crm_tasks_due_today=crm_tasks_due_today,
         crm_tasks_overdue=crm_tasks_overdue,
+        payment_due_7d=reminders["payment_due_7d"],
+        payment_overdue=reminders["payment_overdue"],
+        contract_expiring_30d=reminders["contract_expiring_30d"],
     )

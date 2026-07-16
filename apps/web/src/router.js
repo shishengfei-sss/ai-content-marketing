@@ -192,6 +192,21 @@ const routes = [
         },
       },
       {
+        path: 'crm/trade-report',
+        name: 'CrmTradeReport',
+        component: () => import('./views/crm/TradeReport.vue'),
+        meta: {
+          title: '交易报表',
+          permissionAny: [
+            'crm.order.list_own',
+            'crm.order.list_all',
+            'crm.payment.list_own',
+            'crm.payment.list_all',
+            'analytics.view_all',
+          ],
+        },
+      },
+      {
         path: 'crm/lead-insights',
         name: 'CrmLeadInsights',
         component: () => import('./views/crm/LeadInsights.vue'),
@@ -289,6 +304,15 @@ const routes = [
         name: 'SettingsNumberRules',
         component: () => import('./views/SettingsNumberRules.vue'),
         meta: { title: '编号规则', permission: 'crm.pipeline.manage' },
+      },
+      {
+        path: 'settings/assignment-rules',
+        name: 'SettingsAssignmentRules',
+        component: () => import('./views/SettingsAssignmentRules.vue'),
+        meta: {
+          title: '线索分配规则',
+          permissionAny: ['crm.lead.edit', 'crm.pipeline.manage'],
+        },
       },
       {
         path: 'settings',

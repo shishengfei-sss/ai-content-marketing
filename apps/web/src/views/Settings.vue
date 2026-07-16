@@ -53,6 +53,13 @@ const settingsMenu = computed(() => {
       show: hasPermission(p, 'crm.pipeline.manage'),
     },
     {
+      title: '线索分配规则',
+      desc: '按条件自动指派线索负责人',
+      icon: 'Sort',
+      path: '/settings/assignment-rules',
+      show: hasPermission(p, 'crm.lead.edit') || hasPermission(p, 'crm.pipeline.manage'),
+    },
+    {
       title: '品牌设置',
       desc: '公司名、人设、语气、CTA',
       icon: 'Shop',

@@ -14,11 +14,14 @@ const stages = ref([])
 const activeTab = ref('funnel')
 const forecast = ref(null)
 const winLoss = ref(null)
+const stageDuration = ref(null)
 const EMPTY_FORECAST = { deal_count: 0, total_amount: 0, weighted_amount: 0, by_stage: [], by_owner: [] }
 const EMPTY_WIN_LOSS = { total: 0, by_type: { won: 0, lost: 0, abandoned: 0 }, by_reason: [], items: [] }
+const EMPTY_DURATION = { pipeline_id: null, pipeline_name: '', stages: [] }
 
 const hasForecastData = computed(() => Number(forecast.value?.deal_count || 0) > 0)
 const hasWinLossData = computed(() => Number(winLoss.value?.total || 0) > 0)
+const durationStages = computed(() => stageDuration.value?.stages || [])
 
 const funnelChartRef = ref(null)
 let chartInstance = null
@@ -73,9 +76,30 @@ async function loadWinLoss() {
   }
 }
 
+async function loadStageDuration() {
+  loading.value = true
+  try {
+    const params = {}
+    if (pipelineId.value) params.pipeline_id = pipelineId.value
+    if (ownerId.value) params.owner_id = ownerId.value
+    const { data } = await crmApi.dealStageDuration(params)
+    stageDuration.value = data || { ...EMPTY_DURATION }
+  } catch (e) {
+    if (isBenignEmptyError(e)) {
+      stageDuration.value = { ...EMPTY_DURATION }
+    } else {
+      ElMessage.error(e.message || '加载阶段停留失败')
+      stageDuration.value = { ...EMPTY_DURATION }
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
 async function loadActiveTab() {
   if (activeTab.value === 'funnel') await loadFunnel()
   else if (activeTab.value === 'forecast') await loadForecast()
+  else if (activeTab.value === 'duration') await loadStageDuration()
   else await loadWinLoss()
 }
 
@@ -180,6 +204,7 @@ watch(() => [pipelineId.value, ownerId.value, activeTab.value], () => loadActive
       <el-tab-pane label="销售漏斗" name="funnel" />
       <el-tab-pane label="收入预测" name="forecast" />
       <el-tab-pane label="赢输分析" name="winloss" />
+      <el-tab-pane label="阶段停留" name="duration" />
     </el-tabs>
 
     <template v-if="activeTab === 'funnel'">
@@ -271,6 +296,37 @@ watch(() => [pipelineId.value, ownerId.value, activeTab.value], () => loadActive
       </template>
       <el-empty v-else-if="!loading" description="暂无赢输分析数据" class="deal-funnel__empty" />
     </template>
+
+    <template v-else-if="activeTab === 'duration'">
+      <p v-if="stageDuration?.pipeline_name" class="deal-funnel__desc" style="margin-bottom: 12px">
+        管道：{{ stageDuration.pipeline_name }} · 基于阶段变更日志统计停留天数
+      </p>
+      <el-table
+        v-if="durationStages.length"
+        :data="durationStages"
+        border
+        size="small"
+        class="deal-funnel__table"
+      >
+        <el-table-column prop="stage_name" label="阶段" min-width="140" />
+        <el-table-column prop="sample_count" label="样本数" width="90" align="right" />
+        <el-table-column label="平均停留(天)" width="120" align="right">
+          <template #default="{ row }">{{ row.avg_days }}</template>
+        </el-table-column>
+        <el-table-column label="最长停留(天)" width="120" align="right">
+          <template #default="{ row }">{{ row.max_days }}</template>
+        </el-table-column>
+        <el-table-column label="SLA(天)" width="90" align="right">
+          <template #default="{ row }">{{ row.max_stay_days ?? '—' }}</template>
+        </el-table-column>
+        <el-table-column label="超SLA数" width="100" align="right">
+          <template #default="{ row }">
+            <span :class="{ 'text-danger': row.over_sla_count > 0 }">{{ row.over_sla_count }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty v-else-if="!loading" description="暂无阶段停留数据" class="deal-funnel__empty" />
+    </template>
   </div>
 </template>
 
@@ -293,4 +349,5 @@ watch(() => [pipelineId.value, ownerId.value, activeTab.value], () => loadActive
 .deal-funnel__table { margin-top: 8px; }
 .deal-funnel__tabs { margin-bottom: 12px; }
 .deal-funnel__empty { padding: 48px 0; }
+.text-danger { color: var(--el-color-danger); font-weight: 600; }
 </style>

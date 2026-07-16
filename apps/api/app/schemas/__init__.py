@@ -327,6 +327,9 @@ class DashboardStatsOut(BaseModel):
     crm_new_leads: int = 0
     crm_tasks_due_today: int = 0
     crm_tasks_overdue: int = 0
+    payment_due_7d: int = 0
+    payment_overdue: int = 0
+    contract_expiring_30d: int = 0
 
 
 class WeChatSettingsOut(BaseModel):

@@ -284,6 +284,8 @@ export const crmApi = {
     api.post(`/api/v1/crm/customer-pools/${poolId}/claim`, { customer_id: customerId }),
   listAssignmentRules: () => api.get('/api/v1/crm/assignment-rules'),
   createAssignmentRule: (data) => api.post('/api/v1/crm/assignment-rules', data),
+  updateAssignmentRule: (id, data) => api.patch(`/api/v1/crm/assignment-rules/${id}`, data),
+  deleteAssignmentRule: (id) => api.delete(`/api/v1/crm/assignment-rules/${id}`),
   listAddresses: (params) => api.get('/api/v1/crm/addresses', { params }),
   createAddress: (data) => api.post('/api/v1/crm/addresses', data),
   listTags: () => api.get('/api/v1/crm/tags'),
@@ -404,6 +406,8 @@ export const crmApi = {
   dealFunnel: (params) => api.get('/api/v1/analytics/deal-funnel', { params }),
   dealForecast: (params) => api.get('/api/v1/analytics/deal-forecast', { params }),
   dealWinLoss: (params) => api.get('/api/v1/analytics/deal-win-loss', { params }),
+  tradeReport: (params) => api.get('/api/v1/analytics/trade-report', { params }),
+  dealStageDuration: (params) => api.get('/api/v1/analytics/deal-stage-duration', { params }),
   batchUpdateDeals: (data) => api.post('/api/v1/crm/deals/batch-update', data),
   cloneDeal: (id) => api.post(`/api/v1/crm/deals/${id}/clone`),
   // v0.8 P1-06 团队
@@ -491,6 +495,7 @@ export const crmApi = {
   issueInvoice: (id) => api.post(`/api/v1/crm/invoices/${id}/issue`),
   voidInvoice: (id) => api.post(`/api/v1/crm/invoices/${id}/void`),
   matchInvoicePayment: (id, data) => api.post(`/api/v1/crm/invoices/${id}/payments`, data),
+  listInvoicePayments: (id) => api.get(`/api/v1/crm/invoices/${id}/payments`),
   listApprovalRules: () => api.get('/api/v1/crm/approval-rules'),
   // v0.7 回款
   listPayments: (params) => api.get('/api/v1/crm/payments', { params }),

@@ -195,6 +195,24 @@ onMounted(async () => {
         key: 'crm_tasks_overdue',
         path: '/crm/tasks?overdue=1',
       },
+      {
+        label: '7日内待回款',
+        value: dash.payment_due_7d ?? 0,
+        key: 'payment_due_7d',
+        path: '/crm/payments',
+      },
+      {
+        label: '已超期回款',
+        value: dash.payment_overdue ?? 0,
+        key: 'payment_overdue',
+        path: '/crm/payments',
+      },
+      {
+        label: '30日内合同到期',
+        value: dash.contract_expiring_30d ?? 0,
+        key: 'contract_expiring_30d',
+        path: '/crm/contracts',
+      },
     ]
     await loadContentBox()
   } catch (e) {
@@ -231,7 +249,7 @@ onMounted(async () => {
     </el-row>
 
     <el-row v-if="crmStats.length" :gutter="16" class="dashboard__stats dashboard__stats--crm">
-      <el-col v-for="stat in crmStats" :key="stat.key" :span="8">
+      <el-col v-for="stat in crmStats" :key="stat.key" :xs="12" :sm="8" :md="4">
         <div
           class="stat-card stat-card--crm stat-card--clickable"
           role="link"

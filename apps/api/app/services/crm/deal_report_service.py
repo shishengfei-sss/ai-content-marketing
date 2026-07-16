@@ -1,7 +1,8 @@
 """商机报表服务（v0.8 deal P1-05 销售漏斗）。"""
 from __future__ import annotations
 
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import func
@@ -9,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database import uuid_eq
 from app.dependencies import TenantContext
-from app.models.crm import Deal, DealCloseAnalysis, SalesPipeline, SalesPipelineStage
+from app.models.crm import Deal, DealCloseAnalysis, DealStageLog, SalesPipeline, SalesPipelineStage
 from app.services.crm.crm_scope_service import apply_deal_list_scope
 
 
@@ -183,3 +184,116 @@ def deal_win_loss_report(
         "by_reason": [{"reason": k, "count": v} for k, v in sorted(by_reason.items(), key=lambda x: -x[1])],
         "items": items[:50],
     }
+
+
+def deal_stage_duration_report(
+    db: Session,
+    ctx: TenantContext,
+    *,
+    pipeline_id: UUID | None = None,
+    owner_id: UUID | None = None,
+) -> dict:
+    """FR-DR-08：基于 deal_stage_logs 汇总各阶段平均/最大停留天数。"""
+    tenant_id = ctx.tenant_id
+    now = datetime.now(timezone.utc)
+
+    pipe_q = db.query(SalesPipeline).filter(SalesPipeline.tenant_id == tenant_id)
+    if pipeline_id:
+        pipe = pipe_q.filter(uuid_eq(SalesPipeline.id, pipeline_id)).first()
+    else:
+        pipe = pipe_q.filter(SalesPipeline.is_default.is_(True)).first() or pipe_q.first()
+    if not pipe:
+        return {"pipeline_id": None, "pipeline_name": "", "stages": []}
+
+    stages = (
+        db.query(SalesPipelineStage)
+        .filter(uuid_eq(SalesPipelineStage.pipeline_id, pipe.id), SalesPipelineStage.tenant_id == tenant_id)
+        .order_by(SalesPipelineStage.sort_order, SalesPipelineStage.id)
+        .all()
+    )
+
+    deal_q = db.query(Deal).filter(
+        Deal.tenant_id == tenant_id,
+        Deal.deleted_at.is_(None),
+        uuid_eq(Deal.pipeline_id, pipe.id),
+    )
+    deal_q = apply_deal_list_scope(deal_q, ctx, db)
+    if owner_id:
+        deal_q = deal_q.filter(uuid_eq(Deal.owner_user_id, owner_id))
+    deals = deal_q.all()
+    if not deals:
+        return {
+            "pipeline_id": str(pipe.id),
+            "pipeline_name": pipe.name,
+            "stages": [
+                {
+                    "stage_id": str(s.id),
+                    "stage_name": s.name,
+                    "sort_order": s.sort_order,
+                    "sample_count": 0,
+                    "avg_days": 0.0,
+                    "max_days": 0.0,
+                    "max_stay_days": s.max_stay_days,
+                    "over_sla_count": 0,
+                }
+                for s in stages
+            ],
+        }
+
+    deal_ids = [d.id for d in deals]
+    logs = (
+        db.query(DealStageLog)
+        .filter(DealStageLog.tenant_id == tenant_id, DealStageLog.deal_id.in_(deal_ids))
+        .order_by(DealStageLog.deal_id, DealStageLog.changed_at)
+        .all()
+    )
+    logs_by_deal: dict[UUID, list[DealStageLog]] = defaultdict(list)
+    for log in logs:
+        logs_by_deal[log.deal_id].append(log)
+
+    stage_durations: dict[UUID, list[float]] = defaultdict(list)
+
+    def _aware(dt: datetime | None) -> datetime | None:
+        if dt is None:
+            return None
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+    for deal in deals:
+        deal_logs = logs_by_deal.get(deal.id, [])
+        if not deal_logs:
+            start = _aware(deal.created_at) or now
+            days = max(0.0, (now - start).total_seconds() / 86400)
+            if deal.stage_id:
+                stage_durations[deal.stage_id].append(days)
+            continue
+
+        for i, log in enumerate(deal_logs):
+            start = _aware(log.changed_at) or now
+            if i + 1 < len(deal_logs):
+                end = _aware(deal_logs[i + 1].changed_at) or now
+            else:
+                end = now if deal.status == "open" else (_aware(deal.updated_at) or now)
+            days = max(0.0, (end - start).total_seconds() / 86400)
+            stage_durations[log.to_stage_id].append(days)
+
+    result: list[dict] = []
+    for s in stages:
+        durs = stage_durations.get(s.id, [])
+        avg = round(sum(durs) / len(durs), 1) if durs else 0.0
+        max_d = round(max(durs), 1) if durs else 0.0
+        sla = s.max_stay_days
+        over = sum(1 for d in durs if sla and d > sla)
+        result.append(
+            {
+                "stage_id": str(s.id),
+                "stage_name": s.name,
+                "sort_order": s.sort_order,
+                "sample_count": len(durs),
+                "avg_days": avg,
+                "max_days": max_d,
+                "max_stay_days": sla,
+                "over_sla_count": over,
+            }
+        )
+
+    return {"pipeline_id": str(pipe.id), "pipeline_name": pipe.name, "stages": result}

@@ -25,6 +25,7 @@ const approvals = ref([])
 const activities = ref([])
 const deliveries = ref([])
 const invoices = ref([])
+const refunds = ref([])
 const revisions = ref([])
 const activeTab = ref('basic')
 const rejectVisible = ref(false)
@@ -35,8 +36,21 @@ const deliveryDialogVisible = ref(false)
 const deliveryForm = ref({ carrier: '', tracking_number: '', remark: '' })
 const invoiceDialogVisible = ref(false)
 const invoiceForm = ref({ invoice_type: 'vat', amount: null, tax_amount: 0 })
+const matchDialogVisible = ref(false)
+const matchingInvoice = ref(null)
+const matchForm = ref({ invoice_id: '', payment_id: '', matched_amount: null })
+const matchSaving = ref(false)
+const refundDialogVisible = ref(false)
+const refundForm = ref({ original_payment_id: '', amount: null, reason: '' })
+const refundSaving = ref(false)
 const activityForm = ref({ activity_type: 'call', content: '', next_follow_up_at: '' })
 const activityLabels = { call: '电话', visit: '拜访', wechat: '微信', email: '邮件', other: '其他' }
+const REFUND_STATUS = {
+  pending: { label: '待审', type: 'warning' },
+  approved: { label: '已批准', type: 'success' },
+  completed: { label: '已完成', type: 'success' },
+  rejected: { label: '已驳回', type: 'danger' },
+}
 
 const planDialogVisible = ref(false)
 const planForm = ref(emptyPlan())
@@ -89,6 +103,7 @@ const taxTotal = computed(() =>
 )
 const amountInclTax = computed(() => Number(order.value?.amount || 0) + taxTotal.value)
 const unpaid = computed(() => Math.max(0, Number(order.value?.amount || 0) - paidTotal.value))
+const confirmedPayments = computed(() => payments.value.filter((p) => p.status === 'confirmed'))
 
 async function loadOrder() {
   loading.value = true
@@ -98,7 +113,16 @@ async function loadOrder() {
     if (data.customer_id) {
       try { const c = await crmApi.getCustomer(data.customer_id); customer.value = c.data } catch { customer.value = null }
     }
-    await Promise.all([loadPlans(), loadPayments(), loadApprovals(), loadActivities(), loadDeliveries(), loadInvoices(), loadRevisions()])
+    await Promise.all([
+      loadPlans(),
+      loadPayments(),
+      loadApprovals(),
+      loadActivities(),
+      loadDeliveries(),
+      loadInvoices(),
+      loadRevisions(),
+      loadRefunds(),
+    ])
   } catch (e) {
     ElMessage.error(e.message || '加载订单失败')
   } finally {
@@ -156,6 +180,15 @@ async function loadRevisions() {
     const { data } = await crmApi.listOrderRevisions(route.params.id)
     revisions.value = Array.isArray(data) ? data : []
   } catch { revisions.value = [] }
+}
+
+async function loadRefunds() {
+  try {
+    const { data } = await crmApi.listOrderRefunds(route.params.id)
+    refunds.value = Array.isArray(data) ? data : []
+  } catch {
+    refunds.value = []
+  }
 }
 
 async function handleRevise() {
@@ -217,6 +250,106 @@ async function voidInvoice(row) {
     ElMessage.success('已作废')
     loadInvoices()
   } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '作废失败') }
+}
+
+function openMatchInvoice(row) {
+  matchingInvoice.value = row
+  const pay = confirmedPayments.value[0]
+  matchForm.value = {
+    invoice_id: row.id,
+    payment_id: pay?.id || '',
+    matched_amount: Number(row.total_amount || row.amount || 0),
+  }
+  matchDialogVisible.value = true
+}
+
+async function submitMatchInvoice() {
+  if (!matchForm.value.payment_id) {
+    ElMessage.warning('请选择回款')
+    return
+  }
+  if (matchForm.value.matched_amount == null || matchForm.value.matched_amount <= 0) {
+    ElMessage.warning('请填写核销金额')
+    return
+  }
+  matchSaving.value = true
+  try {
+    await crmApi.matchInvoicePayment(matchForm.value.invoice_id, {
+      payment_id: matchForm.value.payment_id,
+      matched_amount: matchForm.value.matched_amount,
+    })
+    ElMessage.success('已核销回款')
+    matchDialogVisible.value = false
+  } catch (e) {
+    ElMessage.error(e.message || '核销失败')
+  } finally {
+    matchSaving.value = false
+  }
+}
+
+function openRefund() {
+  const pay = confirmedPayments.value[0]
+  refundForm.value = {
+    amount: Number(pay?.amount || unpaid.value || 0) || null,
+    reason: '',
+    original_payment_id: pay?.id || '',
+  }
+  refundDialogVisible.value = true
+}
+
+async function submitRefund() {
+  if (refundForm.value.amount == null || refundForm.value.amount <= 0) {
+    ElMessage.warning('请填写退款金额')
+    return
+  }
+  refundSaving.value = true
+  try {
+    await crmApi.createRefund({
+      order_id: order.value.id,
+      original_payment_id: refundForm.value.original_payment_id || null,
+      amount: refundForm.value.amount,
+      reason: refundForm.value.reason || null,
+    })
+    ElMessage.success('退款申请已提交')
+    refundDialogVisible.value = false
+    await loadRefunds()
+    activeTab.value = 'refunds'
+  } catch (e) {
+    ElMessage.error(e.message || '提交失败')
+  } finally {
+    refundSaving.value = false
+  }
+}
+
+async function approveRefund(row) {
+  try {
+    await crmApi.approveRefund(row.id)
+    ElMessage.success('已批准')
+    await loadRefunds()
+  } catch (e) {
+    ElMessage.error(e.message || '批准失败')
+  }
+}
+
+async function completeRefund(row) {
+  try {
+    await crmApi.completeRefund(row.id)
+    ElMessage.success('已完成退款')
+    await loadRefunds()
+  } catch (e) {
+    ElMessage.error(e.message || '完成失败')
+  }
+}
+
+async function rejectRefund(row) {
+  try {
+    await ElMessageBox.confirm('确定驳回该退款？', '驳回')
+    await crmApi.rejectRefund(row.id)
+    ElMessage.success('已驳回')
+    await loadRefunds()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.message || '驳回失败')
+  }
 }
 
 async function submitActivity() {
@@ -360,7 +493,7 @@ watch(
   (t) => {
     if (
       t &&
-      ['basic', 'lines', 'approval', 'payments', 'deliveries', 'invoices', 'revisions', 'activities', 'tasks'].includes(String(t))
+      ['basic', 'lines', 'approval', 'payments', 'deliveries', 'invoices', 'refunds', 'revisions', 'activities', 'tasks'].includes(String(t))
     ) {
       activeTab.value = String(t)
     }
@@ -567,10 +700,64 @@ onMounted(async () => { await loadMembers(); loadOrder() })
             <el-table-column label="状态" width="90" align="center">
               <template #default="{ row }">{{ { draft: '草稿', issued: '已开具', void: '已作废' }[row.status] || row.status }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="140" align="center">
+            <el-table-column label="操作" width="200" align="center">
               <template #default="{ row }">
                 <el-button v-if="canEdit() && row.status === 'draft'" link type="primary" @click="issueInvoice(row)">开具</el-button>
+                <el-button
+                  v-if="canEdit() && row.status === 'issued'"
+                  link
+                  type="success"
+                  @click="openMatchInvoice(row)"
+                >核销</el-button>
                 <el-button v-if="canEdit() && row.status !== 'void'" link type="danger" @click="voidInvoice(row)">作废</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <el-tab-pane :label="`退款（${refunds.length}）`" name="refunds">
+          <div class="detail-page__card-head">
+            <span>退款单</span>
+            <el-button
+              v-if="canPaymentCreate() && !['draft','pending_approval','rejected','cancelled','superseded'].includes(order.status)"
+              size="small"
+              type="primary"
+              @click="openRefund"
+            >申请退款</el-button>
+          </div>
+          <el-table :data="refunds" border size="small" empty-text="暂无退款单">
+            <el-table-column prop="refund_number" label="退款号" width="150" />
+            <el-table-column label="金额" width="120" align="right">
+              <template #default="{ row }">¥{{ formatAmount(row.amount) }}</template>
+            </el-table-column>
+            <el-table-column prop="reason" label="原因" min-width="160" show-overflow-tooltip />
+            <el-table-column label="状态" width="100" align="center">
+              <template #default="{ row }">
+                <el-tag size="small" :type="REFUND_STATUS[row.status]?.type">
+                  {{ REFUND_STATUS[row.status]?.label || row.status }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="180" align="center">
+              <template #default="{ row }">
+                <el-button
+                  v-if="canPaymentConfirm() && row.status === 'pending'"
+                  link
+                  type="success"
+                  @click="approveRefund(row)"
+                >批准</el-button>
+                <el-button
+                  v-if="canPaymentConfirm() && (row.status === 'pending' || row.status === 'approved')"
+                  link
+                  type="primary"
+                  @click="completeRefund(row)"
+                >完成</el-button>
+                <el-button
+                  v-if="canPaymentConfirm() && row.status === 'pending'"
+                  link
+                  type="danger"
+                  @click="rejectRefund(row)"
+                >驳回</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -741,6 +928,53 @@ onMounted(async () => { await loadMembers(); loadOrder() })
       <template #footer>
         <el-button @click="payDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="submitPay">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="matchDialogVisible" title="发票核销回款" width="440px">
+      <el-form label-width="96px">
+        <el-form-item label="回款" required>
+          <el-select v-model="matchForm.payment_id" placeholder="选择已确认回款" style="width: 100%">
+            <el-option
+              v-for="p in confirmedPayments"
+              :key="p.id"
+              :label="`${p.payment_number} · ¥${formatAmount(p.amount)}`"
+              :value="p.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="核销金额" required>
+          <el-input-number v-model="matchForm.matched_amount" :min="0.01" :precision="2" :controls="false" style="width: 100%" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="matchDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="matchSaving" @click="submitMatchInvoice">核销</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="refundDialogVisible" title="申请退款" width="440px">
+      <el-form label-width="96px">
+        <el-form-item label="原回款">
+          <el-select v-model="refundForm.original_payment_id" clearable placeholder="可选" style="width: 100%">
+            <el-option
+              v-for="p in confirmedPayments"
+              :key="p.id"
+              :label="`${p.payment_number} · ¥${formatAmount(p.amount)}`"
+              :value="p.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="退款金额" required>
+          <el-input-number v-model="refundForm.amount" :min="0.01" :precision="2" :controls="false" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="原因">
+          <el-input v-model="refundForm.reason" type="textarea" :rows="2" maxlength="500" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="refundDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="refundSaving" @click="submitRefund">提交</el-button>
       </template>
     </el-dialog>
   </div>

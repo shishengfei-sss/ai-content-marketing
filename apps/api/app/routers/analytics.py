@@ -10,13 +10,19 @@ from app.dependencies import TenantContext, get_tenant_context
 from app.models import Content
 from app.schemas import AnalyticsStatsOut
 from app.services.scope_service import apply_stats_scope
-from app.services.crm.deal_report_service import deal_funnel_report, deal_forecast_report, deal_win_loss_report
+from app.services.crm.deal_report_service import (
+    deal_funnel_report,
+    deal_forecast_report,
+    deal_stage_duration_report,
+    deal_win_loss_report,
+)
 from app.services.crm.lead_report_service import (
     lead_customer_funnel_report,
     sales_board_report,
     source_roi_report,
 )
 from app.services.crm.lifecycle_service import lifecycle_report
+from app.services.crm.trade_report_service import trade_report
 from app.services.permission_service import require_any_permission
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -179,3 +185,39 @@ def lifecycle_report_endpoint(
     db: Session = Depends(get_db),
 ):
     return lifecycle_report(db, ctx)
+
+
+@router.get("/trade-report")
+def trade_report_endpoint(
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
+    ctx: TenantContext = Depends(
+        require_any_permission(
+            "crm.order.list_own",
+            "crm.order.list_all",
+            "crm.payment.list_own",
+            "crm.payment.list_all",
+            "analytics.view_all",
+        )
+    ),
+    db: Session = Depends(get_db),
+):
+    return trade_report(db, ctx, start_date=start_date, end_date=end_date)
+
+
+@router.get("/deal-stage-duration")
+def deal_stage_duration_endpoint(
+    pipeline_id: UUID | None = Query(default=None),
+    owner_id: UUID | None = Query(default=None),
+    ctx: TenantContext = Depends(
+        require_any_permission(
+            "crm.deal.list_own",
+            "crm.deal.list_team",
+            "crm.deal.list_territory",
+            "crm.deal.list_all",
+            "analytics.view_all",
+        )
+    ),
+    db: Session = Depends(get_db),
+):
+    return deal_stage_duration_report(db, ctx, pipeline_id=pipeline_id, owner_id=owner_id)
