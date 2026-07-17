@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("max_amount", sa.Numeric(14, 2), nullable=True),
         sa.Column("approver_role", sa.String(length=50), nullable=False),
         sa.Column("approval_type", sa.String(length=20), nullable=False, server_default="sequential"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column(
             "updated_at",

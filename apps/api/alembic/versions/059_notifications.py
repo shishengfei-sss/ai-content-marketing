@@ -28,7 +28,7 @@ def upgrade() -> None:
         sa.Column("body", sa.Text(), nullable=True),
         sa.Column("entity_type", sa.String(length=20), nullable=True),
         sa.Column("entity_id", sa.Uuid(), nullable=True),
-        sa.Column("is_read", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_read", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("read_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),

@@ -84,7 +84,7 @@ def upgrade() -> None:
         sa.Column("date_format", sa.String(length=20), nullable=False, server_default="%Y%m%d"),
         sa.Column("seq_width", sa.Integer(), nullable=False, server_default="3"),
         sa.Column("reset_period", sa.String(length=10), nullable=False, server_default="daily"),
-        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.UniqueConstraint(

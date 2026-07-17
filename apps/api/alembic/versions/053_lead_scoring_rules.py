@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column("condition_json", sa.JSON(), nullable=False),
         sa.Column("score_value", sa.Integer(), nullable=False),
         sa.Column("priority", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column(
             "updated_at",

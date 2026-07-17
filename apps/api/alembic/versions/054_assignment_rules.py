@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("assign_type", sa.String(length=30), nullable=False),
         sa.Column("target_id", sa.Uuid(), nullable=True),
         sa.Column("priority", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column(
             "updated_at",

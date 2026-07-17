@@ -25,7 +25,7 @@ def upgrade() -> None:
         sa.Column("entity_type", sa.String(length=20), nullable=False),
         sa.Column("entity_id", sa.Uuid(), nullable=False),
         sa.Column("address_type", sa.String(length=30), nullable=False, server_default="office"),
-        sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("province", sa.String(length=50), nullable=True),
         sa.Column("city", sa.String(length=50), nullable=True),
         sa.Column("district", sa.String(length=50), nullable=True),
