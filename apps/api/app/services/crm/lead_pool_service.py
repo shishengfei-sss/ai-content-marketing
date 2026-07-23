@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.database import uuid_eq
 from app.dependencies import TenantContext
 from app.models.crm import Lead, LeadPool
-from app.services.crm.crm_scope_service import assert_can_view_lead
+from app.services.crm.crm_scope_service import assert_can_mutate_lead
 
 
 def list_pools(db: Session, tenant_id: UUID) -> list[LeadPool]:
@@ -115,8 +115,7 @@ def reclaim_lead_to_pool(db: Session, ctx: TenantContext, lead: Lead, pool_id: U
     require_pool(db, ctx.tenant_id, pool_id)
     if lead.status == "已转化":
         raise HTTPException(status_code=409, detail="已转化线索不可回收")
-    if lead.owner_user_id is not None:
-        assert_can_view_lead(ctx, db, lead.owner_user_id, lead.territory_id)
+    assert_can_mutate_lead(ctx, lead)
     lead.owner_user_id = None
     lead.pool_id = pool_id
     lead.claimed_at = None
@@ -138,7 +137,7 @@ def claim_lead(db: Session, ctx: TenantContext, pool_id: UUID, lead_id: UUID) ->
     )
     if not lead:
         raise HTTPException(status_code=404, detail="线索不存在")
-    if lead.pool_id != pool_id:
+    if lead.pool_id is None or str(lead.pool_id).replace("-", "").lower() != str(pool_id).replace("-", "").lower():
         raise HTTPException(status_code=409, detail="线索不在该公海")
     if lead.owner_user_id is not None:
         raise HTTPException(status_code=409, detail="线索已被认领")
@@ -146,6 +145,11 @@ def claim_lead(db: Session, ctx: TenantContext, pool_id: UUID, lead_id: UUID) ->
         raise HTTPException(status_code=409, detail="已转化线索不可认领")
     lead.owner_user_id = ctx.user.id
     lead.claimed_at = datetime.now(timezone.utc)
+    from app.services.crm.sales_org_service import apply_owner_org_snapshot
+
+    snap_territory, snap_manager = apply_owner_org_snapshot(db, ctx.tenant_id, ctx.user.id)
+    lead.territory_id = snap_territory
+    lead.manager_user_id = snap_manager
     from app.services.crm.notification_service import create_notification
 
     create_notification(

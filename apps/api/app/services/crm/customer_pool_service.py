@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.database import uuid_eq
 from app.dependencies import TenantContext
 from app.models.crm import Customer, CustomerPool
-from app.services.crm.crm_scope_service import assert_can_view_customer
+from app.services.crm.crm_scope_service import assert_can_mutate_customer
 
 
 def list_pools(db: Session, tenant_id: UUID) -> list[CustomerPool]:
@@ -60,10 +60,64 @@ def create_pool(
     return pool
 
 
+def update_pool(
+    db: Session,
+    ctx: TenantContext,
+    pool: CustomerPool,
+    *,
+    name: str | None = None,
+    territory_id: UUID | None = None,
+    industry_filter: str | None = None,
+    auto_reclaim_days: int | None = None,
+) -> CustomerPool:
+    if name is not None:
+        pool.name = name.strip()
+    if territory_id is not None:
+        pool.territory_id = territory_id
+    if industry_filter is not None:
+        pool.industry_filter = industry_filter
+    if auto_reclaim_days is not None:
+        pool.auto_reclaim_days = auto_reclaim_days
+    db.commit()
+    db.refresh(pool)
+    return pool
+
+
+def delete_pool(db: Session, ctx: TenantContext, pool: CustomerPool) -> None:
+    in_use = (
+        db.query(Customer)
+        .filter(
+            Customer.tenant_id == ctx.tenant_id,
+            uuid_eq(Customer.pool_id, pool.id),
+            Customer.deleted_at.is_(None),
+            Customer.owner_user_id.is_(None),
+        )
+        .count()
+    )
+    if in_use:
+        raise HTTPException(status_code=409, detail="公海内仍有未认领客户，无法删除")
+    db.delete(pool)
+    db.commit()
+
+
+def list_pool_customers(db: Session, ctx: TenantContext, pool_id: UUID) -> list[Customer]:
+    require_pool(db, ctx.tenant_id, pool_id)
+    return (
+        db.query(Customer)
+        .filter(
+            Customer.tenant_id == ctx.tenant_id,
+            uuid_eq(Customer.pool_id, pool_id),
+            Customer.owner_user_id.is_(None),
+            Customer.deleted_at.is_(None),
+        )
+        .order_by(Customer.created_at.desc())
+        .all()
+    )
+
+
 def reclaim_customer_to_pool(db: Session, ctx: TenantContext, customer: Customer, pool_id: UUID) -> Customer:
     require_pool(db, ctx.tenant_id, pool_id)
-    if customer.owner_user_id is not None:
-        assert_can_view_customer(ctx, db, customer.owner_user_id, customer.territory_id)
+    assert_can_mutate_customer(ctx, customer)
     customer.owner_user_id = None
     customer.pool_id = pool_id
     customer.claimed_at = None
@@ -85,12 +139,30 @@ def claim_customer(db: Session, ctx: TenantContext, pool_id: UUID, customer_id: 
     )
     if not customer:
         raise HTTPException(status_code=404, detail="客户不存在")
-    if customer.pool_id != pool_id:
+    if customer.pool_id is None or str(customer.pool_id).replace("-", "").lower() != str(pool_id).replace("-", "").lower():
         raise HTTPException(status_code=409, detail="客户不在该公海")
     if customer.owner_user_id is not None:
         raise HTTPException(status_code=409, detail="客户已被认领")
     customer.owner_user_id = ctx.user.id
     customer.claimed_at = datetime.now(timezone.utc)
+    from app.services.crm.sales_org_service import apply_owner_org_snapshot
+
+    snap_territory, snap_manager = apply_owner_org_snapshot(db, ctx.tenant_id, ctx.user.id)
+    customer.territory_id = snap_territory
+    customer.manager_user_id = snap_manager
+    from app.services.crm.notification_service import create_notification
+
+    create_notification(
+        db,
+        tenant_id=ctx.tenant_id,
+        user_id=ctx.user.id,
+        title="已认领客户",
+        body=f"「{customer.company_name}」已从公海认领",
+        category="pool_claim",
+        entity_type="customer",
+        entity_id=customer.id,
+        commit=False,
+    )
     db.commit()
     db.refresh(customer)
     return customer

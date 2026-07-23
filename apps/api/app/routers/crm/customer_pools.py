@@ -14,6 +14,7 @@ from app.schemas.crm import (
     CustomerPoolClaimRequest,
     CustomerPoolCreate,
     CustomerPoolOut,
+    CustomerPoolUpdate,
 )
 from app.services.crm import customer_pool_service
 from app.services.permission_service import require_any_permission, require_permission
@@ -50,6 +51,52 @@ def api_create_pool(
         industry_filter=body.industry_filter,
         auto_reclaim_days=body.auto_reclaim_days,
     )
+
+
+@router.patch("/{pool_id}", response_model=CustomerPoolOut)
+def api_update_pool(
+    pool_id: UUID,
+    body: CustomerPoolUpdate,
+    ctx: TenantContext = Depends(require_permission("crm.customer.edit")),
+    db: Session = Depends(get_db),
+):
+    pool = customer_pool_service.require_pool(db, ctx.tenant_id, pool_id)
+    return customer_pool_service.update_pool(
+        db,
+        ctx,
+        pool,
+        name=body.name,
+        territory_id=body.territory_id,
+        industry_filter=body.industry_filter,
+        auto_reclaim_days=body.auto_reclaim_days,
+    )
+
+
+@router.delete("/{pool_id}", status_code=204)
+def api_delete_pool(
+    pool_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.customer.edit")),
+    db: Session = Depends(get_db),
+):
+    pool = customer_pool_service.require_pool(db, ctx.tenant_id, pool_id)
+    customer_pool_service.delete_pool(db, ctx, pool)
+
+
+@router.get("/{pool_id}/customers", response_model=list[CustomerOut])
+def api_list_pool_customers(
+    pool_id: UUID,
+    ctx: TenantContext = Depends(
+        require_any_permission(
+            "crm.customer.list_own",
+            "crm.customer.list_team",
+            "crm.customer.list_territory",
+            "crm.customer.list_all",
+            "crm.customer.edit",
+        )
+    ),
+    db: Session = Depends(get_db),
+):
+    return customer_pool_service.list_pool_customers(db, ctx, pool_id)
 
 
 @router.post("/{pool_id}/claim", response_model=CustomerOut)

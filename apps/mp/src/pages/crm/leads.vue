@@ -80,12 +80,18 @@ const columnSaving = ref(false)
 
 const activityVisible = ref(false)
 const activeLeadId = ref('')
+const activeLeadOwnerId = ref('')
 const activityForm = ref({ activity_type: 'call', content: '', status: '' })
 const activityStatusSheetVisible = ref(false)
+const currentUserId = ref('')
 
 const canCreate = () => hasPermission(permissions.value, 'crm.lead.create')
 const canActivity = () => hasPermission(permissions.value, 'crm.activity.create')
-const canEditLead = () => hasPermission(permissions.value, 'crm.lead.edit')
+const canEditPerm = () => hasPermission(permissions.value, 'crm.lead.edit')
+const sameUserId = (a, b) =>
+  !!a && !!b && String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
+const canEditActiveLeadStatus = () =>
+  canEditPerm() && sameUserId(activeLeadOwnerId.value, currentUserId.value)
 
 async function fetchPage(pageNum, append = false) {
   const params = { page: pageNum, page_size: PAGE_SIZE }
@@ -116,6 +122,7 @@ async function loadData() {
   try {
     const user = await ensureSession()
     permissions.value = user?.permissions || []
+    currentUserId.value = user?.id || ''
     try {
       views.value = await crmApi.listViews('lead')
       if (!Array.isArray(views.value)) views.value = []
@@ -400,6 +407,7 @@ function goDetail(item) {
 
 function openActivity(item) {
   activeLeadId.value = typeof item === 'object' ? item.id : item
+  activeLeadOwnerId.value = typeof item === 'object' ? item.owner_user_id || '' : ''
   const status = typeof item === 'object' ? item.status : ''
   activityForm.value = { activity_type: 'call', content: '', status: status || '待跟进' }
   activityStatusSheetVisible.value = false
@@ -435,7 +443,7 @@ async function submitActivity() {
       activity_type: activityForm.value.activity_type,
       content: activityForm.value.content,
     }
-    if (canEditLead() && activityForm.value.status) {
+    if (canEditActiveLeadStatus() && activityForm.value.status) {
       body.status = activityForm.value.status
     }
     await crmApi.createActivity(body)
@@ -549,7 +557,7 @@ onShow(loadData)
           :cursor-spacing="20"
         />
         <view
-          v-if="canEditLead()"
+          v-if="canEditActiveLeadStatus()"
           class="status-pick"
           @tap="openActivityStatusSheet"
         >

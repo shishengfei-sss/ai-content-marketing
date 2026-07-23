@@ -11,7 +11,11 @@ from app.dependencies import TenantContext, get_tenant_context
 
 def require_permission(code: str) -> Callable:
     def _dependency(ctx: TenantContext = Depends(get_tenant_context)) -> TenantContext:
-        perms = {p.permission_code for p in ctx.membership.role.permissions}
+        from sqlalchemy.orm import object_session
+
+        from app.services.membership_service import get_membership_permissions
+
+        perms = set(get_membership_permissions(ctx.membership, object_session(ctx.membership)))
         if code not in perms:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限")
         return ctx
@@ -21,7 +25,11 @@ def require_permission(code: str) -> Callable:
 
 def require_any_permission(*codes: str) -> Callable:
     def _dependency(ctx: TenantContext = Depends(get_tenant_context)) -> TenantContext:
-        perms = {p.permission_code for p in ctx.membership.role.permissions}
+        from sqlalchemy.orm import object_session
+
+        from app.services.membership_service import get_membership_permissions
+
+        perms = set(get_membership_permissions(ctx.membership, object_session(ctx.membership)))
         if not perms.intersection(codes):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限")
         return ctx

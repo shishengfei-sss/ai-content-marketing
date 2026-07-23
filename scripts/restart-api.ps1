@@ -66,10 +66,13 @@ try {
 
 Write-Host ""
 Write-Host "Starting API on http://127.0.0.1:$Port ..."
-Write-Host "Web/H5 代理请指向: VITE_API_PROXY_TARGET=http://127.0.0.1:$Port"
-Write-Host "修改 .env 后需重启 Web/H5 开发服务 (npm run dev)"
+Write-Host "Web/H5 proxy: VITE_API_PROXY_TARGET=http://127.0.0.1:$Port"
+Write-Host "After .env change, restart Web/H5 (npm run dev)"
+Write-Host "Windows: WATCHFILES_FORCE_POLLING=1 (avoid fake reload)"
 Write-Host ""
 
 Set-Location $apiRoot
+# Windows 下默认 inotify 等价机制常漏检/半重载；强制轮询更稳
+$env:WATCHFILES_FORCE_POLLING = '1'
 & .\.venv\Scripts\python.exe -m alembic upgrade head
-& .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port $Port --reload
+& .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port $Port --reload --reload-dir app

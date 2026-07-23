@@ -8,12 +8,14 @@ import { hasPermission } from '../../config/permissions'
 import { useEntitySchema } from '../../composables/useEntitySchema'
 import { useTeamMembers } from '../../composables/useTeamMembers'
 import { getFormFields, LEAD_STATUS_OPTIONS } from '../../utils/entityForm'
+import { formatDateTime } from '../../utils/datetime'
 import CrmAssignOwner from '../../components/crm/CrmAssignOwner.vue'
 import CrmDetailHero from '../../components/crm/CrmDetailHero.vue'
 import CrmDetailShell from '../../components/crm/CrmDetailShell.vue'
 import CrmEntityFieldsView from '../../components/crm/CrmEntityFieldsView.vue'
 import CrmEntityFormDialog from '../../components/crm/CrmEntityFormDialog.vue'
 import CrmEntityTasks from '../../components/crm/CrmEntityTasks.vue'
+import CrmEntityTags from '../../components/crm/CrmEntityTags.vue'
 import { isActiveTaskStatus } from '../../utils/taskMeta'
 
 const route = useRoute()
@@ -21,6 +23,13 @@ const router = useRouter()
 const auth = useAuthStore()
 const { fields, loadSchema } = useEntitySchema('lead')
 const { loadMembers, resolveMemberName } = useTeamMembers()
+
+const listPath = computed(() =>
+  route.query.from === 'lead-pools' ? '/crm/lead-pools' : '/crm/leads',
+)
+const entityLabel = computed(() =>
+  route.query.from === 'lead-pools' ? '线索公海' : '线索',
+)
 
 const loading = ref(false)
 const activeTab = ref('profile')
@@ -34,13 +43,40 @@ const activityForm = ref({ activity_type: 'call', content: '', next_follow_up_at
 const taskPanelRef = ref(null)
 const assignVisible = ref(false)
 const editVisible = ref(false)
+const bantList = ref([])
+const bantVisible = ref(false)
+const bantSaving = ref(false)
+const bantForm = ref({
+  budget_score: 3,
+  authority_score: 3,
+  need_score: 3,
+  time_score: 3,
+  note: '',
+})
+const reclaimVisible = ref(false)
+const reclaimSaving = ref(false)
+const reclaimPools = ref([])
+const reclaimPoolId = ref('')
+const scoreBusy = ref(false)
 
 const formFields = computed(() => getFormFields(fields.value, 'lead'))
 
 const canWriteActivity = () => hasPermission(auth.permissions, 'crm.activity.create')
-const canConvert = () => hasPermission(auth.permissions, 'crm.lead.convert')
 const canAssign = () => hasPermission(auth.permissions, 'crm.lead.assign')
 const canEdit = () => hasPermission(auth.permissions, 'crm.lead.edit')
+const isLeadOwner = () => {
+  const a = lead.value?.owner_user_id
+  const b = auth.user?.id
+  return (
+    !!a &&
+    !!b &&
+    String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
+  )
+}
+/** 编辑 / 退回公海等：权限 + 负责人 */
+const canMutateLead = () => canEdit() && isLeadOwner()
+const canConvert = () => hasPermission(auth.permissions, 'crm.lead.convert') && isLeadOwner()
+const canCpq = () => hasPermission(auth.permissions, 'crm.quote.create')
 const isTenantAdmin = () => auth.user?.active_tenant?.role_code === 'admin'
 
 const heroAvatar = computed(() => (lead.value?.company_name || '线').slice(0, 1))
@@ -90,7 +126,7 @@ async function loadCampaignName() {
   }
 }
 
-async function loadDetail() {
+async function loadDetail({ afterAssign = false } = {}) {
   loading.value = true
   try {
     await loadSchema()
@@ -102,12 +138,118 @@ async function loadDetail() {
     activities.value = Array.isArray(timeline) ? timeline : []
     await loadCampaignName()
     await loadAttachments()
+    await loadBant()
     await taskPanelRef.value?.reload()
   } catch (e) {
+    const forbidden = e.status === 403 || String(e.message || '').includes('无权访问')
+    if (afterAssign && forbidden) {
+      // 分配组件已提示成功；失去可见权时安静回列表，避免再弹「无权访问」
+      router.replace('/crm/leads')
+      return
+    }
     ElMessage.error(e.message || '加载失败')
     router.replace('/crm/leads')
   } finally {
     loading.value = false
+  }
+}
+
+async function onAssignDone() {
+  await loadDetail({ afterAssign: true })
+}
+
+async function loadBant() {
+  try {
+    const { data } = await crmApi.listBant(route.params.id)
+    bantList.value = Array.isArray(data) ? data : []
+  } catch {
+    bantList.value = []
+  }
+}
+
+function openBantDialog() {
+  bantForm.value = {
+    budget_score: 3,
+    authority_score: 3,
+    need_score: 3,
+    time_score: 3,
+    note: '',
+  }
+  bantVisible.value = true
+}
+
+async function submitBant() {
+  bantSaving.value = true
+  try {
+    await crmApi.createBant(route.params.id, {
+      budget_score: bantForm.value.budget_score,
+      authority_score: bantForm.value.authority_score,
+      need_score: bantForm.value.need_score,
+      time_score: bantForm.value.time_score,
+      note: bantForm.value.note.trim() || null,
+    })
+    ElMessage.success('BANT 已保存')
+    bantVisible.value = false
+    await loadBant()
+  } catch (e) {
+    ElMessage.error(e.message || '保存失败')
+  } finally {
+    bantSaving.value = false
+  }
+}
+
+async function recalculateScore() {
+  scoreBusy.value = true
+  try {
+    await crmApi.recalculateLeadScore(route.params.id)
+    ElMessage.success('评分已重算')
+    await loadDetail()
+  } catch (e) {
+    ElMessage.error(e.message || '重算失败')
+  } finally {
+    scoreBusy.value = false
+  }
+}
+
+async function openReclaim() {
+  try {
+    const { data: pools } = await crmApi.listLeadPools()
+    reclaimPools.value = Array.isArray(pools) ? pools : []
+    if (!reclaimPools.value.length) {
+      try {
+        await ElMessageBox.confirm('暂无线索公海，是否前往设置创建？', '退回公海', {
+          type: 'warning',
+          confirmButtonText: '去设置',
+          cancelButtonText: '取消',
+        })
+        router.push('/settings/lead-pools')
+      } catch {
+        /* cancel */
+      }
+      return
+    }
+    reclaimPoolId.value = reclaimPools.value[0].id
+    reclaimVisible.value = true
+  } catch (e) {
+    ElMessage.error(e.message || '加载公海失败')
+  }
+}
+
+async function submitReclaim() {
+  if (!reclaimPoolId.value) {
+    ElMessage.warning('请选择公海')
+    return
+  }
+  reclaimSaving.value = true
+  try {
+    await crmApi.reclaimLeadToPool(route.params.id, { pool_id: reclaimPoolId.value })
+    ElMessage.success('已退回公海')
+    reclaimVisible.value = false
+    router.push('/crm/leads')
+  } catch (e) {
+    ElMessage.error(e.message || '退回失败')
+  } finally {
+    reclaimSaving.value = false
   }
 }
 
@@ -192,7 +334,7 @@ async function submitActivity() {
     if (activityForm.value.next_follow_up_at) {
       body.next_follow_up_at = new Date(activityForm.value.next_follow_up_at).toISOString()
     }
-    if (canEdit() && activityForm.value.status) {
+    if (canMutateLead() && activityForm.value.status) {
       body.status = activityForm.value.status
     }
     await crmApi.createActivity(body)
@@ -328,8 +470,8 @@ onMounted(async () => {
 <template>
   <CrmDetailShell
     :loading="loading"
-    list-path="/crm/leads"
-    entity-label="线索"
+    :list-path="listPath"
+    :entity-label="entityLabel"
     :title="lead?.company_name || ''"
   >
     <CrmDetailHero
@@ -351,8 +493,27 @@ onMounted(async () => {
         >
           查看客户
         </el-button>
-        <el-button v-if="canEdit()" @click="editVisible = true">编辑资料</el-button>
+        <el-button
+          v-if="canCpq() && lead.converted_customer_id"
+          type="primary"
+          plain
+          @click="router.push({
+            path: '/crm/quotes/cpq/new',
+            query: { customer_id: lead.converted_customer_id, lead_id: lead.id },
+          })"
+        >
+          CPQ 报价
+        </el-button>
+        <el-button v-if="canMutateLead()" @click="editVisible = true">编辑资料</el-button>
+        <el-tooltip
+          v-if="canMutateLead()"
+          content="按设置中的评分规则重新计算并覆盖当前分；BANT 仅在更高时抬升"
+          placement="bottom"
+        >
+          <el-button :loading="scoreBusy" @click="recalculateScore">重算评分</el-button>
+        </el-tooltip>
         <el-button v-if="canAssign()" @click="assignVisible = true">分配负责人</el-button>
+        <el-button v-if="canMutateLead()" type="warning" plain @click="openReclaim">退回公海</el-button>
         <el-button v-if="canConvert() && lead.status !== '已转化'" type="primary" @click="handleConvert">
           转化客户
         </el-button>
@@ -362,12 +523,49 @@ onMounted(async () => {
     <section v-if="lead" class="page-card crm-detail-tabs">
       <el-tabs v-model="activeTab">
         <el-tab-pane label="资料" name="profile">
+          <div class="crm-panel" style="margin-bottom: 16px">
+            <div class="crm-panel__title">标签</div>
+            <CrmEntityTags
+              entity-type="lead"
+              :entity-id="route.params.id"
+              :editable="canMutateLead()"
+            />
+          </div>
           <CrmEntityFieldsView
             :record="lead"
             :fields="formFields"
             :campaign-name="campaignName"
             :owner-name="ownerName"
           />
+        </el-tab-pane>
+
+        <el-tab-pane label="BANT" name="bant">
+          <div class="crm-panel">
+            <div class="crm-panel__head">
+              <div>
+                <div class="crm-panel__title">BANT 评估</div>
+                <div class="crm-panel__hint">
+                  预算(Budget) / 决策权(Authority) / 需求(Need) / 时间(Time)，各 1–5 分
+                </div>
+              </div>
+              <el-button v-if="canMutateLead()" type="primary" @click="openBantDialog">新增评估</el-button>
+            </div>
+          </div>
+          <el-table v-if="bantList.length" :data="bantList" stripe class="crm-table">
+            <el-table-column label="时间" width="160">
+              <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
+            </el-table-column>
+            <el-table-column prop="budget_score" label="预算" width="80" align="center" />
+            <el-table-column prop="authority_score" label="决策权" width="90" align="center" />
+            <el-table-column prop="need_score" label="需求" width="80" align="center" />
+            <el-table-column prop="time_score" label="时间" width="80" align="center" />
+            <el-table-column prop="total_score" label="总分" width="80" align="center" />
+            <el-table-column prop="note" label="备注" min-width="160" show-overflow-tooltip />
+            <el-table-column label="评估人" width="120">
+              <template #default="{ row }">{{ resolveMemberName(row.created_by_user_id) }}</template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-else description="暂无 BANT 评估" />
         </el-tab-pane>
 
         <el-tab-pane label="跟进" name="activities">
@@ -389,7 +587,7 @@ onMounted(async () => {
                 style="width: 190px"
               />
               <el-select
-                v-if="canEdit()"
+                v-if="canMutateLead()"
                 v-model="activityForm.status"
                 placeholder="线索状态"
                 style="width: 120px"
@@ -409,7 +607,7 @@ onMounted(async () => {
             <el-timeline-item
               v-for="item in activities"
               :key="item.id"
-              :timestamp="new Date(item.created_at).toLocaleString('zh-CN')"
+              :timestamp="formatDateTime(item.created_at)"
               placement="top"
             >
               <div class="crm-timeline__card">
@@ -434,7 +632,7 @@ onMounted(async () => {
           <div class="crm-panel">
             <div class="crm-panel__head">
               <div class="crm-panel__title">文档附件</div>
-              <label v-if="canEdit()" class="crm-upload-btn">
+              <label v-if="canMutateLead()" class="crm-upload-btn">
                 <input type="file" :disabled="uploading" @change="onUploadFile" />
                 <el-button type="primary" size="small" :loading="uploading">上传附件</el-button>
               </label>
@@ -449,12 +647,12 @@ onMounted(async () => {
               <template #default="{ row }">{{ resolveMemberName(row.uploaded_by_user_id) }}</template>
             </el-table-column>
             <el-table-column label="上传时间" width="160">
-              <template #default="{ row }">{{ new Date(row.created_at).toLocaleString('zh-CN') }}</template>
+              <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
             </el-table-column>
             <el-table-column label="操作" width="140" align="center">
               <template #default="{ row }">
                 <el-button link type="primary" size="small" @click="downloadAttachment(row)">下载</el-button>
-                <el-button v-if="canEdit()" link type="danger" size="small" @click="removeAttachment(row)">删除</el-button>
+                <el-button v-if="canMutateLead()" link type="danger" size="small" @click="removeAttachment(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -486,8 +684,69 @@ onMounted(async () => {
       entity-type="lead"
       :entity-id="route.params.id"
       :owner-user-id="lead?.owner_user_id"
-      @done="loadDetail"
+      @done="onAssignDone"
     />
+
+    <el-dialog v-model="bantVisible" title="新增 BANT 评估" width="520px" destroy-on-close>
+      <el-form label-position="top" class="bant-form">
+        <el-form-item required>
+          <template #label>
+            <span>预算（Budget）</span>
+            <span class="bant-form__desc">客户是否有明确采购预算、预算是否充足</span>
+          </template>
+          <el-input-number v-model="bantForm.budget_score" :min="1" :max="5" />
+        </el-form-item>
+        <el-form-item required>
+          <template #label>
+            <span>决策权（Authority）</span>
+            <span class="bant-form__desc">对接人是否具备拍板/强力影响决策的权力</span>
+          </template>
+          <el-input-number v-model="bantForm.authority_score" :min="1" :max="5" />
+        </el-form-item>
+        <el-form-item required>
+          <template #label>
+            <span>需求（Need）</span>
+            <span class="bant-form__desc">业务痛点是否清晰、对方案需求是否强烈</span>
+          </template>
+          <el-input-number v-model="bantForm.need_score" :min="1" :max="5" />
+        </el-form-item>
+        <el-form-item required>
+          <template #label>
+            <span>时间（Time）</span>
+            <span class="bant-form__desc">是否有明确采购/上线时间表、紧迫程度如何</span>
+          </template>
+          <el-input-number v-model="bantForm.time_score" :min="1" :max="5" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input
+            v-model="bantForm.note"
+            type="textarea"
+            :rows="2"
+            maxlength="500"
+            show-word-limit
+            placeholder="补充评估依据或跟进建议（选填）"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="bantVisible = false">取消</el-button>
+        <el-button type="primary" :loading="bantSaving" @click="submitBant">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="reclaimVisible" title="退回公海" width="420px" destroy-on-close>
+      <el-form label-width="72px">
+        <el-form-item label="公海" required>
+          <el-select v-model="reclaimPoolId" placeholder="选择公海" style="width: 100%">
+            <el-option v-for="p in reclaimPools" :key="p.id" :label="p.name" :value="p.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="reclaimVisible = false">取消</el-button>
+        <el-button type="warning" :loading="reclaimSaving" @click="submitReclaim">确认退回</el-button>
+      </template>
+    </el-dialog>
   </CrmDetailShell>
 </template>
 
@@ -531,10 +790,16 @@ onMounted(async () => {
 }
 
 .crm-panel__title {
-  margin-bottom: 10px;
+  margin-bottom: 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+.crm-panel__hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .activity-form {
@@ -569,5 +834,19 @@ onMounted(async () => {
 
 .crm-table {
   margin-top: 4px;
+}
+
+.bant-form :deep(.el-form-item__label) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  line-height: 1.4;
+}
+
+.bant-form__desc {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--el-text-color-secondary);
 }
 </style>

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { crmApi } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
+import { formatDateTime } from '../../utils/datetime'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -92,8 +93,7 @@ function navigateEntity(row) {
 }
 
 function formatTime(v) {
-  if (!v) return ''
-  return String(v).replace('T', ' ').slice(0, 16)
+  return formatDateTime(v, { empty: '', withSeconds: false })
 }
 
 onMounted(() => {

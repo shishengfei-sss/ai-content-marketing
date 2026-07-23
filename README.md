@@ -4,6 +4,7 @@
 
 | 文档 | 路径 |
 |------|------|
+| **整合 PRD（v0.3.3→v1.3 全链路）** | [docs/PRD-智营获客-整合v1.3.html](docs/PRD-智营获客-整合v1.3.html) · [Markdown](docs/PRD-智营获客-整合v1.3.md) |
 | 需求规格 SRS | [docs/需求规格.md](docs/需求规格.md) |
 | v0.3.3 执行计划 | [docs/v0.3.3执行计划.md](docs/v0.3.3执行计划.md) |
 | **v0.4 Agent 执行计划** | [docs/v0.4-agent执行计划.md](docs/v0.4-agent执行计划.md) |

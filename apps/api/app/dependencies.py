@@ -86,11 +86,17 @@ def get_tenant_context(
     tenant_id: UUID = Depends(require_active_tenant_id),
     db: Session = Depends(get_db),
 ) -> TenantContext:
+    from app.models import Tenant
+    from app.database import uuid_eq
+
     if is_platform_admin(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="平台管理员请使用用户工作台")
     membership = get_membership(db, current_user.id, tenant_id)
     if not membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该公司")
+    tenant = db.query(Tenant).filter(uuid_eq(Tenant.id, tenant_id)).first()
+    if tenant is not None and hasattr(tenant, "is_active") and tenant.is_active is False:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="企业已被禁用")
     return TenantContext(user=current_user, tenant_id=tenant_id, membership=membership)
 
 

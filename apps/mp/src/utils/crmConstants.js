@@ -16,6 +16,7 @@ export const ORDER_STATUS_LABEL = {
   executing: '执行中',
   completed: '已完成',
   cancelled: '已取消',
+  superseded: '已修订',
 }
 
 export const QUOTE_STATUS_LABEL = {
@@ -29,6 +30,8 @@ export const QUOTE_STATUS_LABEL = {
 export const CONTRACT_STATUS_LABEL = {
   draft: '草稿',
   sent: '已发送',
+  pending_approval: '待审批',
+  rejected: '已驳回',
   signed: '已签署',
   executing: '执行中',
   expired: '已过期',

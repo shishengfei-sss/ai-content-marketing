@@ -1,4 +1,4 @@
-"""合同 API（v0.7 CRM-2）。"""
+"""合同 API（v0.7 + 状态机/审批/批量/复制增强）。"""
 
 from __future__ import annotations
 
@@ -15,11 +15,14 @@ from app.models.crm import Contract
 from app.schemas.crm_deals import (
     ContractAmendmentCreate,
     ContractAmendmentOut,
+    ContractBatchAction,
+    ContractBatchActionResult,
     ContractConvertToOrderOut,
     ContractCreate,
     ContractFromTemplateRequest,
     ContractListResponse,
     ContractOut,
+    ContractRejectBody,
     ContractRenewOut,
     ContractUpdate,
 )
@@ -32,12 +35,23 @@ from app.services.crm.contract_amendment_service import (
 )
 from app.services.crm.contract_expiry_job import create_renewal_deal_for_contract
 from app.services.crm.contract_service import (
+    activate_contract,
+    approve_contract,
+    batch_contract_action,
+    clone_contract,
+    contract_to_out,
     convert_contract_to_order,
     create_contract,
+    reject_contract,
+    renew_as_contract,
     require_contract,
+    send_contract,
     sign_contract,
     soft_delete_contract,
+    submit_contract,
+    terminate_contract,
     update_contract,
+    withdraw_contract,
 )
 from app.services.crm.contract_template_service import create_contract_from_template
 from app.services.crm.crm_scope_service import apply_contract_list_scope, has_contract_list_permission
@@ -73,7 +87,7 @@ def list_contracts(
     sort_by: str | None = Query(default=None),
     sort_dir: str | None = Query(default=None, pattern="^(asc|desc)$"),
     ctx: TenantContext = Depends(
-        require_any_permission("crm.contract.list_own", "crm.contract.list_all")
+        require_any_permission("crm.contract.list_own", "crm.contract.list_team", "crm.contract.list_all")
     ),
     db: Session = Depends(get_db),
 ):
@@ -116,7 +130,7 @@ def list_contracts(
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
     return ContractListResponse(
-        items=[ContractOut.model_validate(i) for i in items],
+        items=[contract_to_out(db, i) for i in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -126,6 +140,15 @@ def list_contracts(
     )
 
 
+@router.post("/batch-action", response_model=ContractBatchActionResult)
+def batch_contracts_endpoint(
+    body: ContractBatchAction,
+    ctx: TenantContext = Depends(require_any_permission("crm.contract.sign", "crm.contract.edit")),
+    db: Session = Depends(get_db),
+):
+    return batch_contract_action(db, ctx, body)
+
+
 @router.post("", response_model=ContractOut, status_code=201)
 def post_contract(
     body: ContractCreate,
@@ -133,7 +156,7 @@ def post_contract(
     db: Session = Depends(get_db),
 ):
     c = create_contract(db, ctx, body)
-    return ContractOut.model_validate(c)
+    return contract_to_out(db, c)
 
 
 @router.post("/from-template", response_model=ContractOut, status_code=201)
@@ -143,7 +166,7 @@ def post_contract_from_template(
     db: Session = Depends(get_db),
 ):
     c = create_contract_from_template(db, ctx, body)
-    return ContractOut.model_validate(c)
+    return contract_to_out(db, c)
 
 
 @router.get("/{contract_id}", response_model=ContractOut)
@@ -153,7 +176,7 @@ def get_contract_detail(
     db: Session = Depends(get_db),
 ):
     c = require_contract(db, ctx, contract_id)
-    return ContractOut.model_validate(c)
+    return contract_to_out(db, c)
 
 
 @router.patch("/{contract_id}", response_model=ContractOut)
@@ -165,7 +188,63 @@ def patch_contract(
 ):
     c = require_contract(db, ctx, contract_id)
     c = update_contract(db, ctx, c, body)
-    return ContractOut.model_validate(c)
+    return contract_to_out(db, c)
+
+
+@router.post("/{contract_id}/send", response_model=ContractOut)
+def send_contract_endpoint(
+    contract_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.contract.edit")),
+    db: Session = Depends(get_db),
+):
+    c = require_contract(db, ctx, contract_id)
+    c = send_contract(db, ctx, c)
+    return contract_to_out(db, c)
+
+
+@router.post("/{contract_id}/submit", response_model=ContractOut)
+def submit_contract_endpoint(
+    contract_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.contract.sign")),
+    db: Session = Depends(get_db),
+):
+    c = require_contract(db, ctx, contract_id)
+    c = submit_contract(db, ctx, c)
+    return contract_to_out(db, c)
+
+
+@router.post("/{contract_id}/approve", response_model=ContractOut)
+def approve_contract_endpoint(
+    contract_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.contract.approve")),
+    db: Session = Depends(get_db),
+):
+    c = require_contract(db, ctx, contract_id)
+    c = approve_contract(db, ctx, c)
+    return contract_to_out(db, c)
+
+
+@router.post("/{contract_id}/reject", response_model=ContractOut)
+def reject_contract_endpoint(
+    contract_id: UUID,
+    body: ContractRejectBody,
+    ctx: TenantContext = Depends(require_permission("crm.contract.approve")),
+    db: Session = Depends(get_db),
+):
+    c = require_contract(db, ctx, contract_id)
+    c = reject_contract(db, ctx, c, body.reason)
+    return contract_to_out(db, c)
+
+
+@router.post("/{contract_id}/withdraw", response_model=ContractOut)
+def withdraw_contract_endpoint(
+    contract_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.contract.sign")),
+    db: Session = Depends(get_db),
+):
+    c = require_contract(db, ctx, contract_id)
+    c = withdraw_contract(db, ctx, c)
+    return contract_to_out(db, c)
 
 
 @router.post("/{contract_id}/sign", response_model=ContractOut)
@@ -177,7 +256,51 @@ def sign_contract_endpoint(
 ):
     c = require_contract(db, ctx, contract_id)
     c = sign_contract(db, ctx, c, signed_amount=body.signed_amount, signed_at=body.signed_at)
-    return ContractOut.model_validate(c)
+    return contract_to_out(db, c)
+
+
+@router.post("/{contract_id}/activate", response_model=ContractOut)
+def activate_contract_endpoint(
+    contract_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.contract.edit")),
+    db: Session = Depends(get_db),
+):
+    c = require_contract(db, ctx, contract_id)
+    c = activate_contract(db, ctx, c)
+    return contract_to_out(db, c)
+
+
+@router.post("/{contract_id}/terminate", response_model=ContractOut)
+def terminate_contract_endpoint(
+    contract_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.contract.edit")),
+    db: Session = Depends(get_db),
+):
+    c = require_contract(db, ctx, contract_id)
+    c = terminate_contract(db, ctx, c)
+    return contract_to_out(db, c)
+
+
+@router.post("/{contract_id}/clone", response_model=ContractOut, status_code=201)
+def clone_contract_endpoint(
+    contract_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.contract.create")),
+    db: Session = Depends(get_db),
+):
+    c = require_contract(db, ctx, contract_id)
+    cloned = clone_contract(db, ctx, c)
+    return contract_to_out(db, cloned)
+
+
+@router.post("/{contract_id}/renew-contract", response_model=ContractOut, status_code=201)
+def renew_as_contract_endpoint(
+    contract_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.contract.create")),
+    db: Session = Depends(get_db),
+):
+    c = require_contract(db, ctx, contract_id)
+    renewed = renew_as_contract(db, ctx, c)
+    return contract_to_out(db, renewed)
 
 
 @router.post("/{contract_id}/convert-to-order", response_model=ContractConvertToOrderOut, status_code=201)
@@ -259,4 +382,4 @@ def delete_contract_endpoint(
     db: Session = Depends(get_db),
 ):
     c = require_contract(db, ctx, contract_id)
-    soft_delete_contract(db, c)
+    soft_delete_contract(db, ctx, c)

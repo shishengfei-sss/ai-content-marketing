@@ -42,6 +42,7 @@ from app.services.crm.deal_service import (
     generate_quote_from_deal,
     remove_team_member,
     list_stage_logs,
+    reopen_deal,
     require_deal,
     soft_delete_deal,
     update_deal,
@@ -68,6 +69,8 @@ def list_deals(
     view_id: UUID | None = Query(default=None),
     q: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    priority: str | None = Query(default=None),
+    source: str | None = Query(default=None),
     pipeline_id: UUID | None = Query(default=None),
     stage_id: UUID | None = Query(default=None),
     customer_id: UUID | None = Query(default=None),
@@ -107,8 +110,6 @@ def list_deals(
         if parsed_filters and parsed_filters.get("conditions"):
             query = apply_view_filters(query, db, ctx.tenant_id, "deal", parsed_filters)
             filters_applied = True
-        elif status:
-            query = query.filter(Deal.status == status)
         query = apply_view_search(query, "deal", q)
         sort_spec = None
         if sort_by:
@@ -117,6 +118,12 @@ def list_deals(
 
     if owner_id is not None:
         query = query.filter(Deal.owner_user_id == owner_id)
+    if status:
+        query = query.filter(Deal.status == status)
+    if priority:
+        query = query.filter(Deal.priority == priority)
+    if source:
+        query = query.filter(Deal.source == source)
     if pipeline_id is not None:
         query = query.filter(Deal.pipeline_id == pipeline_id)
     if stage_id is not None:
@@ -214,6 +221,17 @@ def close_deal_endpoint(
     return DealOut.model_validate(deal)
 
 
+@router.post("/{deal_id}/reopen", response_model=DealOut)
+def reopen_deal_endpoint(
+    deal_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.deal.reopen")),
+    db: Session = Depends(get_db),
+):
+    deal = require_deal(db, ctx, deal_id)
+    deal = reopen_deal(db, ctx, deal)
+    return deal_to_out(db, ctx.tenant_id, deal)
+
+
 @router.get("/{deal_id}/stage-logs", response_model=list[DealStageLogOut])
 def list_deal_stage_logs(
     deal_id: UUID,
@@ -256,7 +274,9 @@ def create_deal_activity(
 @router.post("/{deal_id}/convert-to-order", response_model=DealConvertToOrderOut, status_code=201)
 def convert_deal_to_order_endpoint(
     deal_id: UUID,
-    ctx: TenantContext = Depends(require_permission("crm.order.convert")),
+    ctx: TenantContext = Depends(
+        require_any_permission("crm.order.convert", "crm.order.create", "crm.deal.convert")
+    ),
     db: Session = Depends(get_db),
 ):
     deal = require_deal(db, ctx, deal_id)
@@ -316,4 +336,4 @@ def delete_deal_endpoint(
     db: Session = Depends(get_db),
 ):
     deal = require_deal(db, ctx, deal_id)
-    soft_delete_deal(db, deal)
+    soft_delete_deal(db, ctx, deal)

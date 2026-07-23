@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import String, cast, func, or_
+from sqlalchemy import String, cast, exists, func, or_
 from sqlalchemy.orm import Query, Session
 
 from app.dependencies import TenantContext
@@ -183,6 +183,35 @@ def apply_view_filters(
         key = cond.get("field_key")
         if not key:
             continue
+        # 回款.customer_id 来自关联订单，用 exists 避免重复 join
+        if entity_type == "payment" and key == "customer_id":
+            value = cond.get("value")
+            op = cond.get("op", "eq")
+
+            def _coerce_uuid(v):
+                if isinstance(v, str) and len(v) in (32, 36):
+                    try:
+                        return UUID(v)
+                    except (ValueError, TypeError, AttributeError):
+                        return v
+                return v
+
+            order_match = (
+                Order.id == Payment.order_id,
+                Order.tenant_id == tenant_id,
+                Order.deleted_at.is_(None),
+            )
+            if op == "eq":
+                query = query.filter(exists().where(*order_match, Order.customer_id == _coerce_uuid(value)))
+            elif op == "neq":
+                query = query.filter(~exists().where(*order_match, Order.customer_id == _coerce_uuid(value)))
+            elif op == "in":
+                vals = [_coerce_uuid(v) for v in (value if isinstance(value, list) else [value])]
+                query = query.filter(exists().where(*order_match, Order.customer_id.in_(vals)))
+            elif op == "is_empty":
+                query = query.filter(exists().where(*order_match, Order.customer_id.is_(None)))
+            continue
+
         field_def = field_map.get(key)
         if not field_def or not field_def.is_active:
             if key.startswith("cf_"):
@@ -221,7 +250,14 @@ def apply_view_search(query: Query, entity_type: str, search_q: str | None) -> Q
         )
     if entity_type == "deal":
         pattern = f"%{search_q.strip()}%"
-        return query.filter(Deal.title.like(pattern))
+        return query.filter(
+            or_(
+                Deal.title.like(pattern),
+                Deal.deal_number.like(pattern),
+                Deal.competitor.like(pattern),
+                Deal.next_step.like(pattern),
+            )
+        )
     if entity_type == "quote":
         pattern = f"%{search_q.strip()}%"
         return query.filter(or_(Quote.subject.like(pattern), Quote.quote_number.like(pattern)))

@@ -2,9 +2,13 @@
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, isBenignEmptyError } from '../../api/client'
+import { formatDateTime } from '../../utils/datetime'
 
 const loading = ref(false)
 const users = ref([])
+const total = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(20)
 const searchQ = ref('')
 const filterRole = ref('')
 const filterActive = ref('')
@@ -22,15 +26,24 @@ const roleOptions = [
 async function loadUsers() {
   loading.value = true
   try {
-    const params = {}
+    const params = { page: currentPage.value, page_size: pageSize.value }
     if (searchQ.value.trim()) params.q = searchQ.value.trim()
     if (filterRole.value) params.role = filterRole.value
     if (filterActive.value !== '') params.is_active = filterActive.value
     const { data } = await adminApi.listUsers(params)
-    users.value = Array.isArray(data) ? data : []
+    // 兼容旧进程返回裸数组（无 items/total）导致页面「暂无数据」
+    if (Array.isArray(data)) {
+      users.value = data
+      total.value = data.length
+      ElMessage.warning('账号列表接口格式异常（疑似 API 未重启），已临时展示；请硬重启 API')
+    } else {
+      users.value = Array.isArray(data?.items) ? data.items : []
+      total.value = data?.total ?? 0
+    }
   } catch (e) {
     if (isBenignEmptyError(e)) {
       users.value = []
+      total.value = 0
     } else {
       ElMessage.error(e.message || '加载失败')
     }
@@ -39,10 +52,22 @@ async function loadUsers() {
   }
 }
 
+function handlePageChange(page) {
+  currentPage.value = page
+  loadUsers()
+}
+
+function handleSizeChange(size) {
+  pageSize.value = size
+  currentPage.value = 1
+  loadUsers()
+}
+
 function resetFilters() {
   searchQ.value = ''
   filterRole.value = ''
   filterActive.value = ''
+  currentPage.value = 1
   loadUsers()
 }
 
@@ -91,7 +116,10 @@ async function handleDelete(row) {
       { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
     )
     await adminApi.deleteUser(row.id)
-    users.value = users.value.filter((item) => item.id !== row.id)
+    if (users.value.length <= 1 && currentPage.value > 1) {
+      currentPage.value -= 1
+    }
+    loadUsers()
     ElMessage.success('已删除')
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
@@ -174,7 +202,7 @@ onMounted(loadUsers)
       </el-table-column>
       <el-table-column label="注册时间" min-width="170">
         <template #default="{ row }">
-          {{ new Date(row.created_at).toLocaleString('zh-CN') }}
+          {{ formatDateTime(row.created_at) }}
         </template>
       </el-table-column>
       <el-table-column label="操作" width="160" fixed="right">
@@ -188,6 +216,19 @@ onMounted(loadUsers)
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="pagination-wrap">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @current-change="handlePageChange"
+        @size-change="handleSizeChange"
+      />
+    </div>
 
     <el-dialog v-model="resetVisible" title="重置密码" width="420px">
       <p class="reset-tip">
@@ -223,5 +264,11 @@ onMounted(loadUsers)
   margin: 0 0 12px;
   color: var(--color-text-secondary);
   font-size: 14px;
+}
+
+.pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 </style>

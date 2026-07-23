@@ -70,6 +70,12 @@ const routes = [
         component: () => import('./views/admin/AdminPlatformLlm.vue'),
         meta: { title: '平台 AI', platformAdmin: true },
       },
+      {
+        path: 'platform-tender-leads',
+        name: 'AdminPlatformTenderLeads',
+        component: () => import('./views/admin/AdminPlatformTenderLeads.vue'),
+        meta: { title: '招标线索公共池', platformAdmin: true },
+      },
     ],
   },
   {
@@ -88,6 +94,18 @@ const routes = [
         name: 'Create',
         component: () => import('./views/Create.vue'),
         meta: { title: '营销创作', permission: 'content.create' },
+      },
+      {
+        path: 'agent',
+        name: 'Agent',
+        component: () => import('./views/Create.vue'),
+        meta: { title: 'AI 顾问', permission: 'content.create' },
+      },
+      {
+        path: 'agent/workflows',
+        name: 'AgentWorkflows',
+        component: () => import('./views/Create.vue'),
+        meta: { title: 'AI 工作流', permission: 'content.create' },
       },
       {
         path: 'contents',
@@ -123,6 +141,33 @@ const routes = [
         },
       },
       {
+        path: 'crm/tender-leads',
+        name: 'CrmTenderLeads',
+        component: () => import('./views/crm/TenderLeads.vue'),
+        meta: {
+          title: '招标线索',
+          permissionAny: ['crm.lead.list_own', 'crm.lead.list_team', 'crm.lead.list_territory', 'crm.lead.list_all', 'crm.lead.view'],
+        },
+      },
+      {
+        path: 'crm/tender-lead-analytics',
+        name: 'CrmTenderLeadAnalytics',
+        component: () => import('./views/crm/TenderLeadAnalytics.vue'),
+        meta: {
+          title: '招标线索看板',
+          permissionAny: ['crm.lead.list_all', 'crm.lead.list_team', 'crm.pipeline.manage', 'analytics.view'],
+        },
+      },
+      {
+        path: 'crm/lead-pools',
+        name: 'CrmLeadPools',
+        component: () => import('./views/crm/LeadPools.vue'),
+        meta: {
+          title: '线索公海',
+          permissionAny: ['crm.lead.list_own', 'crm.lead.list_team', 'crm.lead.list_territory', 'crm.lead.list_all'],
+        },
+      },
+      {
         path: 'crm/leads/:id',
         name: 'CrmLeadDetail',
         component: () => import('./views/crm/LeadDetail.vue'),
@@ -135,6 +180,20 @@ const routes = [
         meta: {
           title: '客户',
           permissionAny: ['crm.customer.list_own', 'crm.customer.list_team', 'crm.customer.list_territory', 'crm.customer.list_all'],
+        },
+      },
+      {
+        path: 'crm/customer-pools',
+        name: 'CrmCustomerPools',
+        component: () => import('./views/crm/CustomerPools.vue'),
+        meta: {
+          title: '客户公海',
+          permissionAny: [
+            'crm.customer.list_own',
+            'crm.customer.list_team',
+            'crm.customer.list_territory',
+            'crm.customer.list_all',
+          ],
         },
       },
       {
@@ -231,6 +290,12 @@ const routes = [
         },
       },
       {
+        path: 'crm/quotes/cpq/new',
+        name: 'CrmCpqQuoteCreate',
+        component: () => import('./views/crm/CpqQuoteCreate.vue'),
+        meta: { title: 'CPQ 配置报价', permission: 'crm.quote.create' },
+      },
+      {
         path: 'crm/quotes/:id',
         name: 'CrmQuoteDetail',
         component: () => import('./views/crm/QuoteDetail.vue'),
@@ -306,11 +371,53 @@ const routes = [
         meta: { title: '编号规则', permission: 'crm.pipeline.manage' },
       },
       {
+        path: 'settings/product-master-data',
+        name: 'SettingsProductMasterData',
+        component: () => import('./views/SettingsProductMasterData.vue'),
+        meta: { title: '产品基础数据', permission: 'crm.product.manage' },
+      },
+      {
+        path: 'settings/campaign-channels',
+        name: 'SettingsCampaignChannels',
+        component: () => import('./views/SettingsCampaignChannels.vue'),
+        meta: { title: '活动投放渠道', permission: 'crm.campaign.manage' },
+      },
+      {
+        path: 'settings/lead-pools',
+        name: 'SettingsLeadPools',
+        component: () => import('./views/SettingsLeadPools.vue'),
+        meta: { title: '线索公海', permission: 'crm.lead.edit' },
+      },
+      {
+        path: 'settings/customer-pools',
+        name: 'SettingsCustomerPools',
+        component: () => import('./views/SettingsCustomerPools.vue'),
+        meta: { title: '客户公海', permission: 'crm.customer.edit' },
+      },
+      {
+        path: 'settings/icp',
+        name: 'SettingsIcp',
+        component: () => import('./views/SettingsIcp.vue'),
+        meta: {
+          title: 'ICP 画像',
+          permissionAny: ['crm.lead.edit', 'crm.pipeline.manage'],
+        },
+      },
+      {
         path: 'settings/assignment-rules',
         name: 'SettingsAssignmentRules',
         component: () => import('./views/SettingsAssignmentRules.vue'),
         meta: {
           title: '线索分配规则',
+          permissionAny: ['crm.lead.edit', 'crm.pipeline.manage'],
+        },
+      },
+      {
+        path: 'settings/lead-scoring',
+        name: 'SettingsLeadScoring',
+        component: () => import('./views/SettingsLeadScoring.vue'),
+        meta: {
+          title: '线索评分规则',
           permissionAny: ['crm.lead.edit', 'crm.pipeline.manage'],
         },
       },
@@ -333,6 +440,12 @@ const routes = [
         meta: { title: '角色与成员', permissionAny: ['team.member.view', 'team.role.manage'] },
       },
       {
+        path: 'settings/members',
+        name: 'SettingsMembers',
+        component: () => import('./views/SettingsTeam.vue'),
+        meta: { title: '角色与成员', permissionAny: ['team.member.view', 'team.role.manage'] },
+      },
+      {
         path: 'settings/crm-org',
         name: 'SettingsCrmOrg',
         component: () => import('./views/SettingsCrmOrg.vue'),
@@ -343,6 +456,15 @@ const routes = [
         name: 'SettingsSchema',
         component: () => import('./views/SettingsSchema.vue'),
         meta: { title: '表单字段', permission: 'crm.schema.manage' },
+      },
+      {
+        path: 'settings/tags',
+        name: 'SettingsTags',
+        component: () => import('./views/SettingsTags.vue'),
+        meta: {
+          title: '业务标签',
+          permissionAny: ['crm.schema.manage', 'crm.pipeline.manage', 'crm.lead.edit', 'crm.customer.edit'],
+        },
       },
       {
         path: 'settings/llm',

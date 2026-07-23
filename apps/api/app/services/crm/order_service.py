@@ -13,18 +13,22 @@ from sqlalchemy.orm import Session
 
 from app.database import uuid_eq
 from app.dependencies import TenantContext
-from app.models.crm import ApprovalInstance, Order, OrderApprovalRule, OrderLine
+from app.models.crm import ApprovalInstance, Order, OrderApprovalRule, OrderLine, Payment, Product
 from app.schemas.crm_deals import (
     OrderApprovalRuleCreate,
     OrderApprovalRuleUpdate,
+    OrderBatchAction,
+    OrderBatchActionResult,
     OrderCreate,
     OrderLineCreate,
+    OrderLineOut,
+    OrderOut,
     OrderUpdate,
 )
-from app.services.crm.crm_scope_service import assert_can_view_order, _perm_set
+from app.services.crm.crm_scope_service import assert_can_mutate_order, assert_can_view_order, _perm_set
 from app.services.crm.number_service import generate_number
 from app.services.crm.schema_service import validate_extra_data
-from app.services.crm.sales_org_service import get_territory
+from app.services.crm.sales_org_service import apply_owner_org_snapshot, assert_can_assign_owner, get_territory
 
 
 def get_order(db: Session, tenant_id: UUID, order_id: UUID) -> Order | None:
@@ -57,21 +61,38 @@ def _generate_order_number(db: Session, tenant_id: UUID) -> str:
 
 
 def _line_amounts(ln: OrderLineCreate) -> tuple[float, float | None]:
-    """返回 (line_total 折后未税, tax_amount)。"""
-    line_total = ln.line_total if ln.line_total else float(ln.quantity) * float(ln.unit_price) * (
-        1 - (float(ln.discount_rate or 0) / 100)
+    """返回 (line_total 折后未税, tax_amount)。委托 tax_engine（无头折）。"""
+    from app.services.crm.tax_engine import TaxLineIn, compute_tax_lines
+
+    result = compute_tax_lines(
+        [
+            TaxLineIn(
+                unit_price=ln.unit_price,
+                quantity=ln.quantity,
+                discount_rate=ln.discount_rate,
+                tax_rate=ln.tax_rate,
+            )
+        ]
     )
-    line_total = round(float(line_total), 2)
-    tax_amount = ln.tax_amount
-    if tax_amount is None and ln.tax_rate is not None:
-        tax_amount = round(line_total * float(ln.tax_rate) / 100, 2)
-    return line_total, tax_amount
+    out = result.lines[0]
+    return float(out.line_total), float(out.tax_amount)
 
 
 def _replace_lines(db: Session, order: Order, lines: list[OrderLineCreate]) -> None:
+    from app.services.crm.tax_engine import TaxLineIn, compute_tax_lines
+
     db.query(OrderLine).filter(OrderLine.order_id == order.id).delete(synchronize_session=False)
-    for i, ln in enumerate(lines):
-        line_total, tax_amount = _line_amounts(ln)
+    engine_in = [
+        TaxLineIn(
+            unit_price=ln.unit_price,
+            quantity=ln.quantity,
+            discount_rate=ln.discount_rate,
+            tax_rate=ln.tax_rate,
+        )
+        for ln in lines
+    ]
+    result = compute_tax_lines(engine_in)
+    for i, (ln, out) in enumerate(zip(lines, result.lines)):
         db.add(
             OrderLine(
                 tenant_id=order.tenant_id,
@@ -82,9 +103,9 @@ def _replace_lines(db: Session, order: Order, lines: list[OrderLineCreate]) -> N
                 quantity=ln.quantity,
                 unit_price=ln.unit_price,
                 discount_rate=ln.discount_rate,
-                tax_rate=ln.tax_rate,
-                tax_amount=tax_amount,
-                line_total=line_total,
+                tax_rate=float(out.tax_rate) if out.tax_rate is not None else ln.tax_rate,
+                tax_amount=float(out.tax_amount),
+                line_total=float(out.line_total),
                 sort_order=ln.sort_order if ln.sort_order is not None else i,
                 remark=ln.remark,
             )
@@ -104,6 +125,7 @@ def create_order(db: Session, ctx: TenantContext, data: OrderCreate) -> Order:
     if data.owner_user_id is not None and data.owner_user_id != ctx.user.id:
         if "crm.order.assign" not in _perm_set(ctx):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限分配负责人")
+        assert_can_assign_owner(db, ctx, data.owner_user_id)
         owner_user_id = data.owner_user_id
     territory_id = data.territory_id
     if territory_id is not None and not get_territory(db, ctx.tenant_id, territory_id):
@@ -142,10 +164,18 @@ def create_order(db: Session, ctx: TenantContext, data: OrderCreate) -> Order:
 
 def update_order(db: Session, ctx: TenantContext, order: Order, data: OrderUpdate) -> Order:
     perms = _perm_set(ctx)
+    mutate_keys = set(data.model_fields_set) - {"owner_user_id"}
+    if mutate_keys:
+        assert_can_mutate_order(ctx, order)
+
     if data.owner_user_id is not None and data.owner_user_id != order.owner_user_id:
         if "crm.order.assign" not in perms:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限分配负责人")
+        assert_can_assign_owner(db, ctx, data.owner_user_id)
         order.owner_user_id = data.owner_user_id
+        snap_territory, _snap_manager = apply_owner_org_snapshot(db, ctx.tenant_id, data.owner_user_id)
+        if data.territory_id is None:
+            order.territory_id = snap_territory
     if data.title is not None:
         order.title = data.title.strip()
     if data.customer_id is not None:
@@ -164,8 +194,6 @@ def update_order(db: Session, ctx: TenantContext, order: Order, data: OrderUpdat
         order.order_date = data.order_date
     if data.amount is not None:
         order.amount = data.amount
-    if data.status is not None:
-        order.status = data.status
     if data.territory_id is not None:
         if not get_territory(db, ctx.tenant_id, data.territory_id):
             raise HTTPException(status_code=404, detail="地区不存在")
@@ -263,6 +291,7 @@ def _create_approval_instance(
 
 def confirm_order(db: Session, ctx: TenantContext, order: Order) -> Order:
     """无匹配审批规则时直接 confirmed；有规则则 409 提示走 submit。"""
+    assert_can_mutate_order(ctx, order)
     if order.status == "superseded":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="已修订订单不可确认")
     if order.status not in ("draft", "rejected", "approved"):
@@ -286,6 +315,7 @@ def confirm_order(db: Session, ctx: TenantContext, order: Order) -> Order:
 
 def submit_order(db: Session, ctx: TenantContext, order: Order) -> Order:
     """提交审批：无规则则直接 confirmed；有规则 → pending_approval。"""
+    assert_can_mutate_order(ctx, order)
     if order.status == "superseded":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="已修订订单不可提交")
     if order.status not in ("draft", "rejected"):
@@ -381,9 +411,53 @@ def reject_order(db: Session, ctx: TenantContext, order: Order, reason: str) -> 
     return order
 
 
+def _has_confirmed_payments(db: Session, order_id: UUID) -> bool:
+    row = (
+        db.query(Payment.id)
+        .filter(
+            Payment.order_id == order_id,
+            Payment.status == "confirmed",
+            Payment.deleted_at.is_(None),
+        )
+        .first()
+    )
+    return row is not None
+
+
+def _has_active_payments(db: Session, order_id: UUID) -> bool:
+    """存在未删除的待确认或已确认回款（删除订单时拦截）。"""
+    row = (
+        db.query(Payment.id)
+        .filter(
+            Payment.order_id == order_id,
+            Payment.status.in_(("pending", "confirmed")),
+            Payment.deleted_at.is_(None),
+        )
+        .first()
+    )
+    return row is not None
+
+
 def cancel_order(db: Session, ctx: TenantContext, order: Order) -> Order:
+    assert_can_mutate_order(ctx, order)
+    # 草稿/驳回走删除；取消仅用于已进入审批或已确认的订单
+    if order.status in ("draft", "rejected"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="草稿或已驳回订单请直接删除，不可取消",
+        )
     if order.status in ("completed", "cancelled", "superseded"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"订单已 {order.status}，不可取消")
+    if order.status not in ("pending_approval", "approved", "confirmed", "executing"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"订单状态为 {order.status}，不可取消",
+        )
+    if _has_confirmed_payments(db, order.id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="订单存在已确认回款，请先冲销后再取消",
+        )
     if order.status == "pending_approval":
         inst = get_pending_approval(db, ctx.tenant_id, order.id)
         if inst:
@@ -393,6 +467,188 @@ def cancel_order(db: Session, ctx: TenantContext, order: Order) -> Order:
     db.commit()
     db.refresh(order)
     return order
+
+
+def complete_order(db: Session, ctx: TenantContext, order: Order) -> Order:
+    """手动完成：confirmed/executing → completed。"""
+    assert_can_mutate_order(ctx, order)
+    if order.status not in ("confirmed", "executing"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"订单状态为 {order.status}，不可完成",
+        )
+    order.status = "completed"
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+def withdraw_order(db: Session, ctx: TenantContext, order: Order) -> Order:
+    """撤回审批：pending_approval → draft。"""
+    assert_can_mutate_order(ctx, order)
+    if order.status != "pending_approval":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"订单状态为 {order.status}，不可撤回",
+        )
+    inst = get_pending_approval(db, ctx.tenant_id, order.id)
+    if inst:
+        inst.status = "cancelled"
+        inst.resolved_at = datetime.now(timezone.utc)
+    order.status = "draft"
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+def clone_order(db: Session, ctx: TenantContext, order: Order, *, as_template: bool = False) -> Order:
+    """复制订单为新草稿；as_template=True 时标记为模板（extra_data）。"""
+    assert_can_view_order(ctx, db, order.owner_user_id)
+    if "crm.order.create" not in _perm_set(ctx):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限创建订单")
+    src_lines = _load_lines(db, order.id)
+    line_payload = [
+        OrderLineCreate(
+            product_id=ln.product_id,
+            name=ln.name,
+            unit=ln.unit,
+            quantity=float(ln.quantity),
+            unit_price=float(ln.unit_price),
+            discount_rate=float(ln.discount_rate) if ln.discount_rate is not None else None,
+            tax_rate=float(ln.tax_rate) if ln.tax_rate is not None else None,
+            tax_amount=float(ln.tax_amount) if ln.tax_amount is not None else None,
+            line_total=float(ln.line_total),
+            sort_order=ln.sort_order,
+            remark=ln.remark,
+        )
+        for ln in src_lines
+    ]
+    suffix = "（模板）" if as_template else "（复制）"
+    extra = {"cloned_from": str(order.id)}
+    if as_template:
+        extra["is_template"] = True
+    return create_order(
+        db,
+        ctx,
+        OrderCreate(
+            title=f"{order.title}{suffix}"[:200],
+            customer_id=order.customer_id,
+            contact_id=order.contact_id,
+            deal_id=order.deal_id,
+            quote_id=order.quote_id,
+            contract_id=order.contract_id,
+            source=order.source,
+            amount=0,
+            status="draft",
+            owner_user_id=ctx.user.id,
+            territory_id=order.territory_id,
+            extra_data=extra,
+            lines=line_payload,
+        ),
+    )
+
+
+def batch_order_action(
+    db: Session, ctx: TenantContext, data: OrderBatchAction
+) -> OrderBatchActionResult:
+    succeeded = 0
+    errors: list[dict] = []
+    for oid in data.order_ids:
+        try:
+            order = require_order(db, ctx, oid)
+            if data.action == "confirm":
+                if "crm.order.place" not in _perm_set(ctx):
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限确认订单")
+                # 有规则走 submit，无规则 confirm
+                rules = list_matching_approval_rules(db, ctx.tenant_id, order.amount)
+                if rules:
+                    submit_order(db, ctx, order)
+                else:
+                    confirm_order(db, ctx, order)
+            elif data.action == "cancel":
+                if "crm.order.edit" not in _perm_set(ctx):
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限取消订单")
+                cancel_order(db, ctx, order)
+            succeeded += 1
+        except HTTPException as e:
+            detail = e.detail if isinstance(e.detail, str) else str(e.detail)
+            errors.append({"order_id": str(oid), "detail": detail})
+        except Exception as e:  # noqa: BLE001
+            errors.append({"order_id": str(oid), "detail": str(e)})
+    return OrderBatchActionResult(succeeded=succeeded, failed=len(errors), errors=errors)
+
+
+def order_to_out(db: Session, order: Order) -> OrderOut:
+    """序列化订单并附加毛利（按 Product.cost_price）。"""
+    lines = list(order.lines) if getattr(order, "lines", None) is not None else _load_lines(db, order.id)
+    product_ids = [ln.product_id for ln in lines if ln.product_id]
+    cost_map: dict[UUID, float | None] = {}
+    if product_ids:
+        products = (
+            db.query(Product)
+            .filter(Product.tenant_id == order.tenant_id, Product.id.in_(product_ids), Product.deleted_at.is_(None))
+            .all()
+        )
+        for p in products:
+            cost_map[p.id] = float(p.cost_price) if p.cost_price is not None else None
+
+    line_outs: list[OrderLineOut] = []
+    cost_total = 0.0
+    has_incomplete = False
+    for ln in lines:
+        qty = float(ln.quantity or 0)
+        line_total = float(ln.line_total or 0)
+        cost_price = cost_map.get(ln.product_id) if ln.product_id else None
+        if ln.product_id and ln.product_id not in cost_map:
+            has_incomplete = True
+            cost_price = None
+        elif ln.product_id and cost_price is None:
+            has_incomplete = True
+        cost_amount = round(cost_price * qty, 2) if cost_price is not None else None
+        if cost_amount is not None:
+            cost_total += cost_amount
+        margin_amount = round(line_total - cost_amount, 2) if cost_amount is not None else None
+        margin_rate = (
+            round(margin_amount / line_total * 100, 2) if margin_amount is not None and line_total else None
+        )
+        line_outs.append(
+            OrderLineOut(
+                id=ln.id,
+                order_id=ln.order_id,
+                product_id=ln.product_id,
+                name=ln.name,
+                unit=ln.unit,
+                quantity=qty,
+                unit_price=float(ln.unit_price or 0),
+                discount_rate=float(ln.discount_rate) if ln.discount_rate is not None else None,
+                tax_rate=float(ln.tax_rate) if ln.tax_rate is not None else None,
+                tax_amount=float(ln.tax_amount) if ln.tax_amount is not None else None,
+                line_total=line_total,
+                sort_order=ln.sort_order or 0,
+                remark=ln.remark,
+                cost_price=cost_price,
+                cost_amount=cost_amount,
+                margin_amount=margin_amount,
+                margin_rate=margin_rate,
+            )
+        )
+
+    amount = float(order.amount or 0)
+    cost_total = round(cost_total, 2)
+    margin_amount = None if has_incomplete else round(amount - cost_total, 2)
+    margin_rate = (
+        round(margin_amount / amount * 100, 2) if margin_amount is not None and amount else None
+    )
+    base = OrderOut.model_validate(order)
+    return base.model_copy(
+        update={
+            "lines": line_outs,
+            "cost_total": cost_total,
+            "margin_amount": margin_amount,
+            "margin_rate": margin_rate,
+            "has_incomplete_cost": has_incomplete,
+        }
+    )
 
 
 def revise_order(
@@ -405,10 +661,16 @@ def revise_order(
     title: str | None = None,
 ) -> Order:
     """生成修订版订单：原单 superseded；新单复制后自动 submit 重审。"""
+    assert_can_mutate_order(ctx, order)
     if order.status not in ("confirmed", "executing"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"订单状态为 {order.status}，不可修订",
+        )
+    if _has_confirmed_payments(db, order.id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="订单存在已确认回款，不可修订；请先冲销或走退款流程",
         )
     src_lines = _load_lines(db, order.id)
     if not src_lines and not lines:
@@ -499,7 +761,19 @@ def list_order_revisions(db: Session, ctx: TenantContext, order_id: UUID) -> lis
     return result
 
 
-def soft_delete_order(db: Session, order: Order) -> None:
+def soft_delete_order(db: Session, ctx: TenantContext, order: Order) -> None:
+    assert_can_mutate_order(ctx, order)
+    # 与取消互斥：仅草稿/驳回/已取消可删
+    if order.status not in ("draft", "cancelled", "rejected"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"订单状态为 {order.status}，不可删除（已生效请先取消）",
+        )
+    if _has_active_payments(db, order.id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="订单存在回款记录，请先删除待确认回款或冲销已确认回款后再删除",
+        )
     order.deleted_at = datetime.now(timezone.utc)
     db.query(OrderLine).filter(OrderLine.order_id == order.id).delete(synchronize_session=False)
     db.commit()

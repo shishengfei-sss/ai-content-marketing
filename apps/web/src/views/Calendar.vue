@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { contentApi, isBenignEmptyError } from '../api/client'
+import { formatDate, formatTimeOfDay } from '../utils/datetime'
 
 const loading = ref(true)
 const events = ref([])
@@ -12,26 +13,14 @@ const platformMap = {
   douyin: '抖音',
 }
 
-function formatDate(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleDateString('zh-CN')
-}
-
-function formatTime(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
-}
-
 onMounted(async () => {
   try {
     const { data } = await contentApi.calendar()
     events.value = data.map((item) => ({
       id: item.id,
-      date: formatDate(item.scheduled_at),
+      date: formatDate(item.scheduled_at, { empty: '' }),
       title: item.title,
-      time: formatTime(item.scheduled_at),
+      time: formatTimeOfDay(item.scheduled_at, { empty: '' }),
       status: item.status,
       platform: platformMap[item.platform] || item.platform,
     }))

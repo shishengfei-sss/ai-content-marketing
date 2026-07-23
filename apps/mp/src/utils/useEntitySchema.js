@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { crmApi } from '@/utils/api'
 import { resolveMemberNameSync } from '@/utils/useTeamMembers'
+import { formatDate, formatDateTime } from '@/utils/datetime'
 
 const schemaCache = new Map()
 
@@ -132,8 +133,11 @@ export function useEntitySchema(entityType) {
     const formatValue = (val, type) => {
       const refLabel = resolveRef(val, type || fieldType)
       if (refLabel !== null) return refLabel
-      if (type === 'datetime' || type === 'date' || fieldType === 'datetime' || fieldType === 'date') {
-        return new Date(val).toLocaleString('zh-CN')
+      if (type === 'datetime' || fieldType === 'datetime') {
+        return formatDateTime(val)
+      }
+      if (type === 'date' || fieldType === 'date') {
+        return formatDate(val)
       }
       if (Array.isArray(val)) return val.join('、')
       return String(val)

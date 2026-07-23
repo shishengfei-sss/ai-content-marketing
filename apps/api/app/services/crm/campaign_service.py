@@ -11,9 +11,15 @@ from app.database import uuid_eq
 from app.dependencies import TenantContext
 from app.models import Content
 from app.models.crm import CampaignContent, CrmTask, Lead, MarketingCampaign
-from app.schemas.crm import CampaignCreate, CampaignUpdate, validate_campaign_status
+from app.schemas.crm import (
+    CampaignCreate,
+    CampaignUpdate,
+    validate_campaign_status,
+    validate_campaign_type,
+)
 from app.services.crm.crm_scope_service import assert_can_view_campaign
 from app.services.crm.number_service import generate_number
+from app.services.crm.sales_org_service import apply_creator_org_defaults, apply_owner_org_snapshot, assert_can_assign_owner
 
 
 def _perm_set(ctx: TenantContext) -> set[str]:
@@ -71,6 +77,9 @@ def campaign_to_out(db: Session, tenant_id: UUID, campaign: MarketingCampaign) -
         "goal": campaign.goal,
         "channels": campaign.channels or [],
         "description": campaign.description,
+        "campaign_type": campaign.campaign_type,
+        "expected_leads": campaign.expected_leads,
+        "location": campaign.location,
         "budget": float(campaign.budget) if campaign.budget is not None else None,
         "spent": float(campaign.spent or 0),
         "currency": campaign.currency or "CNY",
@@ -87,6 +96,14 @@ def campaign_to_out(db: Session, tenant_id: UUID, campaign: MarketingCampaign) -
 
 def create_campaign(db: Session, ctx: TenantContext, data: CampaignCreate) -> MarketingCampaign:
     validate_campaign_status(data.status)
+    try:
+        validate_campaign_type(data.campaign_type)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    owner_id = data.owner_user_id or ctx.user.id
+    if owner_id != ctx.user.id:
+        assert_can_assign_owner(db, ctx, owner_id)
+    territory_id, manager_user_id = apply_creator_org_defaults(db, ctx, territory_id=data.territory_id)
     campaign = MarketingCampaign(
         tenant_id=ctx.tenant_id,
         campaign_number=generate_number(db, ctx.tenant_id, "campaign"),
@@ -97,12 +114,16 @@ def create_campaign(db: Session, ctx: TenantContext, data: CampaignCreate) -> Ma
         goal=data.goal,
         channels=data.channels or [],
         description=data.description,
+        campaign_type=data.campaign_type or None,
+        expected_leads=data.expected_leads,
+        location=(data.location.strip() if data.location else None),
         budget=data.budget,
         spent=data.spent if data.spent is not None else 0,
         currency=data.currency or "CNY",
         target_segment_id=data.target_segment_id,
-        owner_user_id=ctx.user.id,
-        territory_id=data.territory_id,
+        owner_user_id=owner_id,
+        territory_id=territory_id,
+        manager_user_id=manager_user_id,
     )
     db.add(campaign)
     db.commit()
@@ -110,21 +131,49 @@ def create_campaign(db: Session, ctx: TenantContext, data: CampaignCreate) -> Ma
     return campaign
 
 
+ALLOWED_CAMPAIGN_STATUS_TRANSITIONS = {
+    "draft": {"active"},
+    "active": {"paused", "ended"},
+    "paused": {"active", "ended"},
+    "ended": set(),
+}
+
+
 def update_campaign(
     db: Session, ctx: TenantContext, campaign: MarketingCampaign, data: CampaignUpdate
 ) -> MarketingCampaign:
     perms = _perm_set(ctx)
+    fields = data.model_fields_set
+    # 已结束：禁止改内容；不可再变更状态
+    if campaign.status == "ended":
+        if fields and fields != {"status"}:
+            raise HTTPException(status_code=400, detail="已结束的活动不可编辑")
+        if "status" in fields and data.status != "ended":
+            raise HTTPException(status_code=400, detail="已结束的活动不可再变更状态")
+        return campaign
     if data.owner_user_id is not None and data.owner_user_id != campaign.owner_user_id:
         if "crm.campaign.manage" not in perms and "crm.campaign.edit" not in perms:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限修改负责人")
+        assert_can_assign_owner(db, ctx, data.owner_user_id)
         campaign.owner_user_id = data.owner_user_id
+        snap_territory, snap_manager = apply_owner_org_snapshot(db, ctx.tenant_id, data.owner_user_id)
+        if data.territory_id is None:
+            campaign.territory_id = snap_territory
+        campaign.manager_user_id = snap_manager
     if data.name is not None:
         campaign.name = data.name.strip()
     if data.status is not None:
         validate_campaign_status(data.status)
-        if data.status != campaign.status and "crm.campaign.manage" not in perms:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限管理活动状态")
-        campaign.status = data.status
+        if data.status != campaign.status:
+            if "crm.campaign.manage" not in perms:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限管理活动状态")
+            allowed = ALLOWED_CAMPAIGN_STATUS_TRANSITIONS.get(campaign.status, set())
+            if data.status not in allowed:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"不允许从「{campaign.status}」变更为「{data.status}」，请使用启动/暂停/恢复/结束操作",
+                )
+            campaign.status = data.status
     if data.start_at is not None:
         campaign.start_at = data.start_at
     if data.end_at is not None:
@@ -135,15 +184,25 @@ def update_campaign(
         campaign.channels = data.channels
     if data.description is not None:
         campaign.description = data.description
-    if data.territory_id is not None:
+    if "campaign_type" in fields:
+        try:
+            validate_campaign_type(data.campaign_type)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        campaign.campaign_type = data.campaign_type or None
+    if "expected_leads" in fields:
+        campaign.expected_leads = data.expected_leads
+    if "location" in fields:
+        campaign.location = data.location.strip() if data.location else None
+    if "territory_id" in fields:
         campaign.territory_id = data.territory_id
-    if data.budget is not None:
+    if "budget" in fields:
         campaign.budget = data.budget
     if data.spent is not None:
         campaign.spent = data.spent
     if data.currency is not None:
         campaign.currency = data.currency
-    if data.target_segment_id is not None:
+    if "target_segment_id" in fields:
         campaign.target_segment_id = data.target_segment_id
     db.commit()
     db.refresh(campaign)
@@ -151,6 +210,8 @@ def update_campaign(
 
 
 def soft_delete_campaign(db: Session, campaign: MarketingCampaign) -> None:
+    if campaign.status != "draft":
+        raise HTTPException(status_code=400, detail="仅草稿状态的活动可删除")
     campaign.deleted_at = datetime.now(timezone.utc)
     db.commit()
 
@@ -159,7 +220,13 @@ def require_campaign(db: Session, ctx: TenantContext, campaign_id: UUID) -> Mark
     campaign = get_campaign(db, ctx.tenant_id, campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="活动不存在")
-    assert_can_view_campaign(ctx, db, campaign.owner_user_id, campaign.territory_id)
+    assert_can_view_campaign(
+        ctx,
+        db,
+        campaign.owner_user_id,
+        campaign.territory_id,
+        manager_user_id=getattr(campaign, "manager_user_id", None),
+    )
     return campaign
 
 

@@ -94,12 +94,15 @@ CRM_PERMISSIONS: tuple[str, ...] = (
     "crm.deal.assign",
     "crm.deal.convert",
     "crm.deal.close",
+    "crm.deal.reopen",
     "crm.deal.delete",
     "crm.pipeline.manage",
-    # v0.7 产品
+    # v0.7 产品 / v1.4 导入
     "crm.product.manage",
+    "crm.product.import",
     # v0.7 报价
     "crm.quote.list_own",
+    "crm.quote.list_team",
     "crm.quote.list_all",
     "crm.quote.view",
     "crm.quote.create",
@@ -109,11 +112,13 @@ CRM_PERMISSIONS: tuple[str, ...] = (
     "crm.quote.delete",
     # v0.7 合同
     "crm.contract.list_own",
+    "crm.contract.list_team",
     "crm.contract.list_all",
     "crm.contract.view",
     "crm.contract.create",
     "crm.contract.edit",
     "crm.contract.sign",
+    "crm.contract.approve",
     "crm.contract.delete",
     # v0.7 订单
     "crm.order.list_own",
@@ -161,6 +166,7 @@ SALES_DEFAULT_PERMISSIONS: frozenset[str] = frozenset(
         "preference.manage",
         "dashboard.view",
         "analytics.view",
+        "team.member.view",
         "crm.lead.list_own",
         "crm.lead.view",
         "crm.lead.create",
@@ -228,17 +234,19 @@ SALES_MANAGER_DEFAULT_PERMISSIONS: frozenset[str] = SALES_DEFAULT_PERMISSIONS | 
         "crm.deal.list_team",
         "crm.deal.list_territory",
         "crm.deal.assign",
+        "crm.deal.reopen",
         "crm.deal.delete",
-        # v0.7 报价
-        "crm.quote.list_all",
+        # v0.7 报价（与商机一致：经理看团队，admin 全公司）
+        "crm.quote.list_team",
         "crm.quote.send",
         "crm.quote.accept",
         "crm.quote.delete",
         # v0.7 合同
-        "crm.contract.list_all",
+        "crm.contract.list_team",
         "crm.contract.create",
         "crm.contract.edit",
         "crm.contract.sign",
+        "crm.contract.approve",
         "crm.contract.delete",
         # v0.7 订单
         "crm.order.list_team",

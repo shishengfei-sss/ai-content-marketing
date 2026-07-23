@@ -130,8 +130,11 @@ onMounted(loadAll)
         <div class="page-title">成员销售档案</div>
       </div>
       <el-table :data="profiles" stripe>
-        <el-table-column label="成员" min-width="140">
-          <template #default="{ row }">{{ row.display_name || row.phone }}</template>
+        <el-table-column label="成员" min-width="120">
+          <template #default="{ row }">{{ row.display_name || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="手机号" width="140">
+          <template #default="{ row }">{{ row.phone || '—' }}</template>
         </el-table-column>
         <el-table-column prop="role_name" label="角色" width="120" />
         <el-table-column label="主地区" width="140">

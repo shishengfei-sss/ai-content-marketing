@@ -100,6 +100,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { BASE_URL, contentApi, wechatApi } from '@/utils/api'
 import { toastUnlessEmpty, isBenignEmptyError } from '@/utils/apiError'
 import { ensureSession } from '@/utils/session'
+import { formatDateTime } from '@/utils/datetime'
 
 const PAGE_SIZE = 10
 
@@ -128,10 +129,7 @@ function platformIcon(code) {
 }
 
 function formatTime(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return formatDateTime(iso, { empty: '', withSeconds: false })
 }
 
 function mapItem(item) {

@@ -2,6 +2,7 @@
 import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { crmApi } from '../../api/client'
+import { formatApiError } from '../../utils/apiError'
 import { useTeamMembers } from '../../composables/useTeamMembers'
 
 const props = defineProps({
@@ -13,12 +14,13 @@ const props = defineProps({
 
 const emit = defineEmits(['update:visible', 'done'])
 
-const { loadMembers, resolveMemberName, members: teamMembers } = useTeamMembers()
+const { resolveMemberName } = useTeamMembers()
 const selectedOwner = ref('')
 const loading = ref(false)
+const assignableMembers = ref([])
 
 const currentOwnerName = computed(() => resolveMemberName(props.ownerUserId, { withSelfTag: false }))
-const members = computed(() => teamMembers.value.filter((m) => m.is_active))
+const members = computed(() => assignableMembers.value.filter((m) => m.is_active !== false))
 
 watch(
   () => props.visible,
@@ -27,9 +29,13 @@ watch(
     selectedOwner.value = props.ownerUserId || ''
     loading.value = true
     try {
-      await loadMembers(true)
+      const { data } = await crmApi.listAssignableOwners({
+        include_user_id: props.ownerUserId || undefined,
+      })
+      assignableMembers.value = Array.isArray(data) ? data : []
     } catch (e) {
-      ElMessage.error(e.message || '加载成员失败')
+      ElMessage.error(formatApiError(e, '加载可分配成员失败'))
+      assignableMembers.value = []
     } finally {
       loading.value = false
     }
@@ -47,6 +53,8 @@ async function submit() {
       await crmApi.updateLead(props.entityId, payload)
     } else if (props.entityType === 'campaign') {
       await crmApi.updateCampaign(props.entityId, payload)
+    } else if (props.entityType === 'deal') {
+      await crmApi.updateDeal(props.entityId, payload)
     } else {
       await crmApi.updateCustomer(props.entityId, payload)
     }
@@ -54,7 +62,7 @@ async function submit() {
     emit('update:visible', false)
     emit('done')
   } catch (e) {
-    ElMessage.error(e.message || '分配失败')
+    ElMessage.error(formatApiError(e, '分配失败'))
   }
 }
 </script>
@@ -69,7 +77,15 @@ async function submit() {
     <p v-if="ownerUserId" class="assign-owner__current">
       当前负责人：<strong>{{ currentOwnerName }}</strong>
     </p>
-    <el-select v-model="selectedOwner" v-loading="loading" placeholder="选择成员" style="width: 100%">
+    <p v-else class="assign-owner__current">当前负责人：无</p>
+    <p class="assign-owner__hint">仅可分配给本人、下属或同级别销售经理</p>
+    <el-select
+      v-model="selectedOwner"
+      v-loading="loading"
+      filterable
+      placeholder="选择成员"
+      style="width: 100%"
+    >
       <el-option
         v-for="m in members"
         :key="m.user_id"
@@ -86,12 +102,18 @@ async function submit() {
 
 <style scoped>
 .assign-owner__current {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   font-size: 13px;
   color: var(--el-text-color-secondary);
 }
 
 .assign-owner__current strong {
   color: var(--el-text-color-primary);
+}
+
+.assign-owner__hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 </style>

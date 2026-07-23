@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CPQ 报价单生成机制调研报告</title>
+<style>
+:root{
+  --bg:#f8f9fb; --surface:#fff; --muted-bg:#f1f3f6; --ink:#1a1d23; --muted:#6b7280;
+  --rule:#e5e7eb; --accent:#2563eb; --accent2:#059669; --accent-light:#dbeafe; --accent2-light:#d1fae5;
+  --radius:10px; --shadow:0 1px 3px rgba(0,0,0,.08);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+body{font-family:var(--font);background:var(--bg);color:var(--ink);line-height:1.75;margin:0;padding:0}
+.container{max-width:980px;margin:0 auto;padding:0 24px}
+.cover{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);color:#fff;padding:72px 24px 52px;text-align:center;margin-bottom:44px}
+.cover h1{font-size:2rem;font-weight:700;margin:0 0 10px;letter-spacing:-.02em}
+.cover .sub{font-size:1.05rem;opacity:.85;margin:0 0 26px}
+.cover .meta{display:inline-flex;gap:22px;flex-wrap:wrap;justify-content:center;font-size:.88rem;opacity:.72}
+.section{background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);padding:34px 30px;margin-bottom:28px;box-shadow:var(--shadow)}
+.section h2{font-size:1.35rem;font-weight:700;margin:0 0 18px;padding-bottom:10px;border-bottom:2px solid var(--accent)}
+.section h3{font-size:1.08rem;font-weight:600;margin:24px 0 10px}
+.section h4{font-size:.98rem;font-weight:600;margin:16px 0 6px;color:var(--muted)}
+p{margin:0 0 13px;font-size:.96rem}
+.table-wrap{overflow-x:auto;margin:18px 0;border:1px solid var(--rule);border-radius:var(--radius)}
+table{width:100%;border-collapse:collapse;font-size:.88rem;min-width:640px}
+th,td{padding:11px 13px;text-align:left;border-bottom:1px solid var(--rule);vertical-align:top}
+th{background:var(--muted-bg);font-weight:600;position:sticky;top:0}
+tr:hover{background:var(--muted-bg)}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin:18px 0}
+.card{background:var(--muted-bg);border:1px solid var(--rule);border-radius:var(--radius);padding:16px}
+.card .t{font-weight:600;font-size:.95rem;margin-bottom:5px;color:var(--accent)}
+.card .d{font-size:.86rem;color:var(--muted);line-height:1.5}
+.callout{background:var(--accent-light);border-left:4px solid var(--accent);padding:14px 18px;border-radius:0 var(--radius) var(--radius) 0;margin:18px 0;font-size:.94rem}
+.callout.green{background:var(--accent2-light);border-left-color:var(--accent2)}
+.callout strong{color:var(--ink)}
+ol,ul{margin:0 0 13px;padding-left:22px}
+li{margin-bottom:5px}
+.tag{display:inline-block;background:#eef2ff;color:var(--accent);border-radius:6px;padding:1px 8px;font-size:.82rem;margin:2px 4px 2px 0;font-weight:600}
+.tag.g{background:#ecfdf5;color:var(--accent2)}
+.step{display:flex;gap:14px;margin-bottom:14px;align-items:flex-start}
+.step .n{width:30px;height:30px;background:var(--accent);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;font-size:.9rem}
+.step .c h4{margin:0 0 4px}
+.step .c p{margin:0;font-size:.9rem;color:var(--muted)}
+footer{margin-top:40px;padding:28px 0;border-top:1px solid var(--rule);font-size:.84rem;color:var(--muted);text-align:center}
+mark{background:none;color:var(--accent);font-weight:600}
+@media(max-width:640px){.section{padding:22px 18px}.cover h1{font-size:1.5rem}}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>CPQ 报价单生成机制调研报告</h1>
+  <p class="sub">Salesforce / SAP / 纷享销客 / 梅施 / 订阅蜂 / HubSpot / Zoho 横向拆解</p>
+  <div class="meta">
+    <span>目标：为本项目 CPQ 报价模块找最佳实践</span>
+    <span>日期：2026-07-17</span>
+    <span>样本：7 个主流系统 + 4 类通用模板规范</span>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- 摘要 -->
+<div class="section">
+  <h2>一、核心结论（先说人话）</h2>
+  <p>调研了 7 个主流报价/CPQ 系统后，结论很清晰：<mark>报价单从来不是"写死的页面"，而是一套"模板 + 数据绑定 + 定价引擎 + 输出"的机制</mark>。所有厂商的架构高度收敛，差异只在行业深度和集成广度。</p>
+  <div class="callout green">
+    <strong>对本项目最重要的 3 条：</strong>
+    <ol style="margin-bottom:0">
+      <li><strong>定价一定是"瀑布式分层"，不是一行公式。</strong>列表价 → 合约价 → 阶梯折扣 → 客户等级 → 手动折扣 → 加急加价 → 最终价，每一层可审计。这正好对应我们方案里的"阶梯定价/客户等级/区域运费/时效加价"。</li>
+      <li><strong>报价单 = 可配置模板 + 占位符填充。</strong>Salesforce 用 HTML Template Content + Merge Field；SAP 用 Word/Excel 模板 + Tag；纷享/订阅蜂用可视化拖拽模板。本质都是"模版 + 数据"。</li>
+      <li><strong>审批闸 + 草稿水印是标配。</strong>折扣超阈值自动触发审批；未审批报价带水印。我们的 MVP 至少要留审批钩子。</li>
+    </ol>
+  </div>
+</div>
+
+<!-- 横评 -->
+<div class="section">
+  <h2>二、七系统横向对比</h2>
+  <div class="table-wrap">
+    <table>
+      <tr><th>系统</th><th>模板机制</th><th>定价引擎</th><th>输出格式</th><th>审批</th><th>集成</th><th>定位/价格</th></tr>
+      <tr>
+        <td><strong>Salesforce CPQ</strong><br>(Revenue Cloud)</td>
+        <td>Template Sections + Template Content（HTML + Merge Field，如 <code>{!quote.field}</code>）；支持多 Section 拼装</td>
+        <td>价格瀑布 6 层（列表价→合约价→阶梯→手动→伙伴→等级），每层可审计；Price Rules 动态逻辑</td>
+        <td>PDF（品牌化，含 T&amp;C、签名块）；可见阶梯折扣表</td>
+        <td>折扣超阈值自动触发审批流</td>
+        <td>原生 CRM；DocuSign/Adobe Sign 电子签；转合同/订单</td>
+        <td>企业级，百万级部署</td>
+      </tr>
+      <tr>
+        <td><strong>SAP CPQ</strong></td>
+        <td>Document Generation Templates：用 Word/Excel 做模板，插入 Tag 取数；支持单/多 Section（封面/目录/执行摘要/案例/附录）</td>
+        <td>规则引擎 + 公式；可附属内容（数据表、T&amp;C、图片 PDF）</td>
+        <td>PDF / Word(.docx) / Excel；可设格式权限</td>
+        <td>按报价状态/权限控制生成动作</td>
+        <td>邮件发送客户；C4C 接受/拒绝回写工单</td>
+        <td>企业级，极重极贵</td>
+      </tr>
+      <tr>
+        <td><strong>纷享销客 CPQ</strong></td>
+        <td>销售 BOM：多级产品结构（母子件、选配参数、取价规则、约束依赖）；报价单/订单打印模板显示【层级】</td>
+        <td>属性→价目表；单一产品多价格；阶梯/客户级折扣</td>
+        <td>打印模板（拖拽自定义）；导出/预览/打印/邮件</td>
+        <td>预设审批流，一键提交</td>
+        <td>Open API 对接 ERP；报价单转订单</td>
+        <td>CRM 年费数万~数十万</td>
+      </tr>
+      <tr>
+        <td><strong>梅施 CPQ</strong></td>
+        <td>报价单模板管理；3D 可视化配置；自动填充参数/价格/交期</td>
+        <td><strong>价格瀑布流引擎</strong>；多折扣策略；成本利润分析；客户等级定价</td>
+        <td>一键报价单；多语言、多货币；双重审批</td>
+        <td>双重审批流程；报价有效期管理；利润分析展示</td>
+        <td>ERP/CRM 无缝对接；API 扩展</td>
+        <td>专注工业制造；¥5k~¥30k/年 + 企业定制</td>
+      </tr>
+      <tr>
+        <td><strong>订阅蜂 CPQ</strong></td>
+        <td>模板库（多行业）；拖拽式产品组合；自动填充客户信息（CRM 同步）；品牌 LOGO/水印</td>
+        <td>动态定价：阶梯、客户专属折扣、实时成本关联；区域差异化定价</td>
+        <td>10 秒出 PDF/Word；多币种、多税率；20+ 语言模板</td>
+        <td>预设审批（如超 10 万财务复核）；移动端审批</td>
+        <td>Salesforce/用友/金蝶；客户自助门户+电子签章</td>
+        <td>独立 CPQ SaaS；¥9,800~¥29,800/年</td>
+      </tr>
+      <tr>
+        <td><strong>HubSpot CPQ</strong></td>
+        <td>AI 报价（Breeze）自动填充行项目/封面信/执行摘要；模板含布局+预填模块</td>
+        <td>Product Library + 阶梯定价（volume/stair/graduated）；行项目折扣</td>
+        <td>品牌化报价编辑器；电子签/clickwrap/打印签</td>
+        <td>按折扣/金额/账期触发审批流</td>
+        <td>原生 CRM；Stripe/HubSpot 收款；QuickBooks</td>
+        <td>SMB 友好；Commerce Hub 订阅</td>
+      </tr>
+      <tr>
+        <td><strong>Zoho Books</strong></td>
+        <td>丰富报价单模板，自定义样式；自动汇率；产品库</td>
+        <td>产品库+折扣；180 货币实时汇率</td>
+        <td>PDF；一键转发票/装箱单</td>
+        <td>自定义多级审核</td>
+        <td>CRM/库存/财务一体</td>
+        <td>出海外贸；¥84~¥252/月</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<!-- 共性模式 -->
+<div class="section">
+  <h2>三、共性设计模式（11 条，可直接抄）</h2>
+  <p>把 7 个系统拆开看，报价单生成都遵循同一套范式。这 11 条是"别人已经验证过"的最小共识，我们的 MVP 直接对齐即可：</p>
+
+  <div class="step"><div class="n">1</div><div class="c"><h4>模板即文档骨架</h4><p>报价单是渲染出来的文档，不是硬编码页面。模板定义版式（头部/明细/条款/签名），数据在生成时注入。</p></div></div>
+  <div class="step"><div class="n">2</div><div class="c"><h4>Section + Content 模块化拼装</h4><p>Salesforce 的 Template Section/Content、SAP 的 Multi-Section，本质都是"积木式"组合：封面、明细、T&amp;C、签名块可独立排序/显隐/复用。</p></div></div>
+  <div class="step"><div class="n">3</div><div class="c"><h4>占位符数据绑定（Merge Field / Tag）</h4><p>模板里写 <code>{!quote.xxx}</code> 或 Word Tag，生成时用报价数据替换。改模板不改代码。</p></div></div>
+  <div class="step"><div class="n">4</div><div class="c"><h4>定价瀑布（Price Waterfall）</h4><p>列表价→合约价→阶梯折扣→客户等级→手动折扣→加急/区域加价→最终价。每层独立、可审计、可回溯。这是所有系统的定价内核。</p></div></div>
+  <div class="step"><div class="n">5</div><div class="c"><h4>规则引擎而非 AI 做配置与计价</h4><p>制造业配置/计价逻辑是确定的，用规则引擎（约束依赖、取价规则）比大模型更准更便宜。AI 只负责"解析客户需求"。</p></div></div>
+  <div class="step"><div class="n">6</div><div class="c"><h4>折扣超阈值 → 自动审批闸</h4><p>纷享"预设审批流"、订阅蜂"超 10 万财务复核"、Salesforce Approval Rules。审批前报价带草稿水印，防止客户误当正式单。</p></div></div>
+  <div class="step"><div class="n">7</div><div class="c"><h4>多格式输出</h4><p>PDF 是基准（可打印/可签），Word/Excel 用于内部财务，在线链接用于客户协同。</p></div></div>
+  <div class="step"><div class="n">8</div><div class="c"><h4>品牌化与水印</h4><p>LOGO、企业色、签名块；草稿态加"PREVIEW/草稿"水印。专业度直接影响成单。</p></div></div>
+  <div class="step"><div class="n">9</div><div class="c"><h4>多语言 / 多币种 / 多税率</h4><p>出口/全球化刚需：20+ 语言模板、实时汇率、VAT/增值税区域化。</p></div></div>
+  <div class="step"><div class="n">10</div><div class="c"><h4>Quote → Order → ERP 闭环</h4><p>报价单确认后一键转订单/合同，回写 CRM，对接 ERP 预留库存、触发生产。报价不是终点，是订单入口。</p></div></div>
+  <div class="step"><div class="n">11</div><div class="c"><h4>客户自助门户 + 电子签</h4><p>客户在线查看、批注、接受/拒绝、电子签章（订阅蜂、Salesforce、HubSpot 均支持），缩短确认周期。</p></div></div></div>
+</div>
+
+<!-- 通用字段 -->
+<div class="section">
+  <h2>四、一份"标准报价单"应包含什么（字段清单）</h2>
+  <p>综合 Zoho / autoinvo / aidocx / renrendoc 等通用模板规范，一份合格报价单的字段高度一致——这也是我们模板要覆盖的底线：</p>
+  <div class="card-grid">
+    <div class="card"><div class="t">① 文档头</div><div class="d">标题（报价单/Quotation）、报价单编号（唯一）、报价日期、有效期（15~30 天）</div></div>
+    <div class="card"><div class="t">② 双方信息</div><div class="d">供应商：名称/地址/税号/电话/邮箱/联系人；客户：名称/联系人/电话/邮箱/地址</div></div>
+    <div class="card"><div class="t">③ 产品明细</div><div class="d">序号、名称、规格/型号、单位、数量、单价、金额、货币、价格条款(FOB/CIF)</div></div>
+    <div class="card"><div class="t">④ 金额汇总</div><div class="d">小计 → 折扣 → 运费 → 税额(增值税) → 总计（含大写金额）</div></div>
+    <div class="card"><div class="t">⑤ 交易条款</div><div class="d">付款方式、付款条件（预付比例）、交货期、交货地点、包装、质保、售后</div></div>
+    <div class="card"><div class="t">⑥ 落款</div><div class="d">报价有效期声明、签字盖章、备注；接受/拒绝回执</div></div>
+  </div>
+  <div class="callout">制造业还要补三条：<span class="tag">最小起订量 MOQ</span><span class="tag">运费是否含内</span><span class="tag">批量折扣门槛</span>——这正好对应我们方案里的阶梯定价与区域运费。</div>
+</div>
+
+<!-- 与本方案对照 -->
+<div class="section">
+  <h2>五、与本项目现有 CPQ 方案对照（差距 & 对齐）</h2>
+  <p>我们 b2b-manufacturing-ai-cpq 方案（第五节）已经画出了正确方向，调研验证了其合理性，也暴露了几个 MVP 该补的点：</p>
+  <div class="table-wrap">
+    <table>
+      <tr><th>能力</th><th>我们方案已有</th><th>行业标配（需补强）</th><th>优先级</th></tr>
+      <tr><td>配置引擎</td><td>工业烘箱示例、规则引擎思路</td><td>树形/层级产品结构、约束依赖校验</td><td>高（MVP 核心）</td></tr>
+      <tr><td>定价</td><td>阶梯/客户等级/区域运费/加急</td><td>明确"价格瀑布"分层建模，每层可审计</td><td>高</td></tr>
+      <tr><td>报价单模版</td><td>提及"一键出 PDF 含 LOGO/参数表/付款条款"</td><td>可配置模板（占位符+Section），非写死</td><td>高（本次交付即补此）</td></tr>
+      <tr><td>审批闸</td><td>未明确</td><td>折扣超阈值触发审批 + 草稿水印</td><td>中（MVP 留钩子）</td></tr>
+      <tr><td>多语言/币种</td><td>提及出口企业需求</td><td>实时汇率、VAT、20+ 语言模板</td><td>低（二期）</td></tr>
+      <tr><td>转订单/ERP</td><td>提及 ERP/CRM 对接</td><td>报价确认→订单→预留库存→生产</td><td>中（二期）</td></tr>
+      <tr><td>利润分析</td><td>提及"建议报价区间/毛利率"</td><td>内部利润面板（不展示给客户）</td><td>中</td></tr>
+      <tr><td>客户协同</td><td>未提及</td><td>在线查看/批注/电子签/接受拒绝</td><td>低（二期）</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- 建议 -->
+<div class="section">
+  <h2>六、给本项目的落地建议</h2>
+  <h3>6.1 MVP（前 3 个月）就做这三件</h3>
+  <ol>
+    <li><strong>一份可配置报价单模板</strong>（本次已交付原型）：占位符 + Section 拼装 + 打印/导出 PDF。先解决"长得专业、能出单"。</li>
+    <li><strong>价格瀑布引擎</strong>：按 列表价→阶梯→客户等级→加急/区域→最终价 建模，前端实时算，后端规则可配。先吃透一个细分行业（工业烘箱/数控机床）。</li>
+    <li><strong>审批钩子</strong>：折扣超阈值标记"待审批"+ 草稿水印，先不接复杂流，但数据结构留好。</li>
+  </ol>
+  <h3>6.2 数据模型先行（避免后期返工）</h3>
+  <p>调研里所有系统都围绕同一组核心对象：<span class="tag">Quote</span><span class="tag">QuoteLine</span><span class="tag">PriceRule</span><span class="tag">DiscountSchedule</span><span class="tag">Product/BOM</span><span class="tag">ApprovalRule</span><span class="tag">Template</span>。我们的数据表从第一天就按这套建模，比"先存一张大表"省 10 倍重构成本。</p>
+  <h3>6.3 差异化机会</h3>
+  <div class="callout green">
+    市场空白在<strong>"中型制造企业（50~500 人）的获客→报价一体化"</strong>。大厂（SAP/纷享）贵且重，订阅蜂/梅施不做获客。我们方案里"商机直接进 CPQ 自动填参"是独有飞轮——报价单生成器应预留"从商机一键带入客户与参数"的入口。
+  </div>
+  <h3>6.4 一句话总结</h3>
+  <p><mark>别自研"报价页面"，要自研"报价模板引擎 + 价格瀑布"；模板负责好看，引擎负责算对，审批负责控风险。</mark></p>
+</div>
+
+<footer>
+  <div class="container">
+    调研来源：Salesforce Help/Trailhead、SAP Help/learning.sap.com、纷享销客帮助中心、梅施科技官网、订阅蜂官网/帮助文档、HubSpot Knowledge、Zoho Books、autoinvo、aidocx、renrendoc 等公开资料（2026-07 整理）。<br>
+    本报告为项目内部调研，具体选型与实现以实际研发为准。
+  </div>
+</footer>
+
+</div>
+</body>
+</html>

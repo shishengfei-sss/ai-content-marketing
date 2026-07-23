@@ -7,6 +7,7 @@ import { hasPermission } from '@/utils/permissions'
 import { useEntitySchema } from '@/utils/useEntitySchema'
 import { DEAL_STATUS_LABEL, formatMoney } from '@/utils/crmConstants'
 import CrmEntityTasks from '@/components/crm/CrmEntityTasks.vue'
+import { formatDateTime } from '@/utils/datetime'
 
 const dealId = ref('')
 const loading = ref(false)
@@ -17,6 +18,8 @@ const activities = ref([])
 const permissions = ref([])
 const members = ref([])
 const stageSheetVisible = ref(false)
+const assignVisible = ref(false)
+const selectedOwner = ref('')
 const taskPanelRef = ref(null)
 
 const { fields, loadSchema, formatCell } = useEntitySchema('deal')
@@ -31,6 +34,7 @@ const activityTypeOptions = [
 ]
 
 const canEdit = () => hasPermission(permissions.value, 'crm.deal.edit')
+const canAssign = () => hasPermission(permissions.value, 'crm.deal.assign')
 const canActivity = () => hasPermission(permissions.value, 'crm.activity.create')
 
 const stages = computed(() => {
@@ -45,8 +49,14 @@ const currentStageName = computed(() => {
 
 const ownerLabel = computed(() => {
   if (!deal.value?.owner_user_id) return '—'
-  const m = members.value.find((x) => x.user_id === deal.value.owner_user_id)
+  const m = members.value.find((x) => String(x.user_id).replace(/-/g, '') === String(deal.value.owner_user_id).replace(/-/g, ''))
   return m?.display_name || m?.phone || '—'
+})
+
+const selectedOwnerLabel = computed(() => {
+  if (!selectedOwner.value) return '选择成员'
+  const m = members.value.find((x) => String(x.user_id) === String(selectedOwner.value))
+  return m?.display_name || m?.phone || '已选择'
 })
 
 const extraFields = computed(() => {
@@ -74,12 +84,6 @@ async function loadDetail() {
     const user = await ensureSession()
     permissions.value = user?.permissions || []
     await loadSchema()
-    try {
-      members.value = await teamApi.listMembers()
-      if (!Array.isArray(members.value)) members.value = []
-    } catch {
-      members.value = []
-    }
     const [dealData, pipeData, acts] = await Promise.all([
       crmApi.getDeal(dealId.value),
       crmApi.listPipelines(),
@@ -95,11 +99,60 @@ async function loadDetail() {
         customer.value = null
       }
     }
+    try {
+      if (canAssign()) {
+        members.value = await crmApi.listAssignableOwners({
+          include_user_id: dealData.owner_user_id || undefined,
+        })
+      } else {
+        members.value = await teamApi.listMembers()
+      }
+      if (!Array.isArray(members.value)) members.value = []
+    } catch {
+      members.value = []
+    }
     await taskPanelRef.value?.reload()
   } catch (e) {
     uni.showToast({ title: e.message || '加载失败', icon: 'none' })
   } finally {
     loading.value = false
+  }
+}
+
+function openAssign() {
+  selectedOwner.value = deal.value?.owner_user_id || ''
+  assignVisible.value = true
+}
+
+async function submitAssign() {
+  if (!selectedOwner.value) {
+    uni.showToast({ title: '请选择负责人', icon: 'none' })
+    return
+  }
+  try {
+    await crmApi.updateDeal(dealId.value, { owner_user_id: selectedOwner.value })
+    assignVisible.value = false
+    try {
+      const dealData = await crmApi.getDeal(dealId.value)
+      deal.value = dealData
+      uni.showToast({ title: '已分配', icon: 'success' })
+      if (canAssign()) {
+        members.value = await crmApi.listAssignableOwners({
+          include_user_id: dealData.owner_user_id || undefined,
+        }).catch(() => [])
+        if (!Array.isArray(members.value)) members.value = []
+      }
+    } catch (e) {
+      const msg = e.message || ''
+      if (e.status === 403 || msg.includes('无权访问')) {
+        uni.showToast({ title: '已分配，已不在可见范围', icon: 'none' })
+        setTimeout(() => uni.navigateBack(), 800)
+        return
+      }
+      throw e
+    }
+  } catch (e) {
+    uni.showToast({ title: e.message || '分配失败', icon: 'none' })
   }
 }
 
@@ -177,6 +230,9 @@ onLoad((query) => {
           <text class="stage-pick__value">{{ currentStageName }}</text>
           <text class="stage-pick__arrow">▾</text>
         </view>
+        <view v-if="canAssign()" class="hero-actions">
+          <button class="btn" size="mini" hover-class="none" @tap="openAssign">分配负责人</button>
+        </view>
       </view>
 
       <view class="section">
@@ -209,7 +265,7 @@ onLoad((query) => {
           <button class="btn btn--primary" size="mini" hover-class="none" @tap="submitActivity">提交跟进</button>
         </view>
         <view v-for="item in activities" :key="item.id" class="line">
-          <text class="line__meta">{{ activityTypeLabel(item.activity_type) }} · {{ item.created_at }}</text>
+          <text class="line__meta">{{ activityTypeLabel(item.activity_type) }} · {{ formatDateTime(item.created_at) }}</text>
           <text v-if="item.subject" class="line__subject">{{ item.subject }}</text>
           <text>{{ item.content }}</text>
         </view>
@@ -223,7 +279,7 @@ onLoad((query) => {
     </template>
     <view v-else class="empty">商机不存在</view>
 
-    <view v-if="stageSheetVisible" class="mask" @tap.self="stageSheetVisible = false">
+    <view v-if="stageSheetVisible" class="mask mask--sheet" @tap.self="stageSheetVisible = false">
       <view class="sheet" @tap.stop>
         <text class="sheet__title">选择阶段</text>
         <scroll-view scroll-y class="sheet__scroll">
@@ -238,6 +294,24 @@ onLoad((query) => {
             <text v-if="stage.probability != null" class="sheet__prob">{{ stage.probability }}%</text>
           </view>
         </scroll-view>
+      </view>
+    </view>
+
+    <view v-if="assignVisible" class="mask mask--center" @tap="assignVisible = false">
+      <view class="dialog" @tap.stop>
+        <text class="dialog__title">分配负责人</text>
+        <text class="dialog__hint">仅可分配给本人、下属或同级别销售经理</text>
+        <picker
+          mode="selector"
+          :range="members.map((m) => m.display_name || m.phone)"
+          @change="(e) => (selectedOwner = members[e.detail.value]?.user_id || '')"
+        >
+          <view class="picker">{{ selectedOwnerLabel }}</view>
+        </picker>
+        <view class="dialog__acts">
+          <button class="btn" hover-class="none" @tap="assignVisible = false">取消</button>
+          <button class="btn btn--primary" hover-class="none" @tap="submitAssign">保存</button>
+        </view>
       </view>
     </view>
   </view>
@@ -440,7 +514,54 @@ onLoad((query) => {
   z-index: 1000;
   background: rgba(0, 0, 0, 0.45);
   display: flex;
+}
+
+.mask--sheet {
   align-items: flex-end;
+}
+
+.mask--center {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.dialog {
+  width: 100%;
+  max-width: 360px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.dialog__title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.dialog__hint {
+  display: block;
+  font-size: 12px;
+  color: #8c8c8c;
+  margin: -4px 0 12px;
+  line-height: 1.4;
+}
+
+.dialog__acts {
+  display: flex;
+  gap: 10px;
+}
+
+.dialog__acts .btn {
+  flex: 1;
+  font-size: 14px;
+}
+
+.hero-actions {
+  margin-top: 12px;
 }
 
 .sheet {

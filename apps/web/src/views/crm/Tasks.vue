@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { crmApi } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
@@ -17,6 +17,8 @@ import {
   getPrimaryTaskAction,
   getSecondaryTaskActions,
   isActiveTaskStatus,
+  promptTaskCancelReason,
+  promptTaskCompleteConfirm,
 } from '../../utils/taskMeta'
 
 const SEARCH_DEBOUNCE_MS = 300
@@ -53,6 +55,23 @@ const route = useRoute()
 const auth = useAuthStore()
 const { loadMembers, resolveMemberName, members: teamMembers } = useTeamMembers()
 
+/** 按销售组织可指派的执行人 */
+const assignableMembers = ref([])
+const assigneeOptions = computed(() =>
+  assignableMembers.value.filter((m) => m.is_active !== false),
+)
+
+async function loadAssignableAssignees(includeUserId = '') {
+  try {
+    const { data } = await crmApi.listAssignableOwners({
+      include_user_id: includeUserId || undefined,
+    })
+    assignableMembers.value = Array.isArray(data) ? data : []
+  } catch {
+    assignableMembers.value = []
+  }
+}
+
 const loading = ref(false)
 const items = ref([])
 const total = ref(0)
@@ -71,6 +90,13 @@ const overdueFilter = ref(false)
 
 const createVisible = ref(false)
 const creating = ref(false)
+const editVisible = ref(false)
+const editing = ref(false)
+const editingId = ref('')
+const assignVisible = ref(false)
+const assigning = ref(false)
+const assignTaskId = ref('')
+const assignAssigneeId = ref('')
 const linkType = ref('none')
 const linkOptions = ref([])
 const linkLoading = ref(false)
@@ -86,10 +112,43 @@ const form = ref({
   link_id: '',
   campaign_id: '',
 })
+const editForm = ref({
+  title: '',
+  description: '',
+  planned_start_at: '',
+  due_at: '',
+  priority: 'normal',
+  assignee_user_id: '',
+})
 
 const canCreate = () => hasPermission(auth.permissions, 'crm.task.create')
 const canEdit = () => hasPermission(auth.permissions, 'crm.task.edit')
 const canAssign = () => hasPermission(auth.permissions, 'crm.task.assign')
+const canDelete = () =>
+  hasPermission(auth.permissions, 'crm.task.delete') || hasPermission(auth.permissions, 'crm.task.edit')
+
+function sameUserId(a, b) {
+  if (a == null || b == null) return false
+  return String(a).toLowerCase() === String(b).toLowerCase()
+}
+
+/** 当前用户是否为该任务执行人（非执行人不可编辑/完成/删除，仅可指派） */
+function isTaskAssignee(row) {
+  return sameUserId(row?.assignee_user_id, auth.user?.id)
+}
+
+function canEditRow(row) {
+  return canEdit() && isActiveTaskStatus(row?.status) && isTaskAssignee(row)
+}
+
+function canDeleteRow(row) {
+  return canDelete() && row?.status === 'open' && isTaskAssignee(row)
+}
+
+/** 非执行人且有指派权：仅可重新分配执行人 */
+function canReassignRow(row) {
+  return canAssign() && isActiveTaskStatus(row?.status) && !isTaskAssignee(row)
+}
 
 const activeQuickFilter = computed(() => {
   if (overdueFilter.value) return 'overdue'
@@ -209,7 +268,7 @@ onUnmounted(() => {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
 })
 
-function openCreate() {
+async function openCreate() {
   form.value = {
     title: '',
     description: '',
@@ -224,6 +283,7 @@ function openCreate() {
   linkType.value = 'none'
   linkOptions.value = []
   createVisible.value = true
+  await loadAssignableAssignees(auth.user?.id)
   loadCampaignOptions()
 }
 
@@ -305,13 +365,114 @@ async function submitCreate() {
 }
 
 async function updateTaskStatus(row, status) {
-  if (!canEdit()) return
+  if (!canEditRow(row)) {
+    ElMessage.warning('仅任务执行人可变更状态')
+    return
+  }
   try {
-    await crmApi.updateTask(row.id, { status })
+    const payload = { status }
+    if (status === 'done') {
+      await promptTaskCompleteConfirm(row.title)
+    }
+    if (status === 'cancelled') {
+      payload.cancel_reason = await promptTaskCancelReason()
+    }
+    await crmApi.updateTask(row.id, payload)
     ElMessage.success(TASK_STATUS_CHANGE_MESSAGES[status] || '状态已更新')
     loadTasks()
   } catch (e) {
+    if (e === 'cancel' || e?.message === 'cancel') return
     ElMessage.error(e.message || '更新失败')
+  }
+}
+
+async function openAssign(row) {
+  if (!canReassignRow(row)) {
+    ElMessage.warning('无权重新分配执行人')
+    return
+  }
+  assignTaskId.value = row.id
+  assignAssigneeId.value = row.assignee_user_id || ''
+  assignVisible.value = true
+  await loadAssignableAssignees(row.assignee_user_id)
+}
+
+async function submitAssign() {
+  if (!assignAssigneeId.value) {
+    ElMessage.warning('请选择执行人')
+    return
+  }
+  assigning.value = true
+  try {
+    await crmApi.updateTask(assignTaskId.value, { assignee_user_id: assignAssigneeId.value })
+    ElMessage.success('已重新分配执行人')
+    assignVisible.value = false
+    loadTasks()
+  } catch (e) {
+    ElMessage.error(e.message || '分配失败')
+  } finally {
+    assigning.value = false
+  }
+}
+
+async function openEdit(row) {
+  if (!canEditRow(row)) {
+    ElMessage.warning(
+      isActiveTaskStatus(row?.status) ? '仅任务执行人可编辑' : '已完成或已取消的任务不可编辑',
+    )
+    return
+  }
+  editingId.value = row.id
+  editForm.value = {
+    title: row.title || '',
+    description: row.description || '',
+    planned_start_at: row.planned_start_at || '',
+    due_at: row.due_at || '',
+    priority: row.priority || 'normal',
+    assignee_user_id: row.assignee_user_id || '',
+  }
+  editVisible.value = true
+  await loadAssignableAssignees(row.assignee_user_id)
+}
+
+async function submitEdit() {
+  if (!canEdit()) return
+  if (!editForm.value.title.trim()) {
+    ElMessage.warning('请填写任务标题')
+    return
+  }
+  editing.value = true
+  try {
+    const payload = {
+      title: editForm.value.title.trim(),
+      priority: editForm.value.priority || 'normal',
+      description: editForm.value.description.trim() || null,
+      assignee_user_id: editForm.value.assignee_user_id || null,
+      planned_start_at: editForm.value.planned_start_at
+        ? new Date(editForm.value.planned_start_at).toISOString()
+        : null,
+      due_at: editForm.value.due_at ? new Date(editForm.value.due_at).toISOString() : null,
+    }
+    await crmApi.updateTask(editingId.value, payload)
+    ElMessage.success('任务已更新')
+    editVisible.value = false
+    loadTasks()
+  } catch (e) {
+    ElMessage.error(e.message || '更新失败')
+  } finally {
+    editing.value = false
+  }
+}
+
+async function handleDelete(row) {
+  if (!canDeleteRow(row)) return
+  try {
+    await ElMessageBox.confirm(`确定删除任务「${row.title}」？`, '删除', { type: 'warning' })
+    await crmApi.deleteTask(row.id)
+    ElMessage.success('已删除')
+    loadTasks()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
   }
 }
 
@@ -475,9 +636,20 @@ onMounted(async () => {
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="执行人" width="110" show-overflow-tooltip>
+        <el-table-column label="执行人" width="140" show-overflow-tooltip>
           <template #default="{ row }">
-            {{ resolveMemberName(row.assignee_user_id) }}
+            <div class="tasks-table__assignee">
+              <span>{{ resolveMemberName(row.assignee_user_id) }}</span>
+              <el-button
+                v-if="canReassignRow(row)"
+                size="small"
+                link
+                type="primary"
+                @click="openAssign(row)"
+              >
+                {{ row.assignee_user_id ? '重新分配' : '指派' }}
+              </el-button>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="优先级" width="84" align="center">
@@ -494,7 +666,22 @@ onMounted(async () => {
         </el-table-column>
         <el-table-column label="状态" width="92" align="center">
           <template #default="{ row }">
-            <el-tag size="small" :type="TASK_STATUS_TYPES[row.status] || 'info'" effect="light" round>
+            <el-tooltip
+              v-if="row.status === 'cancelled' && row.cancel_reason"
+              :content="`取消原因：${row.cancel_reason}`"
+              placement="top"
+            >
+              <el-tag size="small" :type="TASK_STATUS_TYPES[row.status] || 'info'" effect="light" round>
+                {{ TASK_STATUS_LABELS[row.status] || row.status }}
+              </el-tag>
+            </el-tooltip>
+            <el-tag
+              v-else
+              size="small"
+              :type="TASK_STATUS_TYPES[row.status] || 'info'"
+              effect="light"
+              round
+            >
               {{ TASK_STATUS_LABELS[row.status] || row.status }}
             </el-tag>
           </template>
@@ -528,10 +715,11 @@ onMounted(async () => {
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="148" fixed="right" align="center">
+        <el-table-column label="操作" width="280" fixed="right" align="center">
           <template #default="{ row }">
-            <div v-if="canEdit() && primaryAction(row)" class="tasks-table__actions">
+            <div v-if="canEditRow(row)" class="tasks-table__actions">
               <el-button
+                v-if="primaryAction(row)"
                 size="small"
                 :type="actionButtonType(primaryAction(row))"
                 @click="updateTaskStatus(row, primaryAction(row).next)"
@@ -560,6 +748,19 @@ onMounted(async () => {
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
+              <el-button
+                size="small"
+                link
+                type="primary"
+                @click="openEdit(row)"
+              >编辑</el-button>
+              <el-button
+                v-if="canDeleteRow(row)"
+                size="small"
+                link
+                type="danger"
+                @click="handleDelete(row)"
+              >删除</el-button>
             </div>
             <span v-else class="tasks-table__empty-action">—</span>
           </template>
@@ -628,12 +829,12 @@ onMounted(async () => {
             <el-form-item v-if="canAssign()" label="执行人" class="tasks-create-form__col">
               <el-select
                 v-model="form.assignee_user_id"
-                placeholder="选择执行人"
+                placeholder="选择执行人（本组织范围）"
                 filterable
                 style="width: 100%"
               >
                 <el-option
-                  v-for="m in teamMembers.filter((x) => x.is_active)"
+                  v-for="m in assigneeOptions"
                   :key="m.user_id"
                   :label="m.display_name || m.phone"
                   :value="m.user_id"
@@ -744,6 +945,112 @@ onMounted(async () => {
         <div class="tasks-create-dialog__footer">
           <el-button @click="createVisible = false">取消</el-button>
           <el-button type="primary" :loading="creating" @click="submitCreate">创建任务</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="editVisible"
+      width="560px"
+      destroy-on-close
+      title="编辑任务"
+      align-center
+    >
+      <el-form label-position="top" @submit.prevent="submitEdit">
+        <el-form-item label="任务标题" required>
+          <el-input v-model="editForm.title" maxlength="200" show-word-limit placeholder="任务标题" />
+        </el-form-item>
+        <el-form-item label="备注说明">
+          <el-input
+            v-model="editForm.description"
+            type="textarea"
+            :rows="3"
+            maxlength="2000"
+            show-word-limit
+            placeholder="补充说明（选填）"
+          />
+        </el-form-item>
+        <div class="tasks-create-form__row">
+          <el-form-item v-if="canAssign()" label="执行人" class="tasks-create-form__col">
+            <el-select
+              v-model="editForm.assignee_user_id"
+              placeholder="选择执行人（本组织范围）"
+              filterable
+              clearable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="m in assigneeOptions"
+                :key="m.user_id"
+                :label="m.display_name || m.phone"
+                :value="m.user_id"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="优先级" class="tasks-create-form__col">
+            <el-select v-model="editForm.priority" style="width: 100%">
+              <el-option label="高" value="high" />
+              <el-option label="普通" value="normal" />
+              <el-option label="低" value="low" />
+            </el-select>
+          </el-form-item>
+        </div>
+        <div class="tasks-create-form__row">
+          <el-form-item label="计划开始" class="tasks-create-form__col">
+            <el-date-picker
+              v-model="editForm.planned_start_at"
+              type="datetime"
+              placeholder="计划何时开始"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="计划完成" class="tasks-create-form__col">
+            <el-date-picker
+              v-model="editForm.due_at"
+              type="datetime"
+              placeholder="计划何时完成"
+              style="width: 100%"
+              :shortcuts="DUE_SHORTCUTS"
+            />
+          </el-form-item>
+        </div>
+      </el-form>
+      <template #footer>
+        <div class="tasks-create-dialog__footer">
+          <el-button @click="editVisible = false">取消</el-button>
+          <el-button type="primary" :loading="editing" @click="submitEdit">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="assignVisible"
+      width="420px"
+      destroy-on-close
+      title="重新分配执行人"
+      align-center
+    >
+      <el-form label-position="top" @submit.prevent="submitAssign">
+        <el-form-item label="执行人" required>
+          <el-select
+            v-model="assignAssigneeId"
+            placeholder="选择执行人（本组织范围）"
+            filterable
+            style="width: 100%"
+          >
+            <el-option
+              v-for="m in assigneeOptions"
+              :key="m.user_id"
+              :label="m.display_name || m.phone"
+              :value="m.user_id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="tasks-create-dialog__footer">
+          <el-button @click="assignVisible = false">取消</el-button>
+          <el-button type="primary" :loading="assigning" @click="submitAssign">确定</el-button>
         </div>
       </template>
     </el-dialog>
@@ -930,6 +1237,13 @@ onMounted(async () => {
   flex-wrap: nowrap;
   gap: 4px;
   white-space: nowrap;
+}
+
+.tasks-table__assignee {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
 }
 
 .tasks-table__actions :deep(.el-button) {

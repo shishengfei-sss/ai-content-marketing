@@ -224,6 +224,7 @@ export const PERMISSION_GROUPS = [
           { code: 'crm.activity.create', label: '写跟进记录' },
           { code: 'crm.pipeline.manage', label: '销售管道' },
           { code: 'crm.product.manage', label: '产品目录' },
+          { code: 'crm.product.import', label: '产品导入', requires: 'crm.product.manage' },
         ],
       },
       {
@@ -258,6 +259,7 @@ export const PERMISSION_GROUPS = [
           { code: 'crm.deal.assign', label: '分配负责人', requires: 'crm.deal.edit' },
           { code: 'crm.deal.convert', label: '转订单', requires: 'crm.deal.view' },
           { code: 'crm.deal.close', label: '关闭赢单/输单', requires: 'crm.deal.edit' },
+          { code: 'crm.deal.reopen', label: '重开商机', requires: 'crm.deal.close' },
           { code: 'crm.deal.delete', label: '删除', requires: 'crm.deal.edit' },
         ],
       },
@@ -270,6 +272,7 @@ export const PERMISSION_GROUPS = [
         type: 'inline',
         items: [
           { code: 'crm.quote.list_own', label: '本人列表' },
+          { code: 'crm.quote.list_team', label: '团队列表', requires: 'crm.quote.list_own' },
           { code: 'crm.quote.list_all', label: '全公司列表', requires: 'crm.quote.list_own' },
           { code: 'crm.quote.view', label: '查看', requires: 'crm.quote.list_own' },
           { code: 'crm.quote.create', label: '新建', requires: 'crm.quote.view' },
@@ -288,11 +291,13 @@ export const PERMISSION_GROUPS = [
         type: 'inline',
         items: [
           { code: 'crm.contract.list_own', label: '本人列表' },
+          { code: 'crm.contract.list_team', label: '团队列表', requires: 'crm.contract.list_own' },
           { code: 'crm.contract.list_all', label: '全公司列表', requires: 'crm.contract.list_own' },
           { code: 'crm.contract.view', label: '查看', requires: 'crm.contract.list_own' },
           { code: 'crm.contract.create', label: '新建', requires: 'crm.contract.view' },
           { code: 'crm.contract.edit', label: '编辑', requires: 'crm.contract.view' },
           { code: 'crm.contract.sign', label: '签署', requires: 'crm.contract.edit' },
+          { code: 'crm.contract.approve', label: '审批', requires: 'crm.contract.view' },
           { code: 'crm.contract.delete', label: '删除', requires: 'crm.contract.edit' },
         ],
       },
@@ -353,115 +358,196 @@ export const PERMISSION_GROUPS = [
   },
 ]
 
-export const NAV_ITEMS = [
-  { path: '/dashboard', title: '工作台', icon: 'Odometer', permission: 'dashboard.view' },
-  { path: '/create', title: '营销创作', icon: 'EditPen', permission: 'content.create' },
+/** 侧栏二级菜单：顶层为分组或单页入口；children 为二级项 */
+export const NAV_MENUS = [
   {
-    path: '/contents',
-    title: '内容库',
-    icon: 'Document',
-    permissionAny: ['content.list_own', 'content.list_all'],
+    key: 'dashboard',
+    path: '/dashboard',
+    title: '工作台',
+    icon: 'Odometer',
+    permission: 'dashboard.view',
   },
-  { path: '/calendar', title: '发布日历', icon: 'Calendar', permission: 'content.schedule' },
   {
-    path: '/knowledge',
-    title: '知识库',
-    icon: 'Collection',
-    permissionAny: ['knowledge.view', 'knowledge.manage'],
+    key: 'content',
+    title: '内容营销',
+    icon: 'EditPen',
+    children: [
+      { path: '/create', title: '营销创作', icon: 'EditPen', permission: 'content.create' },
+      {
+        path: '/contents',
+        title: '内容库',
+        icon: 'Document',
+        permissionAny: ['content.list_own', 'content.list_all'],
+      },
+      { path: '/calendar', title: '发布日历', icon: 'Calendar', permission: 'content.schedule' },
+      {
+        path: '/knowledge',
+        title: '知识库',
+        icon: 'Collection',
+        permissionAny: ['knowledge.view', 'knowledge.manage'],
+      },
+      { path: '/analytics', title: '数据看板', icon: 'DataLine', permission: 'analytics.view' },
+    ],
   },
-  { path: '/analytics', title: '数据看板', icon: 'DataLine', permission: 'analytics.view' },
   {
-    path: '/crm/leads',
-    title: '线索',
+    key: 'crm-customer',
+    title: '客户管理',
     icon: 'User',
-    permissionAny: ['crm.lead.list_own', 'crm.lead.list_team', 'crm.lead.list_territory', 'crm.lead.list_all'],
+    children: [
+      {
+        path: '/crm/leads',
+        title: '线索',
+        icon: 'User',
+        permissionAny: ['crm.lead.list_own', 'crm.lead.list_team', 'crm.lead.list_territory', 'crm.lead.list_all'],
+      },
+      {
+        path: '/crm/tender-leads',
+        title: '招标线索',
+        icon: 'Tickets',
+        permissionAny: [
+          'crm.lead.list_own',
+          'crm.lead.list_team',
+          'crm.lead.list_territory',
+          'crm.lead.list_all',
+          'crm.lead.view',
+        ],
+      },
+      {
+        path: '/crm/tender-lead-analytics',
+        title: '招标线索看板',
+        icon: 'DataAnalysis',
+        permissionAny: ['crm.lead.list_all', 'crm.lead.list_team', 'crm.pipeline.manage', 'analytics.view'],
+      },
+      {
+        path: '/crm/lead-pools',
+        title: '线索公海',
+        icon: 'Coin',
+        permissionAny: ['crm.lead.list_own', 'crm.lead.list_team', 'crm.lead.list_territory', 'crm.lead.list_all'],
+      },
+      {
+        path: '/crm/lead-insights',
+        title: '线索洞察',
+        icon: 'DataAnalysis',
+        permissionAny: [
+          'crm.lead.list_own',
+          'crm.lead.list_all',
+          'crm.customer.list_own',
+          'crm.customer.list_all',
+          'analytics.view_all',
+        ],
+      },
+      {
+        path: '/crm/customers',
+        title: '客户',
+        icon: 'OfficeBuilding',
+        permissionAny: [
+          'crm.customer.list_own',
+          'crm.customer.list_team',
+          'crm.customer.list_territory',
+          'crm.customer.list_all',
+        ],
+      },
+      {
+        path: '/crm/customer-pools',
+        title: '客户公海',
+        icon: 'Coin',
+        permissionAny: [
+          'crm.customer.list_own',
+          'crm.customer.list_team',
+          'crm.customer.list_territory',
+          'crm.customer.list_all',
+        ],
+      },
+      {
+        path: '/crm/tasks',
+        title: '任务',
+        icon: 'List',
+        permissionAny: ['crm.task.list_own', 'crm.task.list_team', 'crm.task.list_territory', 'crm.task.list_all'],
+      },
+      {
+        path: '/crm/campaigns',
+        title: '营销活动',
+        icon: 'Promotion',
+        permissionAny: [
+          'crm.campaign.list_own',
+          'crm.campaign.list_team',
+          'crm.campaign.list_territory',
+          'crm.campaign.list_all',
+        ],
+      },
+    ],
   },
   {
-    path: '/crm/customers',
-    title: '客户',
-    icon: 'OfficeBuilding',
-    permissionAny: ['crm.customer.list_own', 'crm.customer.list_team', 'crm.customer.list_territory', 'crm.customer.list_all'],
-  },
-  {
-    path: '/crm/tasks',
-    title: '任务',
-    icon: 'List',
-    permissionAny: ['crm.task.list_own', 'crm.task.list_team', 'crm.task.list_territory', 'crm.task.list_all'],
-  },
-  {
-    path: '/crm/campaigns',
-    title: '营销活动',
-    icon: 'Promotion',
-    permissionAny: ['crm.campaign.list_own', 'crm.campaign.list_team', 'crm.campaign.list_territory', 'crm.campaign.list_all'],
-  },
-  {
-    path: '/crm/deals',
-    title: '商机',
+    key: 'crm-sales',
+    title: '销售交易',
     icon: 'TrendCharts',
-    permissionAny: ['crm.deal.list_own', 'crm.deal.list_team', 'crm.deal.list_territory', 'crm.deal.list_all'],
-  },
-  {
-    path: '/crm/deal-funnel',
-    title: '销售漏斗',
-    icon: 'CaretBottom',
-    permissionAny: ['crm.deal.list_own', 'crm.deal.list_team', 'crm.deal.list_territory', 'crm.deal.list_all'],
-  },
-  {
-    path: '/crm/trade-report',
-    title: '交易报表',
-    icon: 'DataBoard',
-    permissionAny: [
-      'crm.order.list_own',
-      'crm.order.list_all',
-      'crm.payment.list_own',
-      'crm.payment.list_all',
-      'analytics.view_all',
+    children: [
+      {
+        path: '/crm/deals',
+        title: '商机',
+        icon: 'TrendCharts',
+        permissionAny: ['crm.deal.list_own', 'crm.deal.list_team', 'crm.deal.list_territory', 'crm.deal.list_all'],
+      },
+      {
+        path: '/crm/deal-funnel',
+        title: '销售漏斗',
+        icon: 'Filter',
+        permissionAny: ['crm.deal.list_own', 'crm.deal.list_team', 'crm.deal.list_territory', 'crm.deal.list_all'],
+      },
+      {
+        path: '/crm/quotes',
+        title: '报价',
+        icon: 'Document',
+        permissionAny: ['crm.quote.list_own', 'crm.quote.list_team', 'crm.quote.list_all'],
+      },
+      {
+        path: '/crm/contracts',
+        title: '合同',
+        icon: 'Notebook',
+        permissionAny: ['crm.contract.list_own', 'crm.contract.list_team', 'crm.contract.list_all'],
+      },
+      {
+        path: '/crm/orders',
+        title: '订单',
+        icon: 'List',
+        permissionAny: ['crm.order.list_own', 'crm.order.list_team', 'crm.order.list_territory', 'crm.order.list_all'],
+      },
+      {
+        path: '/crm/payments',
+        title: '回款',
+        icon: 'Money',
+        permissionAny: [
+          'crm.payment.list_own',
+          'crm.payment.list_team',
+          'crm.payment.list_territory',
+          'crm.payment.list_all',
+        ],
+      },
+      {
+        path: '/crm/products',
+        title: '产品',
+        icon: 'Box',
+        permission: 'crm.product.manage',
+      },
+      {
+        path: '/crm/trade-report',
+        title: '交易报表',
+        icon: 'Histogram',
+        permissionAny: [
+          'crm.order.list_own',
+          'crm.order.list_all',
+          'crm.payment.list_own',
+          'crm.payment.list_all',
+          'analytics.view_all',
+        ],
+      },
     ],
   },
-  {
-    path: '/crm/lead-insights',
-    title: '线索洞察',
-    icon: 'DataAnalysis',
-    permissionAny: [
-      'crm.lead.list_own',
-      'crm.lead.list_all',
-      'crm.customer.list_own',
-      'crm.customer.list_all',
-      'analytics.view_all',
-    ],
-  },
-  {
-    path: '/crm/quotes',
-    title: '报价',
-    icon: 'Document',
-    permissionAny: ['crm.quote.list_own', 'crm.quote.list_all'],
-  },
-  {
-    path: '/crm/contracts',
-    title: '合同',
-    icon: 'Notebook',
-    permissionAny: ['crm.contract.list_own', 'crm.contract.list_all'],
-  },
-  {
-    path: '/crm/orders',
-    title: '订单',
-    icon: 'List',
-    permissionAny: ['crm.order.list_own', 'crm.order.list_team', 'crm.order.list_territory', 'crm.order.list_all'],
-  },
-  {
-    path: '/crm/payments',
-    title: '回款',
-    icon: 'Money',
-    permissionAny: ['crm.payment.list_own', 'crm.payment.list_team', 'crm.payment.list_territory', 'crm.payment.list_all'],
-  },
-  {
-    path: '/crm/products',
-    title: '产品',
-    icon: 'Box',
-    permission: 'crm.product.manage',
-  },
-  { path: '/settings', title: '设置', icon: 'Setting' },
+  { key: 'settings', path: '/settings', title: '设置', icon: 'Setting' },
 ]
+
+/** 扁平叶子菜单（路由守卫 / 兼容旧引用） */
+export const NAV_ITEMS = NAV_MENUS.flatMap((menu) => (menu.children ? menu.children : [menu]))
 
 export function hasAnyPermission(permissions, codes) {
   const set = new Set(permissions || [])

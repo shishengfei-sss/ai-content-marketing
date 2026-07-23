@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class ImportOptions(BaseModel):
@@ -59,6 +59,12 @@ class ImportJobCreateOut(BaseModel):
     job_id: UUID
     columns: list[str]
     suggested_mapping: dict[str, str]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def id(self) -> UUID:
+        """兼容部分客户端/用例读取 id。"""
+        return self.job_id
 
 
 class ImportJobListResponse(BaseModel):

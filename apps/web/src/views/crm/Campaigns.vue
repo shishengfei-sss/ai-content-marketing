@@ -11,14 +11,20 @@ import { useCrmViewList } from '../../composables/useCrmViewList'
 import CrmListToolbar from '../../components/crm/CrmListToolbar.vue'
 import CrmViewSwitcher from '../../components/crm/CrmViewSwitcher.vue'
 import CrmAdvancedFilterDialog from '../../components/crm/CrmAdvancedFilterDialog.vue'
+import { formatDateTime } from '../../utils/datetime'
 import {
-  CAMPAIGN_CHANNEL_OPTIONS,
+  CAMPAIGN_CURRENCY_OPTIONS,
   CAMPAIGN_STATUS_OPTIONS,
+  CAMPAIGN_TYPE_OPTIONS,
+  buildChannelLabelMap,
   campaignDateToIso,
   campaignStatusLabel,
   campaignStatusTagType,
+  campaignTypeLabel,
+  channelsToOptions,
   formatCampaignChannels,
   formatCampaignPeriod,
+  showCampaignLocation,
   toCampaignDateValue,
 } from '../../utils/campaignMeta'
 
@@ -32,23 +38,46 @@ const formVisible = ref(false)
 const formSaving = ref(false)
 const editingId = ref('')
 const form = ref(emptyForm())
+const territories = ref([])
+const segments = ref([])
+const channelRows = ref([])
+const channelOptions = computed(() => channelsToOptions(channelRows.value))
+const channelLabelMap = computed(() => buildChannelLabelMap(channelRows.value))
 
 function emptyForm() {
   return {
     name: '',
     status: 'draft',
+    campaign_type: null,
     start_at: null,
     end_at: null,
     goal: '',
     channels: [],
     description: '',
+    budget: null,
+    currency: 'CNY',
+    expected_leads: null,
+    location: '',
+    owner_user_id: auth.user?.id || null,
+    territory_id: null,
+    target_segment_id: null,
   }
 }
+
+const locationVisible = computed(() => showCampaignLocation(form.value.campaign_type))
 
 const canCreate = () => hasPermission(auth.permissions, 'crm.campaign.create')
 const canEdit = () => hasPermission(auth.permissions, 'crm.campaign.edit')
 const canDelete = () => hasPermission(auth.permissions, 'crm.campaign.delete')
 const canManage = () => hasPermission(auth.permissions, 'crm.campaign.manage')
+
+function canEditRow(row) {
+  return canEdit() && row?.status !== 'ended'
+}
+
+function canDeleteRow(row) {
+  return canDelete() && row?.status === 'draft'
+}
 
 const {
   loading, items, total, page, pageSize, views, activeViewId, advancedFilters, advancedFilterVisible,
@@ -70,14 +99,7 @@ const {
 })
 
 function formatUpdatedAt(value) {
-  if (!value) return '—'
-  return new Date(value).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatDateTime(value, { withSeconds: false })
 }
 
 function goDetail(row) {
@@ -96,24 +118,59 @@ function openEdit(row, e) {
   form.value = {
     name: row.name || '',
     status: row.status || 'draft',
+    campaign_type: row.campaign_type || null,
     start_at: toCampaignDateValue(row.start_at),
     end_at: toCampaignDateValue(row.end_at),
     goal: row.goal || '',
     channels: [...(row.channels || [])],
     description: row.description || '',
+    budget: row.budget != null ? Number(row.budget) : null,
+    currency: row.currency || 'CNY',
+    expected_leads: row.expected_leads != null ? Number(row.expected_leads) : null,
+    location: row.location || '',
+    owner_user_id: row.owner_user_id || auth.user?.id || null,
+    territory_id: row.territory_id || null,
+    target_segment_id: row.target_segment_id || null,
   }
   formVisible.value = true
 }
 
 function buildPayload() {
-  return {
+  const payload = {
     name: form.value.name.trim(),
-    status: form.value.status,
+    campaign_type: form.value.campaign_type || null,
     start_at: campaignDateToIso(form.value.start_at),
     end_at: campaignDateToIso(form.value.end_at),
     goal: form.value.goal?.trim() || null,
     channels: form.value.channels || [],
     description: form.value.description?.trim() || null,
+    budget: form.value.budget,
+    currency: form.value.currency || 'CNY',
+    expected_leads: form.value.expected_leads,
+    location: locationVisible.value ? (form.value.location?.trim() || null) : null,
+    owner_user_id: form.value.owner_user_id || null,
+    territory_id: form.value.territory_id || null,
+    target_segment_id: form.value.target_segment_id || null,
+  }
+  // 状态仅通过启动/暂停/恢复/结束操作变更；新建固定草稿
+  if (!editingId.value) payload.status = 'draft'
+  return payload
+}
+
+async function loadLookups() {
+  try {
+    const [terrRes, segRes, chRes] = await Promise.all([
+      crmApi.listTerritories(),
+      crmApi.listSegments(),
+      crmApi.listCampaignChannels({ active_only: true }),
+    ])
+    territories.value = Array.isArray(terrRes.data) ? terrRes.data : (terrRes.data?.items || [])
+    segments.value = Array.isArray(segRes.data) ? segRes.data : (segRes.data?.items || [])
+    channelRows.value = Array.isArray(chRes.data) ? chRes.data : []
+  } catch {
+    territories.value = []
+    segments.value = []
+    channelRows.value = []
   }
 }
 
@@ -155,7 +212,7 @@ async function changeStatus(row, status, e) {
 
 async function handleDelete(row, e) {
   e?.stopPropagation?.()
-  if (!canDelete()) return
+  if (!canDeleteRow(row)) return
   try {
     await ElMessageBox.confirm(`确定删除活动「${row.name}」？`, '删除活动', {
       type: 'warning',
@@ -172,7 +229,7 @@ async function handleDelete(row, e) {
 
 onMounted(async () => {
   initRouteView()
-  await Promise.all([loadSchema(), loadMembers()])
+  await Promise.all([loadSchema(), loadMembers(), loadLookups()])
   await loadViews()
   load()
   watchRouteView()
@@ -271,11 +328,14 @@ onMounted(async () => {
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="类型" width="100" show-overflow-tooltip>
+          <template #default="{ row }">{{ campaignTypeLabel(row.campaign_type) }}</template>
+        </el-table-column>
         <el-table-column label="活动周期" min-width="170">
           <template #default="{ row }">{{ formatCampaignPeriod(row) }}</template>
         </el-table-column>
         <el-table-column label="渠道" min-width="140" show-overflow-tooltip>
-          <template #default="{ row }">{{ formatCampaignChannels(row.channels) }}</template>
+          <template #default="{ row }">{{ formatCampaignChannels(row.channels, channelLabelMap) }}</template>
         </el-table-column>
         <el-table-column label="负责人" width="100">
           <template #default="{ row }">{{ resolveMemberName(row.owner_user_id) }}</template>
@@ -286,10 +346,10 @@ onMounted(async () => {
         <el-table-column label="更新时间" width="156">
           <template #default="{ row }">{{ formatUpdatedAt(row.updated_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right" align="center" @click.stop>
+        <el-table-column label="操作" width="280" fixed="right" align="center" @click.stop>
           <template #default="{ row }">
             <el-button link type="primary" @click.stop="goDetail(row)">详情</el-button>
-            <el-button v-if="canEdit()" link type="primary" @click.stop="openEdit(row, $event)">编辑</el-button>
+            <el-button v-if="canEditRow(row)" link type="primary" @click.stop="openEdit(row, $event)">编辑</el-button>
             <el-button
               v-if="canManage() && row.status === 'draft'"
               link
@@ -300,9 +360,21 @@ onMounted(async () => {
               v-if="canManage() && row.status === 'active'"
               link
               type="warning"
+              @click.stop="changeStatus(row, 'paused', $event)"
+            >暂停</el-button>
+            <el-button
+              v-if="canManage() && row.status === 'paused'"
+              link
+              type="success"
+              @click.stop="changeStatus(row, 'active', $event)"
+            >恢复</el-button>
+            <el-button
+              v-if="canManage() && (row.status === 'active' || row.status === 'paused')"
+              link
+              type="warning"
               @click.stop="changeStatus(row, 'ended', $event)"
             >结束</el-button>
-            <el-button v-if="canDelete()" link type="danger" @click.stop="handleDelete(row, $event)">删除</el-button>
+            <el-button v-if="canDeleteRow(row)" link type="danger" @click.stop="handleDelete(row, $event)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -342,17 +414,17 @@ onMounted(async () => {
     <el-dialog
       v-model="formVisible"
       :title="editingId ? '编辑活动' : '新建活动'"
-      width="560px"
+      width="640px"
       destroy-on-close
     >
-      <el-form label-width="88px">
+      <el-form label-width="96px">
         <el-form-item label="活动名称" required>
           <el-input v-model="form.name" placeholder="如：2026 Q3 财税获客" maxlength="200" show-word-limit />
         </el-form-item>
-        <el-form-item v-if="editingId && canManage()" label="状态">
-          <el-select v-model="form.status" style="width: 100%">
+        <el-form-item label="活动类型">
+          <el-select v-model="form.campaign_type" clearable placeholder="请选择" style="width: 100%">
             <el-option
-              v-for="item in CAMPAIGN_STATUS_OPTIONS"
+              v-for="item in CAMPAIGN_TYPE_OPTIONS"
               :key="item.value"
               :label="item.label"
               :value="item.value"
@@ -368,11 +440,55 @@ onMounted(async () => {
         <el-form-item label="投放渠道">
           <el-select v-model="form.channels" multiple collapse-tags style="width: 100%">
             <el-option
-              v-for="item in CAMPAIGN_CHANNEL_OPTIONS"
+              v-for="item in channelOptions"
               :key="item.value"
               :label="item.label"
               :value="item.value"
             />
+          </el-select>
+          <div class="field-hint">
+            可在
+            <router-link to="/settings/campaign-channels">设置 → 活动投放渠道</router-link>
+            维护选项
+          </div>
+        </el-form-item>
+        <el-form-item v-if="locationVisible" label="活动地点">
+          <el-input v-model="form.location" placeholder="城市 / 场馆" maxlength="200" />
+        </el-form-item>
+        <el-form-item label="预算">
+          <div class="form-inline-row">
+            <el-input-number v-model="form.budget" :min="0" :precision="2" :controls="false" style="flex: 1" />
+            <el-select v-model="form.currency" style="width: 100px">
+              <el-option
+                v-for="item in CAMPAIGN_CURRENCY_OPTIONS"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </div>
+        </el-form-item>
+        <el-form-item label="预期线索">
+          <el-input-number v-model="form.expected_leads" :min="0" :precision="0" :controls="false" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="负责人">
+          <el-select v-model="form.owner_user_id" filterable clearable placeholder="默认本人" style="width: 100%">
+            <el-option
+              v-for="m in members"
+              :key="m.user_id"
+              :label="m.display_name || m.phone || m.user_id"
+              :value="m.user_id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="归属地区">
+          <el-select v-model="form.territory_id" filterable clearable placeholder="可选" style="width: 100%">
+            <el-option v-for="t in territories" :key="t.id" :label="t.name" :value="t.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="目标细分">
+          <el-select v-model="form.target_segment_id" filterable clearable placeholder="可选" style="width: 100%">
+            <el-option v-for="s in segments" :key="s.id" :label="s.name" :value="s.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="活动目标">
@@ -399,4 +515,7 @@ onMounted(async () => {
   vertical-align: middle;
 }
 .crm-list-status-filter { width: 120px; }
+.form-inline-row { display: flex; gap: 8px; width: 100%; align-items: center; }
+.field-hint { margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary); }
+.field-hint a { color: var(--el-color-primary); }
 </style>

@@ -29,10 +29,28 @@ export const ROUTE_NOT_FOUND_HINT =
 export const INTERNAL_SERVER_HINT =
   '服务器内部错误：请确认已执行 alembic upgrade head、配置 DEEPSEEK_API_KEY，并查看 docker logs ai_marketing_api'
 
+export const BAD_GATEWAY_HINT =
+  '后端暂时不可用（502）：请确认 API 已启动（默认 8003），并与 Web 代理端口 VITE_API_PROXY_TARGET 一致后重试'
+
 export function formatApiError(err, fallback = '操作失败') {
   if (isRouteNotFoundError(err)) return ROUTE_NOT_FOUND_HINT
   const msg = String(err?.message || fallback).trim()
   if (msg.toLowerCase() === 'not found') return ROUTE_NOT_FOUND_HINT
+  if (
+    err?.status === 502 ||
+    msg.includes('status code 502') ||
+    msg.toLowerCase().includes('bad gateway')
+  ) {
+    return BAD_GATEWAY_HINT
+  }
+  if (
+    err?.status === 503 ||
+    msg.includes('status code 503') ||
+    msg.toLowerCase().includes('econnrefused') ||
+    msg.toLowerCase().includes('network error')
+  ) {
+    return BAD_GATEWAY_HINT
+  }
   if (msg.toLowerCase() === 'internal server error' || msg.includes('status code 500')) {
     return INTERNAL_SERVER_HINT
   }

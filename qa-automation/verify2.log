@@ -1,0 +1,5 @@
+web_base => http://127.0.0.1:5173
+[PASS] AUTH-001: 手机号+密码登录成功，跳转工作台 URL=http://127.0.0.1:5173/dashboard
+[PASS] AUTH-002: 密码错误被前端拦截，停留登录页并提示 URL=http://127.0.0.1:5173/login
+[PASS] LEAD-001: 线索创建成功，列表可见公司名「自动化线索公司695185」 URL=http://127.0.0.1:5173/crm/leads
+DONE

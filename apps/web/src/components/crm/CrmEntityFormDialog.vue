@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import { crmApi } from '../../api/client'
+import { useAuthStore } from '../../stores/auth'
 import { useEntitySchema } from '../../composables/useEntitySchema'
 import {
   emptyContactDraft,
@@ -24,6 +25,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:visible', 'saved'])
 
+const auth = useAuthStore()
 const { fields, loadSchema } = useEntitySchema(props.entityType)
 const formValues = ref({})
 const contacts = ref([emptyContactDraft(true)])
@@ -58,13 +60,32 @@ const dialogSubtitle = computed(() => {
   return props.mode === 'edit' ? '更新线索资料' : '录入潜在客户信息，便于后续跟进转化'
 })
 
+async function resolveCreatorTerritoryId() {
+  const userId = auth.user?.id
+  if (!userId) return null
+  try {
+    const { data } = await crmApi.listSalesProfiles()
+    const rows = Array.isArray(data) ? data : []
+    const mine = rows.find((r) => r.user_id === userId)
+    return mine?.primary_territory_id || null
+  } catch {
+    return null
+  }
+}
+
 async function initForm() {
   await loadSchema()
   if (props.mode === 'edit' && props.record) {
     formValues.value = entityToFormValues(props.record, formFields.value)
   } else {
     formValues.value = entityToFormValues({}, formFields.value)
-    if (props.entityType === 'lead') formValues.value.status = '待跟进'
+    if (props.entityType === 'lead') {
+      formValues.value.status = '待跟进'
+      if (!formValues.value.territory_id) {
+        const tid = await resolveCreatorTerritoryId()
+        if (tid) formValues.value.territory_id = tid
+      }
+    }
     if (props.entityType === 'customer') formValues.value.status = '潜在'
     if (props.initialValues && typeof props.initialValues === 'object') {
       formValues.value = { ...formValues.value, ...props.initialValues }
@@ -126,10 +147,8 @@ function validateContacts(list) {
   }
   for (const c of named) {
     if (!c.name) return '联系人姓名不能为空'
-    if (c.mobile) {
-      const err = validateLeadMobile(c.mobile, { required: false })
-      if (err) return `联系人「${c.name}」${err}`
-    }
+    const err = validateLeadMobile(c.mobile, { required: true })
+    if (err) return `联系人「${c.name}」${err}`
   }
   if (!named.some((c) => c.is_primary)) {
     named[0].is_primary = true
@@ -150,6 +169,10 @@ async function submit() {
     const mobileErr = validateLeadMobile(formValues.value.mobile)
     if (mobileErr) {
       ElMessage.warning(mobileErr)
+      return
+    }
+    if (!formValues.value.territory_id) {
+      ElMessage.warning('请选择销售区域')
       return
     }
   }
@@ -305,8 +328,8 @@ async function submit() {
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="手机">
-                  <el-input v-model="contact.mobile" placeholder="11 位手机号" />
+                <el-form-item label="手机" required>
+                  <el-input v-model="contact.mobile" placeholder="11 位手机号" maxlength="11" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">

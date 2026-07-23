@@ -4,6 +4,7 @@ import * as echarts from 'echarts'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { contentApi, dashboardApi, isBenignEmptyError } from '../api/client'
+import { formatDateTime } from '../utils/datetime'
 
 const router = useRouter()
 const apiBase = import.meta.env.VITE_API_BASE_URL || ''
@@ -48,8 +49,7 @@ const statusMap = {
 const platformMap = { wechat: '公众号', xhs: '小红书', douyin: '抖音' }
 
 function formatTime(iso) {
-  if (!iso) return ''
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso, { empty: '' })
 }
 
 function openPreview(url) {

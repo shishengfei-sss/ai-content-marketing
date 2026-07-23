@@ -39,6 +39,17 @@ const settingsMenu = computed(() => {
       show: hasPermission(p, 'crm.schema.manage'),
     },
     {
+      title: '业务标签',
+      desc: '线索/客户等业务标签字典',
+      icon: 'PriceTag',
+      path: '/settings/tags',
+      show:
+        hasPermission(p, 'crm.schema.manage') ||
+        hasPermission(p, 'crm.pipeline.manage') ||
+        hasPermission(p, 'crm.lead.edit') ||
+        hasPermission(p, 'crm.customer.edit'),
+    },
+    {
       title: '销售管道',
       desc: '商机阶段与成交概率',
       icon: 'Connection',
@@ -53,10 +64,52 @@ const settingsMenu = computed(() => {
       show: hasPermission(p, 'crm.pipeline.manage'),
     },
     {
+      title: '产品基础数据',
+      desc: '产品分类与计量单位',
+      icon: 'Goods',
+      path: '/settings/product-master-data',
+      show: hasPermission(p, 'crm.product.manage'),
+    },
+    {
+      title: '活动投放渠道',
+      desc: '营销活动投放渠道字典',
+      icon: 'Promotion',
+      path: '/settings/campaign-channels',
+      show: hasPermission(p, 'crm.campaign.manage'),
+    },
+    {
+      title: '线索公海',
+      desc: '创建与维护线索公海池',
+      icon: 'Coin',
+      path: '/settings/lead-pools',
+      show: hasPermission(p, 'crm.lead.edit'),
+    },
+    {
+      title: '客户公海',
+      desc: '创建与维护客户公海池',
+      icon: 'OfficeBuilding',
+      path: '/settings/customer-pools',
+      show: hasPermission(p, 'crm.customer.edit'),
+    },
+    {
+      title: 'ICP 画像',
+      desc: '招标线索匹配行业/地区/预算权重',
+      icon: 'Aim',
+      path: '/settings/icp',
+      show: hasPermission(p, 'crm.lead.edit') || hasPermission(p, 'crm.pipeline.manage'),
+    },
+    {
       title: '线索分配规则',
       desc: '按条件自动指派线索负责人',
       icon: 'Sort',
       path: '/settings/assignment-rules',
+      show: hasPermission(p, 'crm.lead.edit') || hasPermission(p, 'crm.pipeline.manage'),
+    },
+    {
+      title: '线索评分规则',
+      desc: '按条件累加线索评分（重算用）',
+      icon: 'TrendCharts',
+      path: '/settings/lead-scoring',
       show: hasPermission(p, 'crm.lead.edit') || hasPermission(p, 'crm.pipeline.manage'),
     },
     {

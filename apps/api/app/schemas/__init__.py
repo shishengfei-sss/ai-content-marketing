@@ -158,7 +158,12 @@ class MemberRoleUpdateRequest(BaseModel):
 
 
 class MemberUpdateRequest(BaseModel):
-    display_name: str = Field(min_length=1, max_length=100)
+    display_name: str | None = Field(default=None, min_length=1, max_length=100)
+    phone: str | None = Field(default=None, pattern=r"^1\d{10}$")
+
+
+class MemberResetPasswordRequest(BaseModel):
+    password: str = Field(min_length=8, max_length=128)
 
 
 class UserOut(BaseModel):
@@ -368,10 +373,26 @@ class KnowledgeDocumentOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class KnowledgeDocumentDetailOut(KnowledgeDocumentOut):
+    raw_text: str = ""
+
+
+class KnowledgeDocumentListResponse(BaseModel):
+    items: list[KnowledgeDocumentOut]
+    total: int
+    page: int
+    page_size: int
+
+
 class KnowledgeUploadTextRequest(BaseModel):
     title: str = Field(min_length=2, max_length=300)
     text: str = Field(min_length=10, max_length=200000)
     industry_code: str = "marketing"
+
+
+class KnowledgeDocumentUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=2, max_length=300)
+    text: str | None = Field(default=None, min_length=10, max_length=200000)
 
 
 class BrandSettingsOut(BaseModel):
@@ -481,6 +502,13 @@ class AdminUserUpdate(BaseModel):
     role: str | None = None
     is_active: bool | None = None
     display_name: str | None = None
+
+
+class AdminUserListResponse(BaseModel):
+    items: list[AdminUserOut]
+    total: int
+    page: int
+    page_size: int
 
 
 class AdminUserResetPasswordRequest(BaseModel):

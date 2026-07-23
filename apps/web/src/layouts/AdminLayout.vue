@@ -18,6 +18,7 @@ const menuItems = [
   { path: '/admin/assistants', title: '营销顾问配置', icon: 'MagicStick' },
   { path: '/admin/knowledge', title: '公共知识库', icon: 'Collection' },
   { path: '/admin/platform-llm', title: '平台 AI', icon: 'Cpu' },
+  { path: '/admin/platform-tender-leads', title: '招标线索公共池', icon: 'Tickets' },
 ]
 
 const activeMenu = computed(() => route.path)

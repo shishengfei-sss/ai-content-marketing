@@ -11,6 +11,15 @@ const props = defineProps({
 
 const emit = defineEmits(['update:visible', 'done'])
 
+const isProductImport = computed(() => props.entityType === 'product')
+const isSpecModelImport = computed(() => props.entityType === 'product_spec_model')
+const showDupOptions = computed(() => !isProductImport.value)
+const dupKeyLabel = computed(() => {
+  if (isSpecModelImport.value) return '名称'
+  if (isProductImport.value) return '产品编码'
+  return '手机号'
+})
+
 const step = ref(1)
 const loading = ref(false)
 const jobId = ref('')
@@ -47,11 +56,11 @@ watch(
 
 async function downloadTemplate() {
   try {
-    const blob = await crmApi.downloadImportTemplate(props.entityType)
+    const blob = await crmApi.downloadImportTemplate(props.entityType, 'xlsx')
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${props.entityType}_template.csv`
+    a.download = `${props.entityType}_import_template.xlsx`
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
@@ -81,13 +90,19 @@ async function onFileChange(e) {
 async function saveMapping() {
   loading.value = true
   try {
+    let dupKey = 'mobile'
+    if (isProductImport.value) dupKey = 'code'
+    else if (isSpecModelImport.value) dupKey = 'name'
+    const options = {
+      duplicate_key: dupKey,
+      on_duplicate: onDuplicate.value,
+    }
+    if (!isProductImport.value && !isSpecModelImport.value) {
+      options.default_source = '导入'
+    }
     await crmApi.patchImportJob(jobId.value, {
       mapping: mapping.value,
-      options: {
-        duplicate_key: 'mobile',
-        on_duplicate: onDuplicate.value,
-        default_source: '导入',
-      },
+      options,
     })
     const data = await crmApi.previewImportJob(jobId.value)
     preview.value = data
@@ -131,14 +146,24 @@ async function downloadErrors() {
 <template>
   <el-dialog v-model="dialogVisible" title="导入数据" width="640px" destroy-on-close>
     <div v-if="step === 1" v-loading="loading">
-      <p class="hint">支持 CSV（UTF-8）文件，可先下载模板填写。</p>
+      <p class="hint">
+        支持 <b>Excel（.xlsx）</b> 或 CSV（UTF-8）。建议先下载模板填写；
+        <template v-if="isProductImport">产品模板含「默认税率%」「标价含税」列。</template>
+        <template v-else-if="isSpecModelImport">规格型号模板含名称、编码、说明等列。</template>
+      </p>
       <div class="actions">
-        <el-button @click="downloadTemplate">下载模板</el-button>
+        <el-button type="primary" plain @click="downloadTemplate">下载 Excel 模板</el-button>
         <label class="upload-btn">
-          <input ref="fileRef" type="file" accept=".csv,.xlsx" @change="onFileChange" />
+          <input ref="fileRef" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" @change="onFileChange" />
           选择文件上传
         </label>
       </div>
+      <p v-if="isProductImport" class="hint tip">
+        产品编码自动生成，无需填写。税率填 0～100（如 13）；标价含税填「是/否」。
+      </p>
+      <p v-else-if="isSpecModelImport" class="hint tip">
+        名称租户内不可重复；编码可选。启用填「是/否」。
+      </p>
     </div>
 
     <div v-else-if="step === 2" v-loading="loading">
@@ -151,13 +176,16 @@ async function downloadErrors() {
           </template>
         </el-table-column>
       </el-table>
-      <div class="dup-options">
-        <span class="hint">重复处理（按手机号）：</span>
+      <div v-if="showDupOptions" class="dup-options">
+        <span class="hint">
+          重复处理（按{{ dupKeyLabel }}）：
+        </span>
         <el-radio-group v-model="onDuplicate" size="small">
           <el-radio value="skip">跳过</el-radio>
           <el-radio value="update">更新已有</el-radio>
         </el-radio-group>
       </div>
+      <p v-else class="hint tip">产品将全部新建，编码由系统自动生成。</p>
       <div class="footer-actions">
         <el-button type="primary" @click="saveMapping">预览</el-button>
       </div>
@@ -196,6 +224,12 @@ async function downloadErrors() {
 .hint {
   color: var(--el-text-color-secondary);
   margin-bottom: 12px;
+}
+
+.hint.tip {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .actions {

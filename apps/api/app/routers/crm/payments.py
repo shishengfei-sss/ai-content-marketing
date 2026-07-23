@@ -29,6 +29,7 @@ from app.services.crm.payment_service import (
     create_plan,
     delete_plan,
     list_receivables,
+    order_customer_map,
     order_payment_summary,
     require_payment,
     reverse_payment,
@@ -121,10 +122,12 @@ def list_payments(
     items = query.offset((page - 1) * page_size).limit(page_size).all()
     order_ids = list({p.order_id for p in items})
     summary_map = order_payment_summary(db, ctx.tenant_id, order_ids)
+    cust_map = order_customer_map(db, ctx.tenant_id, order_ids)
     out_items: list[PaymentOut] = []
     for p in items:
         row = PaymentOut.model_validate(p)
         sm = summary_map.get(p.order_id) or {}
+        row.customer_id = cust_map.get(p.order_id)
         row.order_plan_total = sm.get("plan_total", 0.0)
         row.order_paid_total = sm.get("paid_total", 0.0)
         row.order_overdue_amount = sm.get("overdue_amount", 0.0)
@@ -140,6 +143,13 @@ def list_payments(
     )
 
 
+def _payment_out(db: Session, ctx: TenantContext, p: Payment) -> PaymentOut:
+    row = PaymentOut.model_validate(p)
+    cust_map = order_customer_map(db, ctx.tenant_id, [p.order_id])
+    row.customer_id = cust_map.get(p.order_id)
+    return row
+
+
 @router.post("", response_model=PaymentOut, status_code=201)
 def post_payment(
     body: PaymentCreate,
@@ -147,7 +157,7 @@ def post_payment(
     db: Session = Depends(get_db),
 ):
     p = create_payment(db, ctx, body)
-    return PaymentOut.model_validate(p)
+    return _payment_out(db, ctx, p)
 
 
 @router.get("/receivables", response_model=ReceivableSummaryOut)
@@ -225,7 +235,7 @@ def get_payment_detail(
     db: Session = Depends(get_db),
 ):
     p = require_payment(db, ctx, payment_id)
-    return PaymentOut.model_validate(p)
+    return _payment_out(db, ctx, p)
 
 
 @router.patch("/{payment_id}", response_model=PaymentOut)
@@ -237,7 +247,7 @@ def patch_payment(
 ):
     p = require_payment(db, ctx, payment_id)
     p = update_payment(db, ctx, p, body)
-    return PaymentOut.model_validate(p)
+    return _payment_out(db, ctx, p)
 
 
 @router.post("/{payment_id}/confirm", response_model=PaymentOut)
@@ -248,7 +258,7 @@ def confirm_payment_endpoint(
 ):
     p = require_payment(db, ctx, payment_id)
     p = confirm_payment(db, ctx, p)
-    return PaymentOut.model_validate(p)
+    return _payment_out(db, ctx, p)
 
 
 @router.post("/{payment_id}/reverse", response_model=PaymentOut)
@@ -259,7 +269,7 @@ def reverse_payment_endpoint(
 ):
     p = require_payment(db, ctx, payment_id)
     p = reverse_payment(db, ctx, p)
-    return PaymentOut.model_validate(p)
+    return _payment_out(db, ctx, p)
 
 
 @router.delete("/{payment_id}", status_code=204)
@@ -269,7 +279,7 @@ def delete_payment_endpoint(
     db: Session = Depends(get_db),
 ):
     p = require_payment(db, ctx, payment_id)
-    soft_delete_payment(db, p)
+    soft_delete_payment(db, ctx, p)
 
 
 # ---------------- 回款计划 ----------------

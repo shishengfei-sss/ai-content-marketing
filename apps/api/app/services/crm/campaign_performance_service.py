@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.database import uuid_eq
 from app.dependencies import TenantContext
 from app.models.crm import (
     CHANNEL_CONTENT_TYPES,
@@ -149,7 +150,11 @@ def calculate_campaign_performance(db: Session, ctx: TenantContext, campaign_id:
 
     leads = (
         db.query(Lead)
-        .filter(Lead.tenant_id == ctx.tenant_id, Lead.campaign_id == campaign_id, Lead.deleted_at.is_(None))
+        .filter(
+            Lead.tenant_id == ctx.tenant_id,
+            uuid_eq(Lead.campaign_id, campaign_id),
+            Lead.deleted_at.is_(None),
+        )
         .all()
     )
     leads_count = len(leads)

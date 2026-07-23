@@ -14,6 +14,7 @@ class Tenant(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     industry_code: Mapped[str] = mapped_column(String(50), default="finance", nullable=False)
     credit_code: Mapped[str] = mapped_column(String(18), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     users: Mapped[list["User"]] = relationship(back_populates="tenant")
@@ -465,5 +466,13 @@ from app.models.crm import (  # noqa: E402, F401
     EntityNumberRule,
     Lead,
     MarketingCampaign,
+    CampaignChannel,
     NurtureRule,
+)
+from app.models.tender import (  # noqa: E402, F401
+    IcpConfig,
+    ParseJob,
+    PlatformTenderLead,
+    ScoredTenderLead,
+    TenderAttachment,
 )

@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.crm import (
     CONTRACT_AMENDMENT_CHANGE_TYPES,
@@ -124,6 +124,8 @@ class DealLineItemCreate(BaseModel):
     quantity: float = Field(default=1, ge=0)
     unit_price: float = Field(default=0, ge=0)
     discount_percent: float = Field(default=0, ge=0, le=100)
+    tax_rate: float | None = Field(default=None, ge=0, le=100)
+    tax_amount: float | None = Field(default=None, ge=0)
     subtotal: float | None = Field(default=None, ge=0)
     sort_order: int | None = None
 
@@ -137,6 +139,8 @@ class DealLineItemOut(BaseModel):
     quantity: float
     unit_price: float
     discount_percent: float
+    tax_rate: float | None = None
+    tax_amount: float | None = None
     subtotal: float
     sort_order: int
 
@@ -296,6 +300,7 @@ class DealOut(BaseModel):
     campaign_id: UUID | None
     owner_user_id: UUID
     territory_id: UUID | None
+    manager_user_id: UUID | None = None
     lines: list[DealLineItemOut] = Field(default_factory=list)
     converted_from_lead_id: UUID | None
     converted_order_id: UUID | None
@@ -349,8 +354,12 @@ class ProductCreate(BaseModel):
     unit: str | None = None
     list_price: float = Field(default=0, ge=0)
     cost_price: float | None = Field(default=None, ge=0)
+    default_tax_rate: float | None = Field(default=None, ge=0, le=100)
+    price_includes_tax: bool = False
     category_id: UUID | None = None
+    spec_model_id: UUID | None = None
     is_active: bool = True
+    cpq_enabled: bool = False
     description: str | None = None
     extra_data: dict = Field(default_factory=dict)
 
@@ -361,8 +370,12 @@ class ProductUpdate(BaseModel):
     unit: str | None = None
     list_price: float | None = Field(default=None, ge=0)
     cost_price: float | None = Field(default=None, ge=0)
+    default_tax_rate: float | None = Field(default=None, ge=0, le=100)
+    price_includes_tax: bool | None = None
     category_id: UUID | None = None
+    spec_model_id: UUID | None = None
     is_active: bool | None = None
+    cpq_enabled: bool | None = None
     description: str | None = None
     extra_data: dict | None = None
 
@@ -375,8 +388,13 @@ class ProductOut(BaseModel):
     unit: str | None
     list_price: float
     cost_price: float | None
+    default_tax_rate: float | None = None
+    price_includes_tax: bool = False
     category_id: UUID | None = None
+    spec_model_id: UUID | None = None
+    spec_model_name: str | None = None
     is_active: bool
+    cpq_enabled: bool = False
     description: str | None
     extra_data: dict
     total_ordered_quantity: int = 0
@@ -517,6 +535,60 @@ class ProductCategoryOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ProductUnitCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=30)
+    sort_order: int = 0
+    is_active: bool = True
+
+
+class ProductUnitUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=30)
+    sort_order: int | None = None
+    is_active: bool | None = None
+
+
+class ProductUnitOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    name: str
+    sort_order: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProductSpecModelCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    code: str | None = Field(default=None, max_length=50)
+    description: str | None = None
+    sort_order: int = 0
+    is_active: bool = True
+
+
+class ProductSpecModelUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    code: str | None = Field(default=None, max_length=50)
+    description: str | None = None
+    sort_order: int | None = None
+    is_active: bool | None = None
+
+
+class ProductSpecModelOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    name: str
+    code: str | None = None
+    description: str | None = None
+    sort_order: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # ============================================================
 # 报价 + 报价行
 # ============================================================
@@ -529,6 +601,8 @@ class QuoteLineCreate(BaseModel):
     quantity: float = Field(default=1, ge=0)
     unit_price: float = Field(default=0, ge=0)
     discount_rate: float | None = Field(default=None, ge=0, le=100)
+    tax_rate: float | None = Field(default=None, ge=0, le=100)
+    tax_amount: float | None = Field(default=None, ge=0)
     line_total: float = Field(default=0, ge=0)
     sort_order: int = 0
     remark: str | None = None
@@ -541,6 +615,8 @@ class QuoteLineUpdate(BaseModel):
     quantity: float | None = Field(default=None, ge=0)
     unit_price: float | None = Field(default=None, ge=0)
     discount_rate: float | None = Field(default=None, ge=0, le=100)
+    tax_rate: float | None = Field(default=None, ge=0, le=100)
+    tax_amount: float | None = Field(default=None, ge=0)
     line_total: float | None = Field(default=None, ge=0)
     sort_order: int | None = None
     remark: str | None = None
@@ -555,6 +631,8 @@ class QuoteLineOut(BaseModel):
     quantity: float
     unit_price: float
     discount_rate: float | None
+    tax_rate: float | None = None
+    tax_amount: float | None = None
     line_total: float
     sort_order: int
     remark: str | None
@@ -580,6 +658,7 @@ class QuoteCreate(BaseModel):
     owner_user_id: UUID | None = None
     extra_data: dict = Field(default_factory=dict)
     lines: list[QuoteLineCreate] = Field(default_factory=list)
+    cpq_config_snapshot: dict | None = None
 
     @field_validator("status")
     @classmethod
@@ -595,18 +674,23 @@ class QuoteUpdate(BaseModel):
     subject: str | None = Field(default=None, min_length=1, max_length=200)
     discount_rate: float | None = Field(default=None, ge=0, le=100)
     total_amount: float | None = Field(default=None, ge=0)
+    # status 禁止 PATCH：若客户端仍传入则 422（见下方 validator）
     status: str | None = None
     valid_until: datetime | None = None
     owner_user_id: UUID | None = None
     extra_data: dict | None = None
     lines: list[QuoteLineCreate] | None = None
+    cpq_config_snapshot: dict | None = None
 
-    @field_validator("status")
-    @classmethod
-    def _valid_status(cls, v: str | None) -> str | None:
-        if v is not None:
-            validate_quote_status(v)
-        return v
+    @model_validator(mode="after")
+    def _forbid_status_patch(self) -> "QuoteUpdate":
+        if "status" in self.model_fields_set:
+            raise ValueError("禁止通过 PATCH 修改 status，请使用 send/accept/reject/recall/convert 等专用接口")
+        return self
+
+
+class QuoteRejectBody(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
 
 
 class QuoteOut(BaseModel):
@@ -619,17 +703,27 @@ class QuoteOut(BaseModel):
     subject: str
     discount_rate: float | None
     total_amount: float
+    tax_total: float = 0
+    amount_incl_tax: float = 0
     status: str
     valid_until: datetime | None
     owner_user_id: UUID
     converted_order_id: UUID | None
     extra_data: dict
+    cpq_config_snapshot: dict | None = None
     created_by_user_id: UUID
     created_at: datetime
     updated_at: datetime
     lines: list[QuoteLineOut] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def _fill_tax_totals(self) -> "QuoteOut":
+        tax = round(sum(float(l.tax_amount or 0) for l in self.lines), 2)
+        self.tax_total = tax
+        self.amount_incl_tax = round(float(self.total_amount or 0) + tax, 2)
+        return self
 
 
 class QuoteListResponse(BaseModel):
@@ -662,6 +756,38 @@ def validate_contract_type(value: str) -> None:
         raise ValueError(f"contract_type 必须是 {CONTRACT_TYPES} 之一")
 
 
+class ContractLineCreate(BaseModel):
+    product_id: UUID | None = None
+    name: str = Field(min_length=1, max_length=200)
+    unit: str | None = None
+    quantity: float = Field(default=1, ge=0)
+    unit_price: float = Field(default=0, ge=0)
+    discount_rate: float | None = Field(default=None, ge=0, le=100)
+    tax_rate: float | None = Field(default=None, ge=0, le=100)
+    tax_amount: float | None = Field(default=None, ge=0)
+    line_total: float = Field(default=0, ge=0)
+    sort_order: int = 0
+    remark: str | None = None
+
+
+class ContractLineOut(BaseModel):
+    id: UUID
+    contract_id: UUID
+    product_id: UUID | None
+    name: str
+    unit: str | None
+    quantity: float
+    unit_price: float
+    discount_rate: float | None
+    tax_rate: float | None
+    tax_amount: float | None
+    line_total: float
+    sort_order: int
+    remark: str | None
+
+    model_config = {"from_attributes": True}
+
+
 class ContractCreate(BaseModel):
     contract_number: str | None = None
     deal_id: UUID | None = None
@@ -677,6 +803,7 @@ class ContractCreate(BaseModel):
     owner_user_id: UUID | None = None
     file_url: str | None = None
     extra_data: dict = Field(default_factory=dict)
+    lines: list[ContractLineCreate] = Field(default_factory=list)
 
     @field_validator("status")
     @classmethod
@@ -751,17 +878,10 @@ class ContractUpdate(BaseModel):
     signed_amount: float | None = Field(default=None, ge=0)
     start_date: datetime | None = None
     end_date: datetime | None = None
-    status: str | None = None
     owner_user_id: UUID | None = None
     file_url: str | None = None
     extra_data: dict | None = None
-
-    @field_validator("status")
-    @classmethod
-    def _valid_status(cls, v: str | None) -> str | None:
-        if v is not None:
-            validate_contract_status(v)
-        return v
+    lines: list[ContractLineCreate] | None = None
 
     @field_validator("contract_type")
     @classmethod
@@ -792,8 +912,28 @@ class ContractOut(BaseModel):
     created_by_user_id: UUID
     created_at: datetime
     updated_at: datetime
+    lines: list[ContractLineOut] = Field(default_factory=list)
+    amount_diff: float | None = None
+    related_order_count: int = 0
+    related_order_amount: float = 0
+    days_remaining: int | None = None
 
     model_config = {"from_attributes": True}
+
+
+class ContractBatchAction(BaseModel):
+    contract_ids: list[UUID] = Field(min_length=1, max_length=100)
+    action: str = Field(pattern="^(sign|send)$")
+
+
+class ContractBatchActionResult(BaseModel):
+    succeeded: int
+    failed: int
+    errors: list[dict] = Field(default_factory=list)
+
+
+class ContractRejectBody(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
 
 
 class ContractListResponse(BaseModel):
@@ -844,6 +984,10 @@ class OrderLineOut(BaseModel):
     line_total: float
     sort_order: int
     remark: str | None
+    cost_price: float | None = None
+    cost_amount: float | None = None
+    margin_amount: float | None = None
+    margin_rate: float | None = None
 
     model_config = {"from_attributes": True}
 
@@ -898,18 +1042,10 @@ class OrderUpdate(BaseModel):
     source: str | None = None
     order_date: datetime | None = None
     amount: float | None = Field(default=None, ge=0)
-    status: str | None = None
     owner_user_id: UUID | None = None
     territory_id: UUID | None = None
     extra_data: dict | None = None
     lines: list[OrderLineCreate] | None = None
-
-    @field_validator("status")
-    @classmethod
-    def _valid_status(cls, v: str | None) -> str | None:
-        if v is not None:
-            validate_order_status(v)
-        return v
 
     @field_validator("source")
     @classmethod
@@ -943,8 +1079,23 @@ class OrderOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     lines: list[OrderLineOut] = Field(default_factory=list)
+    cost_total: float = 0
+    margin_amount: float | None = None
+    margin_rate: float | None = None
+    has_incomplete_cost: bool = False
 
     model_config = {"from_attributes": True}
+
+
+class OrderBatchAction(BaseModel):
+    order_ids: list[UUID] = Field(min_length=1, max_length=100)
+    action: str = Field(pattern="^(confirm|cancel)$")
+
+
+class OrderBatchActionResult(BaseModel):
+    succeeded: int
+    failed: int
+    errors: list[dict] = Field(default_factory=list)
 
 
 class OrderListResponse(BaseModel):
@@ -1117,6 +1268,8 @@ class PaymentOut(BaseModel):
     created_by_user_id: UUID
     created_at: datetime
     updated_at: datetime
+    # 来自关联订单（列表/详情展示用）
+    customer_id: UUID | None = None
     # 列表汇总（订单维度，可选）
     order_plan_total: float | None = None
     order_paid_total: float | None = None
@@ -1283,6 +1436,9 @@ class ContractAmendmentCreate(BaseModel):
     original_value: str | None = None
     new_value: str | None = None
     amount_delta: float | None = None
+    # term_change 可选：直接传新起止日（亦可用 new_value JSON）
+    new_start_date: datetime | None = None
+    new_end_date: datetime | None = None
 
     @field_validator("change_type")
     @classmethod
@@ -1395,14 +1551,26 @@ RESET_PERIODS = ("once", "daily", "weekly", "monthly", "yearly")
 class EntityNumberRuleOut(BaseModel):
     entity_type: str
     prefix: str
+    suffix: str = ""
     date_format: str
     seq_width: int
     reset_period: str
     enabled: bool
 
 
+class EntityNumberRuleCreate(BaseModel):
+    entity_type: str = Field(min_length=1, max_length=30)
+    prefix: str = Field(default="", max_length=10)
+    suffix: str = Field(default="", max_length=10)
+    date_format: str = Field(default="%Y%m%d", max_length=20)
+    seq_width: int = Field(default=3, ge=1, le=8)
+    reset_period: str = "daily"
+    enabled: bool = True
+
+
 class EntityNumberRuleUpdate(BaseModel):
     prefix: str | None = Field(default=None, max_length=10)
+    suffix: str | None = Field(default=None, max_length=10)
     date_format: str | None = Field(default=None, max_length=20)
     seq_width: int | None = Field(default=None, ge=1, le=8)
     reset_period: str | None = None
@@ -1450,6 +1618,7 @@ __all__ = [
     "QuoteLineOut",
     "QuoteCreate",
     "QuoteUpdate",
+    "QuoteRejectBody",
     "QuoteOut",
     "QuoteListResponse",
     "QuoteConvertToOrderOut",

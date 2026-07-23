@@ -47,8 +47,13 @@ const inputPlaceholder = computed(() => {
     v-else-if="field.field_type === 'multiselect'"
     v-model="value"
     multiple
+    filterable
+    allow-create
+    default-first-option
+    collapse-tags
+    collapse-tags-tooltip
     :disabled="readonly"
-    :placeholder="field.placeholder || '请选择'"
+    :placeholder="field.placeholder || '请选择（可多选）'"
     style="width: 100%"
   >
     <el-option v-for="opt in field.options || []" :key="opt" :label="opt" :value="opt" />

@@ -273,6 +273,7 @@ import { onShow } from '@dcloudio/uni-app'
 
 import { BASE_URL, assistantsApi, agentApi, contentApi, llmApi, wechatApi } from '@/utils/api'
 import { ensureSession } from '@/utils/session'
+import { formatDateTime } from '@/utils/datetime'
 
 const agentFallback = import.meta.env.VITE_AGENT_FALLBACK === '1'
 const useWorkflow = import.meta.env.VITE_AGENT_WORKFLOW !== '0'
@@ -306,14 +307,7 @@ const sessionPanelVisible = ref(false)
 const sessionHistory = ref([])
 
 function formatSessionTime(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const h = String(d.getHours()).padStart(2, '0')
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `${m}-${day} ${h}:${min}`
+  return formatDateTime(iso, { empty: '', withSeconds: false })
 }
 
 function mapApiMessagesToUi(apiMessages) {

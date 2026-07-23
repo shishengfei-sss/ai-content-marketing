@@ -31,6 +31,7 @@ from app.services.crm.product_catalog_service import (
 )
 from app.services.crm.product_service import (
     create_product,
+    product_to_out,
     require_product,
     soft_delete_product,
     update_product,
@@ -43,9 +44,20 @@ from app.services.crm.view_service import (
     get_view,
     resolve_view_list_columns,
 )
-from app.services.permission_service import require_permission
+from app.services.permission_service import require_any_permission, require_permission
 
 router = APIRouter(prefix="/products", tags=["crm-products"])
+
+# 报价/订单/商机选品需要读产品；写操作仍仅 crm.product.manage
+_PRODUCT_READ = require_any_permission(
+    "crm.product.manage",
+    "crm.quote.create",
+    "crm.quote.edit",
+    "crm.order.create",
+    "crm.order.edit",
+    "crm.deal.create",
+    "crm.deal.edit",
+)
 
 
 @router.get("", response_model=ProductListResponse)
@@ -59,7 +71,7 @@ def list_products(
     filters: str | None = Query(default=None, description="高级筛选 JSON"),
     sort_by: str | None = Query(default=None),
     sort_dir: str | None = Query(default=None, pattern="^(asc|desc)$"),
-    ctx: TenantContext = Depends(require_permission("crm.product.manage")),
+    ctx: TenantContext = Depends(_PRODUCT_READ),
     db: Session = Depends(get_db),
 ):
     active_view = None
@@ -95,7 +107,7 @@ def list_products(
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
     return ProductListResponse(
-        items=[ProductOut.model_validate(i) for i in items],
+        items=[product_to_out(db, i) for i in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -112,17 +124,17 @@ def post_product(
     db: Session = Depends(get_db),
 ):
     p = create_product(db, ctx, body)
-    return ProductOut.model_validate(p)
+    return product_to_out(db, p)
 
 
 @router.get("/{product_id}", response_model=ProductOut)
 def get_product_detail(
     product_id: UUID,
-    ctx: TenantContext = Depends(require_permission("crm.product.manage")),
+    ctx: TenantContext = Depends(_PRODUCT_READ),
     db: Session = Depends(get_db),
 ):
     p = require_product(db, ctx, product_id)
-    return ProductOut.model_validate(p)
+    return product_to_out(db, p)
 
 
 @router.patch("/{product_id}", response_model=ProductOut)
@@ -134,7 +146,7 @@ def patch_product(
 ):
     p = require_product(db, ctx, product_id)
     p = update_product(db, ctx, p, body)
-    return ProductOut.model_validate(p)
+    return product_to_out(db, p)
 
 
 @router.delete("/{product_id}", status_code=204)

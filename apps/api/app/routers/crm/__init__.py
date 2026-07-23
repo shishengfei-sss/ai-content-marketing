@@ -9,6 +9,7 @@ from app.routers.crm import (
     assignment_rules,
     attachments,
     campaigns,
+    campaign_channels,
     contract_templates,
     contracts,
     customer_pools,
@@ -29,8 +30,11 @@ from app.routers.crm import (
     pipelines,
     price_books,
     product_categories,
+    product_spec_models,
+    product_units,
     products,
     quotes,
+    cpq,
     sales_profiles,
     schema,
     segments,
@@ -38,7 +42,9 @@ from app.routers.crm import (
     tasks,
     team_members,
     territories,
+    tender_leads,
     views,
+    assignable_owners,
 )
 
 router = APIRouter(prefix="/crm", tags=["crm"])
@@ -52,8 +58,10 @@ router.include_router(customer_pools.router)
 router.include_router(activities.router)
 router.include_router(territories.router)
 router.include_router(sales_profiles.router)
+router.include_router(assignable_owners.router)
 router.include_router(tasks.router)
 router.include_router(campaigns.router)
+router.include_router(campaign_channels.router)
 router.include_router(segments.router)
 router.include_router(schema.router)
 router.include_router(views.router)
@@ -63,7 +71,11 @@ router.include_router(pipelines.router)
 router.include_router(deals.router)
 router.include_router(products.router)
 router.include_router(product_categories.router)
+router.include_router(product_units.router)
+router.include_router(product_spec_models.router)
 router.include_router(price_books.router)
+router.include_router(cpq.router)
+router.include_router(tender_leads.router)
 router.include_router(quotes.router)
 router.include_router(contracts.router)
 router.include_router(contract_templates.router)

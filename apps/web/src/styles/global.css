@@ -101,7 +101,11 @@ a {
 }
 
 .crm-list-filter-select {
-  width: 118px;
+  width: 128px;
+}
+
+.crm-list-filter-select--wide {
+  width: 148px;
 }
 
 .crm-list-filter-select .el-select__wrapper {

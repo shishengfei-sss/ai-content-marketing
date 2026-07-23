@@ -15,6 +15,8 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': { target: apiTarget, changeOrigin: true },
         '/storage': { target: apiTarget, changeOrigin: true },
+        // 用于核对后端是否加载了最新代码（tender_parser_version）
+        '/health': { target: apiTarget, changeOrigin: true },
       },
     },
   }

@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import TenantContext
+from app.dependencies import TenantContext, get_tenant_context
 from app.schemas import (
     MemberCreateRequest,
     MemberOut,
     MemberRoleUpdateRequest,
+    MemberResetPasswordRequest,
     MemberUpdateRequest,
     RoleCreateRequest,
     RoleOut,
@@ -20,6 +21,8 @@ from app.services.team_service import (
     create_custom_role,
     delete_custom_role,
     disable_member,
+    enable_member,
+    reset_member_password,
     list_members,
     list_roles,
     update_member,
@@ -99,7 +102,11 @@ def remove_role(
 
 
 @router.get("/members", response_model=list[MemberOut])
-def get_members(ctx: TenantContext = Depends(require_permission("team.member.view")), db: Session = Depends(get_db)):
+def get_members(
+    ctx: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+):
+    """同租户成员名册：CRM 执行人/负责人展示需要，登录租户成员均可读取。"""
     return [_member_out(m) for m in list_members(db, ctx.tenant_id)]
 
 
@@ -144,6 +151,7 @@ def patch_member(
         ctx.membership,
         membership_id,
         display_name=body.display_name,
+        phone=body.phone,
     )
     return _member_out(m)
 
@@ -155,4 +163,27 @@ def post_disable_member(
     db: Session = Depends(get_db),
 ):
     m = disable_member(db, ctx.tenant_id, ctx.membership, membership_id)
+    return _member_out(m)
+
+
+@router.post("/members/{membership_id}/enable", response_model=MemberOut)
+def post_enable_member(
+    membership_id: UUID,
+    ctx: TenantContext = Depends(require_permission("team.member.manage")),
+    db: Session = Depends(get_db),
+):
+    m = enable_member(db, ctx.tenant_id, ctx.membership, membership_id)
+    return _member_out(m)
+
+
+@router.post("/members/{membership_id}/reset-password", response_model=MemberOut)
+def post_reset_member_password(
+    membership_id: UUID,
+    body: MemberResetPasswordRequest,
+    ctx: TenantContext = Depends(require_permission("team.member.manage")),
+    db: Session = Depends(get_db),
+):
+    m = reset_member_password(
+        db, ctx.tenant_id, ctx.membership, membership_id, body.password
+    )
     return _member_out(m)

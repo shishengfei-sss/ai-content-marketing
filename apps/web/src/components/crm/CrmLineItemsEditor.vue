@@ -32,6 +32,8 @@ function emptyLine() {
       quantity: 1,
       unit_price: 0,
       discount_percent: 0,
+      tax_rate: null,
+      tax_amount: 0,
       subtotal: 0,
     }
   }
@@ -43,8 +45,14 @@ function emptyLine() {
     quantity: 1,
     unit_price: 0,
     discount_rate: null,
+    tax_rate: null,
+    tax_amount: 0,
     line_total: 0,
   }
+}
+
+function money(n) {
+  return Math.round(Number(n || 0) * 100) / 100
 }
 
 function syncFromProps() {
@@ -59,6 +67,8 @@ function syncFromProps() {
         quantity: Number(l.quantity) || 0,
         unit_price: Number(l.unit_price) || 0,
         discount_percent: Number(l.discount_percent) || 0,
+        tax_rate: l.tax_rate != null ? Number(l.tax_rate) : null,
+        tax_amount: Number(l.tax_amount || 0),
         subtotal: Number(l.subtotal) || 0,
       }
     }
@@ -70,32 +80,66 @@ function syncFromProps() {
       quantity: Number(l.quantity) || 0,
       unit_price: Number(l.unit_price) || 0,
       discount_rate: l.discount_rate != null ? Number(l.discount_rate) : null,
+      tax_rate: l.tax_rate != null ? Number(l.tax_rate) : null,
+      tax_amount: Number(l.tax_amount || 0),
       line_total: Number(l.line_total) || 0,
     }
   })
 }
 
-function recompute(line) {
-  const qty = Number(line.quantity) || 0
-  const price = Number(line.unit_price) || 0
-  if (isDeal.value) {
-    const d = Number(line.discount_percent) || 0
-    line.subtotal = Math.round(qty * price * (1 - d / 100) * 100) / 100
-  } else {
-    const d = Number(line.discount_rate) || 0
-    line.line_total = Math.round(qty * price * (1 - d / 100) * 100) / 100
+/** 镜像 tax_engine：行未税 + 税额 + ±0.01 末行尾差 */
+function recomputeTaxes(lines) {
+  const discKey = isDeal.value ? 'discount_percent' : 'discount_rate'
+  const totalKey = isDeal.value ? 'subtotal' : 'line_total'
+  lines.forEach((l) => {
+    const qty = Number(l.quantity) || 0
+    const price = Number(l.unit_price) || 0
+    const d = Number(l[discKey]) || 0
+    const ex = money(qty * price * (1 - d / 100))
+    l[totalKey] = ex
+    const rate = l.tax_rate != null && l.tax_rate !== '' ? Number(l.tax_rate) : null
+    l.tax_amount = rate != null && rate !== 0 ? money(ex * (rate / 100)) : 0
+  })
+  let exactAcc = 0
+  lines.forEach((l) => {
+    const rate = l.tax_rate != null && l.tax_rate !== '' ? Number(l.tax_rate) : null
+    if (rate != null && rate !== 0) exactAcc += Number(l[totalKey]) * (rate / 100)
+  })
+  const exact = money(exactAcc)
+  const taxSum = money(lines.reduce((a, l) => a + Number(l.tax_amount || 0), 0))
+  const delta = money(exact - taxSum)
+  if (Math.abs(delta) === 0.01 && lines.length) {
+    let idx = lines.length - 1
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      if (lines[i].tax_rate != null && Number(lines[i].tax_rate) !== 0) {
+        idx = i
+        break
+      }
+    }
+    lines[idx].tax_amount = money(Number(lines[idx].tax_amount || 0) + delta)
   }
 }
 
+function recompute() {
+  recomputeTaxes(draft.value)
+}
+
 const total = computed(() => {
-  if (isDeal.value) {
-    return Math.round(draft.value.reduce((s, l) => s + (Number(l.subtotal) || 0), 0) * 100) / 100
-  }
-  return Math.round(draft.value.reduce((s, l) => s + (Number(l.line_total) || 0), 0) * 100) / 100
+  const key = isDeal.value ? 'subtotal' : 'line_total'
+  return money(draft.value.reduce((s, l) => s + (Number(l[key]) || 0), 0))
 })
+const taxTotal = computed(() => {
+  const rows = props.editable ? draft.value : props.modelValue || []
+  return money(rows.reduce((s, l) => s + Number(l.tax_amount || 0), 0))
+})
+const inclTotal = computed(() => money(total.value + taxTotal.value))
 
 function displayName(row) {
   return isDeal.value ? row.product_name : row.name
+}
+
+function lineEx(row) {
+  return Number(isDeal.value ? row.subtotal : row.line_total) || 0
 }
 
 function openAddProducts() {
@@ -119,16 +163,24 @@ function applyProductToLine(line, product) {
     line.name = product.name || ''
   }
   line.unit = product.unit || ''
-  line.unit_price = Number(product.list_price) || 0
+  const taxRate = product.default_tax_rate != null ? Number(product.default_tax_rate) : null
+  line.tax_rate = taxRate
+  let unitPrice = Number(product.list_price) || 0
+  if (product.price_includes_tax && taxRate != null && taxRate > 0) {
+    unitPrice = money(unitPrice / (1 + taxRate / 100))
+  }
+  line.unit_price = unitPrice
   if (!line.quantity) line.quantity = 1
-  recompute(line)
 }
 
 function onProductsPicked(products) {
   if (!products?.length) return
   if (!pickerMultiple.value && replaceLineIndex.value >= 0) {
     const line = draft.value[replaceLineIndex.value]
-    if (line) applyProductToLine(line, products[0])
+    if (line) {
+      applyProductToLine(line, products[0])
+      recompute()
+    }
     return
   }
   for (const p of products) {
@@ -136,6 +188,7 @@ function onProductsPicked(products) {
     applyProductToLine(line, p)
     draft.value.push(line)
   }
+  recompute()
   ElMessage.success(`已添加 ${products.length} 个产品`)
 }
 
@@ -145,14 +198,15 @@ function addLine() {
 
 function removeLine(idx) {
   draft.value.splice(idx, 1)
+  recompute()
 }
 
 function duplicateLine(idx) {
   const src = draft.value[idx]
   if (!src) return
   const copy = { ...src, quantity: Number(src.quantity) || 1 }
-  recompute(copy)
   draft.value.splice(idx + 1, 0, copy)
+  recompute()
 }
 
 function formatAmount(v) {
@@ -166,8 +220,8 @@ function handleSave() {
       ElMessage.warning('请填写行项名称')
       return
     }
-    recompute(l)
   }
+  recompute()
   const payload = draft.value.map((l, i) => {
     if (isDeal.value) {
       return {
@@ -177,6 +231,8 @@ function handleSave() {
         quantity: Number(l.quantity) || 0,
         unit_price: Number(l.unit_price) || 0,
         discount_percent: Number(l.discount_percent) || 0,
+        tax_rate: l.tax_rate != null && l.tax_rate !== '' ? Number(l.tax_rate) : null,
+        tax_amount: Number(l.tax_amount || 0),
         subtotal: Number(l.subtotal) || 0,
         sort_order: i,
       }
@@ -188,6 +244,8 @@ function handleSave() {
       quantity: Number(l.quantity) || 0,
       unit_price: Number(l.unit_price) || 0,
       discount_rate: l.discount_rate != null ? Number(l.discount_rate) : null,
+      tax_rate: l.tax_rate != null ? Number(l.tax_rate) : null,
+      tax_amount: Number(l.tax_amount || 0),
       line_total: Number(l.line_total) || 0,
       sort_order: i,
     }
@@ -269,13 +327,13 @@ watch(
           <span v-else>{{ displayName(row) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="单位" width="80">
+      <el-table-column label="单位" width="72">
         <template #default="{ row }">
           <el-input v-if="editable" v-model="row.unit" maxlength="30" size="small" />
           <span v-else>{{ row.unit || '—' }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="数量" width="110" align="right">
+      <el-table-column label="数量" width="100" align="right">
         <template #default="{ row }">
           <el-input-number
             v-if="editable"
@@ -285,12 +343,12 @@ watch(
             :controls="false"
             size="small"
             style="width: 100%"
-            @change="recompute(row)"
+            @change="recompute"
           />
           <span v-else>{{ row.quantity }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="单价" width="120" align="right">
+      <el-table-column label="单价(未税)" width="110" align="right">
         <template #default="{ row }">
           <el-input-number
             v-if="editable"
@@ -300,12 +358,12 @@ watch(
             :controls="false"
             size="small"
             style="width: 100%"
-            @change="recompute(row)"
+            @change="recompute"
           />
           <span v-else>¥{{ formatAmount(row.unit_price) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="折扣%" width="100" align="right">
+      <el-table-column label="折扣%" width="88" align="right">
         <template #default="{ row }">
           <el-input-number
             v-if="editable"
@@ -316,7 +374,7 @@ watch(
             :controls="false"
             size="small"
             style="width: 100%"
-            @change="recompute(row)"
+            @change="recompute"
           />
           <span v-else>
             {{
@@ -327,12 +385,36 @@ watch(
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="小计" width="120" align="right">
+      <el-table-column label="税率%" width="88" align="right">
         <template #default="{ row }">
-          ¥{{ formatAmount(isDeal ? row.subtotal : row.line_total) }}
+          <el-input-number
+            v-if="editable"
+            v-model="row.tax_rate"
+            :min="0"
+            :max="100"
+            :precision="2"
+            :controls="false"
+            size="small"
+            style="width: 100%"
+            @change="recompute"
+          />
+          <span v-else>{{ row.tax_rate != null ? `${row.tax_rate}%` : '—' }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="editable" label="" width="84" align="center">
+      <el-table-column label="税额" width="100" align="right">
+        <template #default="{ row }">¥{{ formatAmount(row.tax_amount) }}</template>
+      </el-table-column>
+      <el-table-column label="未税" width="110" align="right">
+        <template #default="{ row }">
+          ¥{{ formatAmount(lineEx(row)) }}
+        </template>
+      </el-table-column>
+      <el-table-column label="含税" width="110" align="right">
+        <template #default="{ row }">
+          ¥{{ formatAmount(lineEx(row) + Number(row.tax_amount || 0)) }}
+        </template>
+      </el-table-column>
+      <el-table-column v-if="editable" label="" width="84" align="center" fixed="right">
         <template #default="{ $index }">
           <el-button link type="primary" :icon="CopyDocument" title="复制行" @click="duplicateLine($index)" />
           <el-button link type="danger" :icon="Delete" title="删除" @click="removeLine($index)" />
@@ -341,11 +423,12 @@ watch(
     </el-table>
 
     <div class="crm-line-items__total">
-      合计：<b>¥{{ formatAmount(editable ? total : (
-        (modelValue || []).reduce(
-          (s, l) => s + Number(isDeal ? l.subtotal : l.line_total || 0),
-          0,
-        )
+      未税 <b>¥{{ formatAmount(editable ? total : (
+        (modelValue || []).reduce((s, l) => s + lineEx(l), 0)
+      )) }}</b>
+      <span class="crm-line-items__tax">税额 ¥{{ formatAmount(taxTotal) }}</span>
+      价税 <b>¥{{ formatAmount(editable ? inclTotal : money(
+        (modelValue || []).reduce((s, l) => s + lineEx(l) + Number(l.tax_amount || 0), 0),
       )) }}</b>
     </div>
 
@@ -449,5 +532,10 @@ watch(
   color: var(--el-color-primary);
   font-size: 16px;
   font-variant-numeric: tabular-nums;
+}
+
+.crm-line-items__tax {
+  margin: 0 12px;
+  color: #94a3b8;
 }
 </style>

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import TenantContext
 from app.models.crm import Customer
+from app.services.crm.crm_scope_service import apply_customer_list_scope
 
 
 def calculate_lifecycle(customer: Customer, *, today: date | None = None) -> str:
@@ -25,11 +26,10 @@ def calculate_lifecycle(customer: Customer, *, today: date | None = None) -> str
 
 
 def lifecycle_report(db: Session, ctx: TenantContext) -> dict:
-    customers = (
-        db.query(Customer)
-        .filter(Customer.tenant_id == ctx.tenant_id, Customer.deleted_at.is_(None))
-        .all()
-    )
+    """客户生命周期分桶（受客户可见范围约束）。"""
+    q = db.query(Customer).filter(Customer.tenant_id == ctx.tenant_id, Customer.deleted_at.is_(None))
+    q = apply_customer_list_scope(q, ctx, db)
+    customers = q.all()
     buckets = {"潜在": 0, "新客户": 0, "活跃客户": 0, "沉睡客户": 0, "流失客户": 0}
     samples: dict[str, list[dict]] = {k: [] for k in buckets}
     today = date.today()

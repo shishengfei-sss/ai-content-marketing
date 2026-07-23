@@ -194,7 +194,8 @@ def update_member(
     operator: TenantMembership,
     membership_id: UUID,
     *,
-    display_name: str,
+    display_name: str | None = None,
+    phone: str | None = None,
 ) -> TenantMembership:
     membership = (
         db.query(TenantMembership)
@@ -205,10 +206,25 @@ def update_member(
     if not membership:
         raise HTTPException(status_code=404, detail="成员不存在")
     _assert_can_manage_target(operator, membership)
-    name = display_name.strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="姓名不能为空")
-    membership.user.display_name = name
+    if display_name is not None:
+        name = display_name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="姓名不能为空")
+        membership.user.display_name = name
+    if phone is not None:
+        phone = phone.strip()
+        from app.models import User
+
+        clash = (
+            db.query(User)
+            .filter(User.phone == phone, User.id != membership.user_id)
+            .first()
+        )
+        if clash:
+            raise HTTPException(status_code=400, detail="该手机号已被其他账号使用")
+        membership.user.phone = phone
+    if display_name is None and phone is None:
+        raise HTTPException(status_code=400, detail="无更新内容")
     db.commit()
     membership = (
         db.query(TenantMembership)
@@ -275,4 +291,51 @@ def disable_member(db: Session, tenant_id: UUID, operator: TenantMembership, mem
     membership.is_active = False
     db.commit()
     db.refresh(membership)
+    return membership
+
+
+def enable_member(db: Session, tenant_id: UUID, operator: TenantMembership, membership_id: UUID) -> TenantMembership:
+    membership = (
+        db.query(TenantMembership)
+        .options(joinedload(TenantMembership.role), joinedload(TenantMembership.user))
+        .filter(uuid_eq(TenantMembership.id, membership_id), TenantMembership.tenant_id == tenant_id)
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=404, detail="成员不存在")
+    _assert_can_manage_target(operator, membership)
+    membership.is_active = True
+    db.commit()
+    membership = (
+        db.query(TenantMembership)
+        .options(joinedload(TenantMembership.role), joinedload(TenantMembership.user))
+        .filter(uuid_eq(TenantMembership.id, membership_id), TenantMembership.tenant_id == tenant_id)
+        .first()
+    )
+    return membership
+
+
+def reset_member_password(
+    db: Session,
+    tenant_id: UUID,
+    operator: TenantMembership,
+    membership_id: UUID,
+    password: str,
+) -> TenantMembership:
+    membership = (
+        db.query(TenantMembership)
+        .options(joinedload(TenantMembership.role), joinedload(TenantMembership.user))
+        .filter(uuid_eq(TenantMembership.id, membership_id), TenantMembership.tenant_id == tenant_id)
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=404, detail="成员不存在")
+    _assert_can_manage_target(operator, membership)
+    reset_user_password(db, membership.user_id, password)
+    membership = (
+        db.query(TenantMembership)
+        .options(joinedload(TenantMembership.role), joinedload(TenantMembership.user))
+        .filter(uuid_eq(TenantMembership.id, membership_id), TenantMembership.tenant_id == tenant_id)
+        .first()
+    )
     return membership

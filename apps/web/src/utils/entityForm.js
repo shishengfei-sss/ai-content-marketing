@@ -1,3 +1,5 @@
+import { formatDate, formatDateTime } from './datetime'
+
 export const FORM_SKIP_FIELD_KEYS = new Set([
   'created_by_user_id',
   'created_at',
@@ -56,13 +58,26 @@ export const ENTITY_DB_FIELDS = {
     'source',
     'remark',
   ]),
+  product: new Set([
+    'code',
+    'name',
+    'unit',
+    'list_price',
+    'cost_price',
+    'category_id',
+    'spec_model_id',
+    'is_active',
+    'cpq_enabled',
+    'description',
+  ]),
 }
 
 const SECTION_RULES = [
   { id: 'basic', label: '基本信息', maxOrder: 45 },
   { id: 'contact', label: '联系方式', maxOrder: 89 },
   { id: 'address', label: '地址信息', maxOrder: 129 },
-  { id: 'business', label: '业务信息', maxOrder: 219 },
+  { id: 'business', label: '业务信息', maxOrder: 199 },
+  { id: 'source', label: '来源与获客', maxOrder: 219 },
   { id: 'sales', label: '销售跟进', maxOrder: 279 },
   { id: 'other', label: '其他', maxOrder: Infinity },
 ]
@@ -70,7 +85,50 @@ const SECTION_RULES = [
 export const REGION_FIELD_KEYS = new Set(['province', 'city', 'district'])
 
 export const LEAD_STATUS_OPTIONS = ['待跟进', '跟进中', '有意向', '无意向', '已转化', '无效']
+export const LEAD_SOURCE_OPTIONS = [
+  '官网',
+  '公众号',
+  '小红书',
+  '抖音',
+  '线下',
+  '转介绍',
+  '电话',
+  '导入',
+  'Webhook',
+  '营销活动',
+  '其他',
+]
+export const INTENTION_LEVEL_OPTIONS = ['高', '中', '低']
 export const CUSTOMER_STATUS_OPTIONS = ['潜在', '意向', '成交', '在服', '暂停', '流失']
+
+/** 标准纳税人类型（覆盖存量 schema 选项） */
+export const TAXPAYER_TYPE_OPTIONS = [
+  '一般纳税人',
+  '小规模纳税人',
+  '个体工商户',
+  '个人',
+  '非增值税纳税人',
+  '其他',
+]
+
+export const MAIN_BUSINESS_OPTIONS = [
+  '生产制造',
+  '批发零售',
+  '餐饮住宿',
+  '建筑装修',
+  '交通运输/物流',
+  '信息技术/软件',
+  '专业服务/咨询',
+  '教育培训',
+  '医疗健康',
+  '金融保险',
+  '房地产',
+  '进出口贸易',
+  '电子商务',
+  '文化传媒',
+  '农业',
+  '其他',
+]
 
 /** 线索表单字段布局（覆盖存量租户 schema 排序/标签） */
 const LEAD_FIELD_OVERRIDES = {
@@ -90,17 +148,21 @@ const LEAD_FIELD_OVERRIDES = {
   industry: { sort_order: 130 },
   company_scale: { sort_order: 140 },
   annual_revenue: { sort_order: 150, label: '年营业额' },
-  taxpayer_type: { sort_order: 160 },
-  main_business: { sort_order: 170 },
-  accounting_need: { sort_order: 180 },
+  taxpayer_type: { sort_order: 160, options: TAXPAYER_TYPE_OPTIONS },
+  main_business: {
+    sort_order: 170,
+    label: '主营业务',
+    field_type: 'multiselect',
+    options: MAIN_BUSINESS_OPTIONS,
+    placeholder: '可多选',
+  },
   source: { sort_order: 200 },
-  source_detail: { sort_order: 210, label: '来源说明' },
-  utm_source: { sort_order: 211, label: 'UTM Source' },
-  utm_medium: { sort_order: 212, label: 'UTM Medium' },
-  utm_campaign: { sort_order: 213, label: 'UTM Campaign' },
-  landing_url: { sort_order: 214, label: '落地页' },
-  acquisition_cost: { sort_order: 215, label: '获客成本' },
-  lead_score: { sort_order: 216, label: '线索评分' },
+  source_detail: { sort_order: 205, label: '来源说明', placeholder: '如：转介绍人姓名、活动场次' },
+  utm_source: { sort_order: 211, label: '投放来源', placeholder: '如 weixin / baidu' },
+  utm_medium: { sort_order: 212, label: '投放媒介', placeholder: '如 cpc / social' },
+  utm_campaign: { sort_order: 213, label: '投放活动', placeholder: 'utm_campaign' },
+  landing_url: { sort_order: 214, label: '落地页', placeholder: 'https://' },
+  acquisition_cost: { sort_order: 215, label: '获客成本', placeholder: '可选，单位：元' },
   status: { sort_order: 220 },
   intention_level: { sort_order: 230 },
   campaign_id: { sort_order: 240 },
@@ -108,6 +170,7 @@ const LEAD_FIELD_OVERRIDES = {
   last_follow_up_at: { sort_order: 260 },
   last_follow_up_content: { sort_order: 270 },
   remark: { sort_order: 280 },
+  territory_id: { sort_order: 285, label: '销售区域' },
 }
 
 /** 客户表单字段布局：级别/状态归入基本信息，联系方式单独分区 */
@@ -127,7 +190,7 @@ const CUSTOMER_FIELD_OVERRIDES = {
   industry: { sort_order: 130 },
   company_scale: { sort_order: 140 },
   credit_code: { sort_order: 150 },
-  taxpayer_type: { sort_order: 160 },
+  taxpayer_type: { sort_order: 160, options: TAXPAYER_TYPE_OPTIONS },
   legal_representative: { sort_order: 170 },
   registered_capital: { sort_order: 180 },
   service_type: { sort_order: 190 },
@@ -148,7 +211,8 @@ export const ENTITY_FORM_SKIP = {
     'email',
     'wechat',
   ]),
-  lead: new Set(),
+  // 代账需求下线；线索评分由规则计算，创建时不手填
+  lead: new Set(['accounting_need', 'lead_score']),
 }
 
 export function emptyContactDraft(isPrimary = false) {
@@ -167,7 +231,7 @@ export function emptyContactDraft(isPrimary = false) {
 
 /** 业务层必填（含存量租户 schema 未同步 is_required 的字段） */
 const ENTITY_REQUIRED_KEYS = {
-  lead: new Set(['company_name', 'contact_name', 'mobile', 'status']),
+  lead: new Set(['company_name', 'contact_name', 'mobile', 'status', 'territory_id']),
   customer: new Set(['company_name']),
 }
 
@@ -243,18 +307,38 @@ function defaultFieldValue(field) {
   return field.default_value ?? ''
 }
 
+function coerceMultiselect(raw) {
+  if (Array.isArray(raw)) return raw.filter((v) => v != null && String(v).trim() !== '')
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw
+      .split(/[,，、;；]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
 export function entityToFormValues(record, fields) {
   const values = {}
   for (const field of fields) {
     const key = field.field_key
     const top = record?.[key]
     const extra = record?.extra_data?.[key]
+    let raw
     if (top !== undefined && top !== null && top !== '') {
-      values[key] = Array.isArray(top) && field.field_type === 'text' ? top.join(',') : top
+      raw = top
     } else if (extra !== undefined && extra !== null && extra !== '') {
-      values[key] = Array.isArray(extra) && field.field_type === 'text' ? extra.join(',') : extra
+      raw = extra
     } else {
       values[key] = defaultFieldValue(field)
+      continue
+    }
+    if (field.field_type === 'multiselect') {
+      values[key] = coerceMultiselect(raw)
+    } else if (Array.isArray(raw) && field.field_type === 'text') {
+      values[key] = raw.join(',')
+    } else {
+      values[key] = raw
     }
   }
   return values
@@ -310,9 +394,8 @@ export function formatFieldDisplay(field, record) {
     val = record?.extra_data?.[key]
   }
   if (val === undefined || val === null || val === '') return '—'
-  if (field.field_type === 'datetime' || field.field_type === 'date') {
-    return new Date(val).toLocaleString('zh-CN')
-  }
+  if (field.field_type === 'datetime') return formatDateTime(val)
+  if (field.field_type === 'date') return formatDate(val)
   if (Array.isArray(val)) return val.join('、')
   if (field.field_type === 'checkbox') return val ? '是' : '否'
   return String(val)

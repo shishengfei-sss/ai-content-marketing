@@ -1,5 +1,6 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { crmApi } from '../../api/client'
 import { formatFieldDisplay, groupFormFields } from '../../utils/entityForm'
 
 const props = defineProps({
@@ -7,16 +8,52 @@ const props = defineProps({
   fields: { type: Array, default: () => [] },
   campaignName: { type: String, default: '' },
   ownerName: { type: String, default: '' },
+  /** 可选；不传时组件会自行拉取销售区域列表做名称解析 */
+  territoryName: { type: String, default: '' },
 })
 
+const territories = ref([])
 const sections = computed(() => groupFormFields(props.fields))
+const needsTerritory = computed(() => props.fields.some((f) => f.field_key === 'territory_id'))
+
+function normId(id) {
+  return String(id || '')
+    .replace(/-/g, '')
+    .toLowerCase()
+}
+
+function resolveTerritoryName() {
+  if (props.territoryName) return props.territoryName
+  const tid = props.record?.territory_id
+  if (!tid) return ''
+  const hit = territories.value.find((t) => normId(t.id) === normId(tid))
+  return hit?.name || ''
+}
+
+async function loadTerritories() {
+  if (!needsTerritory.value) return
+  try {
+    const { data } = await crmApi.listTerritories()
+    territories.value = Array.isArray(data) ? data : data?.items || []
+  } catch {
+    territories.value = []
+  }
+}
 
 function displayValue(field) {
   if (field.field_key === 'campaign_id' && props.campaignName) {
     return props.campaignName
   }
+  if (field.field_key === 'territory_id') {
+    return resolveTerritoryName() || formatFieldDisplay(field, props.record)
+  }
   return formatFieldDisplay(field, props.record)
 }
+
+onMounted(loadTerritories)
+watch(needsTerritory, (v) => {
+  if (v && !territories.value.length) loadTerritories()
+})
 </script>
 
 <template>

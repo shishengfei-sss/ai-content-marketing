@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { NAV_ITEMS, hasAnyPermission, hasPermission } from '../config/permissions'
+import { NAV_MENUS, hasAnyPermission, hasPermission } from '../config/permissions'
 import { useAuthStore } from '../stores/auth'
 import { usePinnedViews } from '../composables/usePinnedViews'
 import { unpinSavedView } from '../composables/useCrmSavedViews'
@@ -11,8 +11,7 @@ import CrmNotificationBell from '../components/crm/CrmNotificationBell.vue'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const { leadPinnedViews, customerPinnedViews, loadPinnedViews, pinnedForPath, viewRoute, viewIndex } =
-  usePinnedViews()
+const { loadPinnedViews, pinnedForPath, viewRoute, viewIndex } = usePinnedViews()
 
 const unpinningId = ref(null)
 
@@ -43,17 +42,32 @@ async function handleUnpinView(view) {
   }
 }
 
+function itemVisible(item, permissions) {
+  if (!item.permission && !item.permissionAny) return true
+  if (item.permissionAny) return hasAnyPermission(permissions, item.permissionAny)
+  return hasPermission(permissions, item.permission)
+}
+
 const menuItems = computed(() => {
   const p = auth.permissions
-  return NAV_ITEMS.filter((item) => {
-    if (!item.permission && !item.permissionAny) return true
-    if (item.permissionAny) return hasAnyPermission(p, item.permissionAny)
-    return hasPermission(p, item.permission)
-  })
+  return NAV_MENUS.map((menu) => {
+    if (!menu.children) {
+      return itemVisible(menu, p) ? menu : null
+    }
+    const children = menu.children.filter((item) => itemVisible(item, p))
+    if (!children.length) return null
+    return { ...menu, children }
+  }).filter(Boolean)
 })
 
 function hasPinnedChildren(item) {
   return pinnedForPath(item.path).length > 0
+}
+
+function pathMatchesItem(itemPath) {
+  if (route.path === itemPath) return true
+  if (itemPath !== '/' && route.path.startsWith(`${itemPath}/`)) return true
+  return false
 }
 
 const activeMenu = computed(() => {
@@ -64,6 +78,21 @@ const activeMenu = computed(() => {
   }
   return route.path
 })
+
+/** 当前路由所属分组/钉选子菜单默认展开 */
+const defaultOpeneds = computed(() => {
+  const open = []
+  for (const menu of menuItems.value) {
+    if (!menu.children) continue
+    const activeChild = menu.children.find((c) => pathMatchesItem(c.path))
+    if (!activeChild) continue
+    open.push(menu.key)
+    if (hasPinnedChildren(activeChild)) open.push(activeChild.path)
+  }
+  return open
+})
+
+const menuOpenKey = computed(() => defaultOpeneds.value.join('|'))
 
 const pageTitle = computed(() => route.meta.title || '工作台')
 
@@ -153,43 +182,67 @@ const avatarChar = computed(() => displayName.value.charAt(0))
 
     <div class="app-body">
       <aside class="app-sidebar">
-        <el-menu :default-active="activeMenu" router class="app-sidebar__menu">
-          <template v-for="item in menuItems" :key="item.path">
-            <el-sub-menu v-if="hasPinnedChildren(item)" :index="item.path">
-              <template #title>
-                <el-icon><component :is="item.icon" /></el-icon>
-                <span>{{ item.title }}</span>
-              </template>
-              <el-menu-item :index="item.path" :route="{ path: item.path }">
-                全部{{ item.title }}
-              </el-menu-item>
-              <el-menu-item
-                v-for="view in pinnedForPath(item.path)"
-                :key="view.id"
-                :index="viewIndex(item.path, view.id)"
-                :route="viewRoute(item.path, view.id)"
-                class="pinned-view-menu-item"
-              >
-                <span class="pinned-view-item">
-                  <span class="pinned-view-item__label">{{ view.name }}</span>
-                  <el-tooltip content="取消钉选" placement="right">
-                    <span
-                      class="pinned-view-item__unpin"
-                      role="button"
-                      tabindex="0"
-                      @click.stop.prevent="handleUnpinView(view)"
-                      @keydown.enter.prevent="handleUnpinView(view)"
-                    >
-                      <el-icon><StarFilled /></el-icon>
-                    </span>
-                  </el-tooltip>
-                </span>
-              </el-menu-item>
-            </el-sub-menu>
-            <el-menu-item v-else :index="item.path">
-              <el-icon><component :is="item.icon" /></el-icon>
-              <span>{{ item.title }}</span>
+        <el-menu
+          :key="menuOpenKey"
+          :default-active="activeMenu"
+          :default-openeds="defaultOpeneds"
+          router
+          class="app-sidebar__menu"
+        >
+          <template v-for="menu in menuItems" :key="menu.key">
+            <!-- 一级：无子项的单页入口 -->
+            <el-menu-item v-if="!menu.children" :index="menu.path">
+              <el-icon><component :is="menu.icon" /></el-icon>
+              <span>{{ menu.title }}</span>
             </el-menu-item>
+
+            <!-- 一级：业务分组 -->
+            <el-sub-menu v-else :index="menu.key">
+              <template #title>
+                <el-icon><component :is="menu.icon" /></el-icon>
+                <span>{{ menu.title }}</span>
+              </template>
+
+              <template v-for="item in menu.children" :key="item.path">
+                <!-- 二级：含钉选视图时再嵌一层 -->
+                <el-sub-menu v-if="hasPinnedChildren(item)" :index="item.path">
+                  <template #title>
+                    <el-icon><component :is="item.icon" /></el-icon>
+                    <span>{{ item.title }}</span>
+                  </template>
+                  <el-menu-item :index="item.path" :route="{ path: item.path }">
+                    全部{{ item.title }}
+                  </el-menu-item>
+                  <el-menu-item
+                    v-for="view in pinnedForPath(item.path)"
+                    :key="view.id"
+                    :index="viewIndex(item.path, view.id)"
+                    :route="viewRoute(item.path, view.id)"
+                    class="pinned-view-menu-item"
+                  >
+                    <span class="pinned-view-item">
+                      <span class="pinned-view-item__label">{{ view.name }}</span>
+                      <el-tooltip content="取消钉选" placement="right">
+                        <span
+                          class="pinned-view-item__unpin"
+                          role="button"
+                          tabindex="0"
+                          @click.stop.prevent="handleUnpinView(view)"
+                          @keydown.enter.prevent="handleUnpinView(view)"
+                        >
+                          <el-icon><StarFilled /></el-icon>
+                        </span>
+                      </el-tooltip>
+                    </span>
+                  </el-menu-item>
+                </el-sub-menu>
+
+                <el-menu-item v-else :index="item.path">
+                  <el-icon><component :is="item.icon" /></el-icon>
+                  <span>{{ item.title }}</span>
+                </el-menu-item>
+              </template>
+            </el-sub-menu>
           </template>
         </el-menu>
       </aside>
@@ -320,6 +373,15 @@ const avatarChar = computed(() => displayName.value.charAt(0))
 .app-sidebar__menu :deep(.el-menu-item.is-active) {
   background: #e6f4ff;
   color: var(--color-primary);
+}
+
+.app-sidebar__menu :deep(.el-sub-menu .el-menu-item) {
+  min-width: 0;
+  padding-left: 48px !important;
+}
+
+.app-sidebar__menu :deep(.el-sub-menu .el-sub-menu .el-menu-item) {
+  padding-left: 64px !important;
 }
 
 .pinned-view-item {

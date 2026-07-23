@@ -15,14 +15,18 @@ from app.schemas.crm_deals import (
     QuoteCreate,
     QuoteListResponse,
     QuoteOut,
+    QuoteRejectBody,
     QuoteUpdate,
 )
 from app.services.crm.crm_scope_service import apply_quote_list_scope, has_quote_list_permission
 from app.services.crm.filter_query import parse_list_filters_param
 from app.services.crm.quote_service import (
     accept_quote,
+    clone_quote,
     convert_quote_to_order,
     create_quote,
+    recall_quote,
+    reject_quote,
     require_quote,
     send_quote,
     soft_delete_quote,
@@ -50,11 +54,12 @@ def list_quotes(
     status: str | None = Query(default=None),
     customer_id: UUID | None = Query(default=None),
     deal_id: UUID | None = Query(default=None),
+    owner_id: UUID | None = Query(default=None),
     filters: str | None = Query(default=None, description="高级筛选 JSON"),
     sort_by: str | None = Query(default=None),
     sort_dir: str | None = Query(default=None, pattern="^(asc|desc)$"),
     ctx: TenantContext = Depends(
-        require_any_permission("crm.quote.list_own", "crm.quote.list_all")
+        require_any_permission("crm.quote.list_own", "crm.quote.list_team", "crm.quote.list_all")
     ),
     db: Session = Depends(get_db),
 ):
@@ -93,6 +98,8 @@ def list_quotes(
         query = query.filter(Quote.customer_id == customer_id)
     if deal_id is not None:
         query = query.filter(Quote.deal_id == deal_id)
+    if owner_id is not None:
+        query = query.filter(Quote.owner_user_id == owner_id)
 
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
@@ -161,6 +168,40 @@ def accept_quote_endpoint(
     return QuoteOut.model_validate(q)
 
 
+@router.post("/{quote_id}/reject", response_model=QuoteOut)
+def reject_quote_endpoint(
+    quote_id: UUID,
+    body: QuoteRejectBody = QuoteRejectBody(),
+    ctx: TenantContext = Depends(require_permission("crm.quote.edit")),
+    db: Session = Depends(get_db),
+):
+    q = require_quote(db, ctx, quote_id)
+    q = reject_quote(db, ctx, q, reason=body.reason)
+    return QuoteOut.model_validate(q)
+
+
+@router.post("/{quote_id}/recall", response_model=QuoteOut)
+def recall_quote_endpoint(
+    quote_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.quote.edit")),
+    db: Session = Depends(get_db),
+):
+    q = require_quote(db, ctx, quote_id)
+    q = recall_quote(db, ctx, q)
+    return QuoteOut.model_validate(q)
+
+
+@router.post("/{quote_id}/clone", response_model=QuoteOut, status_code=201)
+def clone_quote_endpoint(
+    quote_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.quote.create")),
+    db: Session = Depends(get_db),
+):
+    q = require_quote(db, ctx, quote_id)
+    cloned = clone_quote(db, ctx, q)
+    return QuoteOut.model_validate(cloned)
+
+
 @router.post("/{quote_id}/convert-to-order", response_model=QuoteConvertToOrderOut, status_code=201)
 def convert_quote_to_order_endpoint(
     quote_id: UUID,
@@ -179,4 +220,4 @@ def delete_quote_endpoint(
     db: Session = Depends(get_db),
 ):
     q = require_quote(db, ctx, quote_id)
-    soft_delete_quote(db, q)
+    soft_delete_quote(db, ctx, q)

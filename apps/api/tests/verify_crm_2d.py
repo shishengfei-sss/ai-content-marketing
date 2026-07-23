@@ -103,6 +103,7 @@ def _client_get_template(token: str, entity_type: str) -> tuple[int, str]:
         f"/api/v1/crm/import/template/{entity_type}",
 
         headers={"Authorization": f"Bearer {token}"},
+        params={"format": "csv"},
 
     )
 

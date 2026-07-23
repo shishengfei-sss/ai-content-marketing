@@ -14,9 +14,25 @@ from app.database import uuid_eq
 from app.dependencies import TenantContext
 from app.models.crm import Order, Payment, PaymentPlan
 from app.schemas.crm_deals import PaymentCreate, PaymentPlanCreate, PaymentUpdate, ReceivableItemOut, ReceivableSummaryOut
-from app.services.crm.crm_scope_service import assert_can_view_payment, assert_can_view_order, _perm_set
+from app.services.crm.crm_scope_service import (
+    assert_can_mutate_payment,
+    assert_can_view_payment,
+    assert_can_view_order,
+    _perm_set,
+)
 from app.services.crm.number_service import generate_number
 from app.services.crm.order_service import require_order
+
+# BR-PAY-01：回款（计划/实际）仅允许挂在已生效订单
+_PAYMENT_ALLOWED_ORDER_STATUSES = frozenset({"confirmed", "executing", "completed"})
+
+
+def _assert_order_allows_payment(order: Order) -> None:
+    if order.status not in _PAYMENT_ALLOWED_ORDER_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"订单状态为 {order.status}，不可登记回款（仅已确认/执行中/已完成）",
+        )
 
 
 def _generate_payment_number(db: Session, tenant_id: UUID) -> str:
@@ -177,6 +193,7 @@ def order_payment_summary(
 
 def create_plan(db: Session, ctx: TenantContext, order_id: UUID, data: PaymentPlanCreate) -> PaymentPlan:
     order = require_order(db, ctx, order_id)
+    _assert_order_allows_payment(order)
     plan = PaymentPlan(
         tenant_id=ctx.tenant_id,
         order_id=order.id,
@@ -217,6 +234,18 @@ def get_payment(db: Session, tenant_id: UUID, payment_id: UUID) -> Payment | Non
     )
 
 
+def order_customer_map(db: Session, tenant_id: UUID, order_ids: list[UUID]) -> dict[UUID, UUID | None]:
+    """批量取订单 → 客户 id。"""
+    if not order_ids:
+        return {}
+    rows = (
+        db.query(Order.id, Order.customer_id)
+        .filter(Order.tenant_id == tenant_id, Order.id.in_(order_ids), Order.deleted_at.is_(None))
+        .all()
+    )
+    return {oid: cid for oid, cid in rows}
+
+
 def require_payment(db: Session, ctx: TenantContext, payment_id: UUID) -> Payment:
     p = get_payment(db, ctx.tenant_id, payment_id)
     if not p:
@@ -226,8 +255,9 @@ def require_payment(db: Session, ctx: TenantContext, payment_id: UUID) -> Paymen
 
 
 def create_payment(db: Session, ctx: TenantContext, data: PaymentCreate) -> Payment:
-    # 校验订单可见
+    # 校验订单可见 + BR-PAY-01 状态
     order = require_order(db, ctx, data.order_id)
+    _assert_order_allows_payment(order)
     owner_user_id = ctx.user.id
     if data.owner_user_id is not None and data.owner_user_id != ctx.user.id:
         if "crm.payment.edit" not in _perm_set(ctx):
@@ -255,6 +285,10 @@ def create_payment(db: Session, ctx: TenantContext, data: PaymentCreate) -> Paym
 
 def update_payment(db: Session, ctx: TenantContext, payment: Payment, data: PaymentUpdate) -> Payment:
     perms = _perm_set(ctx)
+    mutate_keys = set(data.model_fields_set) - {"owner_user_id"}
+    if mutate_keys:
+        assert_can_mutate_payment(ctx, payment)
+
     if data.owner_user_id is not None and data.owner_user_id != payment.owner_user_id:
         if "crm.payment.edit" not in perms:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限分配负责人")
@@ -275,8 +309,11 @@ def update_payment(db: Session, ctx: TenantContext, payment: Payment, data: Paym
 
 
 def confirm_payment(db: Session, ctx: TenantContext, payment: Payment) -> Payment:
+    assert_can_mutate_payment(ctx, payment)
     if payment.status not in ("pending", "confirmed"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"回款已 {payment.status}，不可确认")
+    order = require_order(db, ctx, payment.order_id)
+    _assert_order_allows_payment(order)
     payment.status = "confirmed"
     db.commit()
     db.refresh(payment)
@@ -284,6 +321,7 @@ def confirm_payment(db: Session, ctx: TenantContext, payment: Payment) -> Paymen
 
 
 def reverse_payment(db: Session, ctx: TenantContext, payment: Payment) -> Payment:
+    assert_can_mutate_payment(ctx, payment)
     if payment.status != "confirmed":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="仅已确认回款可冲销")
     payment.status = "reversed"
@@ -292,6 +330,12 @@ def reverse_payment(db: Session, ctx: TenantContext, payment: Payment) -> Paymen
     return payment
 
 
-def soft_delete_payment(db: Session, payment: Payment) -> None:
+def soft_delete_payment(db: Session, ctx: TenantContext, payment: Payment) -> None:
+    assert_can_mutate_payment(ctx, payment)
+    if payment.status in ("confirmed", "reversed"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="已到账或已冲销的回款不可删除",
+        )
     payment.deleted_at = datetime.now(timezone.utc)
     db.commit()

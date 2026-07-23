@@ -123,6 +123,25 @@ def list_active_memberships(db: Session, user_id: UUID) -> list[TenantMembership
     return memberships
 
 
+def ensure_membership_role(db: Session, membership: TenantMembership) -> TenantRole | None:
+    """回填 membership.role。
+
+    SQLite 下 UUID 可能带/不带连字符，relationship join 在 commit/expire 后 lazy-load 常落空。
+    """
+    if membership.role is not None:
+        return membership.role
+    if membership.role_id is None:
+        return None
+    role = (
+        db.query(TenantRole)
+        .options(joinedload(TenantRole.permissions))
+        .filter(uuid_eq(TenantRole.id, membership.role_id))
+        .first()
+    )
+    membership.role = role
+    return role
+
+
 def get_membership(db: Session, user_id: UUID, tenant_id: UUID) -> TenantMembership | None:
     membership = (
         db.query(TenantMembership)
@@ -137,20 +156,60 @@ def get_membership(db: Session, user_id: UUID, tenant_id: UUID) -> TenantMembers
         )
         .first()
     )
-    if membership and membership.role is None:
-        role = (
-            db.query(TenantRole)
-            .options(joinedload(TenantRole.permissions))
-            .filter(uuid_eq(TenantRole.id, membership.role_id))
-            .first()
-        )
-        if role:
-            membership.role = role
+    if membership:
+        ensure_membership_role(db, membership)
     return membership
 
 
-def get_membership_permissions(membership: TenantMembership) -> list[str]:
-    return sorted({p.permission_code for p in membership.role.permissions})
+def get_membership_permissions(membership: TenantMembership, db: Session | None = None) -> list[str]:
+    role = membership.role
+    if role is None:
+        from sqlalchemy.orm import object_session
+
+        session = db or object_session(membership)
+        if session is not None:
+            role = ensure_membership_role(session, membership)
+    if role is None:
+        return []
+    return sorted({p.permission_code for p in role.permissions})
+
+
+def ensure_product_import_permission(db: Session, membership: TenantMembership) -> bool:
+    """存量角色有 product.manage 但缺 product.import 时补种（一次一角色）。"""
+    role = membership.role
+    codes = {p.permission_code for p in role.permissions}
+    if "crm.product.import" in codes:
+        return False
+    if "crm.product.manage" not in codes and role.code != SYSTEM_ROLE_ADMIN:
+        return False
+    row = TenantRolePermission(role_id=role.id, permission_code="crm.product.import")
+    db.add(row)
+    db.flush()
+    role.permissions.append(row)
+    db.commit()
+    return True
+
+
+def backfill_product_import_permissions(db: Session) -> int:
+    """给所有已有 crm.product.manage 的角色补 crm.product.import。"""
+    manage_role_ids = {
+        r[0]
+        for r in db.query(TenantRolePermission.role_id)
+        .filter(TenantRolePermission.permission_code == "crm.product.manage")
+        .all()
+    }
+    have_import = {
+        r[0]
+        for r in db.query(TenantRolePermission.role_id)
+        .filter(TenantRolePermission.permission_code == "crm.product.import")
+        .all()
+    }
+    missing = manage_role_ids - have_import
+    for role_id in missing:
+        db.add(TenantRolePermission(role_id=role_id, permission_code="crm.product.import"))
+    if missing:
+        db.commit()
+    return len(missing)
 
 
 def is_platform_admin(user: User) -> bool:

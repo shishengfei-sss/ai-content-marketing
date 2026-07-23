@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, isBenignEmptyError } from '../../api/client'
+import { formatDateTime } from '../../utils/datetime'
 
 const loading = ref(false)
 const tenants = ref([])
@@ -185,7 +186,7 @@ onMounted(loadTenants)
       </el-table-column>
       <el-table-column label="创建时间" min-width="170">
         <template #default="{ row }">
-          {{ new Date(row.created_at).toLocaleString('zh-CN') }}
+          {{ formatDateTime(row.created_at) }}
         </template>
       </el-table-column>
       <el-table-column label="操作" width="100" fixed="right">
@@ -232,7 +233,7 @@ onMounted(loadTenants)
         </el-table-column>
         <el-table-column label="加入时间" min-width="160">
           <template #default="{ row }">
-            {{ new Date(row.joined_at).toLocaleString('zh-CN') }}
+            {{ formatDateTime(row.joined_at) }}
           </template>
         </el-table-column>
         <el-table-column label="操作" width="180" fixed="right">

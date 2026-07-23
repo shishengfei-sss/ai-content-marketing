@@ -189,8 +189,14 @@ def step_1b_4(results: list[bool]) -> None:
         )
     )
     sales = sales_token()
-    code, _ = req("GET", "/crm/territories", token=sales)
-    results.append(check("V1b-4-2 sales不可见组织403", code == 403, str(code)))
+    code, rows = req("GET", "/crm/territories", token=sales)
+    results.append(
+        check(
+            "V1b-4-2 sales可读地区列表(表单下拉)",
+            code == 200 and isinstance(rows, list),
+            str(code),
+        )
+    )
 
 
 def step_1b_5(results: list[bool]) -> None:

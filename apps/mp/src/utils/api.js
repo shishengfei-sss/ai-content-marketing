@@ -177,8 +177,20 @@ export const crmApi = {
   getLead: (id) => request({ url: `/api/v1/crm/leads/${id}` }),
   createLead: (data) => request({ url: '/api/v1/crm/leads', method: 'POST', data }),
   updateLead: (id, data) => request({ url: `/api/v1/crm/leads/${id}`, method: 'PATCH', data }),
+  deleteLead: (id) => request({ url: `/api/v1/crm/leads/${id}`, method: 'DELETE' }),
+  reclaimLeadToPool: (id, body) =>
+    request({ url: `/api/v1/crm/leads/${id}/reclaim-to-pool`, method: 'POST', data: body }),
+  listTerritories: () => request({ url: '/api/v1/crm/territories', method: 'GET' }),
+  listSalesProfiles: () => request({ url: '/api/v1/crm/sales-profiles', method: 'GET' }),
   convertLead: (id, data = {}) =>
     request({ url: `/api/v1/crm/leads/${id}/convert`, method: 'POST', data }),
+  recalculateLeadScore: (id) =>
+    request({ url: `/api/v1/crm/leads/${id}/recalculate-score`, method: 'POST' }),
+  listLeadPools: () => request({ url: '/api/v1/crm/lead-pools', method: 'GET' }),
+  listLeadPoolLeads: (poolId) =>
+    request({ url: `/api/v1/crm/lead-pools/${poolId}/leads`, method: 'GET' }),
+  claimLeadFromPool: (poolId, leadId) =>
+    request({ url: `/api/v1/crm/lead-pools/${poolId}/claim`, method: 'POST', data: { lead_id: leadId } }),
   listNotifications: (params) =>
     request({ url: '/api/v1/crm/notifications', method: 'GET', data: params }),
   unreadNotificationCount: () =>
@@ -200,6 +212,8 @@ export const crmApi = {
       method: 'GET',
     }),
   updateCustomer: (id, data) => request({ url: `/api/v1/crm/customers/${id}`, method: 'PATCH', data }),
+  listAssignableOwners: (params) =>
+    request({ url: `/api/v1/crm/assignable-owners${buildCrmQuery(params)}`, method: 'GET' }),
   listViews: (entityType) => request({ url: `/api/v1/crm/views?entity_type=${entityType}` }),
   listCampaigns: (params) => request({ url: `/api/v1/crm/campaigns${buildCrmQuery(params)}` }),
   getCampaign: (id) => request({ url: `/api/v1/crm/campaigns/${id}` }),
@@ -218,6 +232,7 @@ export const crmApi = {
   },
   listDeals: (params) => request({ url: `/api/v1/crm/deals${buildCrmQuery(params)}` }),
   getDeal: (id) => request({ url: `/api/v1/crm/deals/${id}` }),
+  updateDeal: (id, data) => request({ url: `/api/v1/crm/deals/${id}`, method: 'PATCH', data }),
   changeDealStage: (id, data) => request({ url: `/api/v1/crm/deals/${id}/stage`, method: 'POST', data }),
   listDealActivities: (id) => request({ url: `/api/v1/crm/deals/${id}/activities` }),
   createDealActivity: (id, data) => request({ url: `/api/v1/crm/deals/${id}/activities`, method: 'POST', data }),
@@ -228,10 +243,25 @@ export const crmApi = {
   submitOrder: (id) => request({ url: `/api/v1/crm/orders/${id}/submit`, method: 'POST' }),
   approveOrder: (id) => request({ url: `/api/v1/crm/orders/${id}/approve`, method: 'POST' }),
   rejectOrder: (id, data) => request({ url: `/api/v1/crm/orders/${id}/reject`, method: 'POST', data }),
+  withdrawOrder: (id) => request({ url: `/api/v1/crm/orders/${id}/withdraw`, method: 'POST' }),
+  completeOrder: (id) => request({ url: `/api/v1/crm/orders/${id}/complete`, method: 'POST' }),
   cancelOrder: (id) => request({ url: `/api/v1/crm/orders/${id}/cancel`, method: 'POST' }),
+  cloneOrder: (id, params = {}) => {
+    const q = buildCrmQuery(params)
+    return request({ url: `/api/v1/crm/orders/${id}/clone${q}`, method: 'POST' })
+  },
   listQuotes: (params) => request({ url: `/api/v1/crm/quotes${buildCrmQuery(params)}` }),
   listContracts: (params) => request({ url: `/api/v1/crm/contracts${buildCrmQuery(params)}` }),
   getContract: (id) => request({ url: `/api/v1/crm/contracts/${id}` }),
+  sendContract: (id) => request({ url: `/api/v1/crm/contracts/${id}/send`, method: 'POST' }),
+  submitContract: (id) => request({ url: `/api/v1/crm/contracts/${id}/submit`, method: 'POST' }),
+  approveContract: (id) => request({ url: `/api/v1/crm/contracts/${id}/approve`, method: 'POST' }),
+  rejectContract: (id, data) => request({ url: `/api/v1/crm/contracts/${id}/reject`, method: 'POST', data }),
+  withdrawContract: (id) => request({ url: `/api/v1/crm/contracts/${id}/withdraw`, method: 'POST' }),
+  signContract: (id, data) => request({ url: `/api/v1/crm/contracts/${id}/sign`, method: 'POST', data }),
+  activateContract: (id) => request({ url: `/api/v1/crm/contracts/${id}/activate`, method: 'POST' }),
+  terminateContract: (id) => request({ url: `/api/v1/crm/contracts/${id}/terminate`, method: 'POST' }),
+  cloneContract: (id) => request({ url: `/api/v1/crm/contracts/${id}/clone`, method: 'POST' }),
   listPayments: (params) => request({ url: `/api/v1/crm/payments${buildCrmQuery(params)}` }),
   getPayment: (id) => request({ url: `/api/v1/crm/payments/${id}` }),
   createPayment: (data) => request({ url: '/api/v1/crm/payments', method: 'POST', data }),

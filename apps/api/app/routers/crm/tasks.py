@@ -142,4 +142,4 @@ def delete_task(
     db: Session = Depends(get_db),
 ):
     task = require_task(db, ctx, task_id)
-    soft_delete_task(db, task)
+    soft_delete_task(db, ctx, task)

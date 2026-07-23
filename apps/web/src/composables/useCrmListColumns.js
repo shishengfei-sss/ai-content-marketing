@@ -1,6 +1,13 @@
 import { computed } from 'vue'
 
-const LEFT_FIXED_KEYS = new Set(['company_name'])
+const LEFT_FIXED_KEYS = new Set([
+  'company_name',
+  'lead_number',
+  'order_number',
+  'quote_number',
+  'contract_number',
+  'payment_number',
+])
 const RIGHT_FIXED_KEYS = new Set(['owner_user_id'])
 
 /** 将动态列拆为左冻结 / 滚动 / 右冻结，供 el-table 使用。 */

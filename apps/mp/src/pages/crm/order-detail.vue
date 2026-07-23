@@ -5,6 +5,7 @@ import { crmApi, teamApi } from '@/utils/api'
 import { ensureSession } from '@/utils/session'
 import { hasPermission } from '@/utils/permissions'
 import { ORDER_STATUS_LABEL, formatMoney } from '@/utils/crmConstants'
+import { formatDate } from '@/utils/datetime'
 
 const orderId = ref('')
 const loading = ref(false)
@@ -74,7 +75,28 @@ function handleConfirm() {
   runAction(() => crmApi.confirmOrder(order.value.id), '已确认')
 }
 function handleSubmit() {
-  runAction(() => crmApi.submitOrder(order.value.id), '已提交')
+  runAction(async () => {
+    const data = await crmApi.submitOrder(order.value.id)
+    return data
+  }, '已提交')
+}
+function handleWithdraw() {
+  uni.showModal({
+    title: '撤回审批',
+    content: '确定撤回？订单将回到草稿。',
+    success: (res) => {
+      if (res.confirm) runAction(() => crmApi.withdrawOrder(order.value.id), '已撤回')
+    },
+  })
+}
+function handleComplete() {
+  uni.showModal({
+    title: '完成订单',
+    content: '确定标记为已完成？',
+    success: (res) => {
+      if (res.confirm) runAction(() => crmApi.completeOrder(order.value.id), '已完成')
+    },
+  })
 }
 function handleApprove() {
   runAction(() => crmApi.approveOrder(order.value.id), '已通过')
@@ -118,6 +140,19 @@ onLoad((query) => {
         </view>
         <view class="amount">{{ formatMoney(order.amount) }}</view>
         <text class="sub">{{ order.order_number }}</text>
+        <view class="kpi-row">
+          <view class="kpi-item">
+            <text class="kpi-item__label">成本</text>
+            <text class="kpi-item__val">{{ formatMoney(order.cost_total || 0) }}</text>
+          </view>
+          <view class="kpi-item">
+            <text class="kpi-item__label">毛利</text>
+            <text class="kpi-item__val">
+              {{ order.margin_amount != null ? formatMoney(order.margin_amount) : '—' }}
+              <text v-if="order.margin_rate != null" class="kpi-item__rate">{{ order.margin_rate }}%</text>
+            </text>
+          </view>
+        </view>
       </view>
 
       <view class="actions">
@@ -127,14 +162,14 @@ onLoad((query) => {
           hover-class="none"
           :disabled="acting"
           @tap="handleSubmit"
-        >提交审批</button>
+        >提交</button>
         <button
-          v-if="canPlace() && order.status === 'draft'"
-          class="act act--ok"
+          v-if="canPlace() && order.status === 'pending_approval'"
+          class="act"
           hover-class="none"
           :disabled="acting"
-          @tap="handleConfirm"
-        >直接确认</button>
+          @tap="handleWithdraw"
+        >撤回</button>
         <button
           v-if="canApprove() && order.status === 'pending_approval'"
           class="act act--ok"
@@ -150,7 +185,14 @@ onLoad((query) => {
           @tap="rejectVisible = true"
         >驳回</button>
         <button
-          v-if="canEdit() && order.status !== 'cancelled' && order.status !== 'completed'"
+          v-if="canEdit() && (order.status === 'confirmed' || order.status === 'executing')"
+          class="act act--ok"
+          hover-class="none"
+          :disabled="acting"
+          @tap="handleComplete"
+        >完成</button>
+        <button
+          v-if="canEdit() && ['pending_approval', 'approved', 'confirmed', 'executing'].includes(order.status)"
           class="act"
           hover-class="none"
           :disabled="acting"
@@ -165,7 +207,7 @@ onLoad((query) => {
           <text class="desc-label">来源</text><text class="desc-value">{{ SOURCE_LABEL[order.source] || order.source || '—' }}</text>
           <text class="desc-label">负责人</text><text class="desc-value">{{ ownerLabel }}</text>
           <text class="desc-label">下单日期</text>
-          <text class="desc-value">{{ order.order_date ? new Date(order.order_date).toLocaleDateString('zh-CN') : '—' }}</text>
+          <text class="desc-value">{{ formatDate(order.order_date) }}</text>
         </view>
       </view>
 
@@ -214,6 +256,11 @@ onLoad((query) => {
 }
 .amount { display: block; margin-top: 12px; font-size: 24px; font-weight: 700; color: #1677ff; }
 .sub { display: block; margin-top: 4px; font-size: 13px; color: #94a3b8; }
+.kpi-row { display: flex; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f1f5f9; }
+.kpi-item { flex: 1; }
+.kpi-item__label { display: block; font-size: 11px; color: #94a3b8; }
+.kpi-item__val { display: block; margin-top: 4px; font-size: 14px; font-weight: 600; color: #334155; }
+.kpi-item__rate { margin-left: 4px; font-size: 11px; font-weight: 500; color: #94a3b8; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .act {
   margin: 0; font-size: 13px; padding: 0 14px; height: 34px; line-height: 34px;

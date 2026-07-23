@@ -2,14 +2,22 @@ from uuid import UUID
 
 import logging
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user, require_active_tenant_id
 from app.models import KnowledgeDocument, User
-from app.schemas import KnowledgeDocumentOut, KnowledgeUploadTextRequest
+from app.schemas import (
+    KnowledgeDocumentDetailOut,
+    KnowledgeDocumentListResponse,
+    KnowledgeDocumentOut,
+    KnowledgeDocumentUpdateRequest,
+    KnowledgeUploadTextRequest,
+)
 from app.services.assistant_service import MARKETING_ADVISOR_CODE, normalize_advisor_code
+from app.services.document_text_extract import extract_text_from_bytes
 from app.services.knowledge_service import index_document, search_knowledge_scored
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -27,6 +35,20 @@ def _doc_out(doc: KnowledgeDocument) -> KnowledgeDocumentOut:
         status=doc.status,
         chunk_count=doc.chunk_count,
         created_at=doc.created_at,
+    )
+
+
+def _doc_detail(doc: KnowledgeDocument) -> KnowledgeDocumentDetailOut:
+    return KnowledgeDocumentDetailOut(
+        id=doc.id,
+        title=doc.title,
+        file_name=doc.file_name,
+        scope=doc.scope,
+        industry_code=doc.industry_code or "",
+        status=doc.status,
+        chunk_count=doc.chunk_count,
+        created_at=doc.created_at,
+        raw_text=doc.raw_text or "",
     )
 
 
@@ -50,22 +72,89 @@ def _safe_index(db: Session, doc: KnowledgeDocument) -> None:
         raise HTTPException(status_code=500, detail=detail) from exc
 
 
-@router.get("/documents", response_model=list[KnowledgeDocumentOut])
+def _get_tenant_doc(db: Session, tenant_id: UUID, document_id: UUID) -> KnowledgeDocument:
+    doc = (
+        db.query(KnowledgeDocument)
+        .filter(
+            KnowledgeDocument.id == document_id,
+            KnowledgeDocument.tenant_id == tenant_id,
+            KnowledgeDocument.scope == "tenant",
+        )
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    return doc
+
+
+@router.get("/documents", response_model=KnowledgeDocumentListResponse)
 def list_documents(
+    q: str | None = Query(default=None, description="按标题/文件名搜索"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     tenant_id: UUID = Depends(require_active_tenant_id),
     db: Session = Depends(get_db),
 ):
-    docs = (
-        db.query(KnowledgeDocument)
-        .filter(
-            KnowledgeDocument.scope == "tenant",
-            KnowledgeDocument.tenant_id == tenant_id,
+    query = db.query(KnowledgeDocument).filter(
+        KnowledgeDocument.scope == "tenant",
+        KnowledgeDocument.tenant_id == tenant_id,
+    )
+    keyword = (q or "").strip()
+    if keyword:
+        like = f"%{keyword}%"
+        query = query.filter(
+            or_(
+                KnowledgeDocument.title.ilike(like),
+                KnowledgeDocument.file_name.ilike(like),
+            )
         )
-        .order_by(KnowledgeDocument.created_at.desc())
+    total = query.count()
+    docs = (
+        query.order_by(KnowledgeDocument.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
         .all()
     )
-    return [_doc_out(d) for d in docs]
+    return KnowledgeDocumentListResponse(
+        items=[_doc_out(d) for d in docs],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/documents/{document_id}", response_model=KnowledgeDocumentDetailOut)
+def get_document(
+    document_id: UUID,
+    current_user: User = Depends(get_current_user),
+    tenant_id: UUID = Depends(require_active_tenant_id),
+    db: Session = Depends(get_db),
+):
+    return _doc_detail(_get_tenant_doc(db, tenant_id, document_id))
+
+
+@router.patch("/documents/{document_id}", response_model=KnowledgeDocumentOut)
+def update_document(
+    document_id: UUID,
+    body: KnowledgeDocumentUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: UUID = Depends(require_active_tenant_id),
+    db: Session = Depends(get_db),
+):
+    doc = _get_tenant_doc(db, tenant_id, document_id)
+    need_reindex = False
+    if body.title is not None:
+        doc.title = body.title.strip()
+    if body.text is not None:
+        doc.raw_text = body.text
+        doc.status = "parsing"
+        need_reindex = True
+    db.commit()
+    db.refresh(doc)
+    if need_reindex:
+        _safe_index(db, doc)
+    return _doc_out(doc)
 
 
 @router.post("/documents/text", response_model=KnowledgeDocumentOut)
@@ -100,15 +189,18 @@ async def upload_file(
     tenant_id: UUID = Depends(require_active_tenant_id),
     db: Session = Depends(get_db),
 ):
-    raw = (await file.read()).decode("utf-8", errors="ignore")
-    if len(raw.strip()) < 10:
-        raise HTTPException(status_code=400, detail="文件内容过短或无法解析为文本")
+    data = await file.read()
+    filename = file.filename or f"{title}.txt"
+    try:
+        raw = extract_text_from_bytes(filename, data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     doc = KnowledgeDocument(
         tenant_id=tenant_id,
         industry_code=_resolve_industry_code(industry_code),
         scope="tenant",
         title=title,
-        file_name=file.filename or f"{title}.txt",
+        file_name=filename,
         raw_text=raw,
         status="parsing",
     )
@@ -165,17 +257,7 @@ def delete_document(
     tenant_id: UUID = Depends(require_active_tenant_id),
     db: Session = Depends(get_db),
 ):
-    doc = (
-        db.query(KnowledgeDocument)
-        .filter(
-            KnowledgeDocument.id == document_id,
-            KnowledgeDocument.tenant_id == tenant_id,
-            KnowledgeDocument.scope == "tenant",
-        )
-        .first()
-    )
-    if not doc:
-        raise HTTPException(status_code=404, detail="文档不存在")
+    doc = _get_tenant_doc(db, tenant_id, document_id)
     db.delete(doc)
     db.commit()
     return {"ok": True}

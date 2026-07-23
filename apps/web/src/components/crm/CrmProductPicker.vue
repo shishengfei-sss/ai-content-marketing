@@ -68,6 +68,8 @@ async function loadProducts() {
       code: p.code,
       unit: p.unit || '',
       list_price: Number(p.list_price || 0),
+      default_tax_rate: p.default_tax_rate != null ? Number(p.default_tax_rate) : null,
+      price_includes_tax: !!p.price_includes_tax,
       category_id: p.category_id || null,
     }))
     total.value = data.total || 0

@@ -9,6 +9,7 @@ const saving = ref(false)
 const rules = ref([])
 const dialogVisible = ref(false)
 const editingId = ref(null)
+const territories = ref([])
 const { members, loadMembers } = useTeamMembers()
 
 const form = ref({
@@ -26,6 +27,15 @@ const ASSIGN_LABELS = {
   fixed_user: '指定用户',
   round_robin: '轮询',
   load_balanced: '负载均衡',
+  lead_creator: '线索创建人',
+}
+
+const FIELD_LABELS = {
+  source: '来源 source',
+  company_name: '公司名',
+  lead_score: '线索评分',
+  status: '状态',
+  territory_id: '销售区域',
 }
 
 function resetForm() {
@@ -51,6 +61,15 @@ async function load() {
     ElMessage.error(e.message || '加载分配规则失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadTerritories() {
+  try {
+    const { data } = await crmApi.listTerritories()
+    territories.value = Array.isArray(data) ? data : data?.items || []
+  } catch {
+    territories.value = []
   }
 }
 
@@ -81,10 +100,37 @@ function memberName(id) {
   return m?.display_name || m?.phone || String(id).slice(0, 8)
 }
 
+function territoryName(id) {
+  if (!id) return '—'
+  const t = territories.value.find((x) => x.id === id)
+  return t?.name || String(id).slice(0, 8)
+}
+
 function conditionText(row) {
   const c = row.condition_json || {}
   if (!c.field) return '—'
-  return `${c.field} ${c.operator || c.op || ''} ${c.value ?? ''}`
+  const fieldLabel = FIELD_LABELS[c.field] || c.field
+  const op = c.operator || c.op || ''
+  let val = c.value ?? ''
+  if (c.field === 'territory_id' && val) {
+    val = territoryName(val)
+  }
+  return `${fieldLabel} ${op} ${val}`
+}
+
+function onFieldChange() {
+  form.value.value = ''
+  if (form.value.field === 'territory_id') {
+    form.value.operator = 'equals'
+  } else if (form.value.operator === 'equals' && form.value.field === 'source') {
+    form.value.operator = 'contains'
+  }
+}
+
+function onAssignTypeChange() {
+  if (form.value.assign_type !== 'fixed_user') {
+    form.value.target_id = ''
+  }
 }
 
 async function save() {
@@ -94,6 +140,10 @@ async function save() {
   }
   if (form.value.assign_type === 'fixed_user' && !form.value.target_id) {
     ElMessage.warning('请选择指派用户')
+    return
+  }
+  if (form.value.field === 'territory_id' && !form.value.value) {
+    ElMessage.warning('请选择销售区域')
     return
   }
   saving.value = true
@@ -106,7 +156,7 @@ async function save() {
         value: form.value.value,
       },
       assign_type: form.value.assign_type,
-      target_id: form.value.target_id || null,
+      target_id: form.value.assign_type === 'fixed_user' ? form.value.target_id || null : null,
       priority: Number(form.value.priority) || 0,
       is_active: form.value.is_active,
     }
@@ -147,7 +197,7 @@ async function toggleActive(row) {
 }
 
 onMounted(async () => {
-  await loadMembers()
+  await Promise.all([loadMembers(), loadTerritories()])
   await load()
 })
 </script>
@@ -171,7 +221,13 @@ onMounted(async () => {
         <template #default="{ row }">{{ ASSIGN_LABELS[row.assign_type] || row.assign_type }}</template>
       </el-table-column>
       <el-table-column label="目标用户" width="120">
-        <template #default="{ row }">{{ memberName(row.target_id) }}</template>
+        <template #default="{ row }">
+          {{
+            row.assign_type === 'lead_creator'
+              ? '线索创建人'
+              : memberName(row.target_id)
+          }}
+        </template>
       </el-table-column>
       <el-table-column prop="priority" label="优先级" width="80" align="right" />
       <el-table-column label="启用" width="80" align="center">
@@ -198,11 +254,12 @@ onMounted(async () => {
           <el-input v-model="form.name" maxlength="100" />
         </el-form-item>
         <el-form-item label="条件字段">
-          <el-select v-model="form.field" style="width: 100%">
+          <el-select v-model="form.field" style="width: 100%" @change="onFieldChange">
             <el-option value="source" label="来源 source" />
             <el-option value="company_name" label="公司名" />
             <el-option value="lead_score" label="线索评分" />
             <el-option value="status" label="状态" />
+            <el-option value="territory_id" label="销售区域" />
           </el-select>
         </el-form-item>
         <el-form-item label="运算符">
@@ -215,15 +272,41 @@ onMounted(async () => {
             <el-option value="lte" label="小于等于" />
           </el-select>
         </el-form-item>
-        <el-form-item label="条件值">
-          <el-input v-model="form.value" placeholder="空字符串 + 包含 ≈ 全匹配" />
+        <el-form-item label="条件值" :required="form.field === 'territory_id'">
+          <el-select
+            v-if="form.field === 'territory_id'"
+            v-model="form.value"
+            filterable
+            clearable
+            style="width: 100%"
+            placeholder="选择销售区域"
+          >
+            <el-option
+              v-for="t in territories"
+              :key="t.id"
+              :label="t.name"
+              :value="t.id"
+            />
+          </el-select>
+          <el-input
+            v-else
+            v-model="form.value"
+            placeholder="空字符串 + 包含 ≈ 全匹配"
+          />
         </el-form-item>
         <el-form-item label="指派方式">
-          <el-select v-model="form.assign_type" style="width: 100%">
+          <el-select v-model="form.assign_type" style="width: 100%" @change="onAssignTypeChange">
             <el-option value="fixed_user" label="指定用户" />
             <el-option value="round_robin" label="轮询" />
             <el-option value="load_balanced" label="负载均衡" />
+            <el-option value="lead_creator" label="线索创建人" />
           </el-select>
+          <div
+            v-if="form.assign_type === 'round_robin' || form.assign_type === 'load_balanced'"
+            class="form-hint"
+          >
+            在「销售组织」中主地区匹配该条件销售区域的成员之间轮询；无人则尝试下一条规则
+          </div>
         </el-form-item>
         <el-form-item v-if="form.assign_type === 'fixed_user'" label="指派用户" required>
           <el-select v-model="form.target_id" filterable clearable style="width: 100%" placeholder="选择成员">
@@ -265,5 +348,11 @@ onMounted(async () => {
   margin: 4px 0 0;
   color: var(--el-text-color-secondary);
   font-size: 13px;
+}
+.form-hint {
+  margin-top: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.4;
 }
 </style>

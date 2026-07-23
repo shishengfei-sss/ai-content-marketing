@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { crmApi } from '../../api/client'
+import { useAuthStore } from '../../stores/auth'
 import { useTeamMembers } from '../../composables/useTeamMembers'
 
 const props = defineProps({
@@ -10,7 +11,17 @@ const props = defineProps({
   canEdit: { type: Boolean, default: false },
 })
 const emit = defineEmits(['changed', 'go-detail'])
+const auth = useAuthStore()
 const { resolveMemberName, loadMembers } = useTeamMembers()
+
+function sameUserId(a, b) {
+  if (a == null || b == null) return false
+  return String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
+}
+
+function canMutateDeal(deal) {
+  return props.canEdit && sameUserId(deal?.owner_user_id, auth.user?.id)
+}
 
 const loading = ref(false)
 const deals = ref([])
@@ -54,9 +65,19 @@ const totalCountByStage = computed(() => {
 async function loadDeals() {
   loading.value = true
   try {
-    const params = { page: 1, page_size: 9999 }
-    const { data } = await crmApi.listDeals(params)
-    deals.value = (data.items || []).filter((d) => d.status === 'open' || d.status === 'in_progress')
+    const pageSize = 500
+    const all = []
+    let page = 1
+    let total = Infinity
+    while (all.length < total) {
+      const { data } = await crmApi.listDeals({ page, page_size: pageSize })
+      const items = data.items || []
+      total = Number(data.total ?? items.length)
+      all.push(...items)
+      if (!items.length || items.length < pageSize) break
+      page += 1
+    }
+    deals.value = all.filter((d) => d.status === 'open' || d.status === 'in_progress')
   } catch (e) {
     ElMessage.error(e.message || '加载商机失败')
   } finally {
@@ -69,7 +90,7 @@ function formatAmount(v) {
 }
 
 function onDragStart(e, deal, stageId) {
-  if (!props.canEdit) { e.preventDefault(); return }
+  if (!canMutateDeal(deal)) { e.preventDefault(); return }
   dragDealId.value = deal.id
   dragFromStageId.value = stageId
   e.dataTransfer.effectAllowed = 'move'
@@ -91,6 +112,10 @@ async function onDrop(e, targetStageId) {
   if (!props.canEdit) { ElMessage.warning('无编辑权限'); return }
   const deal = deals.value.find((d) => String(d.id) === String(dealId))
   if (!deal) return
+  if (!canMutateDeal(deal)) {
+    ElMessage.warning('仅商机负责人可编辑这些操作')
+    return
+  }
   if (String(deal.stage_id) === String(targetStageId)) return
   try {
     await crmApi.changeDealStage(deal.id, { stage_id: targetStageId })
@@ -183,7 +208,7 @@ defineExpose({ reload: loadDeals })
             :key="deal.id"
             class="deal-kanban__card"
             :class="{ 'deal-kanban__card--overdue': isOverdue(deal, stage), 'deal-kanban__card--warn': isNearTimeout(deal, stage) }"
-            :draggable="canEdit"
+            :draggable="canMutateDeal(deal)"
             @dragstart="onDragStart($event, deal, stage.id)"
             @dragend="onDragEnd"
             @click="goDetail(deal)"

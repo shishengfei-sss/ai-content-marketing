@@ -117,9 +117,23 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
+    from app.services.login_guard import clear_failures, is_locked, record_failure
+
+    if is_locked(body.phone):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="登录过于频繁，账号已临时锁定，请稍后重试或使用验证码登录",
+        )
     user = authenticate_user(db, body.phone, body.password)
     if not user:
+        locked, _ = record_failure(body.phone)
+        if locked:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="登录失败次数过多，账号已临时锁定，请稍后重试",
+            )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="手机号或密码错误")
+    clear_failures(body.phone)
     return _token_for_user(db, user)
 
 

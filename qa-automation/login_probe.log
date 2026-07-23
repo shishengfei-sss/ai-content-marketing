@@ -1,0 +1,17 @@
+[12:36:34] web_base = http://127.0.0.1:5174
+[12:36:35] launching browser...
+[12:36:35] browser launched
+[12:36:35] register -> err=None phone=13949953681 token?True
+[12:36:35] goto /login
+[12:36:36] login page loaded; title=登录 url=http://127.0.0.1:5174/login#/
+[12:36:36] filling phone via input[type=number]
+[12:36:36] filling password via input[type=password]
+[12:36:36] clicking 登录 (text div)
+[12:36:36] clicked; waiting 6s for redirect
+[12:36:42] after login url=http://127.0.0.1:5174/login#/pages/index/index
+[12:36:42] localStorage keys = ['ai_marketing_user', 'ai_marketing_token']
+[12:36:42] localStorage['token'] present? False (len=0)
+[12:36:42] navigating to /crm/leads
+[12:36:46] /crm/leads url=http://127.0.0.1:5174/crm/leads#/
+[12:36:46] /crm/leads bodylen=80 has_线索=False
+[12:36:46] DONE

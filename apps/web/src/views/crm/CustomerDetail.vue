@@ -15,12 +15,18 @@ import CrmEntityFieldsView from '../../components/crm/CrmEntityFieldsView.vue'
 import CrmEntityFormDialog from '../../components/crm/CrmEntityFormDialog.vue'
 import CrmEntityTasks from '../../components/crm/CrmEntityTasks.vue'
 import { isActiveTaskStatus } from '../../utils/taskMeta'
+import { validateLeadMobile } from '../../utils/entityForm'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const { fields, loadSchema } = useEntitySchema('customer')
 const { loadMembers, resolveMemberName } = useTeamMembers()
+
+const listPath = computed(() =>
+  route.query.from === 'customer-pools' ? '/crm/customer-pools' : '/crm/customers',
+)
+const listLabel = computed(() => (route.query.from === 'customer-pools' ? '客户公海' : '客户'))
 
 const loading = ref(false)
 const activeTab = ref('profile')
@@ -49,6 +55,10 @@ const bizLookup = ref(null)
 const bizLoading = ref(false)
 const assignVisible = ref(false)
 const editVisible = ref(false)
+const reclaimVisible = ref(false)
+const reclaimSaving = ref(false)
+const reclaimPools = ref([])
+const reclaimPoolId = ref('')
 const attachments = ref([])
 const uploading = ref(false)
 const relatedDeals = ref([])
@@ -64,6 +74,19 @@ const formFields = computed(() => getFormFields(fields.value, 'customer'))
 const canWriteActivity = () => hasPermission(auth.permissions, 'crm.activity.create')
 const canEdit = () => hasPermission(auth.permissions, 'crm.customer.edit')
 const canAssign = () => hasPermission(auth.permissions, 'crm.customer.assign')
+const isCustomerOwner = () => {
+  const a = customer.value?.owner_user_id
+  const b = auth.user?.id
+  return (
+    !!a &&
+    !!b &&
+    String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
+  )
+}
+/** 编辑 / 退回公海等：权限 + 负责人 */
+const canMutateCustomer = () => canEdit() && isCustomerOwner()
+/** 写跟进：需跟进权限且为负责人（无负责人/公海不可写） */
+const canWriteCustomerActivity = () => canWriteActivity() && isCustomerOwner()
 const isTenantAdmin = () => auth.user?.active_tenant?.role_code === 'admin'
 
 const heroAvatar = computed(() => (customer.value?.company_name || '客').slice(0, 1))
@@ -217,6 +240,10 @@ async function removeAttachment(att) {
 }
 
 async function submitActivity() {
+  if (!canWriteCustomerActivity()) {
+    ElMessage.warning('仅负责人可写跟进')
+    return
+  }
   if (!activityForm.value.content.trim()) {
     ElMessage.warning('请填写跟进内容')
     return
@@ -289,11 +316,16 @@ async function submitContact() {
     ElMessage.warning('请填写联系人姓名')
     return
   }
+  const mobileErr = validateLeadMobile(contactForm.value.mobile, { required: true })
+  if (mobileErr) {
+    ElMessage.warning(mobileErr)
+    return
+  }
   contactSaving.value = true
   try {
     const payload = {
       name: contactForm.value.name.trim(),
-      mobile: contactForm.value.mobile.trim() || null,
+      mobile: contactForm.value.mobile.trim(),
       phone: contactForm.value.phone.trim() || null,
       email: contactForm.value.email.trim() || null,
       wechat: contactForm.value.wechat.trim() || null,
@@ -334,6 +366,48 @@ async function lookupBusiness() {
   }
 }
 
+async function openReclaim() {
+  try {
+    const { data: pools } = await crmApi.listCustomerPools()
+    reclaimPools.value = Array.isArray(pools) ? pools : []
+    if (!reclaimPools.value.length) {
+      try {
+        await ElMessageBox.confirm('暂无客户公海，是否前往设置创建？', '退回公海', {
+          type: 'warning',
+          confirmButtonText: '去设置',
+          cancelButtonText: '取消',
+        })
+        router.push('/settings/customer-pools')
+      } catch {
+        /* cancel */
+      }
+      return
+    }
+    reclaimPoolId.value = reclaimPools.value[0].id
+    reclaimVisible.value = true
+  } catch (e) {
+    ElMessage.error(e.message || '加载公海失败')
+  }
+}
+
+async function submitReclaim() {
+  if (!reclaimPoolId.value) {
+    ElMessage.warning('请选择公海')
+    return
+  }
+  reclaimSaving.value = true
+  try {
+    await crmApi.reclaimCustomerToPool(route.params.id, { pool_id: reclaimPoolId.value })
+    ElMessage.success('已退回公海')
+    reclaimVisible.value = false
+    router.push('/crm/customers')
+  } catch (e) {
+    ElMessage.error(e.message || '退回失败')
+  } finally {
+    reclaimSaving.value = false
+  }
+}
+
 const activityLabels = {
   call: '电话',
   visit: '拜访',
@@ -351,8 +425,8 @@ onMounted(async () => {
 <template>
   <CrmDetailShell
     :loading="loading"
-    list-path="/crm/customers"
-    entity-label="客户"
+    :list-path="listPath"
+    :entity-label="listLabel"
     :title="customer?.company_name || ''"
   >
     <CrmDetailHero
@@ -367,9 +441,10 @@ onMounted(async () => {
       :stats="heroStats"
     >
       <template #actions>
-        <el-button v-if="canEdit()" :loading="bizLoading" @click="lookupBusiness">工商查询</el-button>
-        <el-button v-if="canEdit()" @click="editVisible = true">编辑资料</el-button>
+        <el-button v-if="canMutateCustomer()" :loading="bizLoading" @click="lookupBusiness">工商查询</el-button>
+        <el-button v-if="canMutateCustomer()" @click="editVisible = true">编辑资料</el-button>
         <el-button v-if="canAssign()" @click="assignVisible = true">分配负责人</el-button>
+        <el-button v-if="canMutateCustomer()" type="warning" plain @click="openReclaim">退回公海</el-button>
       </template>
     </CrmDetailHero>
 
@@ -397,7 +472,7 @@ onMounted(async () => {
                 <div class="crm-panel__title">联系人</div>
                 <div class="crm-panel__hint">一位客户可维护多位联系人，便于跟进不同角色</div>
               </div>
-              <el-button v-if="canEdit()" type="primary" @click="openContactDialog">新建联系人</el-button>
+              <el-button v-if="canMutateCustomer()" type="primary" @click="openContactDialog">新建联系人</el-button>
             </div>
           </div>
           <el-table v-if="contacts.length" :data="contacts" stripe class="crm-table">
@@ -438,7 +513,7 @@ onMounted(async () => {
         </el-tab-pane>
 
         <el-tab-pane label="跟进" name="activities">
-          <div v-if="canWriteActivity()" class="crm-panel">
+          <div v-if="canWriteCustomerActivity()" class="crm-panel">
             <div class="crm-panel__title">写跟进</div>
             <div class="activity-form">
               <el-select v-model="activityForm.activity_type" style="width: 120px">
@@ -537,7 +612,7 @@ onMounted(async () => {
           <div class="crm-panel">
             <div class="crm-panel__head">
               <div class="crm-panel__title">文档附件</div>
-              <label v-if="canEdit()" class="crm-upload-btn">
+              <label v-if="canMutateCustomer()" class="crm-upload-btn">
                 <input type="file" :disabled="uploading" @change="onUploadFile" />
                 <el-button type="primary" size="small" :loading="uploading">上传附件</el-button>
               </label>
@@ -557,7 +632,7 @@ onMounted(async () => {
             <el-table-column label="操作" width="140" align="center">
               <template #default="{ row }">
                 <el-button link type="primary" size="small" @click="downloadAttachment(row)">下载</el-button>
-                <el-button v-if="canEdit()" link type="danger" size="small" @click="removeAttachment(row)">删除</el-button>
+                <el-button v-if="canMutateCustomer()" link type="danger" size="small" @click="removeAttachment(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -570,6 +645,7 @@ onMounted(async () => {
             entity-type="customer"
             :entity-id="route.params.id"
             :default-assignee-id="customer.owner_user_id"
+            :allow-create="isCustomerOwner()"
             @changed="onTasksChanged"
           />
         </el-tab-pane>
@@ -590,8 +666,8 @@ onMounted(async () => {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="手机">
-              <el-input v-model="contactForm.mobile" placeholder="11 位手机号" />
+            <el-form-item label="手机" required>
+              <el-input v-model="contactForm.mobile" placeholder="11 位手机号" maxlength="11" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -661,6 +737,20 @@ onMounted(async () => {
       :owner-user-id="customer?.owner_user_id"
       @done="loadDetail"
     />
+
+    <el-dialog v-model="reclaimVisible" title="退回公海" width="420px" destroy-on-close>
+      <el-form label-width="72px">
+        <el-form-item label="公海" required>
+          <el-select v-model="reclaimPoolId" placeholder="选择公海" style="width: 100%">
+            <el-option v-for="p in reclaimPools" :key="p.id" :label="p.name" :value="p.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="reclaimVisible = false">取消</el-button>
+        <el-button type="warning" :loading="reclaimSaving" @click="submitReclaim">确认退回</el-button>
+      </template>
+    </el-dialog>
   </CrmDetailShell>
 </template>
 

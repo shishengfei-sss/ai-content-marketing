@@ -14,8 +14,10 @@ if str(API_ROOT) not in sys.path:
 from sqlalchemy.orm import Session
 
 from app.models import TenantMembership, TenantRole, User
+from app.models.crm import MembershipSalesProfile
 from app.permissions import SYSTEM_ROLE_ADMIN, SYSTEM_ROLE_EDITOR, SYSTEM_ROLE_SALES
 from app.services.auth_service import hash_password
+from app.services.crm.sales_org_service import ensure_default_territories
 from app.services.membership_service import get_membership
 from tests.http_client import check, req, reset_test_client
 
@@ -113,6 +115,34 @@ def ensure_crm_test_users(db: Session, admin_user_phone: str = ADMIN_PHONE) -> d
             membership.role_id = sales_role_id
             membership.is_active = True
         out[phone] = str(user.id)
+
+    # 线索销售区域必填：给 admin / 销售测试账号补主地区
+    territories = ensure_default_territories(db, tenant_id)
+    default_tid = territories[0].id if territories else None
+    if default_tid:
+        admin_m = get_membership(db, admin_user.id, tenant_id)
+        memberships = [admin_m] if admin_m else []
+        for phone in (SALES_A_PHONE, SALES_B_PHONE):
+            uid = UUID(out[phone])
+            m = get_membership(db, uid, tenant_id)
+            if m:
+                memberships.append(m)
+        for m in memberships:
+            profile = (
+                db.query(MembershipSalesProfile)
+                .filter(MembershipSalesProfile.membership_id == m.id)
+                .first()
+            )
+            if not profile:
+                db.add(
+                    MembershipSalesProfile(
+                        membership_id=m.id,
+                        primary_territory_id=default_tid,
+                    )
+                )
+            elif not profile.primary_territory_id:
+                profile.primary_territory_id = default_tid
+
     db.commit()
     reset_test_client()
     return out

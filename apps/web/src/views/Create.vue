@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   Clock,
   Promotion,
@@ -8,9 +9,11 @@ import {
 import { ElMessage } from 'element-plus'
 import { contentApi, agentApi, llmApi, wechatApi, assistantsApi, crmApi } from '../api/client'
 import { formatApiError, isRouteNotFoundError, workflowErrorMessage } from '../utils/apiError'
+import { formatDateTime } from '../utils/datetime'
 import { useAuthStore } from '../stores/auth'
 import { hasPermission } from '../config/permissions'
 
+const route = useRoute()
 const auth = useAuthStore()
 
 const platform = ref('wechat')
@@ -132,10 +135,7 @@ const sessionDrawerVisible = ref(false)
 const sessionHistory = ref([])
 
 function formatSessionTime(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return formatDateTime(iso, { empty: '', withSeconds: false })
 }
 
 function mapApiMessagesToUi(apiMessages) {
@@ -429,9 +429,18 @@ onMounted(async () => {
   await loadAdvisor()
   await loadLlmQuota()
   await loadCampaigns()
+  const qCampaign = route.query.campaign_id
+  if (qCampaign && typeof qCampaign === 'string') {
+    campaignId.value = qCampaign
+  }
   await ensureAgentSession()
   if (agentSessionId.value) {
     restoreSessionPrefs(agentSessionId.value)
+    // URL 带入的活动优先于会话偏好
+    if (qCampaign && typeof qCampaign === 'string') {
+      campaignId.value = qCampaign
+      saveSessionPrefs()
+    }
   }
 })
 
@@ -1464,12 +1473,10 @@ function handleCopy(text) {
 }
 .stream-preview {
   white-space: pre-wrap;
-  line-height: 1.5;
-  max-height: 180px;
-  overflow: auto;
-}
   font-size: 14px;
   line-height: 1.6;
+  max-height: 180px;
+  overflow: auto;
   margin-bottom: 12px;
   color: var(--color-text-primary);
 }

@@ -131,8 +131,13 @@ def lead_funnel_endpoint(
     ctx: TenantContext = Depends(
         require_any_permission(
             "crm.lead.list_own",
+            "crm.lead.list_team",
+            "crm.lead.list_territory",
             "crm.lead.list_all",
             "crm.customer.list_own",
+            "crm.customer.list_team",
+            "crm.customer.list_territory",
+            "crm.customer.list_all",
             "analytics.view_all",
         )
     ),
@@ -146,7 +151,13 @@ def sales_board_endpoint(
     ctx: TenantContext = Depends(
         require_any_permission(
             "crm.lead.list_own",
+            "crm.lead.list_team",
+            "crm.lead.list_territory",
+            "crm.lead.list_all",
             "crm.deal.list_own",
+            "crm.deal.list_team",
+            "crm.deal.list_territory",
+            "crm.deal.list_all",
             "crm.lead.view",
             "analytics.view_all",
         )
@@ -163,8 +174,13 @@ def source_roi_endpoint(
     ctx: TenantContext = Depends(
         require_any_permission(
             "crm.lead.list_own",
+            "crm.lead.list_team",
+            "crm.lead.list_territory",
             "crm.lead.list_all",
             "crm.customer.list_own",
+            "crm.customer.list_team",
+            "crm.customer.list_territory",
+            "crm.customer.list_all",
             "analytics.view_all",
         )
     ),
@@ -178,6 +194,8 @@ def lifecycle_report_endpoint(
     ctx: TenantContext = Depends(
         require_any_permission(
             "crm.customer.list_own",
+            "crm.customer.list_team",
+            "crm.customer.list_territory",
             "crm.customer.list_all",
             "analytics.view_all",
         )

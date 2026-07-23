@@ -48,6 +48,7 @@ const form = reactive({
   status: '待跟进',
   intention_level: '',
   campaign_id: '',
+  territory_id: '',
   remark: '',
 })
 
@@ -55,6 +56,7 @@ const formFields = computed(() => getFormFields(fields.value, 'lead'))
 const fieldMap = computed(() =>
   Object.fromEntries((formFields.value || []).map((f) => [f.field_key, f])),
 )
+const territories = ref([])
 
 function opts(key) {
   const f = fieldMap.value[key]
@@ -86,6 +88,10 @@ function displaySelect(key, fallback = '请选择') {
     const hit = campaigns.value.find((c) => c.id === val)
     return hit?.name || String(val).slice(0, 8)
   }
+  if (key === 'territory_id') {
+    const hit = territories.value.find((t) => t.id === val)
+    return hit?.name || String(val).slice(0, 8)
+  }
   return String(val)
 }
 
@@ -105,6 +111,20 @@ async function init() {
       campaigns.value = data.items || []
     } catch {
       campaigns.value = []
+    }
+    try {
+      const data = await crmApi.listTerritories()
+      territories.value = Array.isArray(data) ? data : data?.items || []
+    } catch {
+      territories.value = []
+    }
+    try {
+      const profiles = await crmApi.listSalesProfiles()
+      const rows = Array.isArray(profiles) ? profiles : []
+      const mine = rows.find((r) => r.user_id === user.id)
+      if (mine?.primary_territory_id) form.territory_id = mine.primary_territory_id
+    } catch {
+      /* ignore */
     }
     if (campaignId.value) form.campaign_id = campaignId.value
     if (!form.status) form.status = '待跟进'
@@ -126,6 +146,10 @@ async function submit() {
   const mobileErr = validateLeadMobile(form.mobile)
   if (mobileErr) {
     uni.showToast({ title: mobileErr, icon: 'none' })
+    return
+  }
+  if (!form.territory_id) {
+    uni.showToast({ title: '请选择销售区域', icon: 'none' })
     return
   }
   saving.value = true
@@ -348,6 +372,16 @@ onLoad((query) => {
         <view class="section__head">
           <view class="section__bar" />
           <text class="section__title">销售跟进</text>
+        </view>
+        <view class="field">
+          <text class="field__label"><text class="req">*</text>销售区域</text>
+          <view
+            class="picker"
+            @click="openSelect('territory_id', '销售区域', territories.map((t) => ({ label: t.name, value: t.id })))"
+          >
+            <text :class="{ ph: !form.territory_id }">{{ displaySelect('territory_id', '请选择销售区域') }}</text>
+            <text class="arrow">▾</text>
+          </view>
         </view>
         <view class="field">
           <text class="field__label"><text class="req">*</text>线索状态</text>

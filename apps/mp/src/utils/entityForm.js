@@ -1,3 +1,5 @@
+import { formatDate, formatDateTime } from './datetime'
+
 export const FORM_SKIP_FIELD_KEYS = new Set([
   'created_by_user_id',
   'created_at',
@@ -157,7 +159,7 @@ export function emptyContactDraft(isPrimary = false) {
 
 /** 业务层必填（含存量租户 schema 未同步 is_required 的字段） */
 const ENTITY_REQUIRED_KEYS = {
-  lead: new Set(['company_name', 'contact_name', 'mobile', 'status']),
+  lead: new Set(['company_name', 'contact_name', 'mobile', 'status', 'territory_id']),
   customer: new Set(['company_name']),
 }
 
@@ -300,8 +302,11 @@ export function formatFieldDisplay(field, record) {
     val = record?.extra_data?.[key]
   }
   if (val === undefined || val === null || val === '') return '—'
-  if (field.field_type === 'datetime' || field.field_type === 'date') {
-    return new Date(val).toLocaleString('zh-CN')
+  if (field.field_type === 'datetime') {
+    return formatDateTime(val)
+  }
+  if (field.field_type === 'date') {
+    return formatDate(val)
   }
   if (Array.isArray(val)) return val.join('、')
   if (field.field_type === 'checkbox') return val ? '是' : '否'

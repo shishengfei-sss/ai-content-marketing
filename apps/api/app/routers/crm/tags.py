@@ -9,16 +9,41 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import TenantContext
-from app.schemas.crm import EntityTagBind, EntityTagOut, TagCreate, TagOut
+from app.schemas.crm import EntityTagBind, EntityTagOut, TagCreate, TagOut, TagUpdate
 from app.services.crm import tag_service
 from app.services.permission_service import require_any_permission
 
 router = APIRouter(tags=["crm-tags"])
 
 _VIEW = require_any_permission(
-    "crm.customer.view", "crm.lead.view", "crm.deal.view", "crm.customer.edit", "crm.lead.edit"
+    "crm.customer.view",
+    "crm.lead.view",
+    "crm.deal.view",
+    "crm.quote.view",
+    "crm.contract.view",
+    "crm.payment.view",
+    "crm.product.view",
+    "crm.product.manage",
+    "crm.customer.edit",
+    "crm.lead.edit",
+    "crm.schema.manage",
 )
-_EDIT = require_any_permission("crm.customer.edit", "crm.lead.edit", "crm.deal.edit")
+_EDIT = require_any_permission(
+    "crm.customer.edit",
+    "crm.lead.edit",
+    "crm.deal.edit",
+    "crm.quote.edit",
+    "crm.contract.edit",
+    "crm.payment.edit",
+    "crm.payment.create",
+    "crm.product.manage",
+)
+_MANAGE = require_any_permission(
+    "crm.schema.manage",
+    "crm.pipeline.manage",
+    "crm.customer.edit",
+    "crm.lead.edit",
+)
 
 
 @router.get("/tags", response_model=list[TagOut])
@@ -32,16 +57,33 @@ def api_list_tags(
 @router.post("/tags", response_model=TagOut, status_code=201)
 def api_create_tag(
     body: TagCreate,
-    ctx: TenantContext = Depends(_EDIT),
+    ctx: TenantContext = Depends(_MANAGE),
     db: Session = Depends(get_db),
 ):
     return tag_service.create_tag(db, ctx, name=body.name, color=body.color, category=body.category)
 
 
+@router.patch("/tags/{tag_id}", response_model=TagOut)
+def api_update_tag(
+    tag_id: UUID,
+    body: TagUpdate,
+    ctx: TenantContext = Depends(_MANAGE),
+    db: Session = Depends(get_db),
+):
+    return tag_service.update_tag(
+        db,
+        ctx,
+        tag_id,
+        name=body.name,
+        color=body.color,
+        category=body.category,
+    )
+
+
 @router.delete("/tags/{tag_id}", status_code=204)
 def api_delete_tag(
     tag_id: UUID,
-    ctx: TenantContext = Depends(_EDIT),
+    ctx: TenantContext = Depends(_MANAGE),
     db: Session = Depends(get_db),
 ):
     tag_service.delete_tag(db, ctx, tag_id)

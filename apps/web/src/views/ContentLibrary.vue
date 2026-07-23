@@ -3,6 +3,7 @@ import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { contentApi, isBenignEmptyError, wechatApi } from '../api/client'
+import { formatDateTime } from '../utils/datetime'
 
 const router = useRouter()
 const route = useRoute()
@@ -55,8 +56,7 @@ function platformTagType(code) {
 }
 
 function formatTime(iso) {
-  if (!iso) return ''
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(iso, { empty: '' })
 }
 
 function openPreview(url) {

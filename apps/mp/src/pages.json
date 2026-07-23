@@ -98,6 +98,12 @@
       }
     },
     {
+      "path": "pages/crm/lead-pools",
+      "style": {
+        "navigationBarTitleText": "线索公海"
+      }
+    },
+    {
       "path": "pages/crm/lead-detail",
       "style": {
         "navigationBarTitleText": "线索详情"

@@ -12,6 +12,7 @@ from app.models.crm import Customer
 from app.schemas.crm import (
     ContactCreate,
     ContactOut,
+    ContactUpdate,
     CustomerCreate,
     CustomerListResponse,
     CustomerOut,
@@ -23,9 +24,12 @@ from app.services.crm import customer_pool_service
 from app.services.crm.customer_service import (
     create_contact,
     create_customer,
+    get_contact,
     list_contacts,
     require_customer,
+    soft_delete_contact,
     soft_delete_customer,
+    update_contact,
     update_customer,
 )
 from app.services.crm.business_lookup_service import lookup_company
@@ -165,7 +169,7 @@ def delete_customer(
     db: Session = Depends(get_db),
 ):
     customer = require_customer(db, ctx, customer_id)
-    soft_delete_customer(db, customer)
+    soft_delete_customer(db, ctx, customer)
 
 
 @router.get("/{customer_id}/contacts", response_model=list[ContactOut])
@@ -188,6 +192,36 @@ def post_contact(
     customer = require_customer(db, ctx, customer_id)
     contact = create_contact(db, ctx, customer, body)
     return ContactOut.model_validate(contact)
+
+
+@router.patch("/{customer_id}/contacts/{contact_id}", response_model=ContactOut)
+def patch_contact(
+    customer_id: UUID,
+    contact_id: UUID,
+    body: ContactUpdate,
+    ctx: TenantContext = Depends(require_permission("crm.customer.edit")),
+    db: Session = Depends(get_db),
+):
+    customer = require_customer(db, ctx, customer_id)
+    contact = get_contact(db, ctx.tenant_id, customer.id, contact_id)
+    if not contact:
+        raise HTTPException(status_code=404, detail="联系人不存在")
+    contact = update_contact(db, ctx, customer, contact, body)
+    return ContactOut.model_validate(contact)
+
+
+@router.delete("/{customer_id}/contacts/{contact_id}", status_code=204)
+def delete_contact(
+    customer_id: UUID,
+    contact_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.customer.edit")),
+    db: Session = Depends(get_db),
+):
+    customer = require_customer(db, ctx, customer_id)
+    contact = get_contact(db, ctx.tenant_id, customer.id, contact_id)
+    if not contact:
+        raise HTTPException(status_code=404, detail="联系人不存在")
+    soft_delete_contact(db, ctx, customer, contact)
 
 
 @router.get("/{customer_id}/decision-chain")

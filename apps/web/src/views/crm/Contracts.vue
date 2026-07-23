@@ -1,38 +1,41 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { crmApi } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { hasPermission } from '../../config/permissions'
 import { useEntitySchema } from '../../composables/useEntitySchema'
+import { useCrmListColumns } from '../../composables/useCrmListColumns'
 import { useTeamMembers } from '../../composables/useTeamMembers'
 import { useCrmViewList } from '../../composables/useCrmViewList'
+import { CONTRACT_STATUS_META, CONTRACT_TYPE_META, contractActions } from '../../composables/contractActions'
 import CrmListToolbar from '../../components/crm/CrmListToolbar.vue'
 import CrmViewSwitcher from '../../components/crm/CrmViewSwitcher.vue'
 import CrmAdvancedFilterDialog from '../../components/crm/CrmAdvancedFilterDialog.vue'
+import CrmColumnSettingsDialog from '../../components/crm/CrmColumnSettingsDialog.vue'
+import ContractFormDialog from './ContractFormDialog.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
-const { fields, loadSchema } = useEntitySchema('contract')
+const { listColumns, fields, loadSchema, loadColumnSettingsDraft, saveListColumns, formatCell, applyListColumns } =
+  useEntitySchema('contract')
+const { leftFixedColumns, scrollColumns, rightFixedColumns } = useCrmListColumns(listColumns)
 const { resolveMemberName, loadMembers, members } = useTeamMembers()
 
 const statusFilter = ref('')
-
-const dialogVisible = ref(false)
-const editing = ref(false)
-const saving = ref(false)
-const customerOptions = ref([])
-const customerLoading = ref(false)
-const form = ref(emptyForm())
+const formVisible = ref(false)
+const editingRecord = ref(null)
+const columnVisible = ref(false)
+const columnDraft = ref([])
+const customerNameMap = ref({})
+const selectedIds = ref([])
+const batchActing = ref(false)
+const exporting = ref(false)
 
 const signVisible = ref(false)
 const signForm = ref({ signed_amount: null, signed_at: '' })
 const signingId = ref('')
-
-function emptyForm() {
-  return { id: '', customer_id: '', deal_id: '', quote_id: '', title: '', contract_type: 'new', amount: null, start_date: '', end_date: '', status: 'draft', file_url: '' }
-}
 
 const canCreate = () => hasPermission(auth.permissions, 'crm.contract.create')
 const canEdit = () => hasPermission(auth.permissions, 'crm.contract.edit')
@@ -40,16 +43,58 @@ const canSign = () => hasPermission(auth.permissions, 'crm.contract.sign')
 const canDelete = () => hasPermission(auth.permissions, 'crm.contract.delete')
 const canConvert = () => hasPermission(auth.permissions, 'crm.order.convert')
 
-const STATUS_META = {
-  draft: { label: '草稿', type: 'info' },
-  sent: { label: '已发送', type: 'warning' },
-  signed: { label: '已签署', type: 'success' },
-  executing: { label: '执行中', type: 'success' },
-  expired: { label: '已过期', type: 'info' },
-  terminated: { label: '已终止', type: 'danger' },
+function sameUserId(a, b) {
+  if (!a || !b) return false
+  return String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
 }
-const TYPE_META = { new: '新签', renewal: '续约', addon: '增订' }
+function isOwner(row) {
+  return sameUserId(row?.owner_user_id, auth.user?.id)
+}
+function rowActions(row) {
+  return contractActions({
+    status: row?.status,
+    isOwner: isOwner(row),
+    canEdit: canEdit(),
+    canSign: canSign(),
+    canCreate: canCreate(),
+    canDelete: canDelete(),
+    canConvert: canConvert(),
+  })
+}
+
+const STATUS_META = CONTRACT_STATUS_META
+const TYPE_META = CONTRACT_TYPE_META
 function statusMeta(s) { return STATUS_META[s] || { label: s, type: '' } }
+
+function onSelectionChange(rows) {
+  selectedIds.value = (rows || []).map((r) => r.id)
+}
+
+function customerName(id) {
+  if (!id) return '—'
+  return customerNameMap.value[String(id)] || customerNameMap.value[String(id).replace(/-/g, '')] || String(id)
+}
+
+async function resolveCustomerNames(rows) {
+  const ids = [...new Set((rows || []).map((r) => r.customer_id).filter(Boolean))]
+  const missing = ids.filter((id) => !customerNameMap.value[String(id)] && !customerNameMap.value[String(id).replace(/-/g, '')])
+  if (!missing.length) return
+  await Promise.all(
+    missing.map(async (id) => {
+      try {
+        const { data } = await crmApi.getCustomer(id)
+        const name = data?.company_name || String(id)
+        customerNameMap.value = {
+          ...customerNameMap.value,
+          [String(id)]: name,
+          [String(id).replace(/-/g, '')]: name,
+        }
+      } catch {
+        /* keep raw id */
+      }
+    }),
+  )
+}
 
 const {
   loading, items, total, page, pageSize, views, activeViewId, advancedFilters, advancedFilterVisible,
@@ -66,75 +111,45 @@ const {
   onResetExtra: () => { statusFilter.value = '' },
   fetcher: async (params) => {
     const { data } = await crmApi.listContracts(params)
+    if (data.list_fields?.length) applyListColumns(data.list_fields)
+    await resolveCustomerNames(data.items || [])
     return { items: data.items || [], total: data.total || 0, filters_applied: data.filters_applied }
   },
 })
 
-async function searchCustomers(q = '') {
-  customerLoading.value = true
+async function openColumnSettings() {
   try {
-    const { data } = await crmApi.listCustomers({ page: 1, page_size: 50, q })
-    customerOptions.value = (data.items || []).map((c) => ({ id: c.id, company_name: c.company_name }))
-  } catch { customerOptions.value = [] } finally { customerLoading.value = false }
-}
-
-function openCreate() {
-  editing.value = false
-  form.value = emptyForm()
-  dialogVisible.value = true
-}
-
-async function openEdit(row) {
-  editing.value = true
-  const { data } = await crmApi.getContract(row.id)
-  form.value = {
-    id: data.id,
-    customer_id: data.customer_id,
-    deal_id: data.deal_id || '',
-    quote_id: data.quote_id || '',
-    title: data.title,
-    contract_type: data.contract_type,
-    amount: Number(data.amount),
-    start_date: data.start_date ? String(data.start_date).slice(0, 10) : '',
-    end_date: data.end_date ? String(data.end_date).slice(0, 10) : '',
-    status: data.status,
-    file_url: data.file_url || '',
+    columnDraft.value = await loadColumnSettingsDraft()
+    columnVisible.value = true
+  } catch (e) {
+    ElMessage.error(e.message || '加载列设置失败')
   }
-  if (data.customer_id) customerOptions.value = [{ id: data.customer_id, company_name: '(已绑定客户)' }]
-  dialogVisible.value = true
 }
 
-async function submit() {
-  if (!form.value.title?.trim()) { ElMessage.warning('请填写合同标题'); return }
-  if (!form.value.customer_id) { ElMessage.warning('请选择客户'); return }
-  saving.value = true
+async function submitColumnSettings() {
   try {
-    const payload = {
-      customer_id: form.value.customer_id,
-      title: form.value.title.trim(),
-      contract_type: form.value.contract_type,
-      amount: form.value.amount ?? 0,
-      start_date: form.value.start_date || null,
-      end_date: form.value.end_date || null,
-      status: form.value.status,
-      file_url: form.value.file_url || null,
-    }
-    if (form.value.deal_id) payload.deal_id = form.value.deal_id
-    if (form.value.quote_id) payload.quote_id = form.value.quote_id
-    if (editing.value) {
-      await crmApi.updateContract(form.value.id, payload)
-      ElMessage.success('已保存')
-    } else {
-      await crmApi.createContract(payload)
-      ElMessage.success('合同已创建')
-    }
-    dialogVisible.value = false
+    const columns = columnDraft.value.map((c, i) => ({
+      field_key: c.field_key,
+      visible: c.visible,
+      order: i,
+    }))
+    await saveListColumns(columns)
+    ElMessage.success('列设置已保存')
+    columnVisible.value = false
     load()
   } catch (e) {
     ElMessage.error(e.message || '保存失败')
-  } finally {
-    saving.value = false
   }
+}
+
+function openCreate() {
+  editingRecord.value = null
+  formVisible.value = true
+}
+
+function openEdit(row) {
+  editingRecord.value = row
+  formVisible.value = true
 }
 
 function openSign(row) {
@@ -155,6 +170,14 @@ async function submitSign() {
   } catch (e) { ElMessage.error(e.message || '签署失败') }
 }
 
+async function handleSend(row) {
+  try {
+    await crmApi.sendContract(row.id)
+    ElMessage.success('已发送')
+    load()
+  } catch (e) { ElMessage.error(e.message || '发送失败') }
+}
+
 async function handleConvert(row) {
   try {
     await ElMessageBox.confirm(`将合同「${row.title}」生成订单？（合同可重复生成订单）`, '生成订单')
@@ -162,6 +185,14 @@ async function handleConvert(row) {
     ElMessage.success('已生成订单')
     router.push(`/crm/orders/${data.order_id}`)
   } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '转化失败') }
+}
+
+async function handleClone(row) {
+  try {
+    const { data } = await crmApi.cloneContract(row.id)
+    ElMessage.success('已复制')
+    router.push(`/crm/contracts/${data.id}`)
+  } catch (e) { ElMessage.error(e.message || '复制失败') }
 }
 
 async function handleDelete(row) {
@@ -173,11 +204,85 @@ async function handleDelete(row) {
   } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '删除失败') }
 }
 
+async function handleBatch(action) {
+  if (!selectedIds.value.length) {
+    ElMessage.warning('请先勾选合同')
+    return
+  }
+  const label = action === 'sign' ? '签署' : '发送'
+  try {
+    await ElMessageBox.confirm(`对已选 ${selectedIds.value.length} 条合同执行「批量${label}」？失败项将跳过。`, `批量${label}`)
+  } catch {
+    return
+  }
+  batchActing.value = true
+  try {
+    const { data } = await crmApi.batchContractAction({
+      contract_ids: selectedIds.value,
+      action,
+    })
+    ElMessage.success(`成功 ${data.succeeded}，失败 ${data.failed}`)
+    selectedIds.value = []
+    load()
+  } catch (e) {
+    ElMessage.error(e.message || '批量操作失败')
+  } finally {
+    batchActing.value = false
+  }
+}
+
+async function handleExport(format) {
+  exporting.value = true
+  try {
+    const params = {
+      format,
+      q: searchKeyword.value || undefined,
+      status: statusFilter.value || undefined,
+      view_id: activeViewId.value || undefined,
+    }
+    if (!activeViewId.value && advancedFilters.value?.conditions?.length) {
+      params.filters = JSON.stringify(advancedFilters.value)
+    }
+    const { data, headers } = await crmApi.exportContracts(params)
+    const blob = data instanceof Blob ? data : new Blob([data])
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = format === 'xlsx' ? 'contracts.xlsx' : 'contracts.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+    const rowCount = headers?.['x-export-row-count'] || headers?.['X-Export-Row-Count']
+    ElMessage.success(rowCount ? `已导出 ${rowCount} 条` : '已导出')
+  } catch (e) {
+    ElMessage.error(e.message || '导出失败')
+  } finally {
+    exporting.value = false
+  }
+}
+
 function goDetail(row) { router.push(`/crm/contracts/${row.id}`) }
 function formatAmount(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
-function formatDate(v) { return v ? String(v).replace('T', ' ').slice(0, 10) : '' }
 
-watch(dialogVisible, async (v) => { if (v) await searchCustomers('') })
+function cellText(row, col) {
+  if (col.field_key === 'status') return statusMeta(row.status).label
+  if (col.field_key === 'contract_type') return TYPE_META[row.contract_type] || row.contract_type || '—'
+  if (col.field_key === 'customer_id') return customerName(row.customer_id)
+  if (col.field_key === 'owner_user_id' || col.field_key === 'created_by_user_id') {
+    return resolveMemberName(row[col.field_key])
+  }
+  if (col.field_key === 'amount') {
+    const v = row.signed_amount != null ? row.signed_amount : row.amount
+    if (v === undefined || v === null || v === '') return '—'
+    return `¥${formatAmount(v)}`
+  }
+  if (col.field_type === 'currency' || col.field_key === 'signed_amount') {
+    const v = row[col.field_key]
+    if (v === undefined || v === null || v === '') return '—'
+    return `¥${formatAmount(v)}`
+  }
+  return formatCell(row, col.field_key, col.field_type)
+}
+
 onMounted(async () => {
   initRouteView()
   await Promise.all([loadSchema(), loadMembers()])
@@ -198,6 +303,28 @@ onMounted(async () => {
       @clear-filters="clearTemporaryFilters"
     >
       <template #actions>
+        <el-button
+          v-if="canSign()"
+          :disabled="!selectedIds.length"
+          :loading="batchActing"
+          @click="handleBatch('sign')"
+        >批量签署</el-button>
+        <el-button
+          v-if="canEdit()"
+          :disabled="!selectedIds.length"
+          :loading="batchActing"
+          @click="handleBatch('send')"
+        >批量发送</el-button>
+        <el-dropdown :disabled="exporting" @command="handleExport">
+          <el-button :loading="exporting">导出</el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="csv">导出 CSV</el-dropdown-item>
+              <el-dropdown-item command="xlsx">导出 Excel</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button @click="openColumnSettings">列设置</el-button>
         <el-button v-if="canCreate()" type="primary" @click="openCreate">新建合同</el-button>
       </template>
 
@@ -254,6 +381,12 @@ onMounted(async () => {
       @apply="applyAdvancedFilters"
     />
 
+    <CrmColumnSettingsDialog
+      v-model:visible="columnVisible"
+      v-model:columns="columnDraft"
+      @save="submitColumnSettings"
+    />
+
     <div class="crm-list-table-wrap">
       <el-table
         :key="tableSortKey"
@@ -263,32 +396,56 @@ onMounted(async () => {
         class="crm-list-table"
         :default-sort="defaultTableSort"
         :header-cell-class-name="() => 'crm-list-table__header-cell'"
+        @selection-change="onSelectionChange"
         @row-click="goDetail"
       >
-        <el-table-column prop="contract_number" label="合同号" width="160" fixed="left" show-overflow-tooltip />
-        <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
-        <el-table-column label="类型" width="80" align="center">
-          <template #default="{ row }">{{ TYPE_META[row.contract_type] || row.contract_type }}</template>
+        <el-table-column type="selection" width="48" fixed="left" @click.stop />
+        <el-table-column
+          v-for="col in leftFixedColumns"
+          :key="col.field_key"
+          :prop="col.field_key"
+          :label="col.label"
+          fixed="left"
+          :min-width="col.width || 160"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">{{ cellText(row, col) }}</template>
         </el-table-column>
-        <el-table-column label="金额" width="130" align="right">
-          <template #default="{ row }">¥{{ formatAmount(row.signed_amount != null ? row.signed_amount : row.amount) }}</template>
+        <el-table-column
+          v-for="col in scrollColumns"
+          :key="col.field_key"
+          :prop="col.field_key"
+          :label="col.label"
+          :min-width="col.width || 120"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            <el-tag v-if="col.field_key === 'status'" :type="statusMeta(row.status).type" size="small">
+              {{ statusMeta(row.status).label }}
+            </el-tag>
+            <template v-else>{{ cellText(row, col) }}</template>
+          </template>
         </el-table-column>
-        <el-table-column label="状态" width="110" align="center">
-          <template #default="{ row }"><el-tag :type="statusMeta(row.status).type" size="small">{{ statusMeta(row.status).label }}</el-tag></template>
-        </el-table-column>
-        <el-table-column label="生效期" width="220">
-          <template #default="{ row }">{{ formatDate(row.start_date) }} ~ {{ formatDate(row.end_date) }}</template>
-        </el-table-column>
-        <el-table-column label="负责人" width="110" fixed="right">
+        <el-table-column
+          v-for="col in rightFixedColumns"
+          :key="col.field_key"
+          :prop="col.field_key"
+          :label="col.label"
+          fixed="right"
+          :width="col.width || 110"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">{{ resolveMemberName(row.owner_user_id) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right" align="center" @click.stop>
+        <el-table-column label="操作" width="300" fixed="right" align="center" @click.stop>
           <template #default="{ row }">
             <el-button link type="primary" @click.stop="goDetail(row)">详情</el-button>
-            <el-button v-if="canEdit() && row.status === 'draft'" link @click.stop="openEdit(row)">编辑</el-button>
-            <el-button v-if="canSign() && row.status === 'draft'" link type="success" @click.stop="openSign(row)">签署</el-button>
-            <el-button v-if="canConvert() && (row.status === 'signed' || row.status === 'executing')" link type="primary" @click.stop="handleConvert(row)">生成订单</el-button>
-            <el-button v-if="canDelete()" link type="danger" @click.stop="handleDelete(row)">删除</el-button>
+            <el-button v-if="rowActions(row).edit" link @click.stop="openEdit(row)">编辑</el-button>
+            <el-button v-if="rowActions(row).send" link @click.stop="handleSend(row)">发送</el-button>
+            <el-button v-if="rowActions(row).sign" link type="success" @click.stop="openSign(row)">签署</el-button>
+            <el-button v-if="rowActions(row).convert" link type="primary" @click.stop="handleConvert(row)">生成订单</el-button>
+            <el-button v-if="rowActions(row).clone" link @click.stop="handleClone(row)">复制</el-button>
+            <el-button v-if="rowActions(row).delete" link type="danger" @click.stop="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -319,39 +476,7 @@ onMounted(async () => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑合同' : '新建合同'" width="600px" destroy-on-close>
-      <el-form label-width="88px">
-        <el-form-item label="标题" required><el-input v-model="form.title" maxlength="200" /></el-form-item>
-        <el-form-item label="客户" required>
-          <el-select v-model="form.customer_id" filterable remote :remote-method="searchCustomers" :loading="customerLoading" placeholder="搜索客户" style="width: 100%">
-            <el-option v-for="c in customerOptions" :key="c.id" :label="c.company_name" :value="c.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="合同类型">
-          <el-select v-model="form.contract_type">
-            <el-option label="新签" value="new" />
-            <el-option label="续约" value="renewal" />
-            <el-option label="增订" value="addon" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="金额">
-          <el-input-number v-model="form.amount" :min="0" :precision="2" :controls="false" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="生效日">
-          <el-date-picker v-model="form.start_date" type="date" value-format="YYYY-MM-DD" style="width: 200px" />
-        </el-form-item>
-        <el-form-item label="到期日">
-          <el-date-picker v-model="form.end_date" type="date" value-format="YYYY-MM-DD" style="width: 200px" />
-        </el-form-item>
-        <el-form-item label="附件URL">
-          <el-input v-model="form.file_url" maxlength="500" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submit">保存</el-button>
-      </template>
-    </el-dialog>
+    <ContractFormDialog v-model:visible="formVisible" :record="editingRecord" @saved="load" />
 
     <el-dialog v-model="signVisible" title="签署合同" width="420px">
       <el-form label-width="88px">

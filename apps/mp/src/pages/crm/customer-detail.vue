@@ -1,10 +1,11 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { crmApi, teamApi } from '@/utils/api'
+import { crmApi } from '@/utils/api'
 import { ensureSession } from '@/utils/session'
 import { hasPermission } from '@/utils/permissions'
 import CrmEntityTasks from '@/components/crm/CrmEntityTasks.vue'
+import { formatDateTime } from '@/utils/datetime'
 
 const customerId = ref('')
 const loading = ref(false)
@@ -31,20 +32,18 @@ const ownerLabel = computed(() => {
   return m?.display_name || m?.phone || '负责人'
 })
 
+const selectedOwnerLabel = computed(() => {
+  if (!selectedOwner.value) return '请选择负责人'
+  const m = members.value.find((x) => String(x.user_id) === String(selectedOwner.value))
+  return m?.display_name || m?.phone || '请选择负责人'
+})
+
 async function loadDetail() {
   if (!customerId.value) return
   loading.value = true
   try {
     const user = await ensureSession()
     permissions.value = user?.permissions || []
-    if (canAssign()) {
-      try {
-        members.value = await teamApi.listMembers()
-        if (!Array.isArray(members.value)) members.value = []
-      } catch {
-        members.value = []
-      }
-    }
     const [custData, contactList, timeline, chain] = await Promise.all([
       crmApi.getCustomer(customerId.value),
       crmApi.listContacts(customerId.value),
@@ -55,6 +54,16 @@ async function loadDetail() {
     contacts.value = Array.isArray(contactList) ? contactList : []
     activities.value = Array.isArray(timeline) ? timeline : []
     decisionChain.value = chain
+    if (canAssign()) {
+      try {
+        members.value = await crmApi.listAssignableOwners({
+          include_user_id: custData.owner_user_id || undefined,
+        })
+        if (!Array.isArray(members.value)) members.value = []
+      } catch {
+        members.value = []
+      }
+    }
     await taskPanelRef.value?.reload()
   } catch (e) {
     uni.showToast({ title: e.message || '加载失败', icon: 'none' })
@@ -75,9 +84,28 @@ async function submitAssign() {
   }
   try {
     await crmApi.updateCustomer(customerId.value, { owner_user_id: selectedOwner.value })
-    uni.showToast({ title: '已分配', icon: 'success' })
     assignVisible.value = false
-    loadDetail()
+    try {
+      const custData = await crmApi.getCustomer(customerId.value)
+      customer.value = custData
+      uni.showToast({ title: '已分配', icon: 'success' })
+      if (canAssign()) {
+        members.value = await crmApi.listAssignableOwners({
+          include_user_id: custData.owner_user_id || undefined,
+        }).catch(() => [])
+        if (!Array.isArray(members.value)) members.value = []
+      }
+    } catch (e) {
+      const msg = e.message || ''
+      if (e.status === 403 || msg.includes('无权访问')) {
+        uni.showToast({ title: '已分配，已不在可见范围', icon: 'none' })
+        setTimeout(() => {
+          uni.navigateBack({ fail: () => uni.redirectTo({ url: '/pages/crm/customers' }) })
+        }, 400)
+        return
+      }
+      uni.showToast({ title: msg || '分配后刷新失败', icon: 'none' })
+    }
   } catch (e) {
     uni.showToast({ title: e.message || '分配失败', icon: 'none' })
   }
@@ -174,7 +202,7 @@ onLoad((query) => {
         <button class="btn btn--primary" size="mini" hover-class="none" @tap="submitActivity">提交</button>
       </view>
       <view v-for="item in activities" :key="item.id" class="line">
-        <text class="line__time">{{ item.created_at }}</text>
+        <text class="line__time">{{ formatDateTime(item.created_at) }}</text>
         <text>{{ item.content }}</text>
       </view>
       <view v-if="!activities.length" class="empty">暂无跟进</view>
@@ -193,12 +221,13 @@ onLoad((query) => {
     <view v-if="assignVisible" class="mask" @click="assignVisible = false">
       <view class="dialog" @click.stop>
         <text class="dialog__title">分配负责人</text>
+        <text class="dialog__hint">仅可分配给本人、下属或同级别销售经理</text>
         <picker
           mode="selector"
           :range="members.map((m) => m.display_name || m.phone)"
           @change="(e) => (selectedOwner = members[e.detail.value]?.user_id || '')"
         >
-          <view class="picker">{{ ownerLabel }}</view>
+          <view class="picker">{{ selectedOwnerLabel }}</view>
         </picker>
         <view class="dialog__acts">
           <button class="btn" @click="assignVisible = false">取消</button>
@@ -273,6 +302,14 @@ onLoad((query) => {
   font-weight: 600;
   margin-bottom: 12px;
   display: block;
+}
+
+.dialog__hint {
+  display: block;
+  font-size: 12px;
+  color: #8c8c8c;
+  margin: -4px 0 12px;
+  line-height: 1.4;
 }
 
 .picker {

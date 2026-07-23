@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { crmApi } from '../../api/client'
 import { formatApiError } from '../../utils/apiError'
+import { formatDateTime } from '../../utils/datetime'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -93,7 +94,7 @@ const statusLabels = {
       </el-table-column>
       <el-table-column label="时间" width="170">
         <template #default="{ row }">
-          {{ row.created_at ? new Date(row.created_at).toLocaleString('zh-CN') : '—' }}
+          {{ formatDateTime(row.created_at) }}
         </template>
       </el-table-column>
       <el-table-column label="操作" width="100">

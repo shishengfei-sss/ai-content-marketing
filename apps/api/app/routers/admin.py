@@ -13,6 +13,7 @@ from app.models import Content, IndustryPack, KnowledgeDocument, PlatformLLMConf
 from app.schemas import (
     AdminContentListResponse,
     AdminContentOut,
+    AdminUserListResponse,
     AdminKnowledgeUploadTextRequest,
     AdminMembershipBrief,
     AdminTenantListResponse,
@@ -230,11 +231,13 @@ def list_all_contents(
     )
 
 
-@router.get("/users", response_model=list[AdminUserOut])
+@router.get("/users", response_model=AdminUserListResponse)
 def list_users(
     q: str | None = Query(default=None),
     role: str | None = Query(default=None),
     is_active: bool | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     _: User = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ):
@@ -263,8 +266,14 @@ def list_users(
         query = query.filter(User.role == role)
     if is_active is not None:
         query = query.filter(User.is_active.is_(is_active))
-    users = query.all()
-    return [_user_out(u) for u in users]
+    total = query.count()
+    items = query.offset((page - 1) * page_size).limit(page_size).all()
+    return AdminUserListResponse(
+        items=[_user_out(u) for u in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.patch("/users/{user_id}", response_model=AdminUserOut)
@@ -361,6 +370,40 @@ def get_tenant(
     if not item:
         raise HTTPException(status_code=404, detail="企业不存在")
     return AdminTenantOut(**item)
+
+
+@router.patch("/tenants/{tenant_id}/disable")
+def disable_tenant(
+    tenant_id: UUID,
+    _: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models import Tenant
+    from app.database import uuid_eq
+
+    tenant = db.query(Tenant).filter(uuid_eq(Tenant.id, tenant_id)).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="企业不存在")
+    tenant.is_active = False
+    db.commit()
+    return {"ok": True, "id": str(tenant.id), "is_active": False}
+
+
+@router.patch("/tenants/{tenant_id}/enable")
+def enable_tenant(
+    tenant_id: UUID,
+    _: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+):
+    from app.models import Tenant
+    from app.database import uuid_eq
+
+    tenant = db.query(Tenant).filter(uuid_eq(Tenant.id, tenant_id)).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="企业不存在")
+    tenant.is_active = True
+    db.commit()
+    return {"ok": True, "id": str(tenant.id), "is_active": True}
 
 
 @router.get("/tenants/{tenant_id}/members", response_model=list[AdminTenantMemberOut])

@@ -35,13 +35,20 @@ def match_condition(lead: Lead, condition: dict | None) -> bool:
         return False
     actual = _field_value(lead, field)
     if op == "equals":
-        return actual == expected
+        if actual is None and expected is None:
+            return True
+        if actual is None or expected is None:
+            return False
+        # UUID 与字符串可比（分配规则条件常为字符串）
+        return str(actual) == str(expected)
     if op == "contains":
         return actual is not None and expected is not None and str(expected) in str(actual)
     if op == "in":
         if not isinstance(expected, (list, tuple, set)):
             return False
-        return actual in expected
+        if actual is None:
+            return False
+        return str(actual) in {str(x) for x in expected}
     if op in {"gt", "lt", "gte", "lte"}:
         try:
             a = float(actual)
@@ -83,7 +90,11 @@ def calculate_lead_score(db: Session, tenant_id: UUID, lead: Lead) -> int:
 
 
 def recalculate_lead_score(db: Session, ctx: TenantContext, lead: Lead) -> Lead:
+    from app.services.tender_match_service import get_icp, score_crm_lead
+
     lead.lead_score = calculate_lead_score(db, ctx.tenant_id, lead)
+    icp = get_icp(db, ctx.tenant_id)
+    lead.icp_score = score_crm_lead(lead, icp) if icp and getattr(icp, "is_active", True) else 0
     db.commit()
     db.refresh(lead)
     return lead

@@ -104,7 +104,7 @@ def _normalize_seed(raw: dict) -> dict:
         "sort_order": raw.get("sort_order", 0),
         "show_in_list_default": raw.get("show_in_list_default", False),
         "list_width": raw.get("list_width"),
-        "is_active": True,
+        "is_active": raw.get("is_active", True),
         "validation": raw.get("validation", {}),
         "storage": raw.get("storage", "seed"),
     }
@@ -119,7 +119,7 @@ def _sync_seed_field_metadata(
     """存量租户：同步系统种子字段的 label / sort_order / is_required 等元数据。"""
     seeds = {_normalize_seed(raw)["field_key"]: _normalize_seed(raw) for raw in ENTITY_SEED_MAP.get(entity_type, [])}
     changed = False
-    sync_keys = ("label", "sort_order", "is_required", "field_type", "options", "placeholder", "show_in_list_default")
+    sync_keys = ("label", "sort_order", "is_required", "field_type", "options", "placeholder", "show_in_list_default", "is_active")
     for row in fields:
         if row.field_key not in seeds:
             continue
@@ -149,6 +149,7 @@ def ensure_entity_schema(db: Session, tenant_id: UUID, entity_type: str) -> list
         # 补种种子中存在但租户尚未拥有的字段（如 v0.8 新增编号字段）
         existing_keys = {f.field_key for f in fields}
         seeds = ENTITY_SEED_MAP.get(entity_type, [])
+        added = False
         for raw in seeds:
             data = _normalize_seed(raw)
             if data["field_key"] in existing_keys:
@@ -156,19 +157,21 @@ def ensure_entity_schema(db: Session, tenant_id: UUID, entity_type: str) -> list
             row = EntityFieldDefinition(tenant_id=tenant_id, entity_type=entity_type, **data)
             db.add(row)
             fields.append(row)
-        db.commit()
-        for f in fields:
-            db.refresh(f)
+            added = True
+        if added:
+            db.commit()
+            for f in fields:
+                db.refresh(f)
         return fields
 
     seeds = ENTITY_SEED_MAP.get(entity_type, [])
     created: list[EntityFieldDefinition] = []
-    seen_keys: set[str] = set()
+    # 同 field_key 以后出现的为准（实体专用覆盖 COMMON_FIELDS）
+    by_key: dict[str, dict] = {}
     for raw in seeds:
         data = _normalize_seed(raw)
-        if data["field_key"] in seen_keys:
-            continue
-        seen_keys.add(data["field_key"])
+        by_key[data["field_key"]] = data
+    for data in by_key.values():
         row = EntityFieldDefinition(tenant_id=tenant_id, entity_type=entity_type, **data)
         db.add(row)
         created.append(row)
@@ -309,14 +312,12 @@ def _validate_field_value(field: EntityFieldDefinition, value) -> None:
     if ft == "email" and isinstance(value, str) and not _EMAIL_RE.match(value.strip()):
         raise HTTPException(status_code=422, detail=f"字段 {field.label} 邮箱格式无效")
     if ft == "select" and field.options and value not in field.options:
-        raise HTTPException(status_code=422, detail=f"字段 {field.label} 选项无效")
+        legacy_ok = field.field_key == "taxpayer_type" and value in ("小规模", "未知")
+        if not legacy_ok:
+            raise HTTPException(status_code=422, detail=f"字段 {field.label} 选项无效")
     if ft == "multiselect":
         if not isinstance(value, list):
             raise HTTPException(status_code=422, detail=f"字段 {field.label} 须为数组")
-        if field.options:
-            invalid = [v for v in value if v not in field.options]
-            if invalid:
-                raise HTTPException(status_code=422, detail=f"字段 {field.label} 选项无效")
 
 
 def validate_extra_data(
@@ -371,6 +372,7 @@ def resolve_list_columns(
 
     if pref and pref.columns:
         cols: list[dict] = []
+        used: set[str] = set()
         for i, col in enumerate(pref.columns):
             key = col.get("field_key")
             if not key or key not in field_map:
@@ -383,6 +385,20 @@ def resolve_list_columns(
                     visible=col.get("visible", True),
                     width=col.get("width") or f.list_width,
                     order=col.get("order", i),
+                )
+            )
+            used.add(key)
+        # 存量偏好补齐：种子默认展示列（如回款.customer_id）尚未写入偏好时自动可见
+        for f in fields:
+            if f.field_key in used or not f.show_in_list_default:
+                continue
+            cols.append(
+                list_column_out(
+                    entity_type,
+                    f,
+                    visible=True,
+                    width=f.list_width,
+                    order=f.sort_order,
                 )
             )
         if cols:

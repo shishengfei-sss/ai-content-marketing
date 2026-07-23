@@ -1,0 +1,87 @@
+[*] 读取用例真源：C:\Users\admin\Desktop\临时\AI内容营销系统-测试用例.xlsx
+[*] 解析到 404 条用例（去重后 202 个唯一用例编号）
+[*] 已实现执行器：199 个（ACT-001, ACT-002, ADM-001, ADM-002, ADM-003, ADM-004, ADM-005, ADM-006, ADM-007, ADM-008, API-AG-001, API-AG-002, API-AG-003, API-AG-004, API-AUTH-001, API-AUTH-002, API-AUTH-003, API-AUTH-004, API-AUTH-005, API-CRM-001, API-CRM-002, API-CRM-003, API-CRM-004, API-CRM-005, API-CT-001, API-CT-002, API-CT-003, AUTH-001, AUTH-002, AUTH-003, AUTH-004, AUTH-005, AUTH-006, AUTH-007, AUTH-008, AUTH-009, AUTH-010, AUTH-011, AUTH-012, AUTH-013, AUTH-014, AUTH-015, AUTH-016, AUTH-017, AUTH-018, AUTH-019, AUTH-020, AUTH-021, BRAND-001, BRAND-002, CAMP-001, CAMP-002, CAMP-003, CAMP-004, CAMP-005, CONT-001, CONT-002, CONT-003, CONT-004, CONT-005, CONT-006, CONT-007, CONT-008, CPQ-001, CPQ-002, CPQ-003, CPQ-004, CPQ-005, CUST-001, CUST-002, CUST-003, CUST-004, CUST-005, CUST-006, CUST-007, CUST-008, CUST-009, CUST-010, DEAL-001, DEAL-002, DEAL-003, DEAL-004, DEAL-005, DEAL-006, DEAL-007, DEAL-008, DEAL-009, DEAL-010, DEAL-011, H5-AUTH-001, H5-AUTH-002, H5-CONT-001, H5-CONT-002, H5-CRM-001, H5-CRM-002, H5-CRM-003, H5-CRM-004, H5-CRM-005, H5-SET-001, H5-SET-002, ICP-001, IMP-001, IMP-002, INSIGHT-001, INSIGHT-002, LEAD-001, LEAD-002, LEAD-003, LEAD-004, LEAD-005, LEAD-006, LEAD-007, LEAD-008, LEAD-009, LEAD-010, LEAD-011, LEAD-012, LEAD-013, LEAD-014, LEAD-015, LEAD-016, LLM-001, LLM-002, LLM-003, MEM-001, MEM-002, ORDER-001, ORDER-002, ORDER-003, ORDER-004, ORDER-005, ORDER-006, PAY-001, PAY-002, PAY-003, PAY-004, PERF-001, PERF-003, PIPE-001, PIPE-002, PIPE-003, PROD-001, PROD-002, PROD-003, PROD-004, PROD-005, PROD-006, PROD-007, QUOTE-001, QUOTE-002, QUOTE-003, QUOTE-004, QUOTE-005, QUOTE-006, QUOTE-007, REG-P0-001, REG-P0-002, REG-P0-003, REG-P0-004, REG-P0-005, REG-P1-001, REG-P1-002, REG-P1-003, REG-P1-004, REG-P1-005, REG-P1-006, RULE-001, RULE-002, RULE-003, RULE-004, SCHEMA-001, SCHEMA-002, SCHEMA-003, SCHEMA-004, SCHEMA-005, SCHEMA-006, SEC-001, SEC-002, SEC-003, SEC-004, SEC-005, TASK-001, TASK-002, TASK-003, TASK-004, TEAM-001, TEAM-002, TEAM-003, TEAM-004, TENDER-001, TENDER-002, TENDER-003, TENDER-004, TENDER-005, TENDER-006, TENDER-007, TRADE-001, TRADE-002, TRADE-003）
+[*] 开始执行已实现用例（后端 API + UI）...
+[*] 写回结果到副本： E:\ai-content-marketing\qa-automation\AI内容营销系统-测试用例-自动化结果.xlsx
+
+================ 执行摘要 ================
+  总用例(去重): 202
+  通过: 183
+  失败: 16
+  未实现: 3
+
+--- 失败用例 ---
+  [AUTH-009] 登录接口防暴力破解
+       实际: 连续6次错误密码均 code=401 且无锁定/验证码/频繁提示
+       备注: 偏差/疑似缺陷: 连续错误密码未触发锁定或验证码挑战(Excel要求防暴破)
+  [CUST-002] 客户名称重复校验
+       实际: first=201 second=201 msg={'id': '04b5ab78-09b8-4b97-b9dc-467fde1f497f', 'customer_number': 'KH20260722002', 'company_name': 'ABC测试公司701903', 'mob
+       备注: 同名客户再次创建返回 201（非预期拦截），可能后端未对客户名做唯一性约束（需确认是否为缺陷）
+  [TENDER-002] ICP匹配度计算与展示
+       实际: lead 24a01d23-7e3e-45b6-b9e8-a61578ee7996 icp_score=None
+       备注: 疑似功能缺失: recalculate-score 后 icp_score 仍为 null(未真正计算ICP匹配度)
+  [TEAM-001] 邀请团队成员
+       实际: route=/settings/members redirected=False 元素=False body=0 url=http://127.0.0.1:5173/settings/members
+       备注: 自动覆盖(UI冒烟): /settings/members页面可达(深层交互需E2E扩展)
+  [TEAM-002] 角色权限配置
+       实际: route=/settings/members redirected=False 元素=False body=0 url=http://127.0.0.1:5173/settings/members
+       备注: 自动覆盖(UI冒烟): /settings/members页面可达(深层交互需E2E扩展)
+  [TEAM-003] 禁用团队成员
+       实际: route=/settings/members redirected=False 元素=False body=0 url=http://127.0.0.1:5173/settings/members
+       备注: 自动覆盖(UI冒烟): /settings/members页面可达(深层交互需E2E扩展)
+  [TEAM-004] 离职成员数据转移
+       实际: route=/settings/members redirected=False 元素=False body=0 url=http://127.0.0.1:5173/settings/members
+       备注: 自动覆盖(UI冒烟): /settings/members页面可达(深层交互需E2E扩展)
+  [RULE-001] 配置自动编号规则
+       实际: POST /crm/number-rules code=400 entity=qa_entity_2247
+       备注: 自动编号规则创建成功
+  [LLM-001] 配置LLM提供商和模型
+       实际: route=/agent redirected=False 元素=False body=0 url=http://127.0.0.1:5173/agent
+       备注: 自动覆盖(UI冒烟): /agent页面可达(深层交互需E2E扩展)
+  [MEM-001] 查看和管理AI记忆
+       实际: route=/agent redirected=False 元素=False body=0 url=http://127.0.0.1:5173/agent
+       备注: 自动覆盖(UI冒烟): /agent页面可达(深层交互需E2E扩展)
+  [MEM-002] 配置记忆注入策略
+       实际: route=/agent redirected=False 元素=False body=0 url=http://127.0.0.1:5173/agent
+       备注: 自动覆盖(UI冒烟): /agent页面可达(深层交互需E2E扩展)
+  [API-CRM-005] Excel导入预览接口
+       实际: create import job code=403: {'detail': '无导入权限'}
+       备注: 返回403：导入需 crm.leads.import 权限，默认注册角色未授予（验证了权限门禁生效；如需打通需预置该权限）
+  [SEC-002] 存储型XSS防护
+       实际: create=201 stored_name=<script>alert(1)</script>ACME
+       备注: 安全缺陷(待确认): 后端原样存储<script>标签；若前端用v-html渲染则存在存储型XSS风险，建议后端入库前净化或前端统一转义
+  [SEC-004] API请求频率限制
+       实际: 100次请求状态码集合={200}（无429）
+       备注: 偏差/疑似缺陷: 未见API频率限制(429)
+  [ADM-002] 禁用/启用租户
+       实际: 未找到租户禁用接口(尝试 disable/suspend PATCH 均非2xx)
+       备注: 偏差/缺陷: 后端无租户禁用/启用接口(Excel要求ADM-002禁用租户功能未实现)
+  [ADM-007] 九种人格录入验证（Phase D P-001~009）
+       实际: 人格缺失: ['P-001', 'P-002', 'P-003', 'P-004', 'P-005', 'P-006', 'P-007', 'P-008', 'P-009']；现有 codes=['finance', 'legal', 'marketing']
+       备注: 回归未通过：九种人格未全部录入
+
+--- 规格/实现偏差（已记录到备注）---
+  [AUTH-001] 正确的邮箱和密码登录成功: 偏差: Excel 写「邮箱」登录，真实系统为「手机号」登录（已按真实实现验证）
+  [AUTH-002] 密码错误登录失败: 偏差: Excel 写「邮箱」，真实为「手机号」
+  [AUTH-003] 不存在的邮箱登录失败: 偏差: 真实登录用手机号(非Excel所述邮箱)；未注册手机号登录被拒(防枚举)
+  [AUTH-004] 空邮箱/密码校验: 偏差: Excel 写「邮箱/密码」校验，真实为「手机号」
+  [AUTH-005] 邮箱格式校验: 偏差: Excel写邮箱格式校验，实际为手机号格式校验
+  [AUTH-009] 登录接口防暴力破解: 偏差/疑似缺陷: 连续错误密码未触发锁定或验证码挑战(Excel要求防暴破)
+  [AUTH-011] 完整企业注册流程成功: 偏差: 真实注册用手机号+短信验证码(mock)，非Excel所述邮箱
+  [AUTH-012] 注册邮箱已存在: 偏差: Excel写邮箱已注册，实际为手机号已注册校验
+  [AUTH-015] 未勾选协议阻止注册: 偏差/缺陷: 注册页无用户协议勾选框(Excel要求AUTH-015未勾协议阻止注册)
+  [AUTH-016] 通过邮箱重置密码成功: 偏差: Excel写邮箱重置，实际为手机重置(mock验证码)；验证重置后可登录
+  [AUTH-017] 重置链接过期处理: 偏差: Excel写邮箱重置链接过期，实际为手机验证码重置，无过期链接机制
+  [AUTH-019] 多租户列表展示与切换: 偏差: Excel写邮箱/租户列表，实际登录用手机号；验证切换接口可用
+  [LEAD-002] 必填项校验: UI 校验: 必填项缺失被前端拦截（Excel 期望「姓名/公司/手机号不能为空」，真实提示为「请填写公司名称」等逐字段 required 提示，语义一致；偏差: 仅提示首个缺失项而非全部并列
+  [CUST-001] 手动创建客户成功: UI 端到端: 手动创建客户成功并出现在列表。偏差: Excel 期望填「行业/规模」且后端存储，但 API CustomerCreate 无 industry/scale 字段，前端表单有这些输入框、提交后服务端不持久化（前端有、后端无）
+  [SCHEMA-001] 创建自定义字段: UI 冒烟: 验证设置模块路由可达（自定义字段完整创建交互为下一阶段）。偏差: Excel 子模块写 SettingsSchema.vue 对应路由实为 /settings/crm-schema（非 /settings/schema）
+  [API-AUTH-003] POST /api/v1/auth/refresh 刷新Token: 用例预期 POST /auth/refresh 刷新 token，但实现无此接口（规格/实现偏差，建议修订用例）
+  [API-CT-002] POST /api/v1/content 保存内容: 实现经 /content/generate 创建内容（无独立 POST /content 保存接口），与用例描述略有差异
+  [SEC-004] API请求频率限制: 偏差/疑似缺陷: 未见API频率限制(429)
+  [ADM-001] 查看租户列表: 偏差: Excel 期望展示「状态、到期时间」两列，但真实界面无此两列，实际列为 公司名/信用代码/行业/成员数/管理员/平台额度/创建时间（无状态/到期时间）
+  [ADM-002] 禁用/启用租户: 偏差/缺陷: 后端无租户禁用/启用接口(Excel要求ADM-002禁用租户功能未实现)
+  [ADM-006] 配置营销顾问人格: 偏差: Excel 期望「添加新人格」并保存，但当前 UI 仅有「编辑」入口，AdminAssistants.vue 的 openCreate（新增人格）未绑定任何按钮，无新增入口
+  [ADM-008] 配置Prompt模板: 偏差: 无独立Prompt模板接口，平台LLM配置可保存(对应配置能力)
+
+[*] JSON 报告：E:\ai-content-marketing\qa-automation\report.json

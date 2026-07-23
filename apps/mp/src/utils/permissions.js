@@ -248,6 +248,14 @@ export const CRM_MENU = [
     permissionAny: ['crm.lead.list_own', 'crm.lead.list_team', 'crm.lead.list_territory', 'crm.lead.list_all'],
   },
   {
+    title: '线索公海',
+    desc: '认领待跟进线索',
+    url: '/pages/crm/lead-pools',
+    icon: '🌊',
+    iconColor: '#13c2c2',
+    permissionAny: ['crm.lead.list_own', 'crm.lead.list_team', 'crm.lead.list_territory', 'crm.lead.list_all', 'crm.lead.edit'],
+  },
+  {
     title: '客户',
     desc: '管理成交客户',
     url: '/pages/crm/customers',
@@ -277,7 +285,7 @@ export const CRM_MENU = [
     url: '/pages/crm/quotes',
     icon: '📄',
     iconColor: '#1677ff',
-    permissionAny: ['crm.quote.list_own', 'crm.quote.list_all'],
+    permissionAny: ['crm.quote.list_own', 'crm.quote.list_team', 'crm.quote.list_all'],
   },
   {
     title: '合同',
@@ -285,7 +293,7 @@ export const CRM_MENU = [
     url: '/pages/crm/contracts',
     icon: '📋',
     iconColor: '#722ed1',
-    permissionAny: ['crm.contract.list_own', 'crm.contract.list_all'],
+    permissionAny: ['crm.contract.list_own', 'crm.contract.list_team', 'crm.contract.list_all'],
   },
   {
     title: '回款',

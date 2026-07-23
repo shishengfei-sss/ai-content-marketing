@@ -19,7 +19,7 @@ const memberNameComposing = ref(false)
 const memberNameInputRef = ref(null)
 const editMemberDialog = ref(false)
 const editingMember = ref(null)
-const editMemberForm = ref({ display_name: '' })
+const editMemberForm = ref({ phone: '', display_name: '' })
 const editNameComposing = ref(false)
 const editNameInputRef = ref(null)
 
@@ -202,10 +202,49 @@ async function disableMember(member) {
   }
 }
 
+async function enableMember(member) {
+  if (member.readonly || apiUnavailable.value) return
+  try {
+    await teamApi.enableMember(member.id)
+    ElMessage.success('已启用')
+    invalidateTeamMembersCache()
+    await loadMembers()
+  } catch (e) {
+    ElMessage.error(formatApiError(e, '操作失败'))
+  }
+}
+
+async function resetPassword(member) {
+  if (member.readonly || apiUnavailable.value) return
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `为 ${member.display_name || member.phone} 设置新密码（至少 8 位）`,
+      '重置密码',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        inputType: 'password',
+        inputPlaceholder: '新密码',
+        inputValidator: (v) => {
+          if (!v || String(v).length < 8) return '密码至少 8 位'
+          return true
+        },
+      },
+    )
+    await teamApi.resetMemberPassword(member.id, { password: value })
+    ElMessage.success('密码已重置')
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(formatApiError(e, '重置失败'))
+  }
+}
+
 function openEditMember(member) {
   if (member.readonly || apiUnavailable.value) return
   editingMember.value = member
-  editMemberForm.value = { display_name: member.display_name || '' }
+  editMemberForm.value = {
+    phone: member.phone || '',
+    display_name: member.display_name || '',
+  }
   editMemberDialog.value = true
 }
 
@@ -220,9 +259,17 @@ async function saveEditMember() {
     ElMessage.warning('请填写姓名')
     return
   }
+  const phone = editMemberForm.value.phone.trim()
+  if (!phonePattern.test(phone)) {
+    ElMessage.warning('请输入正确的 11 位手机号')
+    return
+  }
   try {
-    await teamApi.updateMember(editingMember.value.id, { display_name: name })
-    ElMessage.success('姓名已更新')
+    await teamApi.updateMember(editingMember.value.id, {
+      display_name: name,
+      phone,
+    })
+    ElMessage.success('成员信息已更新')
     editMemberDialog.value = false
     editingMember.value = null
     invalidateTeamMembersCache()
@@ -322,7 +369,7 @@ onMounted(loadAll)
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="280">
+          <el-table-column label="操作" width="360">
             <template #default="{ row }">
               <el-button
                 v-if="!row.readonly"
@@ -331,7 +378,7 @@ onMounted(loadAll)
                 :disabled="apiUnavailable"
                 @click="openEditMember(row)"
               >
-                编辑姓名
+                编辑
               </el-button>
               <el-select
                 v-if="row.role_code !== 'admin' && !row.readonly"
@@ -349,6 +396,24 @@ onMounted(loadAll)
                 @click="disableMember(row)"
               >
                 禁用
+              </el-button>
+              <el-button
+                v-if="!row.is_active && !row.readonly"
+                link
+                type="success"
+                :disabled="apiUnavailable"
+                @click="enableMember(row)"
+              >
+                启用
+              </el-button>
+              <el-button
+                v-if="!row.readonly"
+                link
+                type="warning"
+                :disabled="apiUnavailable"
+                @click="resetPassword(row)"
+              >
+                重置密码
               </el-button>
             </template>
           </el-table-column>
@@ -417,10 +482,10 @@ onMounted(loadAll)
       </template>
     </el-dialog>
 
-    <el-dialog v-model="editMemberDialog" title="编辑姓名" width="420px" destroy-on-close>
+    <el-dialog v-model="editMemberDialog" title="编辑成员" width="420px" destroy-on-close>
       <el-form label-width="80px" @submit.prevent="saveEditMember">
         <el-form-item label="手机号">
-          <el-input :model-value="editingMember?.phone" disabled />
+          <el-input v-model="editMemberForm.phone" maxlength="11" placeholder="11 位手机号" />
         </el-form-item>
         <el-form-item label="姓名">
           <el-input

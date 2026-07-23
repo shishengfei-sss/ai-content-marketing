@@ -2,6 +2,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { adminApi, isBenignEmptyError } from '../../api/client'
+import { formatDateTime } from '../../utils/datetime'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -157,7 +158,7 @@ onMounted(loadData)
       </el-table-column>
       <el-table-column label="发布时间" width="160">
         <template #default="{ row }">
-          {{ row.published_at ? new Date(row.published_at).toLocaleString('zh-CN') : '—' }}
+          {{ formatDateTime(row.published_at) }}
         </template>
       </el-table-column>
       <el-table-column label="操作" width="80">

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { crmApi } from '../api/client'
+import { crmApi } from '../../api/client'
 
 const loading = ref(false)
 const report = ref(null)
@@ -94,7 +94,7 @@ onMounted(load)
             <template #default="{ row }">{{ money(row.value) }}</template>
           </el-table-column>
         </el-table>
-        <p class="hint">已确认回款 {{ money(report?.paid_amount) }} / 订单金额 {{ money(report?.order_amount) }}</p>
+        <p class="hint">已确认回款 {{ money(report?.paid_amount) }} / 订单金额（未税） {{ money(report?.order_amount) }}</p>
       </el-col>
     </el-row>
 

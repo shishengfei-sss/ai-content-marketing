@@ -12,7 +12,17 @@ from sqlalchemy.orm import Session
 
 from app.database import uuid_eq
 from app.dependencies import TenantContext
-from app.models.crm import Deal, DealCloseAnalysis, DealLineItem, DealStageLog, DealTeamMember, Order, Quote, SalesPipelineStage
+from app.models.crm import (
+    Contract,
+    Deal,
+    DealCloseAnalysis,
+    DealLineItem,
+    DealStageLog,
+    DealTeamMember,
+    Order,
+    Quote,
+    SalesPipelineStage,
+)
 from app.schemas.crm_deals import (
     DealBatchUpdate,
     DealClose,
@@ -23,7 +33,7 @@ from app.schemas.crm_deals import (
     QuoteCreate,
     QuoteLineCreate,
 )
-from app.services.crm.crm_scope_service import assert_can_view_deal
+from app.services.crm.crm_scope_service import assert_can_mutate_deal, assert_can_view_deal
 from app.services.crm.number_service import generate_number
 from app.services.crm.pipeline_service import (
     get_default_pipeline,
@@ -35,7 +45,51 @@ from app.services.crm.pipeline_service import (
 )
 from app.services.crm.quote_service import create_quote
 from app.services.crm.schema_service import validate_extra_data
-from app.services.crm.sales_org_service import get_territory
+from app.services.crm.sales_org_service import apply_creator_org_defaults, apply_owner_org_snapshot, assert_can_assign_owner, get_territory
+from app.services.crm.tax_engine import TaxLineIn, compute_tax_lines
+
+
+def _assert_deal_open(deal: Deal) -> None:
+    if deal.status in ("won", "lost", "abandoned"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="已关闭的商机不可编辑",
+        )
+
+
+def _assert_deal_convertible(deal: Deal) -> None:
+    """转订单：进行中/赢单可转；输单/放弃禁止。"""
+    if deal.status in ("lost", "abandoned"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"已{ {'lost': '输单', 'abandoned': '放弃'}[deal.status] }商机不可转订单",
+        )
+
+
+def _assert_deal_quoteable(deal: Deal) -> None:
+    """生成报价：进行中/赢单可；输单/放弃禁止。"""
+    if deal.status in ("lost", "abandoned"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="已关闭（输单/放弃）的商机不可生成报价",
+        )
+
+
+def _first_open_stage(db: Session, tenant_id: UUID, pipeline_id: UUID) -> SalesPipelineStage | None:
+    """管道内第一个非终态阶段（用于重开）。"""
+    return (
+        db.query(SalesPipelineStage)
+        .filter(
+            SalesPipelineStage.tenant_id == tenant_id,
+            uuid_eq(SalesPipelineStage.pipeline_id, pipeline_id),
+            SalesPipelineStage.is_active.is_(True),
+            SalesPipelineStage.is_won_stage.is_(False),
+            SalesPipelineStage.is_lost_stage.is_(False),
+            SalesPipelineStage.is_closed_stage.is_(False),
+        )
+        .order_by(SalesPipelineStage.sort_order, SalesPipelineStage.created_at)
+        .first()
+    )
 
 
 def _perm_set(ctx: TenantContext) -> set[str]:
@@ -94,18 +148,20 @@ def deal_to_out(db: Session, tenant_id: UUID, deal: Deal) -> DealOut:
     return enrich_deals_stage_stay(db, tenant_id, [deal])[0]
 
 
-def _line_subtotal(ln) -> float:
-    if ln.subtotal is not None:
-        return float(ln.subtotal)
-    return round(
-        float(ln.quantity) * float(ln.unit_price) * (1 - float(ln.discount_percent or 0) / 100),
-        2,
-    )
-
-
 def _replace_lines(db: Session, deal: Deal, lines) -> None:
+    """写入商机明细：共用价税引擎（行未税 + 税额尾差），无头折。"""
     db.query(DealLineItem).filter(DealLineItem.deal_id == deal.id).delete(synchronize_session=False)
-    for i, ln in enumerate(lines):
+    engine_in = [
+        TaxLineIn(
+            unit_price=ln.unit_price,
+            quantity=ln.quantity,
+            discount_rate=ln.discount_percent or 0,
+            tax_rate=ln.tax_rate,
+        )
+        for ln in lines
+    ]
+    result = compute_tax_lines(engine_in, header_discount_rate=None)
+    for i, (ln, out) in enumerate(zip(lines, result.lines)):
         db.add(
             DealLineItem(
                 tenant_id=deal.tenant_id,
@@ -118,7 +174,9 @@ def _replace_lines(db: Session, deal: Deal, lines) -> None:
                 quantity=ln.quantity,
                 unit_price=ln.unit_price,
                 discount_percent=ln.discount_percent or 0,
-                subtotal=_line_subtotal(ln),
+                tax_rate=float(out.tax_rate) if out.tax_rate is not None else ln.tax_rate,
+                tax_amount=float(out.tax_amount),
+                subtotal=float(out.line_total),
             )
         )
     db.flush()
@@ -153,7 +211,14 @@ def require_deal(db: Session, ctx: TenantContext, deal_id: UUID) -> Deal:
     if not deal:
         raise HTTPException(status_code=404, detail="商机不存在")
     try:
-        assert_can_view_deal(ctx, db, deal.owner_user_id, deal.territory_id)
+        assert_can_view_deal(
+            ctx,
+            db,
+            deal.owner_user_id,
+            deal.territory_id,
+            created_by_user_id=deal.created_by_user_id,
+            manager_user_id=getattr(deal, "manager_user_id", None),
+        )
     except HTTPException as exc:
         if exc.status_code == 403 and _is_deal_team_member(db, ctx, deal.id):
             pass
@@ -210,6 +275,7 @@ def create_deal(db: Session, ctx: TenantContext, data: DealCreate, *, commit: bo
     extra = validate_extra_data(db, ctx.tenant_id, "deal", data.extra_data, is_create=True)
     if data.territory_id is not None and not get_territory(db, ctx.tenant_id, data.territory_id):
         raise HTTPException(status_code=404, detail="地区不存在")
+    territory_id, manager_user_id = apply_creator_org_defaults(db, ctx, territory_id=data.territory_id)
     pipeline_id, stage_id, default_prob = _resolve_pipeline_and_stage(
         db, ctx.tenant_id, data.pipeline_id, data.stage_id
     )
@@ -219,6 +285,7 @@ def create_deal(db: Session, ctx: TenantContext, data: DealCreate, *, commit: bo
     if data.owner_user_id is not None and data.owner_user_id != ctx.user.id:
         if "crm.deal.assign" not in _perm_set(ctx):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限分配负责人")
+        assert_can_assign_owner(db, ctx, data.owner_user_id)
         owner_user_id = data.owner_user_id
     deal = Deal(
         tenant_id=ctx.tenant_id,
@@ -241,7 +308,8 @@ def create_deal(db: Session, ctx: TenantContext, data: DealCreate, *, commit: bo
         contact_role=data.contact_role,
         campaign_id=data.campaign_id,
         owner_user_id=owner_user_id,
-        territory_id=data.territory_id,
+        territory_id=territory_id,
+        manager_user_id=manager_user_id,
         extra_data=extra,
         created_by_user_id=ctx.user.id,
     )
@@ -282,10 +350,57 @@ def create_deal(db: Session, ctx: TenantContext, data: DealCreate, *, commit: bo
 
 def update_deal(db: Session, ctx: TenantContext, deal: Deal, data: DealUpdate) -> Deal:
     perms = _perm_set(ctx)
+    # 除分配负责人外，其它字段变更仅负责人可操作
+    mutate_keys = set(data.model_fields_set) - {"owner_user_id"}
+    if mutate_keys or (data.owner_user_id is not None and data.owner_user_id != deal.owner_user_id):
+        _assert_deal_open(deal)
+    if mutate_keys:
+        assert_can_mutate_deal(ctx, deal)
+
     if data.owner_user_id is not None and data.owner_user_id != deal.owner_user_id:
         if "crm.deal.assign" not in perms:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限分配负责人")
+        assert_can_assign_owner(db, ctx, data.owner_user_id)
         deal.owner_user_id = data.owner_user_id
+        snap_territory, snap_manager = apply_owner_org_snapshot(db, ctx.tenant_id, data.owner_user_id)
+        if data.territory_id is None:
+            deal.territory_id = snap_territory
+        deal.manager_user_id = snap_manager
+        # 同步团队中的 owner 角色
+        for row in (
+            db.query(DealTeamMember)
+            .filter(
+                DealTeamMember.tenant_id == ctx.tenant_id,
+                uuid_eq(DealTeamMember.deal_id, deal.id),
+                DealTeamMember.role == "owner",
+            )
+            .all()
+        ):
+            if row.user_id != data.owner_user_id:
+                row.role = "member"
+        existing_new = (
+            db.query(DealTeamMember)
+            .filter(
+                DealTeamMember.tenant_id == ctx.tenant_id,
+                uuid_eq(DealTeamMember.deal_id, deal.id),
+                uuid_eq(DealTeamMember.user_id, data.owner_user_id),
+            )
+            .first()
+        )
+        if existing_new:
+            existing_new.role = "owner"
+        else:
+            db.add(
+                DealTeamMember(
+                    tenant_id=ctx.tenant_id,
+                    deal_id=deal.id,
+                    user_id=data.owner_user_id,
+                    role="owner",
+                )
+            )
+        from app.services.crm.entity_team_service import ensure_deal_owner_synced
+
+        ensure_deal_owner_synced(db, ctx, deal.id, data.owner_user_id)
     if data.title is not None:
         deal.title = data.title.strip()
     if data.customer_id is not None:
@@ -361,6 +476,8 @@ def update_deal(db: Session, ctx: TenantContext, deal: Deal, data: DealUpdate) -
 def change_stage(
     db: Session, ctx: TenantContext, deal: Deal, data: DealStageChange
 ) -> Deal:
+    assert_can_mutate_deal(ctx, deal)
+    _assert_deal_open(deal)
     if deal.status != "open":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -442,6 +559,7 @@ def _close_deal_internal(
 
 
 def close_deal(db: Session, ctx: TenantContext, deal: Deal, data: DealClose) -> Deal:
+    assert_can_mutate_deal(ctx, deal)
     if deal.status != "open":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -470,6 +588,39 @@ def close_deal(db: Session, ctx: TenantContext, deal: Deal, data: DealClose) -> 
     return deal
 
 
+def reopen_deal(db: Session, ctx: TenantContext, deal: Deal) -> Deal:
+    """主管重开已关闭商机：status→open，回退到管道首个非终态阶段。"""
+    if "crm.deal.reopen" not in _perm_set(ctx):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限重开商机")
+    if deal.status not in ("won", "lost", "abandoned"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="仅已关闭的商机可重开",
+        )
+    open_stage = _first_open_stage(db, ctx.tenant_id, deal.pipeline_id)
+    if not open_stage:
+        raise HTTPException(status_code=400, detail="管道无可用的进行中阶段，无法重开")
+    from_stage_id = deal.stage_id
+    deal.status = "open"
+    deal.closed_at = None
+    if open_stage.id != deal.stage_id:
+        deal.stage_id = open_stage.id
+        deal.probability = open_stage.probability
+    db.add(
+        DealStageLog(
+            tenant_id=ctx.tenant_id,
+            deal_id=deal.id,
+            from_stage_id=from_stage_id,
+            to_stage_id=deal.stage_id,
+            changed_by_user_id=ctx.user.id,
+            note="重开商机",
+        )
+    )
+    db.commit()
+    db.refresh(deal)
+    return deal
+
+
 def list_stage_logs(
     db: Session, tenant_id: UUID, deal_id: UUID
 ) -> list[DealStageLog]:
@@ -484,7 +635,37 @@ def list_stage_logs(
     )
 
 
-def soft_delete_deal(db: Session, deal: Deal) -> None:
+def soft_delete_deal(db: Session, ctx: TenantContext, deal: Deal) -> None:
+    assert_can_mutate_deal(ctx, deal)
+    if deal.status in ("won", "lost", "abandoned"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="已关闭的商机不可删除，请保留记录",
+        )
+    related = []
+    if (
+        db.query(Quote.id)
+        .filter(Quote.deal_id == deal.id, Quote.deleted_at.is_(None))
+        .first()
+    ):
+        related.append("报价")
+    if (
+        db.query(Contract.id)
+        .filter(Contract.deal_id == deal.id, Contract.deleted_at.is_(None))
+        .first()
+    ):
+        related.append("合同")
+    if (
+        db.query(Order.id)
+        .filter(Order.deal_id == deal.id, Order.deleted_at.is_(None))
+        .first()
+    ):
+        related.append("订单")
+    if related:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"商机已关联{'/'.join(related)}，不可删除",
+        )
     deal.deleted_at = datetime.now(timezone.utc)
     db.commit()
 
@@ -494,9 +675,10 @@ def _generate_order_number(db: Session, tenant_id: UUID) -> str:
 
 
 def generate_quote_from_deal(db: Session, ctx: TenantContext, deal: Deal) -> Quote:
-    """商机明细 → 一键生成报价单（草稿）。"""
+    """商机明细 → 一键生成报价单（草稿）。进行中/赢单可生成；输单/放弃不可。"""
     if "crm.quote.edit" not in _perm_set(ctx):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限创建报价单")
+    _assert_deal_quoteable(deal)
     lines = _load_deal_lines(db, deal.id)
     quote_lines = [
         QuoteLineCreate(
@@ -506,6 +688,8 @@ def generate_quote_from_deal(db: Session, ctx: TenantContext, deal: Deal) -> Quo
             quantity=float(ln.quantity),
             unit_price=float(ln.unit_price),
             discount_rate=float(ln.discount_percent or 0),
+            tax_rate=float(ln.tax_rate) if ln.tax_rate is not None else None,
+            tax_amount=float(ln.tax_amount) if ln.tax_amount is not None else None,
             line_total=float(ln.subtotal),
             sort_order=ln.sort_order,
         )
@@ -527,11 +711,12 @@ def convert_deal_to_order(db: Session, ctx: TenantContext, deal: Deal) -> Order:
 
     生成 draft 订单：source=deal, amount=deal.amount, 无明细。
     业务规则 BR-ORDER-01：customer_id 必填（来自商机）。
+    进行中/赢单可转；输单/放弃不可。
     """
-    if "crm.order.convert" not in _perm_set(ctx) and "crm.order.create" not in _perm_set(ctx):
+    perms = _perm_set(ctx)
+    if not ({"crm.order.convert", "crm.order.create", "crm.deal.convert"} & perms):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限转订单")
-    if deal.status == "lost":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="已输单商机不可转订单")
+    _assert_deal_convertible(deal)
     order = Order(
         tenant_id=ctx.tenant_id,
         order_number=_generate_order_number(db, ctx.tenant_id),
@@ -575,6 +760,8 @@ def list_team_members(db: Session, ctx: TenantContext, deal: Deal) -> list[DealT
 def add_team_member(db: Session, ctx: TenantContext, deal: Deal, user_id: UUID, role: str = "member") -> DealTeamMember:
     if "crm.deal.edit" not in _perm_set(ctx):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限管理商机团队")
+    _assert_deal_open(deal)
+    assert_can_mutate_deal(ctx, deal)
     from app.models import User
 
     user = db.query(User).filter(User.id == user_id, User.tenant_id == ctx.tenant_id).first()
@@ -609,6 +796,8 @@ def add_team_member(db: Session, ctx: TenantContext, deal: Deal, user_id: UUID, 
 def remove_team_member(db: Session, ctx: TenantContext, deal: Deal, member_id: UUID) -> None:
     if "crm.deal.edit" not in _perm_set(ctx):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限管理商机团队")
+    _assert_deal_open(deal)
+    assert_can_mutate_deal(ctx, deal)
     member = (
         db.query(DealTeamMember)
         .filter(DealTeamMember.tenant_id == ctx.tenant_id, DealTeamMember.id == member_id)
@@ -660,6 +849,8 @@ def clone_deal(db: Session, ctx: TenantContext, deal: Deal) -> Deal:
                 quantity=float(ln.quantity),
                 unit_price=float(ln.unit_price),
                 discount_percent=float(ln.discount_percent or 0),
+                tax_rate=float(ln.tax_rate) if ln.tax_rate is not None else None,
+                tax_amount=float(ln.tax_amount) if ln.tax_amount is not None else None,
                 subtotal=float(ln.subtotal),
                 sort_order=ln.sort_order,
             )
@@ -690,6 +881,9 @@ def batch_update_deals(db: Session, ctx: TenantContext, data: DealBatchUpdate) -
             patch_fields["status"] = data.status
         if not patch_fields:
             continue
-        update_deal(db, ctx, deal, DealUpdate(**patch_fields))
-        updated += 1
+        try:
+            update_deal(db, ctx, deal, DealUpdate(**patch_fields))
+            updated += 1
+        except HTTPException:
+            continue
     return updated

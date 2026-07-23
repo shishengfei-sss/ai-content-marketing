@@ -1,0 +1,22 @@
+---
+description: 改后端后必须验证 API 已加载新代码，避免 Windows 热重载假成功
+alwaysApply: true
+---
+
+# 本地 API 热重载防踩坑（Windows）
+
+本仓库在 Windows 上使用 `uvicorn --reload` 时，**经常出现「Reloading…」但 worker 仍跑旧代码**（只改了 `tender_parse_service.py` 等却未真正重启）。用户会以为功能没修好。
+
+## 强制要求
+
+修改 `apps/api/app/**/*.py`（尤其 `services/`、`routers/`、`models/`）并需要用户立刻验证时：
+
+1. **不要假设** `--reload` 已生效。
+2. 用 `scripts/restart-api.ps1`（或等价：杀光本项目 `uvicorn app.main:app` 后再启动）**硬重启** API。
+3. 重启后必须检查：`GET http://127.0.0.1:8003/health`，确认返回里的 `tender_parser_version`（及必要时相关行为）与当前代码一致。
+4. 再让用户刷新页面验证；若用户仍看到旧行为，先查 health 版本，不要先改业务逻辑。
+
+## 启动注意
+
+- 启动脚本应设置 `WATCHFILES_FORCE_POLLING=1`（见 `scripts/restart-api.ps1`）。
+- 解析结果 `result_json._parser_version` 应与 health 中版本一致；不一致即旧进程。

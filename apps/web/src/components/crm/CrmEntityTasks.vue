@@ -17,6 +17,8 @@ import {
   isActiveTaskStatus,
   formatDueAtRelative,
   formatTaskDateTime,
+  promptTaskCancelReason,
+  promptTaskCompleteConfirm,
   TASK_TIME_FIELDS,
 } from '../../utils/taskMeta'
 
@@ -24,17 +26,51 @@ const props = defineProps({
   entityType: { type: String, required: true },
   entityId: { type: String, required: true },
   defaultAssigneeId: { type: String, default: '' },
+  /** 为 false 时隐藏新建任务表单（如非客户负责人） */
+  allowCreate: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['changed'])
 
 const auth = useAuthStore()
-const { loadMembers, resolveMemberName, members: teamMembers } = useTeamMembers()
+const { loadMembers, resolveMemberName } = useTeamMembers()
 
 const loading = ref(false)
 const submitting = ref(false)
 const tasks = ref([])
 const taskFilter = ref('open')
+/** 按销售组织可指派的执行人（本人 / 下属 / 同级销售经理；管理员为全员） */
+const assignableMembers = ref([])
+
+const assigneeOptions = computed(() =>
+  assignableMembers.value.filter((m) => m.is_active !== false),
+)
+
+function sameUserId(a, b) {
+  if (a == null || b == null) return false
+  return String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
+}
+
+async function loadAssignableAssignees(includeUserId = '') {
+  try {
+    const { data } = await crmApi.listAssignableOwners({
+      include_user_id: includeUserId || undefined,
+    })
+    assignableMembers.value = Array.isArray(data) ? data : []
+  } catch {
+    assignableMembers.value = []
+  }
+}
+
+function pickDefaultAssignee(preferredId) {
+  const options = assigneeOptions.value
+  if (preferredId && options.some((m) => sameUserId(m.user_id, preferredId))) {
+    return preferredId
+  }
+  const selfId = auth.user?.id
+  if (selfId && options.some((m) => sameUserId(m.user_id, selfId))) return selfId
+  return options[0]?.user_id || selfId || ''
+}
 
 const form = ref({
   title: '',
@@ -71,7 +107,7 @@ function resetForm() {
     planned_start_at: '',
     due_at: '',
     priority: 'normal',
-    assignee_user_id: props.defaultAssigneeId || auth.user?.id || '',
+    assignee_user_id: pickDefaultAssignee(props.defaultAssigneeId),
   }
 }
 
@@ -123,17 +159,25 @@ async function submitCreate() {
   }
 }
 
-const canCreate = () => hasPermission(auth.permissions, 'crm.task.create')
+const canCreate = () => props.allowCreate && hasPermission(auth.permissions, 'crm.task.create')
 const canEdit = () => hasPermission(auth.permissions, 'crm.task.edit')
 const canAssign = () => hasPermission(auth.permissions, 'crm.task.assign')
 
 async function updateTaskStatus(row, status) {
   if (!canEdit()) return
   try {
-    await crmApi.updateTask(row.id, { status })
+    const payload = { status }
+    if (status === 'done') {
+      await promptTaskCompleteConfirm(row.title)
+    }
+    if (status === 'cancelled') {
+      payload.cancel_reason = await promptTaskCancelReason()
+    }
+    await crmApi.updateTask(row.id, payload)
     ElMessage.success(TASK_STATUS_CHANGE_MESSAGES[status] || '状态已更新')
     await loadTasks()
   } catch (e) {
+    if (e === 'cancel' || e?.message === 'cancel') return
     ElMessage.error(e.message || '更新失败')
   }
 }
@@ -165,21 +209,25 @@ function actionButtonType(act) {
 
 watch(
   () => props.defaultAssigneeId,
-  (id) => {
-    if (id && !form.value.assignee_user_id) form.value.assignee_user_id = id
+  async (id) => {
+    await loadAssignableAssignees(id)
+    if (!form.value.assignee_user_id) {
+      form.value.assignee_user_id = pickDefaultAssignee(id)
+    }
   },
 )
 
 watch(
   () => props.entityId,
-  () => {
+  async () => {
+    await loadAssignableAssignees(props.defaultAssigneeId)
     resetForm()
     loadTasks()
   },
 )
 
 onMounted(async () => {
-  await loadMembers(true)
+  await Promise.all([loadMembers(true), loadAssignableAssignees(props.defaultAssigneeId)])
   resetForm()
   loadTasks()
 })
@@ -274,13 +322,13 @@ defineExpose({ reload: loadTasks, openCount })
           <el-form-item v-if="canAssign()" label="执行人" class="entity-tasks__form-col">
             <el-select
               v-model="form.assignee_user_id"
-              placeholder="选择执行人"
+              placeholder="选择执行人（本组织范围）"
               filterable
               clearable
               style="width: 100%"
             >
               <el-option
-                v-for="m in teamMembers.filter((x) => x.is_active)"
+                v-for="m in assigneeOptions"
                 :key="m.user_id"
                 :label="m.display_name || m.phone"
                 :value="m.user_id"
@@ -330,11 +378,24 @@ defineExpose({ reload: loadTasks, openCount })
         <div class="task-card__body">
           <div class="task-card__head">
             <h4 class="task-card__title">{{ item.title }}</h4>
-            <el-tag size="small" :type="statusTagType(item.status)">
+            <el-tooltip
+              v-if="item.status === 'cancelled' && item.cancel_reason"
+              :content="`取消原因：${item.cancel_reason}`"
+              placement="top"
+            >
+              <el-tag size="small" :type="statusTagType(item.status)">
+                {{ STATUS_LABELS[item.status] || item.status }}
+              </el-tag>
+            </el-tooltip>
+            <el-tag v-else size="small" :type="statusTagType(item.status)">
               {{ STATUS_LABELS[item.status] || item.status }}
             </el-tag>
           </div>
           <p v-if="item.description" class="task-card__desc">{{ item.description }}</p>
+          <p
+            v-if="item.status === 'cancelled' && item.cancel_reason"
+            class="task-card__desc task-card__cancel-reason"
+          >取消原因：{{ item.cancel_reason }}</p>
           <div class="task-card__times">
             <div v-for="field in TASK_TIME_FIELDS" :key="field.key" class="task-card__time-row">
               <span class="task-card__time-label">{{ field.label }}</span>
@@ -639,6 +700,10 @@ defineExpose({ reload: loadTasks, openCount })
   font-size: 13px;
   line-height: 1.55;
   color: var(--el-text-color-regular);
+}
+
+.task-card__cancel-reason {
+  color: var(--el-color-warning);
 }
 
 .task-card__times {

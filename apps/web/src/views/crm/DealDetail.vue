@@ -7,7 +7,13 @@ import { useAuthStore } from '../../stores/auth'
 import { hasPermission } from '../../config/permissions'
 import { useTeamMembers } from '../../composables/useTeamMembers'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import CrmEntityTags from '../../components/crm/CrmEntityTags.vue'
+import CrmEntityAttachments from '../../components/crm/CrmEntityAttachments.vue'
+import CrmLineItemsEditor from '../../components/crm/CrmLineItemsEditor.vue'
+import CrmAssignOwner from '../../components/crm/CrmAssignOwner.vue'
 import DealFormDialog from './DealFormDialog.vue'
+import QuoteFormDialog from './QuoteFormDialog.vue'
+import { formatDate, formatDateTime } from '../../utils/datetime'
 
 const route = useRoute()
 const router = useRouter()
@@ -23,21 +29,60 @@ const stageLogs = ref([])
 const activities = ref([])
 const activityForm = ref({ activity_type: 'call', subject: '', content: '' })
 const activitySaving = ref(false)
-const attachments = ref([])
-const uploading = ref(false)
 const teamMembers = ref([])
 const addTeamVisible = ref(false)
 const addTeamForm = ref({ user_id: '', role: 'member' })
 const closeVisible = ref(false)
 const closeForm = ref({ status: 'won', amount: null, reason: '', competitor: '', detail: '', improvement: '' })
 const editVisible = ref(false)
+const assignVisible = ref(false)
+const quoteFormVisible = ref(false)
+const linesEditing = ref(false)
+const linesSaving = ref(false)
 
 const canEdit = computed(() => hasPermission(auth.permissions, 'crm.deal.edit'))
+const canDelete = computed(() => hasPermission(auth.permissions, 'crm.deal.delete'))
+const canAssign = computed(() => hasPermission(auth.permissions, 'crm.deal.assign'))
 const canClose = computed(() => hasPermission(auth.permissions, 'crm.deal.close'))
-const canConvert = computed(() => hasPermission(auth.permissions, 'crm.deal.convert'))
+const canReopen = computed(() => hasPermission(auth.permissions, 'crm.deal.reopen'))
+/** 与后端一致：crm.order.convert / create；兼容 crm.deal.convert */
+const canConvert = computed(() =>
+  hasPermission(auth.permissions, 'crm.order.convert')
+  || hasPermission(auth.permissions, 'crm.order.create')
+  || hasPermission(auth.permissions, 'crm.deal.convert'),
+)
 const canGenerateQuote = computed(() => hasPermission(auth.permissions, 'crm.quote.edit'))
+const canCreateCpq = computed(() => hasPermission(auth.permissions, 'crm.quote.create'))
 const canWriteActivity = computed(() => hasPermission(auth.permissions, 'crm.activity.create'))
 
+function sameUserId(a, b) {
+  if (a == null || b == null) return false
+  return String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
+}
+const isDealOwner = computed(() => sameUserId(deal.value?.owner_user_id, auth.user?.id))
+const isClosed = computed(() => ['won', 'lost', 'abandoned'].includes(deal.value?.status))
+const isWon = computed(() => deal.value?.status === 'won')
+/** 进行中或赢单：可走履约动作（转单/报价） */
+const isOpenOrWon = computed(() => !isClosed.value || isWon.value)
+/** 编辑 / 改阶段 / 明细 / 团队等：仅进行中 */
+const canMutateDeal = computed(() => canEdit.value && isDealOwner.value && !isClosed.value)
+const canCloseDeal = computed(() => canClose.value && isDealOwner.value && !isClosed.value)
+const canReopenDeal = computed(() => canReopen.value && isClosed.value)
+const canWriteDealActivity = computed(() => canWriteActivity.value && isDealOwner.value)
+/** 附件：关闭后仍可上传（跟进履约材料） */
+const canAttachDeal = computed(() => canEdit.value && isDealOwner.value)
+/** 删除：权限 + 负责人 + 进行中 */
+const canDeleteDeal = computed(() => canDelete.value && isDealOwner.value && !isClosed.value)
+const canAssignDeal = computed(() => canAssign.value && !isClosed.value)
+const canCloneDeal = computed(() => hasPermission(auth.permissions, 'crm.deal.create'))
+/** 赢单/进行中可转；已转过仍可再次生成（后端一对多） */
+const canConvertDeal = computed(() => canConvert.value && isDealOwner.value && isOpenOrWon.value)
+/** 有明细可一键生成；无明细也可打开新建报价（关联本商机） */
+const canQuoteFromDeal = computed(() =>
+  (canGenerateQuote.value || canCreateCpq.value) && isDealOwner.value && isOpenOrWon.value,
+)
+const hasDealLines = computed(() => (deal.value?.lines?.length || 0) > 0)
+const canCpqFromDeal = computed(() => canCreateCpq.value && isDealOwner.value && isOpenOrWon.value && !!deal.value?.customer_id)
 const activityLabels = {
   call: '电话',
   visit: '拜访',
@@ -54,7 +99,6 @@ const stages = computed(() => currentPipeline.value?.stages || [])
 const currentStage = computed(() =>
   stages.value.find((s) => String(s.id) === String(deal.value?.stage_id)),
 )
-const isClosed = computed(() => ['won', 'lost', 'abandoned'].includes(deal.value?.status))
 const territoryName = computed(() => {
   const t = territories.value.find((x) => String(x.id) === String(deal.value?.territory_id))
   return t?.name || ''
@@ -67,7 +111,7 @@ const customerTags = computed(() => {
 const priorityLabel = (v) => ({ high: '高', medium: '中', low: '低' })[v] || v || '-'
 const priorityTagType = (v) => ({ high: 'danger', medium: 'warning', low: 'info' })[v] || ''
 
-async function loadDeal() {
+async function loadDeal({ afterAssign = false } = {}) {
   loading.value = true
   try {
     const { data } = await crmApi.getDeal(route.params.id)
@@ -80,13 +124,21 @@ async function loadDeal() {
     }
     await loadStageLogs()
     await loadActivities()
-    await loadAttachments()
     await loadTeam()
   } catch (e) {
+    const forbidden = e.status === 403 || String(e.message || '').includes('无权访问')
+    if (afterAssign && forbidden) {
+      router.replace('/crm/deals')
+      return
+    }
     ElMessage.error(e.message || '加载商机失败')
   } finally {
     loading.value = false
   }
+}
+
+async function onAssignDone() {
+  await loadDeal({ afterAssign: true })
 }
 
 async function loadPipelines() {
@@ -149,64 +201,18 @@ async function removeActivity(id) {
   }
 }
 
-async function loadAttachments() {
+async function saveLines(lines) {
+  linesSaving.value = true
   try {
-    const { data } = await crmApi.listAttachments({ entity_type: 'deal', entity_id: route.params.id })
-    attachments.value = Array.isArray(data) ? data : []
-  } catch { attachments.value = [] }
-}
-
-async function onUploadFile(ev) {
-  const file = ev.target.files?.[0]
-  if (!file) return
-  if (file.size > 50 * 1024 * 1024) { ElMessage.warning('文件超过 50MB'); return }
-  uploading.value = true
-  try {
-    await crmApi.uploadAttachment('deal', route.params.id, file)
-    ElMessage.success('已上传')
-    await loadAttachments()
+    await crmApi.updateDeal(deal.value.id, { lines })
+    linesEditing.value = false
+    ElMessage.success('明细已保存')
+    await loadDeal()
   } catch (e) {
-    ElMessage.error(e.message || '上传失败')
+    ElMessage.error(e.message || '保存失败')
   } finally {
-    uploading.value = false
-    ev.target.value = ''
+    linesSaving.value = false
   }
-}
-
-async function downloadAttachment(att) {
-  try {
-    const { data } = await crmApi.downloadAttachment(att.id)
-    const url = window.URL.createObjectURL(data)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = att.file_name
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    window.URL.revokeObjectURL(url)
-  } catch (e) {
-    ElMessage.error(e.message || '下载失败')
-  }
-}
-
-async function removeAttachment(att) {
-  try {
-    await ElMessageBox.confirm(`确定删除附件「${att.file_name}」？`, '删除', { type: 'warning' })
-  } catch { return }
-  try {
-    await crmApi.deleteAttachment(att.id)
-    await loadAttachments()
-    ElMessage.success('已删除')
-  } catch (e) {
-    ElMessage.error(e.message || '删除失败')
-  }
-}
-
-function formatFileSize(bytes) {
-  if (!bytes) return '0 B'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
 async function loadTeam() {
@@ -292,6 +298,22 @@ async function submitClose() {
   }
 }
 
+async function reopenDeal() {
+  if (!deal.value) return
+  try {
+    await ElMessageBox.confirm(
+      `重开商机「${deal.value.title}」？将恢复为进行中，并回退到管道首个非终态阶段。`,
+      '重开商机',
+      { type: 'warning', confirmButtonText: '确认重开', cancelButtonText: '取消' },
+    )
+    await crmApi.reopenDeal(deal.value.id)
+    ElMessage.success('商机已重开')
+    await loadDeal()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.message || '重开失败')
+  }
+}
+
 async function cloneDeal() {
   if (!deal.value) return
   try {
@@ -304,18 +326,38 @@ async function cloneDeal() {
   }
 }
 
-async function convertToOrder() {
+async function handleDelete() {
   if (!deal.value) return
   try {
     await ElMessageBox.confirm(
-      `将商机「${deal.value.title}」转化为订单？将创建一张草稿订单。`,
-      '转化为订单',
+      `确定删除商机「${deal.value.title}」？\n已关闭商机或已关联报价/合同/订单时不可删除。`,
+      '删除商机',
+      { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' },
+    )
+    await crmApi.deleteDeal(deal.value.id)
+    ElMessage.success('已删除')
+    router.push('/crm/deals')
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
+  }
+}
+
+async function convertToOrder() {
+  if (!deal.value) return
+  const again = !!deal.value.converted_order_id
+  try {
+    await ElMessageBox.confirm(
+      again
+        ? `商机「${deal.value.title}」已关联订单，是否再次生成一张草稿订单？`
+        : `将商机「${deal.value.title}」转化为订单？将创建一张草稿订单。`,
+      again ? '再次生成订单' : '转化为订单',
       { confirmButtonText: '确定', cancelButtonText: '取消' },
     )
     const { data } = await crmApi.convertDealToOrder(deal.value.id)
-    ElMessage.success('已转化为订单')
-    if (data?.id) {
-      router.push(`/crm/orders/${data.id}`)
+    ElMessage.success(again ? '已再次生成订单' : '已转化为订单')
+    const orderId = data?.order_id || data?.id
+    if (orderId) {
+      router.push(`/crm/orders/${orderId}`)
     } else {
       await loadDeal()
     }
@@ -326,6 +368,18 @@ async function convertToOrder() {
 
 async function generateQuote() {
   if (!deal.value) return
+  // 无产品明细时无法一键复制，引导用新建报价对话框（已带入客户/商机）
+  if (!hasDealLines.value) {
+    if (!canCreateCpq.value) {
+      ElMessage.warning('请先在「产品明细」中添加产品后再生成报价')
+      linesEditing.value = canMutateDeal.value
+      document.getElementById('deal-product-lines')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
+    ElMessage.info('商机暂无产品明细，请在报价单中添加产品')
+    quoteFormVisible.value = true
+    return
+  }
   try {
     await ElMessageBox.confirm(
       `将商机「${deal.value.title}」的明细生成报价单？`,
@@ -340,13 +394,12 @@ async function generateQuote() {
   }
 }
 
-function formatAmount(v) {
-  return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+function onQuoteFormSaved() {
+  router.push('/crm/quotes')
 }
 
-function formatDate(v) {
-  if (!v) return ''
-  return String(v).replace('T', ' ').slice(0, 16)
+function formatAmount(v) {
+  return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function statusTagType(s) {
@@ -381,128 +434,164 @@ onMounted(async () => {
           <el-tag :type="statusTagType(deal.status)">{{ statusLabel(deal.status) }}</el-tag>
           <el-tag v-if="currentStage" type="warning">{{ currentStage.name }}</el-tag>
           <el-tag v-if="deal.priority" :type="priorityTagType(deal.priority)" size="small">优先级：{{ priorityLabel(deal.priority) }}</el-tag>
-          <el-tag v-for="tag in customerTags" :key="tag" size="small" type="info" effect="plain">{{ tag }}</el-tag>
           <span class="deal-detail__amount">¥{{ formatAmount(deal.amount) }}</span>
           <span class="deal-detail__owner">负责人：{{ resolveMemberName(deal.owner_user_id) }}</span>
         </div>
       </div>
       <div class="deal-detail__head-actions">
-        <el-button v-if="canEdit" @click="editVisible = true">编辑</el-button>
-        <el-button v-if="canEdit && !isClosed" @click="cloneDeal">克隆</el-button>
-        <el-button v-if="canGenerateQuote && !isClosed && (deal.lines?.length || 0)" @click="generateQuote">
-          生成报价
+        <el-button v-if="canAssignDeal" @click="assignVisible = true">分配负责人</el-button>
+        <el-button v-if="canMutateDeal" @click="editVisible = true">编辑</el-button>
+        <el-button v-if="canCloneDeal" @click="cloneDeal">克隆</el-button>
+        <el-button v-if="canQuoteFromDeal" @click="generateQuote">
+          {{ hasDealLines ? '生成报价' : '新建报价' }}
         </el-button>
-        <el-button v-if="canConvert && !isClosed && !deal.converted_order_id" type="primary" @click="convertToOrder">
-          转化为订单
+        <el-button
+          v-if="canCpqFromDeal"
+          type="primary"
+          plain
+          @click="router.push({ path: '/crm/quotes/cpq/new', query: { deal_id: deal.id, customer_id: deal.customer_id } })"
+        >
+          CPQ 报价
         </el-button>
-        <template v-if="canClose && !isClosed">
+        <el-button v-if="canConvertDeal" type="primary" @click="convertToOrder">
+          {{ deal.converted_order_id ? '再次生成订单' : '转化为订单' }}
+        </el-button>
+        <template v-if="canCloseDeal">
           <el-button type="success" @click="closeDeal('won')">赢单</el-button>
           <el-button type="danger" @click="closeDeal('lost')">输单</el-button>
         </template>
+        <el-button v-if="canReopenDeal" type="warning" plain @click="reopenDeal">重开</el-button>
+        <el-button v-if="canDeleteDeal" type="danger" plain @click="handleDelete">删除</el-button>
       </div>
     </div>
 
     <div v-if="deal" class="deal-detail__body">
-      <el-card class="deal-detail__card" shadow="never">
-        <template #header>基本信息</template>
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="商机名称">{{ deal.title }}</el-descriptions-item>
-          <el-descriptions-item label="客户">
-            <el-link v-if="customer" type="primary" @click="router.push(`/crm/customers/${customer.id}`)">
-              {{ customer.company_name }}
-            </el-link>
-            <span v-else>{{ deal.customer_id }}</span>
-            <div v-if="customerTags.length" style="margin-top: 6px">
-              <el-tag v-for="tag in customerTags" :key="tag" size="small" style="margin-right: 4px">{{ tag }}</el-tag>
+      <div class="deal-detail__main">
+        <el-card class="deal-detail__card" shadow="never">
+          <template #header>基本信息</template>
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="商机名称">{{ deal.title }}</el-descriptions-item>
+            <el-descriptions-item label="客户">
+              <el-link v-if="customer" type="primary" @click="router.push(`/crm/customers/${customer.id}`)">
+                {{ customer.company_name }}
+              </el-link>
+              <span v-else>{{ deal.customer_id }}</span>
+              <div v-if="customerTags.length" style="margin-top: 6px">
+                <el-tag v-for="tag in customerTags" :key="tag" size="small" style="margin-right: 4px">{{ tag }}</el-tag>
+              </div>
+            </el-descriptions-item>
+            <el-descriptions-item label="销售管道">{{ currentPipeline?.name || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="阶段">
+              <el-select
+                v-if="canMutateDeal && !isClosed && stages.length"
+                :model-value="deal.stage_id"
+                size="small"
+                style="width: 160px"
+                @change="changeStage"
+              >
+                <el-option v-for="s in stages" :key="s.id" :label="s.name" :value="s.id" />
+              </el-select>
+              <span v-else>{{ currentStage?.name || deal.stage_id }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="商机金额">¥{{ formatAmount(deal.amount) }}</el-descriptions-item>
+            <el-descriptions-item label="成交概率">{{ deal.probability }}%</el-descriptions-item>
+            <el-descriptions-item label="预计成交日">{{ formatDate(deal.expected_close_date) || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="商机来源">{{ deal.source || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="商机类型">{{ deal.deal_type || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="优先级">{{ priorityLabel(deal.priority) }}</el-descriptions-item>
+            <el-descriptions-item label="竞争对手">{{ deal.competitor || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="联系人角色">{{ deal.contact_role || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="所属地区">{{ territoryName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ formatDateTime(deal.created_at, { withSeconds: false }) }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{ formatDateTime(deal.updated_at, { withSeconds: false }) }}</el-descriptions-item>
+            <el-descriptions-item v-if="deal.closed_at" label="成交时间">{{ formatDateTime(deal.closed_at, { withSeconds: false }) }}</el-descriptions-item>
+            <el-descriptions-item v-if="deal.loss_reason" label="输单原因">{{ deal.loss_reason }}</el-descriptions-item>
+            <el-descriptions-item v-if="deal.converted_order_id" label="转出订单">
+              <el-link type="primary" @click="router.push(`/crm/orders/${deal.converted_order_id}`)">
+                查看订单
+              </el-link>
+            </el-descriptions-item>
+          </el-descriptions>
+        </el-card>
+
+        <el-card v-if="deal.next_step || deal.description" class="deal-detail__card" shadow="never">
+          <template #header>下一步与需求</template>
+          <div v-if="deal.next_step" class="deal-detail__nextstep">
+            <span class="deal-detail__nextstep-label">下一步：</span>{{ deal.next_step }}
+          </div>
+          <div v-if="deal.description" class="deal-detail__desc">{{ deal.description }}</div>
+        </el-card>
+
+        <el-card id="deal-product-lines" class="deal-detail__card" shadow="never">
+          <template #header>
+            <div class="deal-detail__attach-head">
+              <span>产品明细</span>
+              <el-button
+                v-if="canMutateDeal && !isClosed && !linesEditing"
+                size="small"
+                type="primary"
+                @click="linesEditing = true"
+              >页内编辑</el-button>
+              <el-button
+                v-if="linesEditing"
+                size="small"
+                @click="linesEditing = false"
+              >取消</el-button>
             </div>
-          </el-descriptions-item>
-          <el-descriptions-item label="销售管道">{{ currentPipeline?.name || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="阶段">
-            <el-select
-              v-if="canEdit && !isClosed && stages.length"
-              :model-value="deal.stage_id"
-              size="small"
-              style="width: 160px"
-              @change="changeStage"
+          </template>
+          <el-alert
+            v-if="!hasDealLines && canQuoteFromDeal"
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 12px"
+            title="添加产品明细后可一键「生成报价」；也可点顶部「新建报价」直接开单"
+          />
+          <CrmLineItemsEditor
+            mode="deal"
+            :model-value="deal.lines || []"
+            :editable="linesEditing"
+            :saving="linesSaving"
+            @save="saveLines"
+          />
+        </el-card>
+      </div>
+
+      <aside class="deal-detail__side">
+        <el-card class="deal-detail__card deal-detail__card--compact" shadow="never">
+          <template #header>标签</template>
+          <CrmEntityTags
+            entity-type="deal"
+            :entity-id="deal.id"
+            :editable="canMutateDeal"
+          />
+        </el-card>
+
+        <el-card class="deal-detail__card" shadow="never">
+          <template #header>阶段变更记录</template>
+          <el-timeline v-if="stageLogs.length">
+            <el-timeline-item
+              v-for="log in stageLogs"
+              :key="log.id"
+              :timestamp="formatDateTime(log.changed_at)"
+              placement="top"
             >
-              <el-option v-for="s in stages" :key="s.id" :label="s.name" :value="s.id" />
-            </el-select>
-            <span v-else>{{ currentStage?.name || deal.stage_id }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="商机金额">¥{{ formatAmount(deal.amount) }}</el-descriptions-item>
-          <el-descriptions-item label="成交概率">{{ deal.probability }}%</el-descriptions-item>
-          <el-descriptions-item label="预计成交日">{{ formatDate(deal.expected_close_date) || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="商机来源">{{ deal.source || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="商机类型">{{ deal.deal_type || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="优先级">{{ priorityLabel(deal.priority) }}</el-descriptions-item>
-          <el-descriptions-item label="竞争对手">{{ deal.competitor || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="联系人角色">{{ deal.contact_role || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="所属地区">{{ territoryName || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="创建时间">{{ formatDate(deal.created_at) }}</el-descriptions-item>
-          <el-descriptions-item label="更新时间">{{ formatDate(deal.updated_at) }}</el-descriptions-item>
-          <el-descriptions-item v-if="deal.closed_at" label="成交时间">{{ formatDate(deal.closed_at) }}</el-descriptions-item>
-          <el-descriptions-item v-if="deal.loss_reason" label="输单原因">{{ deal.loss_reason }}</el-descriptions-item>
-          <el-descriptions-item v-if="deal.converted_order_id" label="转出订单">
-            <el-link type="primary" @click="router.push(`/crm/orders/${deal.converted_order_id}`)">
-              查看订单
-            </el-link>
-          </el-descriptions-item>
-        </el-descriptions>
-      </el-card>
-
-      <el-card v-if="deal.next_step || deal.description" class="deal-detail__card" shadow="never">
-        <template #header>下一步与需求</template>
-        <div v-if="deal.next_step" class="deal-detail__nextstep">
-          <span class="deal-detail__nextstep-label">下一步：</span>{{ deal.next_step }}
-        </div>
-        <div v-if="deal.description" class="deal-detail__desc">{{ deal.description }}</div>
-      </el-card>
-
-      <el-card v-if="deal.lines && deal.lines.length" class="deal-detail__card" shadow="never">
-        <template #header>产品明细</template>
-        <el-table :data="deal.lines" size="small" border>
-          <el-table-column prop="product_name" label="名称" min-width="160" show-overflow-tooltip />
-          <el-table-column prop="unit" label="单位" width="70" />
-          <el-table-column label="数量" width="90" align="right">
-            <template #default="{ row }">{{ row.quantity }}</template>
-          </el-table-column>
-          <el-table-column label="单价" width="110" align="right">
-            <template #default="{ row }">¥{{ formatAmount(row.unit_price) }}</template>
-          </el-table-column>
-          <el-table-column label="折扣%" width="80" align="right">
-            <template #default="{ row }">{{ row.discount_percent }}%</template>
-          </el-table-column>
-          <el-table-column label="小计" width="120" align="right">
-            <template #default="{ row }">¥{{ formatAmount(row.subtotal) }}</template>
-          </el-table-column>
-        </el-table>
-        <div class="deal-detail__lines-total">合计：¥{{ formatAmount(deal.amount) }}</div>
-      </el-card>
-
-      <el-card class="deal-detail__card" shadow="never">
-        <template #header>阶段变更记录</template>
-        <el-timeline v-if="stageLogs.length">
-          <el-timeline-item
-            v-for="log in stageLogs"
-            :key="log.id"
-            :timestamp="formatDate(log.changed_at)"
-            placement="top"
-          >
-            <div class="deal-detail__log">
-              <span class="deal-detail__log-from">{{ log.from_stage_name || '初始' }}</span>
-              <el-icon><ArrowRight /></el-icon>
-              <span class="deal-detail__log-to">{{ log.to_stage_name }}</span>
-              <span class="deal-detail__log-user">{{ resolveMemberName(log.changed_by_user_id) }}</span>
-            </div>
-          </el-timeline-item>
-        </el-timeline>
-        <el-empty v-else description="暂无阶段变更记录" :image-size="60" />
-      </el-card>
+              <div class="deal-detail__log">
+                <span class="deal-detail__log-from">{{ log.from_stage_name || '初始' }}</span>
+                <el-icon><ArrowRight /></el-icon>
+                <span class="deal-detail__log-to">{{ log.to_stage_name }}</span>
+                <span class="deal-detail__log-user">{{ resolveMemberName(log.changed_by_user_id) }}</span>
+              </div>
+            </el-timeline-item>
+          </el-timeline>
+          <el-empty v-else description="暂无阶段变更记录" :image-size="48" />
+        </el-card>
+      </aside>
     </div>
 
     <el-card v-if="deal" class="deal-detail__card deal-detail__activities" shadow="never">
       <template #header>跟进记录</template>
-      <div v-if="canWriteActivity" class="deal-detail__activity-form">
+      <div v-if="canWriteDealActivity" class="deal-detail__activity-form">
         <el-select v-model="activityForm.activity_type" style="width: 110px">
           <el-option v-for="o in activityTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
         </el-select>
@@ -520,7 +609,7 @@ onMounted(async () => {
         <el-timeline-item
           v-for="item in activities"
           :key="item.id"
-          :timestamp="formatDate(item.created_at)"
+          :timestamp="formatDateTime(item.created_at)"
           placement="top"
         >
           <div class="deal-detail__activity-item">
@@ -529,7 +618,7 @@ onMounted(async () => {
             <span class="deal-detail__activity-content">{{ item.content }}</span>
             <span class="deal-detail__activity-user">{{ resolveMemberName(item.created_by_user_id) }}</span>
             <el-button
-              v-if="canWriteActivity"
+              v-if="canWriteDealActivity"
               link
               type="danger"
               size="small"
@@ -542,41 +631,18 @@ onMounted(async () => {
     </el-card>
 
     <el-card v-if="deal" class="deal-detail__card deal-detail__attachments" shadow="never">
-      <template #header>
-        <div class="deal-detail__attach-head">
-          <span>文档附件</span>
-          <label v-if="canEdit" class="deal-detail__upload-btn">
-            <input type="file" :disabled="uploading" @change="onUploadFile" />
-            <el-button type="primary" size="small" :loading="uploading">上传附件</el-button>
-          </label>
-        </div>
-      </template>
-      <el-table v-if="attachments.length" :data="attachments" size="small" border>
-        <el-table-column prop="file_name" label="文件名" min-width="220" show-overflow-tooltip />
-        <el-table-column label="大小" width="110">
-          <template #default="{ row }">{{ formatFileSize(row.file_size) }}</template>
-        </el-table-column>
-        <el-table-column label="上传人" width="120">
-          <template #default="{ row }">{{ resolveMemberName(row.uploaded_by_user_id) }}</template>
-        </el-table-column>
-        <el-table-column label="上传时间" width="160">
-          <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="140" align="center">
-          <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="downloadAttachment(row)">下载</el-button>
-            <el-button v-if="canEdit" link type="danger" size="small" @click="removeAttachment(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-else description="暂无附件，上传方案/合同/资料等" :image-size="60" />
+      <CrmEntityAttachments
+        entity-type="deal"
+        :entity-id="deal.id"
+        :editable="canAttachDeal"
+      />
     </el-card>
 
     <el-card v-if="deal" class="deal-detail__card deal-detail__team" shadow="never">
       <template #header>
         <div class="deal-detail__attach-head">
           <span>协作团队</span>
-          <el-button v-if="canEdit" type="primary" size="small" @click="addTeamVisible = true">添加成员</el-button>
+          <el-button v-if="canMutateDeal" type="primary" size="small" @click="addTeamVisible = true">添加成员</el-button>
         </div>
       </template>
       <el-table v-if="teamMembers.length" :data="teamMembers" size="small" border>
@@ -591,11 +657,11 @@ onMounted(async () => {
           </template>
         </el-table-column>
         <el-table-column label="加入时间" width="160">
-          <template #default="{ row }">{{ formatDate(row.joined_at) }}</template>
+          <template #default="{ row }">{{ formatDateTime(row.joined_at, { withSeconds: false }) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="100" align="center">
           <template #default="{ row }">
-            <el-button v-if="canEdit && row.role !== 'owner'" link type="danger" size="small" @click="removeTeamMemberApi(row)">移除</el-button>
+            <el-button v-if="canMutateDeal && row.role !== 'owner'" link type="danger" size="small" @click="removeTeamMemberApi(row)">移除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -660,6 +726,21 @@ onMounted(async () => {
       mode="edit"
       @saved="loadDeal"
     />
+
+    <QuoteFormDialog
+      v-model:visible="quoteFormVisible"
+      :preset-customer-id="deal?.customer_id || ''"
+      :preset-deal-id="deal?.id || ''"
+      @saved="onQuoteFormSaved"
+    />
+
+    <CrmAssignOwner
+      v-model:visible="assignVisible"
+      entity-type="deal"
+      :entity-id="route.params.id"
+      :owner-user-id="deal?.owner_user_id"
+      @done="onAssignDone"
+    />
   </div>
 </template>
 
@@ -697,15 +778,28 @@ onMounted(async () => {
 .deal-detail__body {
   margin-top: 16px;
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: minmax(0, 1.65fr) minmax(260px, 0.85fr);
   gap: 16px;
+  align-items: start;
+}
+.deal-detail__main,
+.deal-detail__side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 }
 .deal-detail__card { margin-bottom: 0; }
+.deal-detail__card--compact :deep(.el-card__body) {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
 .deal-detail__log {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
+  flex-wrap: wrap;
 }
 .deal-detail__log-to {
   font-weight: 600;

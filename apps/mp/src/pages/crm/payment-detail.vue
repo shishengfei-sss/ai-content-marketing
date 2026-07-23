@@ -4,6 +4,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { crmApi } from '@/utils/api'
 import { ensureSession } from '@/utils/session'
 import { PAYMENT_STATUS_LABEL, formatMoney } from '@/utils/crmConstants'
+import { formatDateTime } from '@/utils/datetime'
 
 const paymentId = ref('')
 const loading = ref(false)
@@ -12,10 +13,7 @@ const order = ref(null)
 
 const METHOD_LABEL = { bank: '银行', wechat: '微信', alipay: '支付宝', cash: '现金', other: '其他' }
 
-const paidAtLabel = computed(() => {
-  if (!payment.value?.paid_at) return '—'
-  return String(payment.value.paid_at).replace('T', ' ').slice(0, 16)
-})
+const paidAtLabel = computed(() => formatDateTime(payment.value?.paid_at, { withSeconds: false }))
 
 async function loadDetail() {
   if (!paymentId.value) return

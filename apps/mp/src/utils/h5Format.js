@@ -1,4 +1,5 @@
 /** H5 工作台/销售页展示格式化 */
+import { formatDate, parseApiDateTime } from './datetime'
 
 export function formatCompactMoney(amount) {
   const n = Number(amount)
@@ -13,7 +14,9 @@ export function formatCompactMoney(amount) {
 
 export function formatRelativeTime(iso) {
   if (!iso) return ''
-  const diff = Date.now() - new Date(iso).getTime()
+  const d = parseApiDateTime(iso)
+  if (!d) return ''
+  const diff = Date.now() - d.getTime()
   if (diff < 0) return '刚刚'
   const mins = Math.floor(diff / 60000)
   if (mins < 1) return '刚刚'
@@ -22,7 +25,7 @@ export function formatRelativeTime(iso) {
   if (hours < 24) return `${hours}小时前`
   const days = Math.floor(hours / 24)
   if (days < 7) return `${days}天前`
-  return new Date(iso).toLocaleDateString('zh-CN')
+  return formatDate(iso, { empty: '' })
 }
 
 export function monthEndLabel(date = new Date()) {
@@ -37,7 +40,8 @@ export function daysLeftInMonth(date = new Date()) {
 
 export function isThisMonth(iso) {
   if (!iso) return false
-  const d = new Date(iso)
+  const d = parseApiDateTime(iso)
+  if (!d) return false
   const now = new Date()
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
 }

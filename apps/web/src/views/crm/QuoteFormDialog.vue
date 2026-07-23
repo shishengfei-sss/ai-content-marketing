@@ -1,13 +1,14 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { CopyDocument, Delete, Plus, Goods } from '@element-plus/icons-vue'
 import { crmApi } from '../../api/client'
-import CrmProductPicker from '../../components/crm/CrmProductPicker.vue'
+import CrmDocLineCards from '../../components/crm/CrmDocLineCards.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
   record: { type: Object, default: null },
+  presetCustomerId: { type: String, default: '' },
+  presetDealId: { type: String, default: '' },
 })
 const emit = defineEmits(['update:visible', 'saved'])
 
@@ -19,10 +20,10 @@ const dialogVisible = computed({
 const saving = ref(false)
 const customerOptions = ref([])
 const customerLoading = ref(false)
+const dealOptions = ref([])
+const dealLoading = ref(false)
 const form = ref(emptyForm())
-const pickerVisible = ref(false)
-const pickerMultiple = ref(true)
-const replaceLineIndex = ref(-1)
+const lineCardsRef = ref(null)
 
 function emptyForm() {
   return {
@@ -38,42 +39,31 @@ function emptyForm() {
   }
 }
 
-function emptyLine() {
-  return {
-    product_id: '',
-    product_code: '',
-    name: '',
-    unit: '',
-    quantity: 1,
-    unit_price: 0,
-    discount_rate: null,
-    line_total: 0,
-  }
-}
-
 const isEdit = computed(() => !!props.record?.id)
 const dialogTitle = computed(() => (isEdit.value ? '编辑报价' : '新建报价'))
-const lineCount = computed(() => form.value.lines.length)
-const subTotal = computed(() =>
-  form.value.lines.reduce((acc, l) => acc + Number(l.line_total || 0), 0),
+function money(n) {
+  return Math.round(Number(n || 0) * 100) / 100
+}
+
+const subTotalBeforeHeader = computed(() =>
+  money(
+    form.value.lines.reduce((acc, l) => {
+      const qty = Number(l.quantity || 0)
+      const price = Number(l.unit_price || 0)
+      const disc = Number(l.discount_rate || 0)
+      return acc + qty * price * (1 - disc / 100)
+    }, 0),
+  ),
 )
 const discountAmount = computed(() => {
   const rate = Number(form.value.discount_rate || 0)
-  if (!rate || !subTotal.value) return 0
-  return Math.round(subTotal.value * (rate / 100) * 100) / 100
+  if (!rate || !subTotalBeforeHeader.value) return 0
+  return money(subTotalBeforeHeader.value * (rate / 100))
 })
-const grandTotal = computed(() => {
-  return Math.round((subTotal.value - discountAmount.value) * 100) / 100
-})
-const hasOrderDiscount = computed(() => Number(form.value.discount_rate || 0) > 0 || discountAmount.value > 0)
-
-function formatMoney(v) {
-  return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
 
 /** 按折扣金额反算整单折扣%（仍存 discount_rate，与后端兼容） */
 function onDiscountAmountInput(val) {
-  const sub = subTotal.value
+  const sub = subTotalBeforeHeader.value
   if (!sub || sub <= 0) {
     form.value.discount_rate = null
     return
@@ -81,9 +71,9 @@ function onDiscountAmountInput(val) {
   const amount = Math.min(Math.max(Number(val) || 0, 0), sub)
   if (amount <= 0) {
     form.value.discount_rate = null
-    return
+  } else {
+    form.value.discount_rate = Math.round((amount / sub) * 10000) / 100
   }
-  form.value.discount_rate = Math.round((amount / sub) * 10000) / 100
 }
 
 function onDiscountRateChange(val) {
@@ -102,93 +92,72 @@ async function searchCustomers(q = '') {
   }
 }
 
-function openAddProducts() {
-  pickerMultiple.value = true
-  replaceLineIndex.value = -1
-  pickerVisible.value = true
+function formatDealLabel(d) {
+  const amt = Number(d.amount || 0).toLocaleString('zh-CN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })
+  const st = d.status && d.status !== 'open' ? ` · ${d.status}` : ''
+  return `${d.title || '未命名商机'}（¥${amt}${st}）`
 }
 
-function openReplaceProduct(idx) {
-  pickerMultiple.value = false
-  replaceLineIndex.value = idx
-  pickerVisible.value = true
-}
-
-function addBlankLine() {
-  form.value.lines.push(emptyLine())
-}
-
-function removeLine(idx) {
-  form.value.lines.splice(idx, 1)
-}
-
-function duplicateLine(idx) {
-  const src = form.value.lines[idx]
-  if (!src) return
-  const copy = { ...src, quantity: Number(src.quantity) || 1 }
-  recomputeLine(copy)
-  form.value.lines.splice(idx + 1, 0, copy)
-}
-
-async function applyProductToLine(line, product) {
-  line.product_id = product.id
-  line.product_code = product.code || ''
-  line.name = product.name || ''
-  line.unit = product.unit || ''
-  line.unit_price = Number(product.list_price) || 0
-  if (!line.quantity) line.quantity = 1
+async function loadDealOptions() {
+  dealLoading.value = true
   try {
-    const { data } = await crmApi.resolveCpqPrice({
-      product_id: line.product_id,
-      quantity: Number(line.quantity) || 1,
-    })
-    if (data?.unit_price != null) line.unit_price = Number(data.unit_price)
+    const listParams = { page: 1, page_size: 50, status: 'open' }
+    if (form.value.customer_id) listParams.customer_id = form.value.customer_id
+    const { data } = await crmApi.listDeals(listParams)
+    let items = data.items || []
+    if (form.value.deal_id && !items.some((d) => String(d.id) === String(form.value.deal_id))) {
+      try {
+        const { data: deal } = await crmApi.getDeal(form.value.deal_id)
+        if (deal) items = [deal, ...items]
+      } catch {
+        /* keep list */
+      }
+    }
+    dealOptions.value = items.map((d) => ({
+      id: d.id,
+      label: formatDealLabel(d),
+      customer_id: d.customer_id,
+    }))
   } catch {
-    /* keep list_price */
+    dealOptions.value = []
+  } finally {
+    dealLoading.value = false
   }
-  recomputeLine(line)
 }
 
-async function onProductsPicked(products) {
-  if (!products?.length) return
-  if (!pickerMultiple.value && replaceLineIndex.value >= 0) {
-    const line = form.value.lines[replaceLineIndex.value]
-    if (line) await applyProductToLine(line, products[0])
-    return
-  }
-  for (const p of products) {
-    const line = emptyLine()
-    await applyProductToLine(line, p)
-    form.value.lines.push(line)
-  }
-  ElMessage.success(`已添加 ${products.length} 个产品`)
+async function onCustomerChange() {
+  form.value.deal_id = ''
+  await loadDealOptions()
 }
 
-async function onQuantityChange(line) {
-  if (line.product_id) {
-    try {
-      const { data } = await crmApi.resolveCpqPrice({
-        product_id: line.product_id,
-        quantity: Number(line.quantity) || 1,
-      })
-      if (data?.unit_price != null) line.unit_price = Number(data.unit_price)
-    } catch {
-      /* keep */
+async function onDealChange(dealId) {
+  if (!dealId) return
+  const opt = dealOptions.value.find((d) => String(d.id) === String(dealId))
+  const customerId = opt?.customer_id
+  if (!customerId || form.value.customer_id) return
+  form.value.customer_id = customerId
+  try {
+    const { data: cust } = await crmApi.getCustomer(customerId)
+    customerOptions.value = [
+      { id: customerId, company_name: cust?.company_name || '(商机客户)' },
+      ...customerOptions.value.filter((c) => String(c.id) !== String(customerId)),
+    ]
+  } catch {
+    if (!customerOptions.value.some((c) => String(c.id) === String(customerId))) {
+      customerOptions.value = [{ id: customerId, company_name: '(商机客户)' }, ...customerOptions.value]
     }
   }
-  recomputeLine(line)
-}
-
-function recomputeLine(line) {
-  const qty = Number(line.quantity || 0)
-  const price = Number(line.unit_price || 0)
-  const disc = Number(line.discount_rate || 0)
-  line.line_total = Math.round(qty * price * (1 - disc / 100) * 100) / 100
+  await loadDealOptions()
 }
 
 function resetForm() {
   form.value = emptyForm()
   form.value.status = 'draft'
+  if (props.presetCustomerId) form.value.customer_id = props.presetCustomerId
+  if (props.presetDealId) form.value.deal_id = props.presetDealId
 }
 
 async function loadQuote() {
@@ -215,15 +184,60 @@ async function loadQuote() {
         quantity: Number(l.quantity),
         unit_price: Number(l.unit_price),
         discount_rate: l.discount_rate != null ? Number(l.discount_rate) : null,
+        tax_rate: l.tax_rate != null ? Number(l.tax_rate) : null,
+        tax_amount: Number(l.tax_amount || 0),
         line_total: Number(l.line_total),
       })),
     }
+    await nextTick()
+    lineCardsRef.value?.recomputeAllLines()
     if (data.customer_id) {
       customerOptions.value = [{ id: data.customer_id, company_name: data.customer_name || '(已绑定客户)' }]
     }
   } catch (e) {
     ElMessage.error(e.message || '加载报价失败')
     resetForm()
+  }
+}
+
+/** 从预填商机带出客户（新建且仅有 deal 预填时） */
+async function applyPresetDealCustomer() {
+  // 预填客户选项，避免 remote 搜索未命中导致下拉空白
+  if (props.presetCustomerId && form.value.customer_id) {
+    try {
+      const { data: cust } = await crmApi.getCustomer(props.presetCustomerId)
+      const row = { id: props.presetCustomerId, company_name: cust?.company_name || '(商机客户)' }
+      customerOptions.value = [row, ...customerOptions.value.filter((c) => String(c.id) !== String(row.id))]
+    } catch {
+      if (!customerOptions.value.some((c) => String(c.id) === String(props.presetCustomerId))) {
+        customerOptions.value = [{ id: props.presetCustomerId, company_name: '(商机客户)' }, ...customerOptions.value]
+      }
+    }
+  }
+  if (props.presetDealId && !form.value.subject) {
+    try {
+      const { data: deal } = await crmApi.getDeal(props.presetDealId)
+      if (deal?.title) form.value.subject = `${deal.title} - 报价`
+      if (deal?.customer_id && !form.value.customer_id) {
+        form.value.customer_id = deal.customer_id
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!form.value.deal_id || form.value.customer_id) return
+  try {
+    const { data: deal } = await crmApi.getDeal(form.value.deal_id)
+    if (!deal?.customer_id) return
+    form.value.customer_id = deal.customer_id
+    try {
+      const { data: cust } = await crmApi.getCustomer(deal.customer_id)
+      customerOptions.value = [{ id: deal.customer_id, company_name: cust?.company_name || '(商机客户)' }]
+    } catch {
+      customerOptions.value = [{ id: deal.customer_id, company_name: '(商机客户)' }]
+    }
+  } catch {
+    /* ignore */
   }
 }
 
@@ -251,7 +265,6 @@ async function submit() {
     subject: form.value.subject.trim(),
     discount_rate: form.value.discount_rate,
     valid_until: form.value.valid_until || null,
-    status: form.value.status,
     lines: form.value.lines.map((l) => ({
       product_id: l.product_id || null,
       name: l.name,
@@ -259,10 +272,13 @@ async function submit() {
       quantity: Number(l.quantity),
       unit_price: Number(l.unit_price),
       discount_rate: l.discount_rate,
+      tax_rate: l.tax_rate,
+      tax_amount: Number(l.tax_amount || 0),
       line_total: Number(l.line_total),
     })),
   }
   if (form.value.deal_id) payload.deal_id = form.value.deal_id
+  // 创建时固定 draft；编辑禁止 PATCH status（状态机专用接口）
 
   saving.value = true
   try {
@@ -270,7 +286,7 @@ async function submit() {
       await crmApi.updateQuote(form.value.id, payload)
       ElMessage.success('已保存')
     } else {
-      await crmApi.createQuote(payload)
+      await crmApi.createQuote({ ...payload, status: 'draft' })
       ElMessage.success('报价已创建')
     }
     dialogVisible.value = false
@@ -285,8 +301,13 @@ async function submit() {
 watch(dialogVisible, async (v) => {
   if (!v) return
   await searchCustomers('')
-  if (isEdit.value) await loadQuote()
-  else resetForm()
+  if (isEdit.value) {
+    await loadQuote()
+  } else {
+    resetForm()
+    await applyPresetDealCustomer()
+  }
+  await loadDealOptions()
 })
 </script>
 
@@ -309,16 +330,36 @@ watch(dialogVisible, async (v) => {
             v-model="form.customer_id"
             filterable
             remote
+            clearable
             :remote-method="searchCustomers"
             :loading="customerLoading"
             placeholder="搜索客户名称"
             style="width: 100%"
+            @change="onCustomerChange"
           >
             <el-option
               v-for="c in customerOptions"
               :key="c.id"
               :label="c.company_name"
               :value="c.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="关联商机">
+          <el-select
+            v-model="form.deal_id"
+            filterable
+            clearable
+            :loading="dealLoading"
+            placeholder="可选，按客户筛选进行中商机"
+            style="width: 100%"
+            @change="onDealChange"
+          >
+            <el-option
+              v-for="d in dealOptions"
+              :key="d.id"
+              :label="d.label"
+              :value="d.id"
             />
           </el-select>
         </el-form-item>
@@ -339,7 +380,7 @@ watch(dialogVisible, async (v) => {
             <el-input-number
               :model-value="discountAmount || null"
               :min="0"
-              :max="Math.max(subTotal, 0)"
+              :max="Math.max(subTotalBeforeHeader, 0)"
               :precision="2"
               :controls="false"
               placeholder="0.00"
@@ -359,158 +400,15 @@ watch(dialogVisible, async (v) => {
         </div>
       </div>
 
-      <div class="quote-lines">
-        <div class="quote-lines__head">
-          <div class="quote-lines__title">
-            <span>报价明细</span>
-            <el-tag v-if="lineCount" size="small" effect="plain" type="info">{{ lineCount }} 行</el-tag>
-          </div>
-          <div class="quote-lines__actions">
-            <el-button size="small" :icon="Plus" @click="addBlankLine">空白行</el-button>
-            <el-button type="primary" size="small" :icon="Goods" @click="openAddProducts">
-              添加产品
-            </el-button>
-          </div>
-        </div>
-
-        <div v-if="!form.lines.length" class="quote-lines__empty">
-          <div class="quote-lines__empty-icon">
-            <el-icon :size="28"><Goods /></el-icon>
-          </div>
-          <p class="quote-lines__empty-title">还没有明细</p>
-          <p class="quote-lines__empty-desc">从产品库批量添加，或先加一行手动填写</p>
-          <div class="quote-lines__empty-btns">
-            <el-button type="primary" :icon="Goods" @click="openAddProducts">添加产品</el-button>
-            <el-button :icon="Plus" @click="addBlankLine">添加空白行</el-button>
-          </div>
-        </div>
-
-        <el-table
-          v-else
-          :data="form.lines"
-          border
-          size="small"
-          class="quote-lines__table"
-        >
-          <el-table-column label="产品" min-width="240">
-            <template #default="{ row, $index }">
-              <div v-if="row.product_id || row.name" class="line-product">
-                <div class="line-product__main">
-                  <div class="line-product__name" :title="row.name">{{ row.name || '未命名' }}</div>
-                  <div v-if="row.product_code" class="line-product__code">{{ row.product_code }}</div>
-                </div>
-                <el-button link type="primary" size="small" @click="openReplaceProduct($index)">
-                  {{ row.product_id ? '更换' : '选产品' }}
-                </el-button>
-              </div>
-              <el-button
-                v-else
-                link
-                type="primary"
-                size="small"
-                @click="openReplaceProduct($index)"
-              >
-                选择产品
-              </el-button>
-            </template>
-          </el-table-column>
-          <el-table-column label="名称" min-width="140">
-            <template #default="{ row }">
-              <el-input v-model="row.name" size="small" placeholder="显示名称" />
-            </template>
-          </el-table-column>
-          <el-table-column label="单位" width="72">
-            <template #default="{ row }">
-              <el-input v-model="row.unit" size="small" />
-            </template>
-          </el-table-column>
-          <el-table-column label="数量" width="100">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.quantity"
-                :min="0"
-                :precision="2"
-                :controls="false"
-                size="small"
-                style="width: 100%"
-                @change="onQuantityChange(row)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="单价" width="110">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.unit_price"
-                :min="0"
-                :precision="2"
-                :controls="false"
-                size="small"
-                style="width: 100%"
-                @change="recomputeLine(row)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="折扣%" width="88">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.discount_rate"
-                :min="0"
-                :max="100"
-                :precision="2"
-                :controls="false"
-                size="small"
-                style="width: 100%"
-                @change="recomputeLine(row)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="小计" width="110" align="right">
-            <template #default="{ row }">
-              <span class="line-subtotal">¥{{ formatMoney(row.line_total) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="" width="84" align="center" fixed="right">
-            <template #default="{ $index }">
-              <el-button
-                link
-                type="primary"
-                :icon="CopyDocument"
-                title="复制行"
-                @click="duplicateLine($index)"
-              />
-              <el-button
-                link
-                type="danger"
-                :icon="Delete"
-                title="删除"
-                @click="removeLine($index)"
-              />
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <div class="quote-lines__bar">
-          <div class="quote-lines__bar-left">
-            <el-button v-if="form.lines.length" size="small" :icon="Goods" @click="openAddProducts">
-              继续添加
-            </el-button>
-          </div>
-          <div class="quote-lines__totals">
-            <div v-if="hasOrderDiscount" class="quote-lines__sum-row">
-              <span>小计</span>
-              <span>¥{{ formatMoney(subTotal) }}</span>
-            </div>
-            <div v-if="hasOrderDiscount" class="quote-lines__sum-row quote-lines__sum-row--discount">
-              <span>折扣金额{{ form.discount_rate ? ` (${form.discount_rate}%)` : '' }}</span>
-              <span>-¥{{ formatMoney(discountAmount) }}</span>
-            </div>
-            <div class="quote-lines__grand">
-              <span>合计</span>
-              <b>¥{{ formatMoney(grandTotal) }}</b>
-            </div>
-          </div>
-        </div>
-      </div>
+      <CrmDocLineCards
+        ref="lineCardsRef"
+        v-model="form.lines"
+        title="报价明细"
+        :header-discount-rate="form.discount_rate"
+        resolve-cpq
+        picker-title-add="添加产品到报价"
+        picker-title-replace="更换产品"
+      />
     </el-form>
 
     <template #footer>
@@ -518,13 +416,6 @@ watch(dialogVisible, async (v) => {
       <el-button type="primary" :loading="saving" @click="submit">保存报价</el-button>
     </template>
   </el-dialog>
-
-  <CrmProductPicker
-    v-model:visible="pickerVisible"
-    :multiple="pickerMultiple"
-    :title="pickerMultiple ? '添加产品到报价' : '更换产品'"
-    @confirm="onProductsPicked"
-  />
 </template>
 
 <style scoped>
@@ -540,170 +431,5 @@ watch(dialogVisible, async (v) => {
 
 .quote-form__meta-row--3 {
   grid-template-columns: 1fr 1fr 1fr;
-}
-
-.quote-lines {
-  margin-top: 4px;
-  padding: 14px 16px 12px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #f8fafc 0%, #f4f7fb 100%);
-  border: 1px solid #e8eef6;
-}
-
-.quote-lines__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.quote-lines__title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.quote-lines__actions {
-  display: flex;
-  gap: 8px;
-}
-
-.quote-lines__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 36px 16px;
-  border-radius: 10px;
-  background: #fff;
-  border: 1px dashed #cbd5e1;
-}
-
-.quote-lines__empty-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  background: #eff6ff;
-  color: var(--el-color-primary);
-  margin-bottom: 12px;
-}
-
-.quote-lines__empty-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.quote-lines__empty-desc {
-  margin: 6px 0 16px;
-  font-size: 13px;
-  color: #94a3b8;
-}
-
-.quote-lines__empty-btns {
-  display: flex;
-  gap: 8px;
-}
-
-.quote-lines__table {
-  border-radius: 8px;
-  overflow: hidden;
-  background: #fff;
-}
-
-.quote-lines__table :deep(.el-table__header th) {
-  background: #f8fafc !important;
-}
-
-.line-product {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-}
-
-.line-product__main {
-  min-width: 0;
-  flex: 1;
-}
-
-.line-product__name {
-  font-size: 13px;
-  font-weight: 500;
-  color: #1e293b;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.line-product__code {
-  margin-top: 2px;
-  font-size: 11px;
-  color: #94a3b8;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-
-.line-subtotal {
-  font-variant-numeric: tabular-nums;
-  font-weight: 500;
-  color: #334155;
-}
-
-.quote-lines__bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 12px;
-  gap: 12px;
-}
-
-.quote-lines__totals {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  min-width: 220px;
-}
-
-.quote-lines__sum-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
-  width: 100%;
-  font-size: 13px;
-  color: #94a3b8;
-  font-variant-numeric: tabular-nums;
-}
-
-.quote-lines__sum-row--discount {
-  color: #ef4444;
-}
-
-.quote-lines__grand {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 24px;
-  width: 100%;
-  margin-top: 2px;
-  padding-top: 6px;
-  border-top: 1px dashed #dbe3ee;
-  font-size: 14px;
-  color: #64748b;
-}
-
-.quote-lines__grand b {
-  color: var(--el-color-primary);
-  font-size: 18px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }
 </style>

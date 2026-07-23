@@ -13,9 +13,18 @@ from app.database import uuid_eq
 from app.dependencies import TenantContext
 from app.models.crm import CRM_SOURCE_OPTIONS, Contact, CrmActivity, Customer, Lead
 from app.schemas.crm import LeadCreate, LeadUpdate, validate_lead_mobile_value, validate_lead_status
-from app.services.crm.crm_scope_service import assert_can_view_lead, can_view_customer
+from app.services.crm.crm_scope_service import (
+    assert_can_mutate_lead,
+    assert_can_view_lead,
+    can_view_customer,
+)
 from app.services.crm.number_service import generate_number
-from app.services.crm.sales_org_service import get_territory
+from app.services.crm.sales_org_service import (
+    apply_creator_org_defaults,
+    apply_owner_org_snapshot,
+    assert_can_assign_owner,
+    get_territory,
+)
 from app.services.crm.schema_service import validate_extra_data
 from app.services.crm.utm_service import merge_utm_into_lead_fields
 
@@ -47,13 +56,27 @@ def get_lead(db: Session, tenant_id: UUID, lead_id: UUID) -> Lead | None:
 
 
 def create_lead(db: Session, ctx: TenantContext, data: LeadCreate) -> Lead:
+    from app.services.text_sanitize import sanitize_plain_text
+
     validate_lead_status(data.status)
     mobile, mobile_err = validate_lead_mobile_value(data.mobile, required=True)
     if mobile_err:
         raise HTTPException(status_code=422, detail=mobile_err)
+    company_name = sanitize_plain_text(data.company_name) or ""
+    if not company_name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="公司名称不能为空")
     extra = validate_extra_data(db, ctx.tenant_id, "lead", data.extra_data, is_create=True)
+    if getattr(data, "industry", None):
+        extra = dict(extra or {})
+        extra.setdefault("industry", str(data.industry).strip())
     if data.territory_id is not None and not get_territory(db, ctx.tenant_id, data.territory_id):
         raise HTTPException(status_code=404, detail="地区不存在")
+    territory_id, manager_user_id = apply_creator_org_defaults(db, ctx, territory_id=data.territory_id)
+    if territory_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="销售区域不能为空：请选择销售区域，或在「设置 → 销售组织」中配置本人主地区",
+        )
     utm = merge_utm_into_lead_fields(
         source=data.source,
         source_detail=data.source_detail,
@@ -65,7 +88,7 @@ def create_lead(db: Session, ctx: TenantContext, data: LeadCreate) -> Lead:
     lead = Lead(
         tenant_id=ctx.tenant_id,
         lead_number=generate_number(db, ctx.tenant_id, "lead"),
-        company_name=data.company_name.strip(),
+        company_name=company_name,
         contact_name=data.contact_name,
         mobile=mobile,
         phone=data.phone,
@@ -83,7 +106,8 @@ def create_lead(db: Session, ctx: TenantContext, data: LeadCreate) -> Lead:
         country=data.country or "中国",
         status=data.status,
         owner_user_id=ctx.user.id,
-        territory_id=data.territory_id,
+        territory_id=territory_id,
+        manager_user_id=manager_user_id,
         remark=data.remark,
         extra_data=extra,
         campaign_id=data.campaign_id,
@@ -101,10 +125,25 @@ def create_lead(db: Session, ctx: TenantContext, data: LeadCreate) -> Lead:
 
 def update_lead(db: Session, ctx: TenantContext, lead: Lead, data: LeadUpdate) -> Lead:
     perms = _perm_set(ctx)
-    if data.owner_user_id is not None and data.owner_user_id != lead.owner_user_id:
+    changing_owner = data.owner_user_id is not None and data.owner_user_id != lead.owner_user_id
+    # 除分配负责人外，其它字段变更仅负责人可操作
+    mutate_keys = set(data.model_fields_set) - {"owner_user_id"}
+    if mutate_keys:
+        assert_can_mutate_lead(ctx, lead)
+
+    if changing_owner:
         if "crm.lead.assign" not in perms:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限分配负责人")
+        assert_can_assign_owner(db, ctx, data.owner_user_id)
         lead.owner_user_id = data.owner_user_id
+        # 跟随新负责人落地区/汇报上级，避免原负责人因地区/上级快照仍可见
+        snap_territory, snap_manager = apply_owner_org_snapshot(db, ctx.tenant_id, data.owner_user_id)
+        if data.territory_id is None:
+            lead.territory_id = snap_territory
+        lead.manager_user_id = snap_manager
+        if getattr(lead, "pool_id", None) is not None:
+            lead.pool_id = None
+            lead.claimed_at = None
     if data.company_name is not None:
         lead.company_name = data.company_name.strip()
     if data.contact_name is not None:
@@ -176,7 +215,8 @@ def update_lead(db: Session, ctx: TenantContext, lead: Lead, data: LeadUpdate) -
     return lead
 
 
-def soft_delete_lead(db: Session, lead: Lead) -> None:
+def soft_delete_lead(db: Session, ctx: TenantContext, lead: Lead) -> None:
+    assert_can_mutate_lead(ctx, lead)
     lead.deleted_at = datetime.now(timezone.utc)
     db.commit()
 
@@ -185,7 +225,15 @@ def require_lead(db: Session, ctx: TenantContext, lead_id: UUID) -> Lead:
     lead = get_lead(db, ctx.tenant_id, lead_id)
     if not lead:
         raise HTTPException(status_code=404, detail="线索不存在")
-    assert_can_view_lead(ctx, db, lead.owner_user_id, lead.territory_id)
+    assert_can_view_lead(
+        ctx,
+        db,
+        lead.owner_user_id,
+        lead.territory_id,
+        created_by_user_id=lead.created_by_user_id,
+        manager_user_id=getattr(lead, "manager_user_id", None),
+        pool_id=getattr(lead, "pool_id", None),
+    )
     return lead
 
 
@@ -224,6 +272,7 @@ def convert_lead_to_customer(
     force_create: bool = True,
 ) -> tuple[Customer, Contact | None, object | None, bool]:
     """返回 (customer, contact, deal|None, merged)。"""
+    assert_can_mutate_lead(ctx, lead)
     if lead.status == "已转化" or lead.converted_customer_id:
         raise HTTPException(status_code=409, detail="线索已转化")
 
@@ -262,6 +311,7 @@ def convert_lead_to_customer(
             converted_lead_score=lead.lead_score,
             owner_user_id=lead.owner_user_id or ctx.user.id,
             territory_id=lead.territory_id,
+            manager_user_id=getattr(lead, "manager_user_id", None),
             campaign_id=lead.campaign_id,
             converted_from_lead_id=lead.id,
             remark=lead.remark,
@@ -302,7 +352,12 @@ def convert_lead_to_customer(
         db.flush()
 
     if customer.owner_user_id is None or not can_view_customer(
-        ctx, db, customer.owner_user_id, customer.territory_id
+        ctx,
+        db,
+        customer.owner_user_id,
+        customer.territory_id,
+        created_by_user_id=customer.created_by_user_id,
+        manager_user_id=getattr(customer, "manager_user_id", None),
     ):
         customer.owner_user_id = ctx.user.id
 

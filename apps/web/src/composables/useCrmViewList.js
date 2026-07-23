@@ -28,8 +28,21 @@ const SEARCH_DEBOUNCE_MS = 400
  * @param {(params: Object) => Promise<{items:Array,total:number,list_fields?:Array,filters_applied?:boolean}>} opts.fetcher
  * @param {import('vue').Ref<Object>} [opts.extraParams] 额外查询参数（如 { status } ），仅在无激活视图时合并
  * @param {() => void} [opts.onResetExtra] 视图切换/清除筛选时重置额外参数的回调
+ * @param {() => boolean} [opts.getExtraDraftActive] 快捷筛选是否生效（计入可保存视图）
+ * @param {() => Array<{field_key:string,op?:string,value:any}>} [opts.collectExtraFilterConditions] 保存视图时并入条件
+ * @param {() => string[]} [opts.suggestExtraViewNameBits] 保存视图名称建议片段
  */
-export function useCrmViewList({ entityType, listPath, fields, fetcher, extraParams, onResetExtra }) {
+export function useCrmViewList({
+  entityType,
+  listPath,
+  fields,
+  fetcher,
+  extraParams,
+  onResetExtra,
+  getExtraDraftActive,
+  collectExtraFilterConditions,
+  suggestExtraViewNameBits,
+}) {
   const router = useRouter()
   const route = useRoute()
   const auth = useAuthStore()
@@ -61,10 +74,17 @@ export function useCrmViewList({ entityType, listPath, fields, fetcher, extraPar
     () => views.value.find((v) => String(v.id) === String(activeViewId.value)) || null,
   )
   const hasDraftFilters = computed(
-    () => hasActiveFilters(advancedFilters.value) || !!appliedSearchKeyword.value.trim(),
+    () =>
+      hasActiveFilters(advancedFilters.value) ||
+      !!appliedSearchKeyword.value.trim() ||
+      !!getExtraDraftActive?.(),
   )
   const hasTemporaryFilter = computed(
-    () => !activeViewId.value && (hasActiveFilters(advancedFilters.value) || !!appliedSearchKeyword.value.trim()),
+    () =>
+      !activeViewId.value &&
+      (hasActiveFilters(advancedFilters.value) ||
+        !!appliedSearchKeyword.value.trim() ||
+        !!getExtraDraftActive?.()),
   )
   const advancedFilterCount = computed(() => countActiveFilters(advancedFilters.value))
   const fieldMap = computed(() => Object.fromEntries((fields.value || []).map((f) => [f.field_key, f])))
@@ -207,7 +227,14 @@ export function useCrmViewList({ entityType, listPath, fields, fetcher, extraPar
   }
 
   function openSaveView() {
-    const nameFromFilters = suggestViewNameFromFilters(advancedFilters.value, fieldMap.value)
+    let nameFromFilters = suggestViewNameFromFilters(advancedFilters.value, fieldMap.value)
+    const bits = (suggestExtraViewNameBits?.() || []).filter(Boolean)
+    if (bits.length) {
+      nameFromFilters =
+        nameFromFilters === '我的视图'
+          ? bits.slice(0, 2).join('-')
+          : `${bits[0]}-${nameFromFilters}`.slice(0, 40)
+    }
     saveViewName.value = appliedSearchKeyword.value.trim()
       ? `${nameFromFilters}-搜索`
       : nameFromFilters
@@ -223,6 +250,13 @@ export function useCrmViewList({ entityType, listPath, fields, fetcher, extraPar
       return
     }
     const filters = buildFiltersPayload(advancedFilters.value.conditions || [], fields.value)
+    const conditions = [...(filters.conditions || [])]
+    for (const c of collectExtraFilterConditions?.() || []) {
+      if (!c?.field_key || c.value == null || c.value === '') continue
+      if (conditions.some((x) => x.field_key === c.field_key)) continue
+      conditions.push({ field_key: c.field_key, op: c.op || 'eq', value: c.value })
+    }
+    filters.conditions = conditions
     const q = appliedSearchKeyword.value.trim()
     try {
       const { data } = await crmApi.createView({

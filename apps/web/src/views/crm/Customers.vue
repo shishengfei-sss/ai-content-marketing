@@ -86,6 +86,12 @@ const statusOptions = computed(() => {
 
 const canCreate = () => hasPermission(auth.permissions, 'crm.customer.create')
 const canDelete = () => hasPermission(auth.permissions, 'crm.customer.delete')
+const canDeleteRow = (row) => {
+  if (!canDelete() || !row?.owner_user_id || !auth.user?.id) return false
+  const a = String(row.owner_user_id).replace(/-/g, '').toLowerCase()
+  const b = String(auth.user.id).replace(/-/g, '').toLowerCase()
+  return a === b
+}
 const canSaveView = () => hasPermission(auth.permissions, 'crm.view.save_own')
 const canManagePublic = () => hasPermission(auth.permissions, 'crm.view.manage_public')
 const canImport = () => hasPermission(auth.permissions, 'crm.customer.import')
@@ -319,7 +325,17 @@ function onImportCommand(command) {
 
 async function onExportCommand(format) {
   try {
-    const { data } = await crmApi.exportCustomers(format)
+    const params = { format }
+    if (activeViewId.value) {
+      params.view_id = activeViewId.value
+    } else {
+      const q = appliedSearchKeyword.value.trim()
+      if (q) params.q = q
+      if (statusFilter.value) params.status = statusFilter.value
+      const filtersParam = filtersPayloadForApi(advancedFilters.value, fields.value)
+      if (filtersParam) params.filters = filtersParam
+    }
+    const { data, headers } = await crmApi.exportCustomers(params)
     const blob = data instanceof Blob ? data : new Blob([data])
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -327,7 +343,12 @@ async function onExportCommand(format) {
     a.download = `customers.${format === 'xlsx' ? 'xlsx' : 'csv'}`
     a.click()
     URL.revokeObjectURL(url)
-    ElMessage.success('导出已开始')
+    const rowCount = headers?.['x-export-row-count'] ?? headers?.['X-Export-Row-Count']
+    ElMessage.success(
+      rowCount != null && rowCount !== ''
+        ? `已按当前筛选导出 ${rowCount} 条`
+        : '已按当前筛选条件导出',
+    )
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
   }
@@ -536,7 +557,7 @@ onBeforeUnmount(() => {
       <el-table-column label="操作" width="132" fixed="right" align="center" @click.stop>
         <template #default="{ row }">
           <el-button link type="primary" @click.stop="goDetail(row)">详情</el-button>
-          <el-button v-if="canDelete()" link type="danger" @click.stop="handleDelete(row)">删除</el-button>
+          <el-button v-if="canDeleteRow(row)" link type="danger" @click.stop="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>

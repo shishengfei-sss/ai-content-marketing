@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, assistantsApi, isBenignEmptyError } from '../../api/client'
+import { formatDateTime } from '../../utils/datetime'
 
 const loading = ref(false)
 const uploading = ref(false)
@@ -109,7 +110,7 @@ onMounted(async () => {
       </el-table-column>
       <el-table-column label="创建时间" width="170">
         <template #default="{ row }">
-          {{ new Date(row.created_at).toLocaleString('zh-CN') }}
+          {{ formatDateTime(row.created_at) }}
         </template>
       </el-table-column>
       <el-table-column label="操作" width="80">

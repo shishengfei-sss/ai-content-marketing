@@ -19,7 +19,7 @@ from app.schemas.crm_import import (
 )
 from app.services.crm.import_service import (
     build_errors_csv,
-    build_template_csv,
+    build_import_template,
     create_import_job,
     get_job,
     list_import_jobs,
@@ -27,29 +27,51 @@ from app.services.crm.import_service import (
     run_import,
     update_job_mapping,
 )
+from app.services.membership_service import ensure_product_import_permission
 
 router = APIRouter(prefix="/import", tags=["crm-import"])
 
+_ENTITY_ALIASES = {
+    "leads": "lead",
+    "customers": "customer",
+    "products": "product",
+}
 
-def _require_import_perm(ctx: TenantContext, entity_type: str) -> None:
+
+def _normalize_entity_type(entity_type: str) -> str:
+    key = (entity_type or "").strip().lower()
+    return _ENTITY_ALIASES.get(key, key)
+
+
+def _require_import_perm(ctx: TenantContext, entity_type: str, db: Session | None = None) -> None:
+    entity_type = _normalize_entity_type(entity_type)
+    if entity_type == "product" and db is not None:
+        ensure_product_import_permission(db, ctx.membership)
     perm = f"crm.{entity_type}.import"
     codes = {p.permission_code for p in ctx.membership.role.permissions}
-    if perm not in codes:
-        raise HTTPException(status_code=403, detail="无导入权限")
+    if perm in codes:
+        return
+    # 存量租户：有产品管理权即可导入（兼容未种子 crm.product.import）
+    if entity_type in ("product", "product_spec_model") and "crm.product.manage" in codes:
+        return
+    raise HTTPException(status_code=403, detail="无导入权限")
 
 
 @router.get("/template/{entity_type}")
 def download_template(
     entity_type: str,
+    format: str = Query(default="xlsx", description="xlsx | csv"),
     ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
-    _require_import_perm(ctx, entity_type)
-    content = build_template_csv(db, ctx.tenant_id, entity_type)
-    filename = f"{entity_type}_import_template.csv"
+    entity_type = _normalize_entity_type(entity_type)
+    _require_import_perm(ctx, entity_type, db)
+    content, media_type, filename = build_import_template(
+        db, ctx.tenant_id, entity_type, fmt=format
+    )
     return Response(
-        content=content.encode("utf-8-sig"),
-        media_type="text/csv; charset=utf-8",
+        content=content,
+        media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
@@ -61,7 +83,8 @@ async def upload_import_job(
     ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
-    _require_import_perm(ctx, entity_type)
+    entity_type = _normalize_entity_type(entity_type)
+    _require_import_perm(ctx, entity_type, db)
     raw = await file.read()
     if len(raw) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="文件过大")

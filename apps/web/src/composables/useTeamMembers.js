@@ -48,16 +48,31 @@ export function useTeamMembers() {
     return loadingPromise
   }
 
+  function sameUserId(a, b) {
+    if (a == null || b == null) return false
+    return String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
+  }
+
   function findMember(userId) {
     if (!userId) return null
-    return (cachedMembers || members.value).find((m) => m.user_id === userId) || null
+    return (cachedMembers || members.value).find((m) => sameUserId(m.user_id, userId)) || null
   }
 
   function resolveMemberName(userId, { withSelfTag = true } = {}) {
     if (!userId) return '未分配'
     const member = findMember(userId)
-    const name = member?.display_name || member?.phone || '未知成员'
-    if (withSelfTag && userId === auth.user?.id) return `${name}（我）`
+    const isSelf = sameUserId(userId, auth.user?.id)
+    let name = member?.display_name || member?.phone || ''
+    // 无 team.member.view 时成员列表为空：本人回退到登录用户资料
+    if (!name && isSelf) {
+      name = auth.user?.display_name || auth.user?.phone || ''
+    }
+    if (!name) name = '未知成员'
+    // 单字昵称易被误认为空值，附带手机号便于辨认
+    if (member?.phone && [...String(name)].length <= 1) {
+      name = `${name}（${member.phone}）`
+    }
+    if (withSelfTag && isSelf) return `${name}（我）`
     return name
   }
 

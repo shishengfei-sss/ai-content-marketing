@@ -26,14 +26,17 @@ export const TASK_PRIORITY_TYPES = {
   high: 'danger',
 }
 
-/** 根据当前状态返回可执行的操作 */
+/** 根据当前状态返回可执行的操作（取消与删除互斥：待办走删除，已开始走取消） */
 export function getTaskStatusActions(status) {
   if (status === 'done' || status === 'cancelled') return []
   const actions = []
   if (status === 'open') {
     actions.push({ key: 'start', label: '开始', next: 'in_progress', primary: true })
     actions.push({ key: 'hold', label: '挂起', next: 'on_hold' })
-  } else if (status === 'in_progress') {
+    actions.push({ key: 'done', label: '完成', next: 'done', success: true })
+    return actions
+  }
+  if (status === 'in_progress') {
     actions.push({ key: 'hold', label: '挂起', next: 'on_hold' })
   } else if (status === 'on_hold') {
     actions.push({ key: 'resume', label: '继续', next: 'in_progress', primary: true })
@@ -67,31 +70,57 @@ export function isActiveTaskStatus(status) {
   return status !== 'done' && status !== 'cancelled'
 }
 
-export function formatTaskDateTime(value, { empty = '—' } = {}) {
-  if (!value) return empty
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return empty
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
+/** 取消任务时弹出填写取消原因；取消对话框则抛出 'cancel' */
+export async function promptTaskCancelReason() {
+  const { ElMessageBox } = await import('element-plus')
+  const { value } = await ElMessageBox.prompt('请填写取消原因（必填）', '取消任务', {
+    confirmButtonText: '确认取消',
+    cancelButtonText: '返回',
+    type: 'warning',
+    inputType: 'textarea',
+    inputPlaceholder: '例如：客户延期、需求变更、重复任务…',
+    inputValidator: (v) => {
+      const text = String(v || '').trim()
+      if (!text) return '请填写取消原因'
+      if (text.length > 500) return '取消原因不超过 500 字'
+      return true
+    },
   })
+  return String(value).trim()
+}
+
+/** 标记完成前二次确认，避免误点左侧勾选 */
+export async function promptTaskCompleteConfirm(title = '') {
+  const { ElMessageBox } = await import('element-plus')
+  const name = String(title || '').trim()
+  const tip = name ? `确定将任务「${name}」标记为已完成？` : '确定将此任务标记为已完成？'
+  await ElMessageBox.confirm(tip, '完成任务', {
+    confirmButtonText: '确认完成',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
+}
+
+import { formatDateTime, parseApiDateTime } from './datetime'
+
+export function formatTaskDateTime(value, { empty = '—' } = {}) {
+  return formatDateTime(value, { empty, withSeconds: false })
 }
 
 export function formatDueAtRelative(value) {
   if (!value) return '无计划完成时间'
-  const date = new Date(value)
+  const date = parseApiDateTime(value)
+  if (!date) return '无计划完成时间'
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const target = new Date(date.getFullYear(), date.getMonth(), date.getDate())
   const diff = Math.round((target - today) / 86400000)
-  const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  if (diff < 0) return `已逾期 · ${date.toLocaleDateString('zh-CN')} ${time}`
+  const time = formatDateTime(value, { empty: '', withSeconds: false }).split(' ')[1] || ''
+  const day = formatDateTime(value, { empty: '', withSeconds: false }).split(' ')[0] || ''
+  if (diff < 0) return `已逾期 · ${day} ${time}`
   if (diff === 0) return `今天 ${time}`
   if (diff === 1) return `明天 ${time}`
-  return `${date.toLocaleDateString('zh-CN')} ${time}`
+  return `${day} ${time}`
 }
 
 export const TASK_TIME_FIELDS = [

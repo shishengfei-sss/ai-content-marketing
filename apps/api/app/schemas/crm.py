@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.models.crm import (
     ACTIVITY_TYPES,
     CAMPAIGN_STATUSES,
+    CAMPAIGN_TYPES,
     CUSTOMER_STATUSES,
     LEAD_STATUSES,
     TASK_PRIORITIES,
@@ -93,6 +94,7 @@ class LeadCreate(BaseModel):
     lead_score: int | None = Field(default=None, ge=0, le=100)
     department: str | None = Field(default=None, max_length=100)
     country: str | None = Field(default="中国", max_length=50)
+    industry: str | None = Field(default=None, max_length=100)
     status: str = "待跟进"
     remark: str | None = None
     extra_data: dict = Field(default_factory=dict)
@@ -182,6 +184,7 @@ class LeadOut(BaseModel):
     acquisition_cost: float | None = None
     title: str | None = None
     lead_score: int | None = None
+    icp_score: int | None = None
     department: str | None = None
     country: str | None = None
     status: str
@@ -189,6 +192,7 @@ class LeadOut(BaseModel):
     pool_id: UUID | None = None
     claimed_at: datetime | None = None
     territory_id: UUID | None = None
+    manager_user_id: UUID | None = None
     campaign_id: UUID | None = None
     next_follow_up_at: datetime | None = None
     remark: str | None
@@ -245,6 +249,7 @@ class CustomerUpdate(BaseModel):
     email: str | None = None
     status: str | None = None
     owner_user_id: UUID | None = None
+    territory_id: UUID | None = None
     description: str | None = Field(default=None, max_length=2000)
     type: str | None = Field(default=None, max_length=20)
     parent_customer_id: UUID | None = None
@@ -283,6 +288,8 @@ class CustomerOut(BaseModel):
     source: str | None = None
     converted_lead_score: int | None = None
     owner_user_id: UUID | None = None
+    territory_id: UUID | None = None
+    manager_user_id: UUID | None = None
     pool_id: UUID | None = None
     claimed_at: datetime | None = None
     converted_from_lead_id: UUID | None
@@ -306,7 +313,7 @@ class CustomerListResponse(BaseModel):
 
 class ContactCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
-    mobile: str | None = None
+    mobile: str = Field(min_length=1, max_length=11)
     phone: str | None = None
     email: str | None = None
     wechat: str | None = None
@@ -317,6 +324,33 @@ class ContactCreate(BaseModel):
     reports_to_contact_id: UUID | None = None
     remark: str | None = None
     extra_data: dict = Field(default_factory=dict)
+
+    @field_validator("mobile", mode="before")
+    @classmethod
+    def _strip_mobile(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return str(value).strip()
+
+    @field_validator("mobile")
+    @classmethod
+    def _valid_mobile(cls, value: str) -> str:
+        return normalize_lead_mobile(value, required=True)
+
+
+class ContactUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    mobile: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    wechat: str | None = None
+    title: str | None = None
+    department: str | None = None
+    is_primary: bool | None = None
+    contact_role: str | None = None
+    reports_to_contact_id: UUID | None = None
+    remark: str | None = None
+    extra_data: dict | None = None
 
 
 class ContactOut(BaseModel):
@@ -480,6 +514,7 @@ class TaskUpdate(BaseModel):
     started_at: datetime | None = None
     due_at: datetime | None = None
     completed_at: datetime | None = None
+    cancel_reason: str | None = Field(default=None, max_length=500)
     assignee_user_id: UUID | None = None
     territory_id: UUID | None = None
     lead_id: UUID | None = None
@@ -498,9 +533,11 @@ class TaskOut(BaseModel):
     started_at: datetime | None
     due_at: datetime | None
     completed_at: datetime | None
+    cancel_reason: str | None = None
     assignee_user_id: UUID
     owner_user_id: UUID
     territory_id: UUID | None
+    manager_user_id: UUID | None = None
     lead_id: UUID | None
     customer_id: UUID | None
     campaign_id: UUID | None
@@ -556,7 +593,11 @@ class CampaignCreate(BaseModel):
     goal: str | None = None
     channels: list[str] = Field(default_factory=list)
     description: str | None = None
+    campaign_type: str | None = Field(default=None, max_length=30)
+    expected_leads: int | None = Field(default=None, ge=0)
+    location: str | None = Field(default=None, max_length=200)
     territory_id: UUID | None = None
+    owner_user_id: UUID | None = None
     budget: float | None = Field(default=None, ge=0)
     spent: float | None = Field(default=None, ge=0)
     currency: str = Field(default="CNY", max_length=10)
@@ -571,6 +612,9 @@ class CampaignUpdate(BaseModel):
     goal: str | None = None
     channels: list[str] | None = None
     description: str | None = None
+    campaign_type: str | None = Field(default=None, max_length=30)
+    expected_leads: int | None = Field(default=None, ge=0)
+    location: str | None = Field(default=None, max_length=200)
     owner_user_id: UUID | None = None
     territory_id: UUID | None = None
     budget: float | None = Field(default=None, ge=0)
@@ -589,12 +633,16 @@ class CampaignOut(BaseModel):
     goal: str | None
     channels: list
     description: str | None
+    campaign_type: str | None = None
+    expected_leads: int | None = None
+    location: str | None = None
     budget: float | None = None
     spent: float = 0
     currency: str = "CNY"
     target_segment_id: UUID | None = None
     owner_user_id: UUID
     territory_id: UUID | None
+    manager_user_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
     lead_count: int = 0
@@ -612,6 +660,33 @@ class CampaignListResponse(BaseModel):
     list_fields: list[dict] | None = None
     view_id: UUID | None = None
     filters_applied: bool | None = None
+
+
+class CampaignChannelCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    code: str | None = Field(default=None, max_length=50)
+    sort_order: int = 0
+    is_active: bool = True
+
+
+class CampaignChannelUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    code: str | None = Field(default=None, max_length=50)
+    sort_order: int | None = None
+    is_active: bool | None = None
+
+
+class CampaignChannelOut(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    code: str
+    name: str
+    sort_order: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class CampaignContentLink(BaseModel):
@@ -757,6 +832,13 @@ class LeadReclaimRequest(BaseModel):
 
 class CustomerPoolCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+    territory_id: UUID | None = None
+    industry_filter: str | None = None
+    auto_reclaim_days: int | None = Field(default=None, ge=1)
+
+
+class CustomerPoolUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
     territory_id: UUID | None = None
     industry_filter: str | None = None
     auto_reclaim_days: int | None = Field(default=None, ge=1)
@@ -915,6 +997,12 @@ class TagCreate(BaseModel):
     category: str | None = None
 
 
+class TagUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=50)
+    color: str | None = None
+    category: str | None = None
+
+
 class TagOut(BaseModel):
     id: UUID
     name: str
@@ -985,3 +1073,10 @@ class BantEvaluationOut(BaseModel):
 def validate_campaign_status(status: str) -> None:
     if status not in CAMPAIGN_STATUSES:
         raise ValueError(f"status 必须是 {CAMPAIGN_STATUSES} 之一")
+
+
+def validate_campaign_type(campaign_type: str | None) -> None:
+    if campaign_type is None or campaign_type == "":
+        return
+    if campaign_type not in CAMPAIGN_TYPES:
+        raise ValueError(f"campaign_type 必须是 {CAMPAIGN_TYPES} 之一")

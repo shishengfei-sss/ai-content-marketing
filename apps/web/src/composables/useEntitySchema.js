@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { crmApi } from '../api/client'
+import { formatDate, formatDateTime } from '../utils/datetime'
 
 const schemaCache = new Map()
 
@@ -13,10 +14,9 @@ export function useEntitySchema(entityType) {
     loading.value = true
     try {
       const key = `schema:${entityType}`
-      if (!schemaCache.has(key)) {
-        const { data } = await crmApi.getSchema(entityType)
-        schemaCache.set(key, data.fields || [])
-      }
+      // 始终拉取，确保种子字段 options / is_active 同步后前端立即生效
+      const { data } = await crmApi.getSchema(entityType)
+      schemaCache.set(key, data.fields || [])
       fields.value = schemaCache.get(key)
     } finally {
       loading.value = false
@@ -99,7 +99,7 @@ export function useEntitySchema(entityType) {
         field_key: f.field_key,
         label: f.label,
         list_locked: !!f.list_locked,
-        visible: !!f.list_locked,
+        visible: f.list_locked ? true : !!f.show_in_list_default,
         order: draft.length,
       })
     }
@@ -159,9 +159,8 @@ export function useEntitySchema(entityType) {
 
   function formatCell(row, fieldKey, fieldType) {
     const formatValue = (val) => {
-      if (fieldType === 'datetime' || fieldType === 'date') {
-        return new Date(val).toLocaleString('zh-CN')
-      }
+      if (fieldType === 'datetime') return formatDateTime(val)
+      if (fieldType === 'date') return formatDate(val)
       if (Array.isArray(val)) return val.join('、')
       return String(val)
     }

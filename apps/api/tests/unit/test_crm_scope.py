@@ -291,3 +291,19 @@ def test_no_list_permission_empty():
 def test_has_list_own_permission():
     ctx = _ctx("crm.lead.list_own", "crm.lead.view")
     assert has_lead_list_permission(ctx) is True
+
+
+def test_pool_unclaimed_lead_visible_with_list_own():
+    me = uuid.uuid4()
+    pool_id = uuid.uuid4()
+    ctx = _ctx("crm.lead.list_own", user_id=me)
+    db = MagicMock()
+    assert can_view_lead(ctx, db, None, None, pool_id=pool_id) is True
+    assert can_view_lead(ctx, db, None, None, pool_id=None) is False
+    assert can_view_lead(ctx, db, uuid.uuid4(), None, pool_id=pool_id) is False
+
+
+def test_pool_unclaimed_lead_denied_without_list_perm():
+    ctx = _ctx("crm.lead.view")
+    db = MagicMock()
+    assert can_view_lead(ctx, db, None, None, pool_id=uuid.uuid4()) is False

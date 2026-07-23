@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
@@ -8,6 +8,11 @@ import { useAuthStore } from '../../stores/auth'
 import { hasPermission } from '../../config/permissions'
 import { useTeamMembers } from '../../composables/useTeamMembers'
 import CrmEntityTasks from '../../components/crm/CrmEntityTasks.vue'
+import CrmEntityTags from '../../components/crm/CrmEntityTags.vue'
+import CrmEntityAttachments from '../../components/crm/CrmEntityAttachments.vue'
+import ContractFormDialog from './ContractFormDialog.vue'
+import { formatDate, formatDateTime } from '../../utils/datetime'
+import { CONTRACT_STATUS_META, CONTRACT_TYPE_META, contractActions } from '../../composables/contractActions'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,7 +24,6 @@ const contract = ref(null)
 const customer = ref(null)
 const relatedOrders = ref([])
 const amendments = ref([])
-const attachments = ref([])
 const activities = ref([])
 const activeTab = ref('basic')
 const activityForm = ref({ activity_type: 'call', content: '', next_follow_up_at: '' })
@@ -27,9 +31,18 @@ const activityLabels = { call: '电话', visit: '拜访', wechat: '微信', emai
 const amendDialog = ref(false)
 const amendSaving = ref(false)
 const amendForm = ref({ title: '', change_type: 'amount_change', amount_delta: null, new_value: '' })
+const editVisible = ref(false)
+const signDialog = ref(false)
+const signSaving = ref(false)
+const signForm = ref({ signed_amount: null, signed_at: '' })
+const rejectVisible = ref(false)
+const rejectReason = ref('')
 
 const canConvert = () => hasPermission(auth.permissions, 'crm.order.convert')
 const canEdit = () => hasPermission(auth.permissions, 'crm.contract.edit')
+const canSign = () => hasPermission(auth.permissions, 'crm.contract.sign')
+const canApprove = () => hasPermission(auth.permissions, 'crm.contract.approve')
+const canCreate = () => hasPermission(auth.permissions, 'crm.contract.create')
 const canRenew = () => hasPermission(auth.permissions, 'crm.deal.create')
 const canDelete = () => hasPermission(auth.permissions, 'crm.contract.delete')
 const canViewOrder = () =>
@@ -41,15 +54,27 @@ const canDeleteActivity = (item) =>
   hasPermission(auth.permissions, 'crm.activity.create') &&
   (item.created_by_user_id === auth.user?.id || hasPermission(auth.permissions, 'crm.admin'))
 
-const STATUS_META = {
-  draft: { label: '草稿', type: 'info' },
-  sent: { label: '已发送', type: 'warning' },
-  signed: { label: '已签署', type: 'success' },
-  executing: { label: '执行中', type: 'success' },
-  expired: { label: '已过期', type: 'info' },
-  terminated: { label: '已终止', type: 'danger' },
+function sameUserId(a, b) {
+  if (!a || !b) return false
+  return String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
 }
-const TYPE_META = { new: '新签', renewal: '续约', addon: '增订' }
+const isOwner = computed(() => sameUserId(contract.value?.owner_user_id, auth.user?.id))
+const canMutate = computed(() => isOwner.value)
+const STATUS_META = CONTRACT_STATUS_META
+const TYPE_META = CONTRACT_TYPE_META
+const actions = computed(() =>
+  contractActions({
+    status: contract.value?.status,
+    isOwner: isOwner.value,
+    canEdit: canEdit(),
+    canSign: canSign(),
+    canApprove: canApprove(),
+    canCreate: canCreate(),
+    canDelete: canDelete(),
+    canConvert: canConvert(),
+    canRenewDeal: canRenew(),
+  }),
+)
 const ORDER_STATUS = {
   draft: '草稿',
   pending_approval: '待审批',
@@ -69,7 +94,7 @@ async function loadContract() {
     if (data.customer_id) {
       try { const c = await crmApi.getCustomer(data.customer_id); customer.value = c.data } catch { customer.value = null }
     }
-    await Promise.all([loadRelatedOrders(), loadAmendments(), loadAttachments(), loadActivities()])
+    await Promise.all([loadRelatedOrders(), loadAmendments(), loadActivities()])
   } catch (e) {
     ElMessage.error(e.message || '加载合同失败')
   } finally {
@@ -100,12 +125,46 @@ async function loadRelatedOrders() {
   }
 }
 
-async function loadAttachments() {
+const amountInclTax = computed(() => {
+  const lines = contract.value?.lines || []
+  if (!lines.length) return Number(contract.value?.amount || 0)
+  return lines.reduce(
+    (acc, l) => acc + Number(l.line_total || 0) + Number(l.tax_amount || 0),
+    0,
+  )
+})
+
+function lineInclTax(row) {
+  return Number(row.line_total || 0) + Number(row.tax_amount || 0)
+}
+
+function openEdit() {
+  if (!contract.value) return
+  editVisible.value = true
+}
+
+function openSign() {
+  signForm.value = {
+    signed_amount: Number(contract.value?.signed_amount ?? contract.value?.amount ?? 0),
+    signed_at: '',
+  }
+  signDialog.value = true
+}
+
+async function submitSign() {
+  signSaving.value = true
   try {
-    const { data } = await crmApi.listAttachments({ entity_type: 'contract', entity_id: route.params.id })
-    attachments.value = Array.isArray(data) ? data : []
-  } catch {
-    attachments.value = []
+    const { data } = await crmApi.signContract(contract.value.id, {
+      signed_amount: signForm.value.signed_amount,
+      signed_at: signForm.value.signed_at || null,
+    })
+    contract.value = data
+    signDialog.value = false
+    ElMessage.success('已签署')
+  } catch (e) {
+    ElMessage.error(e.message || '签署失败')
+  } finally {
+    signSaving.value = false
   }
 }
 
@@ -149,6 +208,68 @@ async function deleteActivity(item) {
   } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '删除失败') }
 }
 
+async function handleSend() {
+  try {
+    await crmApi.sendContract(contract.value.id)
+    ElMessage.success('已发送')
+    await loadContract()
+  } catch (e) { ElMessage.error(e.message || '发送失败') }
+}
+
+async function handleSubmit() {
+  try {
+    await crmApi.submitContract(contract.value.id)
+    ElMessage.success('已提交审批')
+    await loadContract()
+  } catch (e) { ElMessage.error(e.message || '提交失败') }
+}
+
+async function handleWithdraw() {
+  try {
+    await ElMessageBox.confirm('确定撤回审批？合同将回到草稿。', '撤回审批')
+    await crmApi.withdrawContract(contract.value.id)
+    ElMessage.success('已撤回')
+    await loadContract()
+  } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '撤回失败') }
+}
+
+async function handleApprove() {
+  try {
+    await crmApi.approveContract(contract.value.id)
+    ElMessage.success('审批已通过')
+    await loadContract()
+  } catch (e) { ElMessage.error(e.message || '审批失败') }
+}
+
+async function submitReject() {
+  if (!rejectReason.value.trim()) { ElMessage.warning('请填写驳回原因'); return }
+  try {
+    await crmApi.rejectContract(contract.value.id, { reason: rejectReason.value.trim() })
+    ElMessage.success('已驳回')
+    rejectVisible.value = false
+    rejectReason.value = ''
+    await loadContract()
+  } catch (e) { ElMessage.error(e.message || '驳回失败') }
+}
+
+async function handleActivate() {
+  try {
+    await ElMessageBox.confirm('确定开始执行该合同？', '开始执行')
+    await crmApi.activateContract(contract.value.id)
+    ElMessage.success('已开始执行')
+    await loadContract()
+  } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '操作失败') }
+}
+
+async function handleTerminate() {
+  try {
+    await ElMessageBox.confirm('确定终止该合同？', '终止合同')
+    await crmApi.terminateContract(contract.value.id)
+    ElMessage.success('已终止')
+    await loadContract()
+  } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '终止失败') }
+}
+
 async function handleConvert() {
   try {
     await ElMessageBox.confirm('将合同生成订单？（合同可重复生成订单）', '生成订单')
@@ -165,6 +286,23 @@ async function handleRenew() {
     ElMessage.success('已创建续约商机')
     router.push(`/crm/deals/${data.deal_id}`)
   } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '续约失败') }
+}
+
+async function handleRenewContract() {
+  try {
+    await ElMessageBox.confirm('基于本合同生成续约合同草稿？', '续约合同')
+    const { data } = await crmApi.renewAsContract(contract.value.id)
+    ElMessage.success('已生成续约合同')
+    router.push(`/crm/contracts/${data.id}`)
+  } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '续约失败') }
+}
+
+async function handleClone() {
+  try {
+    const { data } = await crmApi.cloneContract(contract.value.id)
+    ElMessage.success('已复制为新草稿')
+    router.push(`/crm/contracts/${data.id}`)
+  } catch (e) { ElMessage.error(e.message || '复制失败') }
 }
 
 function openAmend() {
@@ -232,7 +370,6 @@ async function handleDelete() {
 }
 
 function formatAmount(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
-function formatDate(v) { return v ? String(v).replace('T', ' ').slice(0, 16) : '' }
 
 onMounted(async () => { await loadMembers(); loadContract() })
 </script>
@@ -255,16 +392,58 @@ onMounted(async () => { await loadMembers(); loadContract() })
         </div>
       </div>
       <div class="detail-page__actions">
-        <el-button v-if="canConvert() && (contract.status === 'signed' || contract.status === 'executing')" type="primary" @click="handleConvert">生成订单</el-button>
-        <el-button v-if="canRenew() && ['signed', 'executing', 'expired'].includes(contract.status)" @click="handleRenew">续约商机</el-button>
-        <el-button v-if="canEdit()" @click="openAmend">补充协议</el-button>
-        <el-button v-if="canDelete()" type="danger" @click="handleDelete">删除</el-button>
+        <el-button v-if="actions.edit" @click="openEdit">编辑</el-button>
+        <el-button v-if="actions.send" @click="handleSend">发送</el-button>
+        <el-button v-if="actions.submit" type="primary" @click="handleSubmit">提交审批</el-button>
+        <el-button v-if="actions.withdraw" @click="handleWithdraw">撤回</el-button>
+        <el-button v-if="actions.approve" type="success" @click="handleApprove">通过</el-button>
+        <el-button v-if="actions.reject" type="danger" @click="rejectVisible = true">驳回</el-button>
+        <el-button v-if="actions.sign" type="success" @click="openSign">签署</el-button>
+        <el-button v-if="actions.activate" type="primary" @click="handleActivate">开始执行</el-button>
+        <el-button v-if="actions.terminate" type="warning" @click="handleTerminate">终止</el-button>
+        <el-button v-if="actions.convert" type="primary" @click="handleConvert">生成订单</el-button>
+        <el-button v-if="actions.amend" @click="openAmend">补充协议</el-button>
+        <el-button v-if="actions.renewDeal" @click="handleRenew">续约商机</el-button>
+        <el-button v-if="actions.renewContract" @click="handleRenewContract">续约合同</el-button>
+        <el-button v-if="actions.clone" @click="handleClone">复制</el-button>
+        <el-button v-if="actions.delete" type="danger" @click="handleDelete">删除</el-button>
+      </div>
+    </div>
+
+    <div v-if="contract" class="detail-page__kpi page-card">
+      <div class="kpi"><div class="kpi__label">合同金额</div><div class="kpi__value">¥{{ formatAmount(contract.amount) }}</div></div>
+      <div class="kpi">
+        <div class="kpi__label">签约金额</div>
+        <div class="kpi__value">{{ contract.signed_amount != null ? '¥' + formatAmount(contract.signed_amount) : '—' }}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi__label">差额</div>
+        <div class="kpi__value">{{ contract.amount_diff != null ? '¥' + formatAmount(contract.amount_diff) : '—' }}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi__label">关联订单数/金额</div>
+        <div class="kpi__value">
+          {{ contract.related_order_count ?? relatedOrders.length }}
+          <span class="kpi__sub">/ ¥{{ formatAmount(contract.related_order_amount ?? relatedOrders.reduce((a, o) => a + Number(o.amount || 0), 0)) }}</span>
+        </div>
+      </div>
+      <div class="kpi">
+        <div class="kpi__label">剩余天数</div>
+        <div class="kpi__value">{{ contract.days_remaining != null ? contract.days_remaining + ' 天' : '—' }}</div>
       </div>
     </div>
 
     <div v-if="contract" class="detail-page__body page-card">
       <el-tabs v-model="activeTab">
         <el-tab-pane label="基本信息" name="basic">
+          <div class="sub-block" style="margin-top: 0; margin-bottom: 16px">
+            <div class="sub-block__title">标签</div>
+            <CrmEntityTags
+              entity-type="contract"
+              :entity-id="contract.id"
+              :editable="canEdit() && canMutate"
+            />
+          </div>
           <el-descriptions :column="2" border>
             <el-descriptions-item label="合同号">{{ contract.contract_number }}</el-descriptions-item>
             <el-descriptions-item label="客户">
@@ -275,19 +454,37 @@ onMounted(async () => { await loadMembers(); loadContract() })
             <el-descriptions-item label="签署金额">{{ contract.signed_amount != null ? '¥' + formatAmount(contract.signed_amount) : '—' }}</el-descriptions-item>
             <el-descriptions-item label="生效日">{{ formatDate(contract.start_date) || '—' }}</el-descriptions-item>
             <el-descriptions-item label="到期日">{{ formatDate(contract.end_date) || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="签署时间">{{ formatDate(contract.signed_at) || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ formatDate(contract.created_at) }}</el-descriptions-item>
+            <el-descriptions-item label="签署时间">{{ formatDateTime(contract.signed_at, { withSeconds: false, empty: '—' }) }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ formatDateTime(contract.created_at, { withSeconds: false }) }}</el-descriptions-item>
           </el-descriptions>
 
           <div class="sub-block">
-            <div class="sub-block__title">附件</div>
-            <ul v-if="attachments.length" class="att-list">
-              <li v-for="a in attachments" :key="a.id">{{ a.file_name }}（{{ formatDate(a.created_at) }}）</li>
-            </ul>
-            <div v-else class="att-fallback">
-              <el-link v-if="contract.file_url" :href="contract.file_url" target="_blank" type="primary">查看 legacy 附件</el-link>
-              <span v-else>暂无附件</span>
+            <CrmEntityAttachments
+              entity-type="contract"
+              :entity-id="contract.id"
+              :editable="canEdit() && canMutate"
+            />
+            <div v-if="contract.file_url" class="att-fallback" style="margin-top: 8px">
+              <el-link :href="contract.file_url" target="_blank" type="primary">查看 legacy 附件链接</el-link>
             </div>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="合同明细" name="lines">
+          <el-table :data="contract.lines || []" border size="small" empty-text="暂无产品明细">
+            <el-table-column prop="name" label="名称" min-width="160" />
+            <el-table-column prop="unit" label="单位" width="70" />
+            <el-table-column label="数量" width="90" align="right"><template #default="{ row }">{{ row.quantity }}</template></el-table-column>
+            <el-table-column label="单价" width="110" align="right"><template #default="{ row }">¥{{ formatAmount(row.unit_price) }}</template></el-table-column>
+            <el-table-column label="折扣%" width="80" align="center"><template #default="{ row }">{{ row.discount_rate != null ? row.discount_rate + '%' : '—' }}</template></el-table-column>
+            <el-table-column label="税率%" width="80" align="center"><template #default="{ row }">{{ row.tax_rate != null ? row.tax_rate + '%' : '—' }}</template></el-table-column>
+            <el-table-column label="税额" width="110" align="right"><template #default="{ row }">¥{{ formatAmount(row.tax_amount) }}</template></el-table-column>
+            <el-table-column label="未税小计" width="120" align="right"><template #default="{ row }">¥{{ formatAmount(row.line_total) }}</template></el-table-column>
+            <el-table-column label="含税" width="120" align="right"><template #default="{ row }">¥{{ formatAmount(lineInclTax(row)) }}</template></el-table-column>
+          </el-table>
+          <div v-if="(contract.lines || []).length" class="detail-page__total">
+            未税合计：<b>¥{{ formatAmount(contract.amount) }}</b>
+            <span class="detail-page__total-sep">含税合计：<b>¥{{ formatAmount(amountInclTax) }}</b></span>
           </div>
         </el-tab-pane>
 
@@ -372,7 +569,7 @@ onMounted(async () => { await loadMembers(); loadContract() })
             <el-timeline-item
               v-for="item in activities"
               :key="item.id"
-              :timestamp="new Date(item.created_at).toLocaleString('zh-CN')"
+              :timestamp="formatDateTime(item.created_at)"
               placement="top"
             >
               <div class="crm-timeline__card">
@@ -428,6 +625,36 @@ onMounted(async () => { await loadMembers(); loadContract() })
         <el-button type="primary" :loading="amendSaving" @click="submitAmend">创建</el-button>
       </template>
     </el-dialog>
+
+    <ContractFormDialog v-model:visible="editVisible" :record="contract" @saved="loadContract" />
+
+    <el-dialog v-model="signDialog" title="签署合同" width="420px">
+      <el-form label-width="96px">
+        <el-form-item label="签署金额">
+          <el-input-number v-model="signForm.signed_amount" :min="0" :precision="2" :controls="false" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="签署时间">
+          <el-date-picker
+            v-model="signForm.signed_at"
+            type="datetime"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="signDialog = false">取消</el-button>
+        <el-button type="primary" :loading="signSaving" @click="submitSign">确认签署</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="rejectVisible" title="驳回审批" width="440px">
+      <el-input v-model="rejectReason" type="textarea" :rows="3" maxlength="500" placeholder="请填写驳回原因" />
+      <template #footer>
+        <el-button @click="rejectVisible = false">取消</el-button>
+        <el-button type="danger" @click="submitReject">确认驳回</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -438,7 +665,15 @@ onMounted(async () => { await loadMembers(); loadContract() })
 .detail-page__meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--el-text-color-secondary); font-size: 13px; }
 .detail-page__amount { font-size: 16px; font-weight: 600; color: var(--el-color-primary); }
 .detail-page__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.detail-page__kpi { margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.kpi { padding: 10px 12px; background: var(--el-fill-color-light); border-radius: 6px; }
+.kpi__label { font-size: 12px; color: var(--el-text-color-secondary); }
+.kpi__value { margin-top: 4px; font-size: 16px; font-weight: 600; }
+.kpi__sub { margin-left: 4px; font-size: 12px; font-weight: 500; color: var(--el-text-color-secondary); }
 .detail-page__body { margin-top: 16px; }
+.detail-page__total { margin-top: 12px; text-align: right; font-size: 14px; color: var(--el-text-color-regular); }
+.detail-page__total b { color: var(--el-color-primary); }
+.detail-page__total-sep { margin-left: 16px; }
 .sub-block { margin-top: 16px; }
 .sub-block__title { font-weight: 600; margin-bottom: 8px; }
 .att-list { margin: 0; padding-left: 18px; font-size: 13px; color: var(--el-text-color-regular); }

@@ -102,9 +102,8 @@ def step_d_product(results: list[bool]) -> None:
 
 
 def step_e_quote(results: list[bool]) -> None:
-    """报价 CRUD + 明细 + 发送 + 接受 + 转订单。"""
+    """报价 CRUD + 明细 + 状态机 + 转订单。"""
     admin_tok = admin_token()
-    sales_tok = sales_token()
     customer_id = _ensure_customer(admin_tok)
 
     # 创建产品用于明细
@@ -116,13 +115,12 @@ def step_e_quote(results: list[bool]) -> None:
         body={"code": pcode, "name": f"报价产品-{pcode}", "list_price": 500.00},
     )
     assert code_ == 201, prod
-    product_id = prod["id"]
 
-    # 创建报价 + 明细
+    # 创建报价 + 明细（admin 为负责人，便于 send/accept）
     code_, quote = req(
         "POST",
         "/crm/quotes",
-        token=sales_tok,
+        token=admin_tok,
         body={
             "customer_id": customer_id,
             "subject": f"测试报价-{uuid.uuid4().hex[:6]}",
@@ -139,53 +137,91 @@ def step_e_quote(results: list[bool]) -> None:
     qid = quote["id"]
     results.append(check("VE-2 自动生成报价单号", quote["quote_number"].startswith("BJ"), quote["quote_number"]))
     results.append(check("VE-3 明细回填", len(quote["lines"]) == 2, str(len(quote.get("lines", [])))))
-    # total = 1000 + 200 = 1200
     results.append(check("VE-4 total 自动计算", float(quote["total_amount"]) == 1200, str(quote["total_amount"])))
 
-    # 列表
-    code_, lst = req("GET", f"/crm/quotes?status=draft", token=sales_tok)
+    code_, lst = req("GET", f"/crm/quotes?status=draft", token=admin_tok)
     results.append(check("VE-5 列表 200", code_ == 200, str(code_)))
 
-    # 编辑明细 -> 重算
     code_, q2 = req(
         "PATCH",
         f"/crm/quotes/{qid}",
-        token=sales_tok,
+        token=admin_tok,
         body={"lines": [{"name": "产品A", "quantity": 3, "unit_price": 500, "line_total": 1500}]},
     )
     results.append(check("VE-6 编辑报价 200", code_ == 200, str(code_)))
     results.append(check("VE-7 重算 total", float(q2["total_amount"]) == 1500, str(q2["total_amount"])))
 
-    # 发送（sales 无 send 权限，用 admin）
+    # PATCH status 禁止
+    code_, _ = req("PATCH", f"/crm/quotes/{qid}", token=admin_tok, body={"status": "accepted"})
+    results.append(check("VE-7b PATCH status 422", code_ == 422, str(code_)))
+
+    # draft 直接转单 → 409
+    code_, _ = req("POST", f"/crm/quotes/{qid}/convert-to-order", token=admin_tok)
+    results.append(check("VE-7c draft 转单 409", code_ == 409, str(code_)))
+
     code_, q3 = req("POST", f"/crm/quotes/{qid}/send", token=admin_tok)
     results.append(check("VE-8 发送 200", code_ == 200, str(code_)))
-    results.append(check("VE-9 状态 sent", q3["status"] == "sent", q3["status"]))
+    results.append(check("VE-9 状态 sent", q3["status"] == "sent", q3.get("status")))
 
-    # 接受
+    # sent 后改明细 → 409
+    code_, _ = req(
+        "PATCH",
+        f"/crm/quotes/{qid}",
+        token=admin_tok,
+        body={"lines": [{"name": "X", "quantity": 1, "unit_price": 1, "line_total": 1}]},
+    )
+    results.append(check("VE-9b sent 改明细 409", code_ == 409, str(code_)))
+
+    # 撤回 → draft，再发送
+    code_, q_recall = req("POST", f"/crm/quotes/{qid}/recall", token=admin_tok)
+    results.append(check("VE-9c 撤回 200", code_ == 200, str(code_)))
+    results.append(check("VE-9d 撤回后 draft", (q_recall or {}).get("status") == "draft", str(q_recall)))
+    code_, q3 = req("POST", f"/crm/quotes/{qid}/send", token=admin_tok)
+    results.append(check("VE-9e 再发送 200", code_ == 200, str(code_)))
+
     code_, q4 = req("POST", f"/crm/quotes/{qid}/accept", token=admin_tok)
     results.append(check("VE-10 接受 200", code_ == 200, str(code_)))
-    results.append(check("VE-11 状态 accepted", q4["status"] == "accepted", q4["status"]))
+    results.append(check("VE-11 状态 accepted", q4["status"] == "accepted", q4.get("status")))
 
-    # 转订单（sales 有 crm.order.convert）
-    code_, out = req("POST", f"/crm/quotes/{qid}/convert-to-order", token=sales_tok)
+    code_, out = req("POST", f"/crm/quotes/{qid}/convert-to-order", token=admin_tok)
     results.append(check("VE-12 报价转订单 201", code_ == 201, str(code_)))
     if code_ != 201:
         return
     order_id = out["order_id"]
-    # 校验订单
-    code_, order = req("GET", f"/crm/orders/{order_id}", token=sales_tok)
+    code_, order = req("GET", f"/crm/orders/{order_id}", token=admin_tok)
     results.append(check("VE-13 订单存在 200", code_ == 200, str(code_)))
-    results.append(check("VE-14 订单 source=quote", order["source"] == "quote", order["source"]))
+    results.append(check("VE-14 订单 source=quote", order["source"] == "quote", order.get("source")))
     results.append(check("VE-15 订单明细复制", len(order["lines"]) == 1, str(len(order.get("lines", [])))))
-    results.append(check("VE-16 报价状态 ordered", q4["status"] == "accepted", ""))  # q4 是 accept 后的
 
-    # 重复转单 -> 409
-    code_, _ = req("POST", f"/crm/quotes/{qid}/convert-to-order", token=sales_tok)
+    code_, q_final = req("GET", f"/crm/quotes/{qid}", token=admin_tok)
+    results.append(check("VE-16 报价状态 ordered", (q_final or {}).get("status") == "ordered", str(q_final)))
+
+    code_, _ = req("POST", f"/crm/quotes/{qid}/convert-to-order", token=admin_tok)
     results.append(check("VE-17 重复转单 409", code_ == 409, str(code_)))
 
-    # 删除报价（sales 无 delete 权限，用 admin）
+    # ordered 不可删；另建草稿测删除 + reject
     code_, _ = req("DELETE", f"/crm/quotes/{qid}", token=admin_tok)
-    results.append(check("VE-18 删除报价 204", code_ == 204, str(code_)))
+    results.append(check("VE-18 ordered 删除 409", code_ == 409, str(code_)))
+
+    code_, q_rej = req(
+        "POST",
+        "/crm/quotes",
+        token=admin_tok,
+        body={
+            "customer_id": customer_id,
+            "subject": f"拒绝报价-{uuid.uuid4().hex[:6]}",
+            "lines": [{"name": "行1", "quantity": 1, "unit_price": 10, "line_total": 10}],
+        },
+    )
+    results.append(check("VE-19 拒绝用例创建 201", code_ == 201, str(code_)))
+    if code_ == 201:
+        rid = q_rej["id"]
+        req("POST", f"/crm/quotes/{rid}/send", token=admin_tok)
+        code_, q_r = req("POST", f"/crm/quotes/{rid}/reject", token=admin_tok, body={"reason": "价格不符"})
+        results.append(check("VE-20 reject 200", code_ == 200, str(code_)))
+        results.append(check("VE-21 reject status", (q_r or {}).get("status") == "rejected", str(q_r)))
+        code_, _ = req("DELETE", f"/crm/quotes/{rid}", token=admin_tok)
+        results.append(check("VE-22 删除 rejected 204", code_ == 204, str(code_)))
 
 
 def step_f_contract(results: list[bool]) -> None:
@@ -241,9 +277,26 @@ def step_f_contract(results: list[bool]) -> None:
     results.append(check("VF-11 合同重复转单 201", code_ == 201, str(code_)))
     results.append(check("VF-12 两次订单不同", out1["order_id"] != out2["order_id"], ""))
 
-    # 删除合同（sales 无 delete 权限，用 admin）
+    # 已签署不可删
     code_, _ = req("DELETE", f"/crm/contracts/{cid}", token=admin_tok)
-    results.append(check("VF-13 删除合同 204", code_ == 204, str(code_)))
+    results.append(check("VF-13 已签署删除 409", code_ == 409, str(code_)))
+
+    # 另建草稿合同测删除
+    code_, draft_c = req(
+        "POST",
+        "/crm/contracts",
+        token=admin_tok,
+        body={
+            "customer_id": customer_id,
+            "title": f"草稿合同-{uuid.uuid4().hex[:6]}",
+            "contract_type": "new",
+            "amount": 1000,
+        },
+    )
+    results.append(check("VF-13b 草稿合同创建 201", code_ == 201, str(code_)))
+    if code_ == 201:
+        code_, _ = req("DELETE", f"/crm/contracts/{draft_c['id']}", token=admin_tok)
+        results.append(check("VF-13c 草稿合同删除 204", code_ == 204, str(code_)))
 
 
 def step_g_order(results: list[bool]) -> None:
@@ -335,11 +388,11 @@ def step_h_payment(results: list[bool]) -> None:
     results.append(check("VH-2 列表计划 200", code_ == 200, str(code_)))
     results.append(check("VH-3 计划数 >=1", len(plans) >= 1, str(len(plans))))
 
-    # 登记实际回款
+    # 登记实际回款（admin 创建以便具备负责人身份，可确认/冲销/删除）
     code_, pay = req(
         "POST",
         "/crm/payments",
-        token=sales_tok,
+        token=admin_tok,
         body={
             "order_id": oid,
             "plan_id": plan_id,
@@ -354,10 +407,14 @@ def step_h_payment(results: list[bool]) -> None:
     pid = pay["id"]
     results.append(check("VH-5 自动回款号", pay["payment_number"].startswith("HK"), pay["payment_number"]))
 
-    # 确认到账（sales 无 confirm 权限，用 admin）
+    # 确认到账
     code_, pay2 = req("POST", f"/crm/payments/{pid}/confirm", token=admin_tok)
     results.append(check("VH-6 确认到账 200", code_ == 200, str(code_)))
     results.append(check("VH-7 状态 confirmed", pay2["status"] == "confirmed", pay2["status"]))
+
+    # 已到账不可删除
+    code_, _ = req("DELETE", f"/crm/payments/{pid}", token=admin_tok)
+    results.append(check("VH-7b 已到账不可删除 409", code_ == 409, str(code_)))
 
     # 冲销
     code_, pay3 = req("POST", f"/crm/payments/{pid}/reverse", token=admin_tok)
@@ -368,9 +425,27 @@ def step_h_payment(results: list[bool]) -> None:
     code_, _ = req("POST", f"/crm/payments/{pid}/confirm", token=admin_tok)
     results.append(check("VH-10 已冲销不可确认 409", code_ == 409, str(code_)))
 
-    # 删除回款（sales 无 delete 权限，用 admin）
+    # 已冲销不可删除
     code_, _ = req("DELETE", f"/crm/payments/{pid}", token=admin_tok)
-    results.append(check("VH-11 删除回款 204", code_ == 204, str(code_)))
+    results.append(check("VH-11 已冲销不可删除 409", code_ == 409, str(code_)))
+
+    # 待确认回款可删除
+    code_, pay_pending = req(
+        "POST",
+        "/crm/payments",
+        token=admin_tok,
+        body={
+            "order_id": oid,
+            "plan_id": plan_id,
+            "amount": 1000,
+            "method": "bank",
+            "status": "pending",
+        },
+    )
+    results.append(check("VH-11b 再登记待确认 201", code_ == 201, str(code_)))
+    if code_ == 201:
+        code_, _ = req("DELETE", f"/crm/payments/{pay_pending['id']}", token=admin_tok)
+        results.append(check("VH-11c 待确认可删除 204", code_ == 204, str(code_)))
 
     # 删除计划
     code_, _ = req("DELETE", f"/crm/payments/plans/{plan_id}", token=admin_tok)

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CPQ 智能报价单生成器（模板 + 生成引擎）</title>
+<style>
+:root{
+  --bg:#eef1f6; --surface:#fff; --ink:#1a1d23; --muted:#6b7280; --rule:#e2e5ea;
+  --accent:#1f4e8c; --accent2:#0f7a4d; --accent-light:#e8f0fe; --accent2-light:#e6f6ee;
+  --warn:#b45309; --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14px}
+a{color:var(--accent)}
+.topbar{display:flex;align-items:center;gap:14px;padding:12px 20px;background:#0f172a;color:#fff}
+.topbar .logo{font-weight:700;font-size:16px;letter-spacing:.02em}
+.topbar .sub{opacity:.7;font-size:12.5px}
+.topbar .spacer{flex:1}
+.topbar button{background:#1e3a8a;border:1px solid #2d4ba6;color:#fff;padding:7px 14px;border-radius:7px;cursor:pointer;font-size:13px}
+.topbar button.alt{background:#0f7a4d;border-color:#0f7a4d}
+.topbar button:hover{filter:brightness(1.12)}
+.layout{display:flex;align-items:flex-start;gap:0;min-height:calc(100vh - 52px)}
+.editor{width:380px;flex:0 0 380px;background:var(--surface);border-right:1px solid var(--rule);height:calc(100vh - 52px);overflow-y:auto;padding:16px 16px 60px}
+.preview-wrap{flex:1;padding:26px;overflow-y:auto;height:calc(100vh - 52px)}
+.editor h3{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 0 10px;border-bottom:1px solid var(--rule);padding-bottom:6px}
+.editor h3:first-child{margin-top:0}
+.field{margin-bottom:9px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
+.field input,.field select,.field textarea{width:100%;padding:7px 9px;border:1px solid var(--rule);border-radius:6px;font-size:13px;font-family:var(--font);background:#fff;color:var(--ink)}
+.field textarea{resize:vertical;min-height:46px}
+.field.row2{display:flex;gap:8px}
+.field.row2>div{flex:1}
+.item-card{border:1px solid var(--rule);border-radius:8px;padding:10px;margin-bottom:10px;background:#fafbfc;position:relative}
+.item-card .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.item-card .hd b{font-size:12.5px;color:var(--accent)}
+.item-card .rm{border:none;background:#fee2e2;color:#b91c1c;border-radius:5px;padding:2px 8px;font-size:11.5px;cursor:pointer}
+.btn-add{width:100%;border:1px dashed #9bb4e6;background:#f3f7ff;color:var(--accent);padding:8px;border-radius:7px;cursor:pointer;font-size:13px}
+.btn-add:hover{background:#e8f0fe}
+.hint{font-size:11.5px;color:var(--muted);line-height:1.5;margin:4px 0 12px;background:#f6f8fb;border-left:3px solid var(--accent-light);padding:8px 10px;border-radius:0 6px 6px 0}
+
+/* ===== 报价单文档（A4） ===== */
+.page{background:#fff;width:794px;min-height:1123px;margin:0 auto;padding:46px 50px;box-shadow:0 4px 24px rgba(0,0,0,.10);color:#1b1f27;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid var(--accent);padding-bottom:14px}
+.doc-head .left{display:flex;gap:14px;align-items:center}
+.logo-box{width:54px;height:54px;border:2px solid var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:700;font-size:13px;text-align:center;line-height:1.15}
+.doc-head .co-name{font-size:19px;font-weight:700}
+.doc-head .co-slogan{font-size:12px;color:var(--muted);margin-top:2px}
+.doc-head .co-meta{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.5}
+.doc-head .right{text-align:right}
+.doc-title{font-size:26px;font-weight:800;letter-spacing:.04em;color:var(--accent)}
+.doc-title small{display:block;font-size:11px;letter-spacing:.3em;color:var(--muted);font-weight:600;margin-top:2px}
+.doc-no{margin-top:8px;font-size:12.5px}
+.doc-no b{color:var(--ink)}
+
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 26px;margin:16px 0 4px;font-size:12.5px}
+.meta-grid .k{color:var(--muted)}
+.meta-grid .v{color:var(--ink);font-weight:600}
+.cust-box{background:#f5f8fd;border:1px solid #e3ebf7;border-left:4px solid var(--accent);border-radius:0 8px 8px 0;padding:11px 14px;margin:14px 0;font-size:12.5px;line-height:1.65}
+.cust-box .t{font-weight:700;color:var(--accent);margin-bottom:3px;font-size:13px}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 9px;border-radius:20px;background:var(--accent2-light);color:var(--accent2);vertical-align:middle;margin-left:6px}
+
+table.items{width:100%;border-collapse:collapse;margin:14px 0 4px;font-size:11.8px}
+table.items th{background:var(--accent);color:#fff;padding:8px 7px;text-align:left;font-weight:600}
+table.items td{padding:8px 7px;border-bottom:1px solid var(--rule);vertical-align:top}
+table.items tr:nth-child(even) td{background:#f7f9fc}
+.items .c-name{font-weight:700}
+.items .c-spec{color:var(--muted);font-size:11px;line-height:1.5;margin-top:2px}
+.items .num{text-align:right;font-variant-numeric:tabular-nums}
+.items .disc{color:var(--warn);font-weight:600}
+
+.summary{margin:14px 0;display:flex;justify-content:flex-end}
+.summary table{border-collapse:collapse;font-size:12.5px;min-width:320px}
+.summary td{padding:6px 10px;border-bottom:1px solid var(--rule)}
+.summary td.k{color:var(--muted);text-align:right}
+.summary td.v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;min-width:120px}
+.summary tr.total td{background:var(--accent);color:#fff;font-size:14px;font-weight:700;border:none}
+.summary tr.total td.k{color:#cfe0ff}
+
+.terms{margin-top:18px;font-size:12px;line-height:1.7;color:#2a2f38}
+.terms h4{font-size:12.5px;margin:12px 0 4px;color:var(--accent)}
+.terms .grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 26px}
+.sign{display:flex;justify-content:space-between;margin-top:34px;font-size:12px}
+.sign .blk{border-top:1px solid #c8cdd6;padding-top:8px;width:44%}
+.sign .blk .lab{color:var(--muted);margin-bottom:14px}
+.watermark{position:absolute;top:46%;left:50%;transform:translate(-50%,-50%) rotate(-22deg);font-size:64px;font-weight:800;color:rgba(180,40,40,.13);letter-spacing:.1em;pointer-events:none;display:none}
+.page.draft .watermark{display:block}
+.note-internal{margin-top:14px;font-size:11px;color:#9aa1ad;border-top:1px dashed var(--rule);padding-top:8px}
+@media print{
+  .topbar,.editor{display:none !important}
+  .layout,.preview-wrap{display:block;height:auto;overflow:visible;padding:0}
+  body{background:#fff}
+  .page{box-shadow:none;margin:0;width:auto;min-height:auto}
+  .no-print{display:none !important}
+}
+</style>
+</head>
+<body>
+<div class="topbar no-print">
+  <div class="logo">⚙ CPQ 报价单生成器</div>
+  <div class="sub">模板 + 价格瀑布引擎 · 一键导出 PDF</div>
+  <div class="spacer"></div>
+  <button onclick="resetSample()">载入示例</button>
+  <button onclick="exportJSON()">导出数据</button>
+  <button onclick="importJSON()">导入数据</button>
+  <button class="alt" onclick="window.print()">🖨 打印 / 导出 PDF</button>
+</div>
+
+<div class="layout">
+  <!-- ============ 编辑区 ============ -->
+  <div class="editor no-print">
+    <h3>公司（报价方）</h3>
+    <div class="field"><label>公司全称</label><input data-f="company.name" value=""></div>
+    <div class="field"><label>标语 / Slogan</label><input data-f="company.slogan" value=""></div>
+    <div class="field"><label>LOGO 文字（占位）</label><input data-f="company.logoText" value=""></div>
+    <div class="field"><label>地址</label><input data-f="company.address" value=""></div>
+    <div class="field row2"><div><label>电话</label><input data-f="company.phone" value=""></div><div><label>邮箱</label><input data-f="company.email" value=""></div></div>
+    <div class="field row2"><div><label>税号</label><input data-f="company.taxNo" value=""></div><div><label>联系人</label><input data-f="company.contact" value=""></div></div>
+
+    <h3>客户（采购方）</h3>
+    <div class="field"><label>客户公司</label><input data-f="customer.name" value=""></div>
+    <div class="field row2"><div><label>联系人</label><input data-f="customer.contact" value=""></div><div><label>电话</label><input data-f="customer.phone" value=""></div></div>
+    <div class="field"><label>邮箱</label><input data-f="customer.email" value=""></div>
+    <div class="field"><label>地址</label><input data-f="customer.address" value=""></div>
+    <div class="field"><label>客户等级（影响折扣）</label>
+      <select data-f="customer.level">
+        <option value="strategic">战略客户（85 折）</option>
+        <option value="normal">普通客户（无折）</option>
+        <option value="new">新客户首单（9 折）</option>
+      </select>
+    </div>
+
+    <h3>报价信息</h3>
+    <div class="field row2"><div><label>报价单编号</label><input data-f="meta.docNo" value=""></div><div><label>日期</label><input data-f="meta.date" value=""></div></div>
+    <div class="field row2"><div><label>有效期（天）</label><input data-f="meta.validDays" type="number" value=""></div><div><label>币种符号</label><input data-f="meta.currency" value=""></div></div>
+    <div class="field"><label>状态</label>
+      <select data-f="meta.draft">
+        <option value="no">正式（无水印）</option>
+        <option value="yes">草稿（带水印）</option>
+      </select>
+    </div>
+
+    <h3>产品明细</h3>
+    <div class="hint">价格瀑布：单价 × 阶梯折扣(按数量) × 客户等级 × 时效加价 = 折后单价。成本仅内部参考，不打印给客户。</div>
+    <div id="items"></div>
+    <button class="btn-add" onclick="addItem()">＋ 添加产品行</button>
+
+    <h3>定价与税费</h3>
+    <div class="field"><label>区域运费（元，按目的地）</label><input data-f="pricing.freight" type="number" value=""></div>
+    <div class="field"><label>增值税率 %</label><input data-f="pricing.taxRate" type="number" value=""></div>
+    <div class="field"><label>订单级折扣 %（整单额外折）</label><input data-f="pricing.orderDiscountPct" type="number" value=""></div>
+
+    <h3>条款</h3>
+    <div class="field"><label>付款条款</label><textarea data-f="terms.payment"></textarea></div>
+    <div class="field"><label>交货期</label><textarea data-f="terms.delivery"></textarea></div>
+    <div class="field"><label>质保 / 售后</label><textarea data-f="terms.warranty"></textarea></div>
+    <div class="field"><label>其他条款</label><textarea data-f="terms.other"></textarea></div>
+  </div>
+
+  <!-- ============ 预览区 ============ -->
+  <div class="preview-wrap">
+    <div class="page" id="page">
+      <div class="watermark">草 稿 DRAFT</div>
+      <div class="doc-head">
+        <div class="left">
+          <div class="logo-box" id="o-logo"></div>
+          <div>
+            <div class="co-name" id="o-coName"></div>
+            <div class="co-slogan" id="o-coSlogan"></div>
+            <div class="co-meta" id="o-coMeta"></div>
+          </div>
+        </div>
+        <div class="right">
+          <div class="doc-title">报价单<small>QUOTATION</small></div>
+          <div class="doc-no">编号：<b id="o-docNo"></b></div>
+          <div class="doc-no">日期：<b id="o-date"></b></div>
+          <div class="doc-no">有效期至：<b id="o-valid"></b></div>
+        </div>
+      </div>
+
+      <div class="cust-box">
+        <div class="t">致：<span id="o-custName"></span><span class="badge" id="o-custLevel"></span></div>
+        <div>联系人：<span id="o-custContact"></span> ｜ 电话：<span id="o-custPhone"></span></div>
+        <div>邮箱：<span id="o-custEmail"></span></div>
+        <div>地址：<span id="o-custAddr"></span></div>
+      </div>
+
+      <table class="items">
+        <thead><tr>
+          <th style="width:26px">#</th><th>产品 / 型号</th><th style="width:60px">单位</th>
+          <th style="width:52px" class="num">数量</th><th style="width:78px" class="num">单价(原)</th>
+          <th style="width:62px" class="num">折扣</th><th style="width:84px" class="num">折后单价</th>
+          <th style="width:92px" class="num">金额</th>
+        </tr></thead>
+        <tbody id="o-items"></tbody>
+      </table>
+
+      <div class="summary"><table id="o-summary"></table></div>
+
+      <div class="terms">
+        <h4>付款条款</h4><div id="o-t-payment"></div>
+        <h4>交货期</h4><div id="o-t-delivery"></div>
+        <h4>质保与售后</h4><div id="o-t-warranty"></div>
+        <h4>其他条款</h4><div id="o-t-other"></div>
+        <div class="note-internal" id="o-internal"></div>
+      </div>
+
+      <div class="sign">
+        <div class="blk"><div class="lab">报价方（盖章 / 签字）：<br><br>日期：</div></div>
+        <div class="blk"><div class="lab">客户确认（签字 / 盖章）：<br><br>日期：</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept="application/json" style="display:none" onchange="doImport(event)">
+<script>
+// ============ 示例数据（工业烘箱订单，呼应梅施 NX-2000 Pro ¥286,000） ============
+const sample = {
+  company:{name:"深圳智造科技有限公司",slogan:"AI 驱动的非标制造专家",logoText:"智造\n科技",
+    address:"深圳市宝安区智造园 A 栋 3 层",phone:"0755-8888 6688",email:"sales@zhizao-tech.com",
+    taxNo:"91440300MA5XXXXXX3",contact:"张明"},
+  customer:{name:"苏州汽车零部件有限公司",contact:"李建国",phone:"0512-6666 7788",
+    email:"li.jg@auto-parts.com",address:"苏州市吴江区精密制造产业园 12 号",level:"strategic"},
+  meta:{docNo:"QT-2026-0812",date:"2026-07-17",validDays:15,currency:"¥",draft:"no"},
+  items:[
+    {name:"工业烘箱",model:"NXO-2000 Pro",unit:"台",qty:3,listPrice:86000,cost:54000,rush:"standard",
+     spec:"内尺寸 2m×1.5m×1.8m / 304 不锈钢 / 热风循环 / 最高 300℃ / 防爆认证（Ex dⅡBT4）"},
+    {name:"热风循环风机",model:"FB-380",unit:"台",qty:6,listPrice:4200,cost:2600,rush:"standard",
+     spec:"与烘箱同批次配套，含减震支架与连接件"},
+    {name:"现场安装调试服务",model:"SVC-INST",unit:"项",qty:1,listPrice:12000,cost:7000,rush:"standard",
+     spec:"含基础就位、管路连接、温控校准与操作培训（2 人日）"}
+  ],
+  pricing:{freight:3500,taxRate:13,orderDiscountPct:0},
+  terms:{
+    payment:"签订合同后 3 个工作日内预付 30%，发货前付清剩余 70%；支持银行转账与对公电汇。",
+    delivery:"标准交期 30 个工作日；自收到定金及确认图纸后起算，物流单号发货前通知。",
+    warranty:"整机质保 12 个月（非人为损坏）；7 日内发现质量问题免费退换，终身有偿维修。",
+    other:"本报价含 13% 增值税专用发票；含国内陆运至客户指定地址（偏远地区另议）；报价自发出日起 15 天内有效，逾期价格如有变动以新报价为准。"
+  }
+};
+
+let state = JSON.parse(JSON.stringify(sample));
+
+// ============ 定价引擎（价格瀑布） ============
+const LEVEL = {strategic:0.85, normal:1.0, new:0.9};
+const LEVEL_TXT = {strategic:"战略客户 85 折", normal:"普通客户 无折扣", new:"新客户首单 9 折"};
+const RUSH = {standard:1.0, rush:1.10, urgent:1.20};
+const RUSH_TXT = {standard:"标准", rush:"加急 +10%", urgent:"特急 +20%"};
+
+function tierFactor(qty){ if(qty>=11) return 0.90; if(qty>=6) return 0.95; return 1.0; }
+function tierTxt(qty){ if(qty>=11) return "11+台 9折"; if(qty>=6) return "6-10台 95折"; return "1-5台 原价"; }
+
+function compute(){
+  const lvl = LEVEL[state.customer.level] ?? 1.0;
+  let goods=0, costTotal=0, rows=[];
+  state.items.forEach(it=>{
+    const tf=tierFactor(it.qty), rf=RUSH[it.rush]??1.0;
+    const net = it.listPrice*tf*lvl*rf;
+    const amt = net*it.qty;
+    goods += amt; costTotal += (it.cost||0)*it.qty;
+    const discPct = (1 - tf*lvl*rf)*100;
+    rows.push({...it, tf, rf, lvl, net, amt, discPct});
+  });
+  const orderDisc = goods*(state.pricing.orderDiscountPct||0)/100;
+  const afterDisc = goods - orderDisc;
+  const fr = state.pricing.freight||0;
+  const taxable = afterDisc + fr;
+  const tax = taxable*(state.pricing.taxRate||0)/100;
+  const total = taxable + tax;
+  const margin = goods>0 ? (goods - costTotal - fr)/goods*100 : 0;
+  return {rows, goods, orderDisc, afterDisc, fr, tax, total, costTotal, margin, lvl};
+}
+
+// ============ 取数辅助 ============
+function get(obj,path){ return path.split('.').reduce((o,k)=>o?.[k],obj); }
+function set(obj,path,val){ const ks=path.split('.'); let o=obj; for(let i=0;i<ks.length-1;i++) o=o[ks[i]]; o[ks[ks.length-1]]=val; }
+const fmt = n => (state.meta.currency||'¥') + Number(n).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt0 = n => Number(n).toLocaleString('zh-CN',{maximumFractionDigits:0});
+const cnNum = n => { // 简单大写金额
+  const d=['零','壹','贰','叁','肆','伍','陆','柒','捌','玖']; const u=['','拾','佰','仟','万','拾','佰','仟','亿'];
+  const s=Math.round(n).toString(); let out='', i=0;
+  for(const ch of s.split('').reverse()){ const v=+ch; if(v) out=d[v]+u[i]+out; else if(!out.startsWith('零')) out='零'+out; i++; }
+  return out.replace(/零+$/,'')+'元整';
+};
+function addDays(dateStr,days){ const d=new Date(dateStr); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+
+// ============ 渲染：编辑区 ============
+function fillEditor(){
+  document.querySelectorAll('[data-f]').forEach(el=>{ const v=get(state,el.dataset.f); if(v!==undefined&&v!==null) el.value=v; });
+  renderItemsEditor();
+}
+function renderItemsEditor(){
+  const box=document.getElementById('items'); box.innerHTML='';
+  state.items.forEach((it,i)=>{
+    const card=document.createElement('div'); card.className='item-card';
+    card.innerHTML=`
+      <div class="hd"><b>产品 ${i+1}</b><button class="rm" onclick="removeItem(${i})">删除</button></div>
+      <div class="field"><label>名称 / 型号</label><input data-i="${i}" data-k="name" value="${it.name}"><input style="margin-top:4px" data-i="${i}" data-k="model" value="${it.model}"></div>
+      <div class="field"><label>规格 / 配置说明</label><textarea data-i="${i}" data-k="spec">${it.spec}</textarea></div>
+      <div class="field row2"><div><label>单位</label><input data-i="${i}" data-k="unit" value="${it.unit}"></div><div><label>数量</label><input data-i="${i}" data-k="qty" type="number" value="${it.qty}"></div></div>
+      <div class="field row2"><div><label>单价(原)</label><input data-i="${i}" data-k="listPrice" type="number" value="${it.listPrice}"></div><div><label>成本(内部)</label><input data-i="${i}" data-k="cost" type="number" value="${it.cost}"></div></div>
+      <div class="field"><label>时效</label><select data-i="${i}" data-k="rush">
+        <option value="standard"${it.rush==='standard'?' selected':''}>标准(无加价)</option>
+        <option value="rush"${it.rush==='rush'?' selected':''}>加急 +10%</option>
+        <option value="urgent"${it.rush==='urgent'?' selected':''}>特急 +20%</option></select></div>`;
+    box.appendChild(card);
+  });
+}
+function addItem(){ state.items.push({name:"新产品",model:"",unit:"台",qty:1,listPrice:0,cost:0,rush:"standard",spec:""}); renderItemsEditor(); }
+function removeItem(i){ state.items.splice(i,1); renderItemsEditor(); }
+
+// 编辑区输入 → 写回 state → 重渲染预览（不动编辑区，保焦点）
+document.querySelector('.editor').addEventListener('input', e=>{
+  const t=e.target;
+  if(t.dataset.f){ let v=t.value; if(t.type==='number') v=parseFloat(v)||0; set(state,t.dataset.f,v); updatePreview(); }
+  else if(t.dataset.i!==undefined){ const i=+t.dataset.i, k=t.dataset.k; let v=t.value; if(t.type==='number') v=parseFloat(v)||0; state.items[i][k]=v; updatePreview(); }
+});
+
+// ============ 渲染：预览 ============
+function updatePreview(){
+  const r=compute();
+  document.getElementById('o-logo').textContent=state.company.logoText.replace('\n',' ');
+  document.getElementById('o-coName').textContent=state.company.name;
+  document.getElementById('o-coSlogan').textContent=state.company.slogan;
+  document.getElementById('o-coMeta').innerHTML=`${state.company.address}<br>电话：${state.company.phone} ｜ ${state.company.email}<br>税号：${state.company.taxNo} ｜ 联系人：${state.company.contact}`;
+  document.getElementById('o-docNo').textContent=state.meta.docNo;
+  document.getElementById('o-date').textContent=state.meta.date;
+  document.getElementById('o-valid').textContent=addDays(state.meta.date,+state.meta.validDays);
+  document.getElementById('o-custName').textContent=state.customer.name;
+  document.getElementById('o-custLevel').textContent=LEVEL_TXT[state.customer.level];
+  document.getElementById('o-custContact').textContent=state.customer.contact;
+  document.getElementById('o-custPhone').textContent=state.customer.phone;
+  document.getElementById('o-custEmail').textContent=state.customer.email;
+  document.getElementById('o-custAddr').textContent=state.customer.address;
+
+  const tb=document.getElementById('o-items'); tb.innerHTML='';
+  r.rows.forEach((row,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${i+1}</td>
+      <td><div class="c-name">${row.name}</div><div style="font-size:11px;color:var(--muted)">${row.model}</div>
+          <div class="c-spec">${row.spec}</div>
+          <div style="font-size:10.5px;color:#9aa1ad;margin-top:3px">阶梯：${tierTxt(row.qty)} ｜ 等级：${LEVEL_TXT[state.customer.level]} ｜ 时效：${RUSH_TXT[row.rush]}</div></td>
+      <td>${row.unit}</td>
+      <td class="num">${fmt0(row.qty)}</td>
+      <td class="num">${fmt(row.listPrice)}</td>
+      <td class="num disc">${row.discPct.toFixed(1)}%</td>
+      <td class="num">${fmt(row.net)}</td>
+      <td class="num">${fmt(row.amt)}</td>`;
+    tb.appendChild(tr);
+  });
+
+  const sm=document.getElementById('o-summary');
+  sm.innerHTML=`
+    <tr><td class="k">货品小计</td><td class="v">${fmt(r.goods)}</td></tr>
+    ${r.orderDisc>0?`<tr><td class="k">订单折扣</td><td class="v">- ${fmt(r.orderDisc)}</td></tr>`:''}
+    <tr><td class="k">运费</td><td class="v">${fmt(r.fr)}</td></tr>
+    <tr><td class="k">增值税（${state.pricing.taxRate}%）</td><td class="v">${fmt(r.tax)}</td></tr>
+    <tr class="total"><td class="k">报价总计</td><td class="v">${fmt(r.total)}</td></tr>
+    <tr><td class="k">金额大写</td><td class="v" style="font-size:11px">${cnNum(r.total)}</td></tr>`;
+
+  document.getElementById('o-t-payment').textContent=state.terms.payment;
+  document.getElementById('o-t-delivery').textContent=state.terms.delivery;
+  document.getElementById('o-t-warranty').textContent=state.terms.warranty;
+  document.getElementById('o-t-other').textContent=state.terms.other;
+  document.getElementById('o-internal').innerHTML=
+    `内部参考（不打印给客户）：总成本 ${fmt(r.costTotal)}，毛利空间 ${fmt(r.goods-r.costTotal-r.fr)}，预估毛利率 ${r.margin.toFixed(1)}% ｜ 当前客户等级折扣 ${((1-r.lvl)*100).toFixed(0)}%`;
+
+  document.getElementById('page').className = 'page' + (state.meta.draft==='yes'?' draft':'');
+}
+
+// ============ 数据存取 ============
+function resetSample(){ state=JSON.parse(JSON.stringify(sample)); fillEditor(); updatePreview(); }
+function exportJSON(){ const b=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='quote-'+state.meta.docNo+'.json'; a.click(); }
+function importJSON(){ document.getElementById('fileInput').click(); }
+function doImport(e){ const f=e.target.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>{ try{ state=JSON.parse(rd.result); fillEditor(); updatePreview(); }catch(err){ alert('JSON 解析失败'); } }; rd.readAsText(f); }
+
+// ============ 文档模式（?doc=1 仅看报价单） ============
+(function(){
+  const p=new URLSearchParams(location.search);
+  if(p.get('doc')==='1'){ document.querySelector('.editor').style.display='none'; document.querySelector('.topbar').innerHTML='<div class="logo">⚙ 报价单预览</div><div class="spacer"></div><button onclick="history.back()">← 返回编辑</button>'; document.querySelector('.topbar').style.justifyContent='space-between'; }
+})();
+
+// 初始化
+fillEditor(); updatePreview();
+</script>
+</body>
+</html>

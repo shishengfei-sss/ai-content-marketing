@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import uuid_eq
@@ -29,6 +29,18 @@ def get_category(db: Session, tenant_id: UUID, category_id: UUID) -> ProductCate
     )
 
 
+def _check_name_unique(
+    db: Session, tenant_id: UUID, name: str, exclude_id: UUID | None = None
+) -> None:
+    q = db.query(ProductCategory).filter(
+        ProductCategory.tenant_id == tenant_id, ProductCategory.name == name
+    )
+    if exclude_id is not None:
+        q = q.filter(ProductCategory.id != exclude_id)
+    if q.first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="分类名称已存在")
+
+
 def create_category(
     db: Session, ctx: TenantContext, data: ProductCategoryCreate
 ) -> ProductCategory:
@@ -36,9 +48,11 @@ def create_category(
         parent = get_category(db, ctx.tenant_id, data.parent_id)
         if not parent:
             raise HTTPException(status_code=404, detail="父分类不存在")
+    name = data.name.strip()
+    _check_name_unique(db, ctx.tenant_id, name)
     cat = ProductCategory(
         tenant_id=ctx.tenant_id,
-        name=data.name.strip(),
+        name=name,
         parent_id=data.parent_id,
         description=data.description,
         sort_order=data.sort_order,
@@ -62,7 +76,10 @@ def update_category(
                 raise HTTPException(status_code=404, detail="父分类不存在")
         cat.parent_id = data.parent_id or None
     if data.name is not None:
-        cat.name = data.name.strip()
+        name = data.name.strip()
+        if name != cat.name:
+            _check_name_unique(db, ctx.tenant_id, name, exclude_id=cat.id)
+            cat.name = name
     if data.description is not None:
         cat.description = data.description
     if data.sort_order is not None:

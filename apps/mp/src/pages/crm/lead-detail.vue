@@ -1,12 +1,13 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { crmApi, teamApi } from '@/utils/api'
+import { crmApi } from '@/utils/api'
 import { ensureSession } from '@/utils/session'
 import { hasPermission } from '@/utils/permissions'
 import { useEntitySchema } from '@/utils/useEntitySchema'
 import { LEAD_STATUS_OPTIONS } from '@/utils/crmConstants'
 import CrmEntityTasks from '@/components/crm/CrmEntityTasks.vue'
+import { formatDateTime } from '@/utils/datetime'
 
 const leadId = ref('')
 const loading = ref(false)
@@ -23,11 +24,22 @@ const activityForm = ref({ content: '', status: '' })
 const activityStatusSheetVisible = ref(false)
 const assignVisible = ref(false)
 const selectedOwner = ref('')
+const scoreBusy = ref(false)
 
 const canActivity = () => hasPermission(permissions.value, 'crm.activity.create')
-const canEditLead = () => hasPermission(permissions.value, 'crm.lead.edit')
-const canConvert = () => hasPermission(permissions.value, 'crm.lead.convert')
+const canEditPerm = () => hasPermission(permissions.value, 'crm.lead.edit')
+const currentUserId = ref('')
+const sameUserId = (a, b) =>
+  !!a && !!b && String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
+const isLeadOwner = () => sameUserId(lead.value?.owner_user_id, currentUserId.value)
+const canEditLead = () => canEditPerm() && isLeadOwner()
+const canConvert = () => hasPermission(permissions.value, 'crm.lead.convert') && isLeadOwner()
 const canAssign = () => hasPermission(permissions.value, 'crm.lead.assign')
+const canDeleteLead = () => hasPermission(permissions.value, 'crm.lead.delete') && isLeadOwner()
+const reclaimVisible = ref(false)
+const reclaimSaving = ref(false)
+const reclaimPools = ref([])
+const reclaimPoolId = ref('')
 
 const extraFields = computed(() => {
   const extra = lead.value?.extra_data || {}
@@ -45,21 +57,20 @@ const ownerLabel = computed(() => {
   return m?.display_name || m?.phone || '负责人'
 })
 
+const selectedOwnerLabel = computed(() => {
+  if (!selectedOwner.value) return '请选择负责人'
+  const m = members.value.find((x) => String(x.user_id) === String(selectedOwner.value))
+  return m?.display_name || m?.phone || '请选择负责人'
+})
+
 async function loadDetail() {
   if (!leadId.value) return
   loading.value = true
   try {
     const user = await ensureSession()
     permissions.value = user?.permissions || []
+    currentUserId.value = user?.id || ''
     await loadSchema()
-    if (canAssign()) {
-      try {
-        members.value = await teamApi.listMembers()
-        if (!Array.isArray(members.value)) members.value = []
-      } catch {
-        members.value = []
-      }
-    }
     const [leadData, timeline] = await Promise.all([
       crmApi.getLead(leadId.value),
       crmApi.listActivities({ lead_id: leadId.value }),
@@ -67,6 +78,16 @@ async function loadDetail() {
     lead.value = leadData
     activityForm.value.status = leadData.status || '待跟进'
     activities.value = Array.isArray(timeline) ? timeline : []
+    if (canAssign()) {
+      try {
+        members.value = await crmApi.listAssignableOwners({
+          include_user_id: leadData.owner_user_id || undefined,
+        })
+        if (!Array.isArray(members.value)) members.value = []
+      } catch {
+        members.value = []
+      }
+    }
     await taskPanelRef.value?.reload()
   } catch (e) {
     uni.showToast({ title: e.message || '加载失败', icon: 'none' })
@@ -80,6 +101,20 @@ function openAssign() {
   assignVisible.value = true
 }
 
+async function recalculateScore() {
+  if (!canEditLead() || scoreBusy.value) return
+  scoreBusy.value = true
+  try {
+    const data = await crmApi.recalculateLeadScore(leadId.value)
+    lead.value = data
+    uni.showToast({ title: '评分已重算', icon: 'success' })
+  } catch (e) {
+    uni.showToast({ title: e.message || '重算失败', icon: 'none' })
+  } finally {
+    scoreBusy.value = false
+  }
+}
+
 async function submitAssign() {
   if (!selectedOwner.value) {
     uni.showToast({ title: '请选择负责人', icon: 'none' })
@@ -87,9 +122,28 @@ async function submitAssign() {
   }
   try {
     await crmApi.updateLead(leadId.value, { owner_user_id: selectedOwner.value })
-    uni.showToast({ title: '已分配', icon: 'success' })
     assignVisible.value = false
-    loadDetail()
+    try {
+      const leadData = await crmApi.getLead(leadId.value)
+      lead.value = leadData
+      uni.showToast({ title: '已分配', icon: 'success' })
+      if (canAssign()) {
+        members.value = await crmApi.listAssignableOwners({
+          include_user_id: leadData.owner_user_id || undefined,
+        }).catch(() => [])
+        if (!Array.isArray(members.value)) members.value = []
+      }
+    } catch (e) {
+      const msg = e.message || ''
+      if (e.status === 403 || msg.includes('无权访问')) {
+        uni.showToast({ title: '已分配，已不在可见范围', icon: 'none' })
+        setTimeout(() => {
+          uni.navigateBack({ fail: () => uni.redirectTo({ url: '/pages/crm/leads' }) })
+        }, 400)
+        return
+      }
+      uni.showToast({ title: msg || '分配后刷新失败', icon: 'none' })
+    }
   } catch (e) {
     uni.showToast({ title: e.message || '分配失败', icon: 'none' })
   }
@@ -206,6 +260,60 @@ async function handleConvert() {
   }
 }
 
+async function openReclaim() {
+  if (!canEditLead()) return
+  try {
+    const pools = await crmApi.listLeadPools()
+    reclaimPools.value = Array.isArray(pools) ? pools : []
+    if (!reclaimPools.value.length) {
+      uni.showToast({ title: '暂无线索公海，请先在 Web 设置中创建', icon: 'none' })
+      return
+    }
+    reclaimPoolId.value = reclaimPools.value[0].id
+    reclaimVisible.value = true
+  } catch (e) {
+    uni.showToast({ title: e.message || '加载公海失败', icon: 'none' })
+  }
+}
+
+async function submitReclaim() {
+  if (!reclaimPoolId.value) {
+    uni.showToast({ title: '请选择公海', icon: 'none' })
+    return
+  }
+  reclaimSaving.value = true
+  try {
+    await crmApi.reclaimLeadToPool(leadId.value, { pool_id: reclaimPoolId.value })
+    uni.showToast({ title: '已退回公海', icon: 'success' })
+    reclaimVisible.value = false
+    setTimeout(() => uni.navigateBack(), 400)
+  } catch (e) {
+    uni.showToast({ title: e.message || '退回失败', icon: 'none' })
+  } finally {
+    reclaimSaving.value = false
+  }
+}
+
+async function handleDelete() {
+  if (!canDeleteLead()) return
+  const { confirm } = await new Promise((resolve) => {
+    uni.showModal({
+      title: '删除线索',
+      content: `确定删除「${lead.value?.company_name || ''}」？`,
+      success: resolve,
+      fail: () => resolve({ confirm: false }),
+    })
+  })
+  if (!confirm) return
+  try {
+    await crmApi.deleteLead(leadId.value)
+    uni.showToast({ title: '已删除', icon: 'success' })
+    setTimeout(() => uni.navigateBack(), 400)
+  } catch (e) {
+    uni.showToast({ title: e.message || '删除失败', icon: 'none' })
+  }
+}
+
 onLoad((query) => {
   leadId.value = query.id || ''
   loadDetail()
@@ -237,10 +345,15 @@ onLoad((query) => {
         </text>
       </view>
       <view class="acts">
+        <button v-if="canEditLead()" class="btn" size="mini" :loading="scoreBusy" @click="recalculateScore">
+          重算评分
+        </button>
         <button v-if="canAssign()" class="btn" size="mini" @click="openAssign">分配负责人</button>
+        <button v-if="canEditLead()" class="btn" size="mini" @click="openReclaim">退回公海</button>
         <button v-if="canConvert() && lead.status !== '已转化'" class="btn btn--primary" size="mini" @click="handleConvert">
           转化客户
         </button>
+        <button v-if="canDeleteLead()" class="btn btn--danger" size="mini" @click="handleDelete">删除</button>
       </view>
     </view>
 
@@ -266,7 +379,7 @@ onLoad((query) => {
         <button class="btn btn--primary" size="mini" hover-class="none" @tap="submitActivity">提交</button>
       </view>
       <view v-for="item in activities" :key="item.id" class="line">
-        <text class="line__time">{{ item.created_at }}</text>
+        <text class="line__time">{{ formatDateTime(item.created_at) }}</text>
         <text>{{ item.content }}</text>
       </view>
       <view v-if="!activities.length" class="empty">暂无跟进</view>
@@ -304,16 +417,36 @@ onLoad((query) => {
     <view v-if="assignVisible" class="mask" @click="assignVisible = false">
       <view class="dialog" @click.stop>
         <text class="dialog__title">分配负责人</text>
+        <text class="dialog__hint">仅可分配给本人、下属或同级别销售经理</text>
         <picker
           mode="selector"
           :range="members.map((m) => m.display_name || m.phone)"
           @change="(e) => (selectedOwner = members[e.detail.value]?.user_id || '')"
         >
-          <view class="picker">{{ ownerLabel }}</view>
+          <view class="picker">{{ selectedOwnerLabel }}</view>
         </picker>
         <view class="dialog__acts">
           <button class="btn" @click="assignVisible = false">取消</button>
           <button class="btn btn--primary" @click="submitAssign">保存</button>
+        </view>
+      </view>
+    </view>
+
+    <view v-if="reclaimVisible" class="mask" @click="reclaimVisible = false">
+      <view class="dialog" @click.stop>
+        <text class="dialog__title">退回公海</text>
+        <picker
+          mode="selector"
+          :range="reclaimPools.map((p) => p.name)"
+          @change="(e) => (reclaimPoolId = reclaimPools[e.detail.value]?.id || '')"
+        >
+          <view class="picker">
+            {{ reclaimPools.find((p) => p.id === reclaimPoolId)?.name || '选择公海' }}
+          </view>
+        </picker>
+        <view class="dialog__acts">
+          <button class="btn" @click="reclaimVisible = false">取消</button>
+          <button class="btn btn--primary" :loading="reclaimSaving" @click="submitReclaim">确认退回</button>
         </view>
       </view>
     </view>
@@ -435,6 +568,12 @@ onLoad((query) => {
   color: #fff;
 }
 
+.btn--danger {
+  background: #fff1f0;
+  color: #cf1322;
+  border: 1px solid #ffa39e;
+}
+
 .empty {
   text-align: center;
   color: #94a3b8;
@@ -464,6 +603,14 @@ onLoad((query) => {
   font-weight: 600;
   margin-bottom: 12px;
   display: block;
+}
+
+.dialog__hint {
+  display: block;
+  font-size: 12px;
+  color: #8c8c8c;
+  margin: -4px 0 12px;
+  line-height: 1.4;
 }
 
 .picker {

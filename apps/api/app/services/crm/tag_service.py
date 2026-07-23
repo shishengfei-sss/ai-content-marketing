@@ -66,6 +66,39 @@ def create_tag(
     return get_or_create_tag(db, ctx, name, color=color, category=category)
 
 
+def update_tag(
+    db: Session,
+    ctx: TenantContext,
+    tag_id: UUID,
+    *,
+    name: str | None = None,
+    color: str | None = None,
+    category: str | None = None,
+) -> Tag:
+    tag = db.query(Tag).filter(uuid_eq(Tag.id, tag_id), Tag.tenant_id == ctx.tenant_id).first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="标签不存在")
+    if name is not None:
+        new_name = name.strip()
+        if not new_name:
+            raise HTTPException(status_code=400, detail="标签名不能为空")
+        dup = (
+            db.query(Tag)
+            .filter(Tag.tenant_id == ctx.tenant_id, Tag.name == new_name, Tag.id != tag.id)
+            .first()
+        )
+        if dup:
+            raise HTTPException(status_code=409, detail="标签已存在")
+        tag.name = new_name
+    if color is not None:
+        tag.color = color or None
+    if category is not None:
+        tag.category = category or None
+    db.commit()
+    db.refresh(tag)
+    return tag
+
+
 def delete_tag(db: Session, ctx: TenantContext, tag_id: UUID) -> None:
     tag = db.query(Tag).filter(uuid_eq(Tag.id, tag_id), Tag.tenant_id == ctx.tenant_id).first()
     if not tag:
@@ -104,15 +137,12 @@ def bind_tag(
     tag_id: UUID | None = None,
     tag_name: str | None = None,
 ) -> EntityTag:
-    if tag_id is None and not tag_name:
-        raise HTTPException(status_code=400, detail="需要 tag_id 或 tag_name")
+    # 标签字典在设置中维护；实体侧仅允许绑定已有 tag_id
     if tag_id is None:
-        tag = get_or_create_tag(db, ctx, tag_name or "", commit=False)
-        tag_id = tag.id
-    else:
-        tag = db.query(Tag).filter(uuid_eq(Tag.id, tag_id), Tag.tenant_id == ctx.tenant_id).first()
-        if not tag:
-            raise HTTPException(status_code=404, detail="标签不存在")
+        raise HTTPException(status_code=400, detail="请选择已有标签（标签请在设置 → 业务标签中维护）")
+    tag = db.query(Tag).filter(uuid_eq(Tag.id, tag_id), Tag.tenant_id == ctx.tenant_id).first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="标签不存在")
     existing = (
         db.query(EntityTag)
         .filter(
@@ -186,12 +216,13 @@ def unbind_tag(
 def sync_customer_tag_names(
     db: Session, ctx: TenantContext, customer: Customer, names: list[str], *, commit: bool = True
 ) -> None:
-    """按名称列表同步客户 entity_tags（创建时增补）。"""
+    """按名称列表同步客户 entity_tags（创建时增补；缺失标签会写入字典）。"""
     for name in names:
         n = str(name).strip()
         if not n:
             continue
-        bind_tag(db, ctx, entity_type="customer", entity_id=customer.id, tag_name=n)
+        tag = get_or_create_tag(db, ctx, n, commit=False)
+        bind_tag(db, ctx, entity_type="customer", entity_id=customer.id, tag_id=tag.id)
     if not names and commit:
         db.commit()
 

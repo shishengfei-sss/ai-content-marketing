@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { crmApi } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { hasPermission } from '../../config/permissions'
@@ -39,6 +39,33 @@ const items = ref([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+const customerNameMap = ref({})
+
+function customerName(id) {
+  if (!id) return '—'
+  return customerNameMap.value[String(id)] || customerNameMap.value[String(id).replace(/-/g, '')] || String(id)
+}
+
+async function resolveCustomerNames(rows) {
+  const ids = [...new Set((rows || []).map((r) => r.customer_id).filter(Boolean))]
+  const missing = ids.filter((id) => !customerNameMap.value[String(id)] && !customerNameMap.value[String(id).replace(/-/g, '')])
+  if (!missing.length) return
+  await Promise.all(
+    missing.map(async (id) => {
+      try {
+        const { data } = await crmApi.getCustomer(id)
+        const name = data?.company_name || String(id)
+        customerNameMap.value = {
+          ...customerNameMap.value,
+          [String(id)]: name,
+          [String(id).replace(/-/g, '')]: name,
+        }
+      } catch {
+        /* keep raw id */
+      }
+    }),
+  )
+}
 
 const createVisible = ref(false)
 const columnVisible = ref(false)
@@ -64,16 +91,65 @@ const viewMode = ref(localStorage.getItem('crm_deals_view_mode') || 'table')
 
 const pipelines = ref([])
 const stageFilter = ref('')
+const statusFilter = ref('')
+const priorityFilter = ref('')
+const sourceFilter = ref('')
+const ownerFilter = ref('')
+const pipelineFilter = ref('')
+
+const statusOptions = [
+  { value: 'open', label: '进行中' },
+  { value: 'won', label: '赢单' },
+  { value: 'lost', label: '输单' },
+  { value: 'abandoned', label: '放弃' },
+]
+const priorityOptions = [
+  { value: 'high', label: '高' },
+  { value: 'medium', label: '中' },
+  { value: 'low', label: '低' },
+]
+const sourceOptions = computed(() => {
+  const fromSchema = fields.value?.find((f) => f.field_key === 'source')?.options
+  return Array.isArray(fromSchema) && fromSchema.length
+    ? fromSchema
+    : ['官网', '公众号', '小红书', '抖音', '线下', '转介绍', '电话', '导入', '营销活动', '其他']
+})
+const ownerOptions = computed(() => (members.value || []).filter((m) => m.is_active !== false))
+const stageSelectOptions = computed(() => {
+  if (pipelineFilter.value) {
+    const p = pipelines.value.find((x) => String(x.id) === String(pipelineFilter.value))
+    return p ? [{ id: p.id, name: p.name, stages: p.stages || [] }] : []
+  }
+  return pipelines.value
+})
 
 const tableSortKey = computed(() => `${sortBy.value}-${sortDir.value}`)
 const activeView = computed(
   () => views.value.find((v) => String(v.id) === String(activeViewId.value)) || null,
 )
+const hasQuickFilters = computed(
+  () =>
+    !!(
+      stageFilter.value ||
+      statusFilter.value ||
+      priorityFilter.value ||
+      sourceFilter.value ||
+      ownerFilter.value ||
+      pipelineFilter.value
+    ),
+)
 const hasDraftFilters = computed(
-  () => hasActiveFilters(advancedFilters.value) || !!appliedSearchKeyword.value.trim(),
+  () =>
+    hasActiveFilters(advancedFilters.value) ||
+    !!appliedSearchKeyword.value.trim() ||
+    hasQuickFilters.value,
 )
 const hasTemporaryFilter = computed(
-  () => !activeViewId.value && (hasActiveFilters(advancedFilters.value) || !!appliedSearchKeyword.value.trim()),
+  () =>
+    !activeViewId.value &&
+    (hasActiveFilters(advancedFilters.value) ||
+      !!appliedSearchKeyword.value.trim() ||
+      hasQuickFilters.value),
 )
 const advancedFilterCount = computed(() => countActiveFilters(advancedFilters.value))
 const fieldMap = computed(() => Object.fromEntries((fields.value || []).map((f) => [f.field_key, f])))
@@ -85,7 +161,6 @@ const defaultTableSort = computed(() =>
 const sortDisabled = computed(() => !!activeViewId.value)
 
 const canCreate = () => hasPermission(auth.permissions, 'crm.deal.create')
-const canDelete = () => hasPermission(auth.permissions, 'crm.deal.delete')
 const canEdit = () => hasPermission(auth.permissions, 'crm.deal.edit')
 
 const selectedIds = ref([])
@@ -171,7 +246,12 @@ async function loadDeals() {
         params.sort_by = sortBy.value
         params.sort_dir = sortDir.value || 'desc'
       }
+      if (pipelineFilter.value) params.pipeline_id = pipelineFilter.value
       if (stageFilter.value) params.stage_id = stageFilter.value
+      if (statusFilter.value) params.status = statusFilter.value
+      if (priorityFilter.value) params.priority = priorityFilter.value
+      if (sourceFilter.value) params.source = sourceFilter.value
+      if (ownerFilter.value) params.owner_id = ownerFilter.value
     }
     const { data } = await crmApi.listDeals(params)
     if (filtersParam && data.filters_applied !== true) {
@@ -179,6 +259,7 @@ async function loadDeals() {
     }
     items.value = data.items || []
     total.value = data.total || 0
+    await resolveCustomerNames(items.value)
     if (data.list_fields?.length) {
       applyListColumns(data.list_fields)
     } else if (!listColumns.value.length) {
@@ -252,8 +333,33 @@ function onViewChange() {
   appliedSearchKeyword.value = ''
   if (searchDebounceTimer) { clearTimeout(searchDebounceTimer); searchDebounceTimer = null }
   sortBy.value = ''; sortDir.value = 'desc'
+  resetQuickFilters()
   page.value = 1
   loadDeals()
+}
+
+function resetQuickFilters() {
+  stageFilter.value = ''
+  statusFilter.value = ''
+  priorityFilter.value = ''
+  sourceFilter.value = ''
+  ownerFilter.value = ''
+  pipelineFilter.value = ''
+}
+
+function onQuickFilterChange() {
+  page.value = 1
+  loadDeals()
+}
+
+function onPipelineFilterChange() {
+  if (stageFilter.value) {
+    const ok = stageSelectOptions.value.some((p) =>
+      (p.stages || []).some((s) => String(s.id) === String(stageFilter.value)),
+    )
+    if (!ok) stageFilter.value = ''
+  }
+  onQuickFilterChange()
 }
 
 function openAdvancedFilter() {
@@ -269,7 +375,34 @@ function applyAdvancedFilters(payload) {
 }
 
 function openSaveView() {
-  const nameFromFilters = suggestViewNameFromFilters(advancedFilters.value, fieldMap.value)
+  let nameFromFilters = suggestViewNameFromFilters(advancedFilters.value, fieldMap.value)
+  const quickBits = []
+  if (stageFilter.value) {
+    const stageName = stageMap.value[stageFilter.value]?.name
+    if (stageName) quickBits.push(stageName)
+  }
+  if (statusFilter.value) {
+    const st = statusOptions.find((o) => o.value === statusFilter.value)
+    if (st) quickBits.push(st.label)
+  }
+  if (priorityFilter.value) {
+    const pr = priorityOptions.find((o) => o.value === priorityFilter.value)
+    if (pr) quickBits.push(`优先级${pr.label}`)
+  }
+  if (sourceFilter.value) quickBits.push(sourceFilter.value)
+  if (ownerFilter.value) {
+    const m = ownerOptions.value.find((x) => String(x.user_id) === String(ownerFilter.value))
+    if (m) quickBits.push(m.display_name || m.phone || '负责人')
+  }
+  if (pipelineFilter.value) {
+    const p = pipelines.value.find((x) => String(x.id) === String(pipelineFilter.value))
+    if (p?.name) quickBits.push(p.name)
+  }
+  if (quickBits.length) {
+    nameFromFilters = nameFromFilters === '我的视图'
+      ? quickBits.slice(0, 2).join('-')
+      : `${quickBits[0]}-${nameFromFilters}`.slice(0, 40)
+  }
   saveViewName.value = appliedSearchKeyword.value.trim() ? `${nameFromFilters}-搜索` : nameFromFilters
   saveViewPinned.value = false; saveViewDefault.value = false; saveViewPublic.value = false
   saveViewVisible.value = true
@@ -308,7 +441,19 @@ function clearActiveView() {
 }
 
 function buildFiltersForView() {
-  return buildFiltersPayload(advancedFilters.value.conditions || [], fields.value)
+  const base = buildFiltersPayload(advancedFilters.value.conditions || [], fields.value)
+  const conditions = [...(base.conditions || [])]
+  const pushEq = (field_key, value) => {
+    if (!value || conditions.some((c) => c.field_key === field_key)) return
+    conditions.push({ field_key, op: 'eq', value })
+  }
+  pushEq('pipeline_id', pipelineFilter.value)
+  pushEq('stage_id', stageFilter.value)
+  pushEq('status', statusFilter.value)
+  pushEq('priority', priorityFilter.value)
+  pushEq('source', sourceFilter.value)
+  pushEq('owner_user_id', ownerFilter.value)
+  return { logic: base.logic || 'and', conditions }
 }
 
 function clearTemporaryFilters() {
@@ -316,7 +461,7 @@ function clearTemporaryFilters() {
   searchKeyword.value = ''
   appliedSearchKeyword.value = ''
   if (searchDebounceTimer) { clearTimeout(searchDebounceTimer); searchDebounceTimer = null }
-  stageFilter.value = ''
+  resetQuickFilters()
   page.value = 1
   loadDeals()
 }
@@ -324,17 +469,6 @@ function clearTemporaryFilters() {
 function openCreate() { createVisible.value = true }
 
 function goDetail(row) { router.push(`/crm/deals/${row.id}`) }
-
-async function handleDelete(row) {
-  try {
-    await ElMessageBox.confirm(`确定删除商机「${row.title}」？`, '删除')
-    await crmApi.deleteDeal(row.id)
-    ElMessage.success('已删除')
-    loadDeals()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
-  }
-}
 
 function onPageChange(p) { page.value = p; loadDeals() }
 
@@ -360,6 +494,10 @@ function statusTagType(status) {
   if (status === 'lost') return 'danger'
   if (status === 'abandoned') return 'info'
   return ''
+}
+
+function statusLabel(status) {
+  return statusOptions.find((o) => o.value === status)?.label || status || '—'
 }
 
 onMounted(async () => {
@@ -417,21 +555,78 @@ onBeforeUnmount(() => {
 
       <template #filters>
         <el-select
+          v-model="pipelineFilter"
+          placeholder="销售管道"
+          clearable
+          class="crm-list-filter-select"
+          :disabled="!!activeViewId"
+          @change="onPipelineFilterChange"
+        >
+          <el-option v-for="p in pipelines" :key="p.id" :label="p.name" :value="p.id" />
+        </el-select>
+        <el-select
           v-model="stageFilter"
-          placeholder="按阶段筛选"
+          placeholder="阶段"
           clearable
           class="crm-stage-filter"
           :disabled="!!activeViewId"
-          @change="() => { page = 1; loadDeals() }"
+          @change="onQuickFilterChange"
         >
-          <el-option-group v-for="p in pipelines" :key="p.id" :label="p.name">
+          <el-option-group v-for="p in stageSelectOptions" :key="p.id" :label="p.name">
             <el-option v-for="s in p.stages" :key="s.id" :label="s.name" :value="s.id" />
           </el-option-group>
+        </el-select>
+        <el-select
+          v-model="statusFilter"
+          placeholder="状态"
+          clearable
+          class="crm-list-filter-select"
+          :disabled="!!activeViewId"
+          @change="onQuickFilterChange"
+        >
+          <el-option v-for="o in statusOptions" :key="o.value" :label="o.label" :value="o.value" />
+        </el-select>
+        <el-select
+          v-model="priorityFilter"
+          placeholder="优先级"
+          clearable
+          class="crm-list-filter-select"
+          :disabled="!!activeViewId"
+          @change="onQuickFilterChange"
+        >
+          <el-option v-for="o in priorityOptions" :key="o.value" :label="o.label" :value="o.value" />
+        </el-select>
+        <el-select
+          v-model="sourceFilter"
+          placeholder="来源"
+          clearable
+          filterable
+          class="crm-list-filter-select crm-list-filter-select--wide"
+          :disabled="!!activeViewId"
+          @change="onQuickFilterChange"
+        >
+          <el-option v-for="s in sourceOptions" :key="s" :label="s" :value="s" />
+        </el-select>
+        <el-select
+          v-model="ownerFilter"
+          placeholder="负责人"
+          clearable
+          filterable
+          class="crm-list-filter-select crm-list-filter-select--wide"
+          :disabled="!!activeViewId"
+          @change="onQuickFilterChange"
+        >
+          <el-option
+            v-for="m in ownerOptions"
+            :key="m.user_id"
+            :label="m.display_name || m.phone"
+            :value="m.user_id"
+          />
         </el-select>
         <el-input
           v-model="searchKeyword"
           class="crm-list-search"
-          placeholder="搜索商机名称"
+          placeholder="搜索名称/编号/竞争对手"
           prefix-icon="Search"
           clearable
           :disabled="!!activeViewId"
@@ -507,10 +702,13 @@ onBeforeUnmount(() => {
               <el-tag size="small" type="warning">{{ stageLabel(row) }}</el-tag>
             </template>
             <template v-else-if="col.field_key === 'status'">
-              <el-tag size="small" :type="statusTagType(row.status)">{{ row.status }}</el-tag>
+              <el-tag size="small" :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
             </template>
             <template v-else-if="col.field_key === 'amount'">
               ¥{{ formatAmount(row) }}
+            </template>
+            <template v-else-if="col.field_key === 'customer_id'">
+              {{ customerName(row.customer_id) }}
             </template>
             <template v-else>
               {{ formatCell(row, col.field_key, col.field_type) }}
@@ -530,10 +728,9 @@ onBeforeUnmount(() => {
             {{ resolveMemberName(row.owner_user_id) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="132" fixed="right" align="center" @click.stop>
+        <el-table-column label="操作" width="88" fixed="right" align="center" @click.stop>
           <template #default="{ row }">
             <el-button link type="primary" @click.stop="goDetail(row)">详情</el-button>
-            <el-button v-if="canDelete()" link type="danger" @click.stop="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

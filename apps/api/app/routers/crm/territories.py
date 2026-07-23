@@ -7,13 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.dependencies import TenantContext
+from app.dependencies import TenantContext, get_tenant_context
 from app.schemas.crm import TerritoryCreate, TerritoryOut, TerritoryUpdate
 from app.services.crm.sales_org_service import (
     create_territory,
     delete_territory,
+    ensure_default_territories,
     get_territory,
-    list_territories,
     update_territory,
 )
 from app.services.permission_service import require_permission
@@ -23,10 +23,12 @@ router = APIRouter(prefix="/territories", tags=["crm-territories"])
 
 @router.get("", response_model=list[TerritoryOut])
 def get_territories(
-    ctx: TenantContext = Depends(require_permission("crm.org.manage")),
+    ctx: TenantContext = Depends(get_tenant_context),
     db: Session = Depends(get_db),
 ):
-    return [TerritoryOut.model_validate(t) for t in list_territories(db, ctx.tenant_id)]
+    """归属地区下拉为引用数据：租户内已登录成员可读；增删改仍需 crm.org.manage。"""
+    rows = ensure_default_territories(db, ctx.tenant_id)
+    return [TerritoryOut.model_validate(t) for t in rows]
 
 
 @router.post("", response_model=TerritoryOut, status_code=201)

@@ -9,6 +9,8 @@ import { hasPermission } from '../../config/permissions'
 import { useTeamMembers } from '../../composables/useTeamMembers'
 import OrderFormDialog from './OrderFormDialog.vue'
 import CrmEntityTasks from '../../components/crm/CrmEntityTasks.vue'
+import { formatDate, formatDateTime } from '../../utils/datetime'
+import { ORDER_SOURCE_META, ORDER_STATUS_META, orderActions } from '../../composables/orderActions'
 
 const route = useRoute()
 const router = useRouter()
@@ -63,6 +65,7 @@ function emptyPay() { return { amount: null, paid_at: '', method: 'bank', status
 const canEdit = () => hasPermission(auth.permissions, 'crm.order.edit')
 const canPlace = () => hasPermission(auth.permissions, 'crm.order.place')
 const canApprove = () => hasPermission(auth.permissions, 'crm.order.approve')
+const canCreate = () => hasPermission(auth.permissions, 'crm.order.create')
 const canDelete = () => hasPermission(auth.permissions, 'crm.order.delete')
 const canPaymentCreate = () => hasPermission(auth.permissions, 'crm.payment.create')
 const canPaymentConfirm = () => hasPermission(auth.permissions, 'crm.payment.confirm')
@@ -73,18 +76,32 @@ const canDeleteActivity = (item) =>
   hasPermission(auth.permissions, 'crm.activity.create') &&
   (item.created_by_user_id === auth.user?.id || hasPermission(auth.permissions, 'crm.admin'))
 
-const STATUS_META = {
-  draft: { label: '草稿', type: 'info' },
-  pending_approval: { label: '待审批', type: 'warning' },
-  approved: { label: '已审批', type: 'success' },
-  rejected: { label: '已驳回', type: 'danger' },
-  confirmed: { label: '已确认', type: 'success' },
-  executing: { label: '执行中', type: 'warning' },
-  completed: { label: '已完成', type: 'success' },
-  cancelled: { label: '已取消', type: 'danger' },
-  superseded: { label: '已修订', type: 'info' },
+function sameUserId(a, b) {
+  if (!a || !b) return false
+  return String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
 }
-const SOURCE_META = { deal: '商机', quote: '报价', contract: '合同' }
+const isOwner = computed(() => sameUserId(order.value?.owner_user_id, auth.user?.id))
+const canMutate = computed(() => isOwner.value)
+/** BR-PAY-01：仅已确认/执行中/已完成可登记回款与计划 */
+const canRegisterPayment = computed(() =>
+  ['confirmed', 'executing', 'completed'].includes(order.value?.status),
+)
+function isPaymentOwner(row) {
+  return sameUserId(row?.owner_user_id, auth.user?.id)
+}
+const STATUS_META = ORDER_STATUS_META
+const SOURCE_META = ORDER_SOURCE_META
+const actions = computed(() =>
+  orderActions({
+    status: order.value?.status,
+    isOwner: isOwner.value,
+    canEdit: canEdit(),
+    canPlace: canPlace(),
+    canApprove: canApprove(),
+    canCreate: canCreate(),
+    canDelete: canDelete(),
+  }),
+)
 const PAY_STATUS_META = { pending: { label: '待确认', type: 'warning' }, confirmed: { label: '已到账', type: 'success' }, reversed: { label: '已冲销', type: 'info' } }
 const PAY_METHOD_META = { bank: '银行', wechat: '微信', alipay: '支付宝', cash: '现金', other: '其他' }
 const APPROVAL_STATUS_META = {
@@ -104,6 +121,24 @@ const taxTotal = computed(() =>
 const amountInclTax = computed(() => Number(order.value?.amount || 0) + taxTotal.value)
 const unpaid = computed(() => Math.max(0, Number(order.value?.amount || 0) - paidTotal.value))
 const confirmedPayments = computed(() => payments.value.filter((p) => p.status === 'confirmed'))
+const invoicedTotal = computed(() =>
+  invoices.value
+    .filter((i) => i.status === 'issued')
+    .reduce((acc, i) => acc + Number(i.total_amount ?? i.amount ?? 0), 0),
+)
+const deliveryProgress = computed(() => {
+  const notes = deliveries.value || []
+  if (!notes.length) return '未发货'
+  const delivered = notes.filter((d) => d.status === 'delivered').length
+  const shipped = notes.filter((d) => d.status === 'shipped').length
+  if (delivered === notes.length) return `已签收 ${delivered}/${notes.length}`
+  if (shipped || delivered) return `发货中 ${delivered + shipped}/${notes.length}`
+  return `备货中 ${notes.length} 单`
+})
+const currentRevision = computed(() => {
+  if (!revisions.value.length) return null
+  return revisions.value.find((r) => !['superseded', 'cancelled'].includes(r.status)) || revisions.value[revisions.value.length - 1]
+})
 
 async function loadOrder() {
   loading.value = true
@@ -387,8 +422,34 @@ async function handleConfirm() {
   catch (e) { ElMessage.error(e.message || '确认失败') }
 }
 async function handleSubmit() {
-  try { await crmApi.submitOrder(order.value.id); ElMessage.success('已提交'); await loadOrder() }
-  catch (e) { ElMessage.error(e.message || '提交失败') }
+  try {
+    const { data } = await crmApi.submitOrder(order.value.id)
+    ElMessage.success(data?.status === 'pending_approval' ? '已提交审批' : '已确认')
+    await loadOrder()
+  } catch (e) { ElMessage.error(e.message || '提交失败') }
+}
+async function handleWithdraw() {
+  try {
+    await ElMessageBox.confirm('确定撤回审批？订单将回到草稿。', '撤回审批')
+    await crmApi.withdrawOrder(order.value.id)
+    ElMessage.success('已撤回')
+    await loadOrder()
+  } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '撤回失败') }
+}
+async function handleComplete() {
+  try {
+    await ElMessageBox.confirm('确定将订单标记为已完成？', '完成订单')
+    await crmApi.completeOrder(order.value.id)
+    ElMessage.success('已完成')
+    await loadOrder()
+  } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '操作失败') }
+}
+async function handleClone(asTemplate = false) {
+  try {
+    const { data } = await crmApi.cloneOrder(order.value.id, { as_template: asTemplate })
+    ElMessage.success(asTemplate ? '已另存为模板草稿' : '已复制为新草稿')
+    router.push(`/crm/orders/${data.id}`)
+  } catch (e) { ElMessage.error(e.message || '复制失败') }
 }
 async function handleApprove() {
   try { await crmApi.approveOrder(order.value.id); ElMessage.success('审批已通过'); await loadOrder() }
@@ -445,7 +506,13 @@ async function deletePlan(p) {
   } catch (e) { if (e !== 'cancel') ElMessage.error(e.message || '删除失败') }
 }
 
-function openCreatePay() { payForm.value = emptyPay(); payDialogVisible.value = true }
+function openCreatePay() {
+  payForm.value = emptyPay()
+  // 默认带出未回款金额，与回款列表登记口径一致
+  const unpaidAmt = Math.max(0, Math.round(Number(unpaid.value || 0) * 100) / 100)
+  payForm.value.amount = unpaidAmt > 0 ? unpaidAmt : null
+  payDialogVisible.value = true
+}
 async function submitPay() {
   if (payForm.value.amount == null) { ElMessage.warning('请填写回款金额'); return }
   try {
@@ -485,7 +552,6 @@ async function deletePay(p) {
 }
 
 function formatAmount(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
-function formatDate(v) { return v ? String(v).replace('T', ' ').slice(0, 16) : '' }
 function lineInclTax(row) { return Number(row.line_total || 0) + Number(row.tax_amount || 0) }
 
 watch(
@@ -516,29 +582,68 @@ onMounted(async () => { await loadMembers(); loadOrder() })
         <div class="detail-page__meta">
           <el-tag :type="STATUS_META[order.status]?.type">{{ STATUS_META[order.status]?.label || order.status }}</el-tag>
           <el-tag size="small" type="info">{{ SOURCE_META[order.source] }}</el-tag>
+          <el-tag v-if="order.extra_data?.is_template" size="small">模板</el-tag>
           <span class="detail-page__amount">¥{{ formatAmount(order.amount) }}</span>
           <span v-if="taxTotal">含税 ¥{{ formatAmount(amountInclTax) }}</span>
           <span>{{ order.order_number }}</span>
           <span>负责人：{{ resolveMemberName(order.owner_user_id) }}</span>
         </div>
+        <el-alert
+          v-if="order.status === 'superseded'"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="detail-page__alert"
+          title="本单已被修订，只读查看。请前往当前有效版本继续操作。"
+        >
+          <template #default>
+            <el-button
+              v-if="currentRevision && currentRevision.id !== order.id"
+              link
+              type="primary"
+              @click="router.push(`/crm/orders/${currentRevision.id}`)"
+            >打开当前版本 v{{ currentRevision.version }}</el-button>
+          </template>
+        </el-alert>
       </div>
       <div class="detail-page__actions">
-        <el-button v-if="canEdit() && (order.status === 'draft' || order.status === 'rejected')" @click="editVisible = true">编辑</el-button>
-        <el-button v-if="canPlace() && (order.status === 'draft' || order.status === 'rejected')" type="primary" @click="handleSubmit">提交审批</el-button>
-        <el-button v-if="canPlace() && order.status === 'draft'" type="success" @click="handleConfirm">直接确认</el-button>
-        <el-button v-if="canApprove() && order.status === 'pending_approval'" type="success" @click="handleApprove">通过</el-button>
-        <el-button v-if="canApprove() && order.status === 'pending_approval'" type="danger" @click="rejectVisible = true">驳回</el-button>
-        <el-button v-if="canPlace() && (order.status === 'confirmed' || order.status === 'executing')" @click="reviseVisible = true">修订</el-button>
-        <el-button v-if="canEdit() && order.status !== 'cancelled' && order.status !== 'completed' && order.status !== 'superseded'" type="warning" @click="handleCancel">取消</el-button>
-        <el-button v-if="canDelete()" type="danger" @click="handleDelete">删除</el-button>
+        <el-button v-if="actions.edit" @click="editVisible = true">编辑</el-button>
+        <el-button v-if="actions.submit" type="primary" @click="handleSubmit">提交</el-button>
+        <el-button v-if="actions.withdraw" @click="handleWithdraw">撤回审批</el-button>
+        <el-button v-if="actions.approve" type="success" @click="handleApprove">通过</el-button>
+        <el-button v-if="actions.reject" type="danger" @click="rejectVisible = true">驳回</el-button>
+        <el-button v-if="actions.revise" @click="reviseVisible = true">修订</el-button>
+        <el-button v-if="actions.complete" type="success" @click="handleComplete">完成</el-button>
+        <el-button v-if="actions.cancel" type="warning" @click="handleCancel">取消</el-button>
+        <el-dropdown v-if="actions.clone" trigger="click" @command="(c) => handleClone(c === 'template')">
+          <el-button>复制</el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="copy">复制为新订单</el-dropdown-item>
+              <el-dropdown-item command="template">另存为模板</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button v-if="actions.delete" type="danger" @click="handleDelete">删除</el-button>
       </div>
     </div>
 
     <div v-if="order" class="detail-page__kpi page-card">
       <div class="kpi"><div class="kpi__label">订单金额</div><div class="kpi__value">¥{{ formatAmount(order.amount) }}</div></div>
-      <div class="kpi"><div class="kpi__label">税额合计</div><div class="kpi__value">¥{{ formatAmount(taxTotal) }}</div></div>
-      <div class="kpi"><div class="kpi__label">计划回款</div><div class="kpi__value">¥{{ formatAmount(planTotal) }}</div></div>
+      <div class="kpi"><div class="kpi__label">成本</div><div class="kpi__value">¥{{ formatAmount(order.cost_total) }}</div></div>
+      <div class="kpi">
+        <div class="kpi__label">毛利{{ order.has_incomplete_cost ? '（成本不全）' : '' }}</div>
+        <div class="kpi__value">
+          <template v-if="order.margin_amount != null">
+            ¥{{ formatAmount(order.margin_amount) }}
+            <span v-if="order.margin_rate != null" class="kpi__sub">{{ order.margin_rate }}%</span>
+          </template>
+          <template v-else>—</template>
+        </div>
+      </div>
       <div class="kpi"><div class="kpi__label">已到账</div><div class="kpi__value kpi__value--ok">¥{{ formatAmount(paidTotal) }}</div></div>
+      <div class="kpi"><div class="kpi__label">已开票</div><div class="kpi__value">¥{{ formatAmount(invoicedTotal) }}</div></div>
+      <div class="kpi"><div class="kpi__label">发货</div><div class="kpi__value">{{ deliveryProgress }}</div></div>
       <div class="kpi"><div class="kpi__label">待回款</div><div class="kpi__value">¥{{ formatAmount(unpaid) }}</div></div>
     </div>
 
@@ -562,7 +667,7 @@ onMounted(async () => { await loadMembers(); loadOrder() })
             <el-descriptions-item v-if="order.contract_id" label="来源合同">
               <el-link type="primary" @click="router.push(`/crm/contracts/${order.contract_id}`)">查看合同</el-link>
             </el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ formatDate(order.created_at) }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ formatDateTime(order.created_at, { withSeconds: false }) }}</el-descriptions-item>
             <el-descriptions-item label="版本">v{{ order.version || 1 }}</el-descriptions-item>
             <el-descriptions-item v-if="order.parent_order_id" label="父订单">
               <el-link type="primary" @click="router.push(`/crm/orders/${order.parent_order_id}`)">查看原单</el-link>
@@ -581,6 +686,8 @@ onMounted(async () => { await loadMembers(); loadOrder() })
             <el-table-column label="税率%" width="80" align="center"><template #default="{ row }">{{ row.tax_rate != null ? row.tax_rate + '%' : '—' }}</template></el-table-column>
             <el-table-column label="税额" width="110" align="right"><template #default="{ row }">¥{{ formatAmount(row.tax_amount) }}</template></el-table-column>
             <el-table-column label="未税小计" width="120" align="right"><template #default="{ row }">¥{{ formatAmount(row.line_total) }}</template></el-table-column>
+            <el-table-column label="成本" width="110" align="right"><template #default="{ row }">{{ row.cost_amount != null ? `¥${formatAmount(row.cost_amount)}` : '—' }}</template></el-table-column>
+            <el-table-column label="毛利" width="110" align="right"><template #default="{ row }">{{ row.margin_amount != null ? `¥${formatAmount(row.margin_amount)}` : '—' }}</template></el-table-column>
             <el-table-column label="含税" width="120" align="right"><template #default="{ row }">¥{{ formatAmount(lineInclTax(row)) }}</template></el-table-column>
           </el-table>
           <div class="detail-page__total">
@@ -596,8 +703,8 @@ onMounted(async () => { await loadMembers(); loadOrder() })
               <el-tag :type="APPROVAL_STATUS_META[inst.status]?.type" size="small">
                 {{ APPROVAL_STATUS_META[inst.status]?.label || inst.status }}
               </el-tag>
-              <span>提交于 {{ formatDate(inst.submitted_at) }}</span>
-              <span v-if="inst.resolved_at">结案于 {{ formatDate(inst.resolved_at) }}</span>
+              <span>提交于 {{ formatDateTime(inst.submitted_at, { withSeconds: false }) }}</span>
+              <span v-if="inst.resolved_at">结案于 {{ formatDateTime(inst.resolved_at, { withSeconds: false }) }}</span>
             </div>
             <div v-if="inst.reject_reason" class="approval-card__reason">驳回原因：{{ inst.reject_reason }}</div>
             <el-steps :active="Math.max(0, (inst.current_step || 1) - (inst.status === 'pending' ? 0 : 1))" finish-status="success" align-center>
@@ -615,14 +722,14 @@ onMounted(async () => { await loadMembers(); loadOrder() })
         <el-tab-pane label="回款" name="payments">
           <div class="detail-page__card-head">
             <span>回款计划</span>
-            <el-button v-if="canPaymentCreate()" size="small" @click="openCreatePlan">添加计划</el-button>
+            <el-button v-if="canPaymentCreate() && canMutate && canRegisterPayment" size="small" @click="openCreatePlan">添加计划</el-button>
           </div>
           <el-table :data="plans" border size="small" class="mb-table">
             <el-table-column label="期次" width="80" align="center"><template #default="{ row }">第{{ row.installment_no }}期</template></el-table-column>
             <el-table-column label="计划日期" width="140"><template #default="{ row }">{{ formatDate(row.plan_date) }}</template></el-table-column>
             <el-table-column label="计划金额" width="130" align="right"><template #default="{ row }">¥{{ formatAmount(row.plan_amount) }}</template></el-table-column>
             <el-table-column label="备注" min-width="160"><template #default="{ row }">{{ row.remark || '—' }}</template></el-table-column>
-            <el-table-column v-if="canPaymentDelete()" label="操作" width="80" align="center">
+            <el-table-column v-if="canPaymentDelete() && canMutate" label="操作" width="80" align="center">
               <template #default="{ row }"><el-button link type="danger" size="small" @click="deletePlan(row)">删</el-button></template>
             </el-table-column>
           </el-table>
@@ -630,7 +737,7 @@ onMounted(async () => { await loadMembers(); loadOrder() })
 
           <div class="detail-page__card-head mt-head">
             <span>回款记录 <span class="detail-page__paid">已到账：¥{{ formatAmount(paidTotal) }} / ¥{{ formatAmount(order.amount) }}</span></span>
-            <el-button v-if="canPaymentCreate()" size="small" type="primary" @click="openCreatePay">登记回款</el-button>
+            <el-button v-if="canPaymentCreate() && canMutate && canRegisterPayment" size="small" type="primary" @click="openCreatePay">登记回款</el-button>
           </div>
           <el-table :data="payments" border size="small">
             <el-table-column prop="payment_number" label="回款号" width="150" />
@@ -643,9 +750,9 @@ onMounted(async () => { await loadMembers(); loadOrder() })
             <el-table-column label="备注" min-width="140"><template #default="{ row }">{{ row.remark || '—' }}</template></el-table-column>
             <el-table-column label="操作" width="160" align="center">
               <template #default="{ row }">
-                <el-button v-if="canPaymentConfirm() && row.status === 'pending'" link type="success" size="small" @click="confirmPay(row)">确认</el-button>
-                <el-button v-if="canPaymentReverse() && row.status === 'confirmed'" link type="warning" size="small" @click="reversePay(row)">冲销</el-button>
-                <el-button v-if="canPaymentDelete()" link type="danger" size="small" @click="deletePay(row)">删</el-button>
+                <el-button v-if="canPaymentConfirm() && isPaymentOwner(row) && row.status === 'pending'" link type="success" size="small" @click="confirmPay(row)">确认</el-button>
+                <el-button v-if="canPaymentReverse() && isPaymentOwner(row) && row.status === 'confirmed'" link type="warning" size="small" @click="reversePay(row)">冲销</el-button>
+                <el-button v-if="canPaymentDelete() && isPaymentOwner(row) && row.status === 'pending'" link type="danger" size="small" @click="deletePay(row)">删</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -656,7 +763,7 @@ onMounted(async () => { await loadMembers(); loadOrder() })
           <div class="detail-page__card-head">
             <span>发货单</span>
             <el-button
-              v-if="canEdit() && (order.status === 'confirmed' || order.status === 'executing' || order.status === 'completed')"
+              v-if="canEdit() && canMutate && (order.status === 'confirmed' || order.status === 'executing' || order.status === 'completed')"
               size="small"
               type="primary"
               @click="deliveryDialogVisible = true; deliveryForm = { carrier: '', tracking_number: '', remark: '' }"
@@ -669,11 +776,11 @@ onMounted(async () => { await loadMembers(); loadOrder() })
             <el-table-column label="状态" width="100" align="center">
               <template #default="{ row }">{{ { preparing: '备货', shipped: '已发运', delivered: '已签收', returned: '退回' }[row.status] || row.status }}</template>
             </el-table-column>
-            <el-table-column label="发运时间" width="150"><template #default="{ row }">{{ formatDate(row.shipped_at) || '—' }}</template></el-table-column>
+            <el-table-column label="发运时间" width="150"><template #default="{ row }">{{ formatDateTime(row.shipped_at, { withSeconds: false }) }}</template></el-table-column>
             <el-table-column label="操作" width="140" align="center">
               <template #default="{ row }">
-                <el-button v-if="canEdit() && row.status === 'preparing'" link type="primary" @click="shipDelivery(row)">发运</el-button>
-                <el-button v-if="canEdit() && (row.status === 'shipped' || row.status === 'preparing')" link type="success" @click="completeDelivery(row)">签收</el-button>
+                <el-button v-if="canEdit() && canMutate && row.status === 'preparing'" link type="primary" @click="shipDelivery(row)">发运</el-button>
+                <el-button v-if="canEdit() && canMutate && (row.status === 'shipped' || row.status === 'preparing')" link type="success" @click="completeDelivery(row)">签收</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -683,7 +790,7 @@ onMounted(async () => { await loadMembers(); loadOrder() })
           <div class="detail-page__card-head">
             <span>发票</span>
             <el-button
-              v-if="canEdit() && !['draft','pending_approval','rejected','cancelled','superseded'].includes(order.status)"
+              v-if="canEdit() && canMutate && !['draft','pending_approval','rejected','cancelled','superseded'].includes(order.status)"
               size="small"
               type="primary"
               @click="invoiceDialogVisible = true; invoiceForm = { invoice_type: 'vat', amount: Number(order.amount), tax_amount: taxTotal }"
@@ -702,14 +809,14 @@ onMounted(async () => { await loadMembers(); loadOrder() })
             </el-table-column>
             <el-table-column label="操作" width="200" align="center">
               <template #default="{ row }">
-                <el-button v-if="canEdit() && row.status === 'draft'" link type="primary" @click="issueInvoice(row)">开具</el-button>
+                <el-button v-if="canEdit() && canMutate && row.status === 'draft'" link type="primary" @click="issueInvoice(row)">开具</el-button>
                 <el-button
-                  v-if="canEdit() && row.status === 'issued'"
+                  v-if="canEdit() && canMutate && row.status === 'issued'"
                   link
                   type="success"
                   @click="openMatchInvoice(row)"
                 >核销</el-button>
-                <el-button v-if="canEdit() && row.status !== 'void'" link type="danger" @click="voidInvoice(row)">作废</el-button>
+                <el-button v-if="canEdit() && canMutate && row.status !== 'void'" link type="danger" @click="voidInvoice(row)">作废</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -719,7 +826,7 @@ onMounted(async () => { await loadMembers(); loadOrder() })
           <div class="detail-page__card-head">
             <span>退款单</span>
             <el-button
-              v-if="canPaymentCreate() && !['draft','pending_approval','rejected','cancelled','superseded'].includes(order.status)"
+              v-if="canPaymentCreate() && canMutate && !['draft','pending_approval','rejected','cancelled','superseded'].includes(order.status)"
               size="small"
               type="primary"
               @click="openRefund"
@@ -806,7 +913,7 @@ onMounted(async () => { await loadMembers(); loadOrder() })
             <el-timeline-item
               v-for="item in activities"
               :key="item.id"
-              :timestamp="new Date(item.created_at).toLocaleString('zh-CN')"
+              :timestamp="formatDateTime(item.created_at)"
               placement="top"
             >
               <div class="crm-timeline__card">
@@ -987,11 +1094,13 @@ onMounted(async () => { await loadMembers(); loadOrder() })
 .detail-page__meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--el-text-color-secondary); font-size: 13px; }
 .detail-page__amount { font-size: 16px; font-weight: 600; color: var(--el-color-primary); }
 .detail-page__actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.detail-page__kpi { margin-top: 12px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.detail-page__kpi { margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
 .kpi { padding: 10px 12px; background: var(--el-fill-color-light); border-radius: 6px; }
 .kpi__label { font-size: 12px; color: var(--el-text-color-secondary); }
 .kpi__value { margin-top: 4px; font-size: 16px; font-weight: 600; }
+.kpi__sub { margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--el-text-color-secondary); }
 .kpi__value--ok { color: var(--el-color-success); }
+.detail-page__alert { margin-top: 10px; }
 .detail-page__body { margin-top: 12px; }
 .detail-page__total { margin-top: 12px; text-align: right; font-size: 15px; }
 .detail-page__total b { color: var(--el-color-primary); font-size: 18px; }

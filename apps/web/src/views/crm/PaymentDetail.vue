@@ -7,6 +7,9 @@ import { crmApi } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { hasPermission } from '../../config/permissions'
 import { useTeamMembers } from '../../composables/useTeamMembers'
+import CrmEntityTags from '../../components/crm/CrmEntityTags.vue'
+import CrmEntityAttachments from '../../components/crm/CrmEntityAttachments.vue'
+import { formatDate, formatDateTime } from '../../utils/datetime'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,17 +19,29 @@ const { resolveMemberName, loadMembers } = useTeamMembers()
 const loading = ref(false)
 const payment = ref(null)
 const order = ref(null)
+const customer = ref(null)
 const refunds = ref([])
 const receivables = ref(null)
 const activeTab = ref('basic')
 const refundDialog = ref(false)
 const refundForm = ref({ amount: null, reason: '' })
 const saving = ref(false)
+const editDialog = ref(false)
+const editSaving = ref(false)
+const editForm = ref({ amount: null, paid_at: '', method: 'bank', remark: '' })
 
 const canConfirm = () => hasPermission(auth.permissions, 'crm.payment.confirm')
 const canReverse = () => hasPermission(auth.permissions, 'crm.payment.reverse')
 const canCreate = () => hasPermission(auth.permissions, 'crm.payment.create')
+const canEdit = () => hasPermission(auth.permissions, 'crm.payment.edit')
+const canDelete = () => hasPermission(auth.permissions, 'crm.payment.delete')
 
+function sameUserId(a, b) {
+  if (!a || !b) return false
+  return String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
+}
+const isOwner = computed(() => sameUserId(payment.value?.owner_user_id, auth.user?.id))
+const canMutate = computed(() => isOwner.value)
 const STATUS_META = {
   pending: { label: '待确认', type: 'warning' },
   confirmed: { label: '已到账', type: 'success' },
@@ -48,6 +63,7 @@ async function loadAll() {
   try {
     const { data } = await crmApi.getPayment(route.params.id)
     payment.value = data
+    customer.value = null
     if (data.order_id) {
       try {
         const o = await crmApi.getOrder(data.order_id)
@@ -56,6 +72,15 @@ async function loadAll() {
         order.value = null
       }
       await loadRefunds(data.order_id)
+    }
+    const customerId = data.customer_id || order.value?.customer_id
+    if (customerId) {
+      try {
+        const c = await crmApi.getCustomer(customerId)
+        customer.value = c.data
+      } catch {
+        customer.value = null
+      }
     }
     try {
       const r = await crmApi.listReceivables()
@@ -79,6 +104,39 @@ async function loadRefunds(orderId) {
   }
 }
 
+function openEdit() {
+  editForm.value = {
+    amount: Number(payment.value?.amount || 0),
+    paid_at: payment.value?.paid_at ? String(payment.value.paid_at).slice(0, 16) : '',
+    method: payment.value?.method || 'bank',
+    remark: payment.value?.remark || '',
+  }
+  editDialog.value = true
+}
+
+async function submitEdit() {
+  if (editForm.value.amount == null || editForm.value.amount < 0) {
+    ElMessage.warning('请填写金额')
+    return
+  }
+  editSaving.value = true
+  try {
+    const { data } = await crmApi.updatePayment(payment.value.id, {
+      amount: editForm.value.amount,
+      paid_at: editForm.value.paid_at ? new Date(editForm.value.paid_at).toISOString() : null,
+      method: editForm.value.method,
+      remark: editForm.value.remark || null,
+    })
+    payment.value = data
+    editDialog.value = false
+    ElMessage.success('已保存')
+  } catch (e) {
+    ElMessage.error(e.message || '保存失败')
+  } finally {
+    editSaving.value = false
+  }
+}
+
 async function handleConfirm() {
   try {
     await crmApi.confirmPayment(payment.value.id)
@@ -97,6 +155,17 @@ async function handleReverse() {
     await loadAll()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message || '冲销失败')
+  }
+}
+
+async function handleDelete() {
+  try {
+    await ElMessageBox.confirm('确定删除该回款记录？', '删除', { type: 'warning' })
+    await crmApi.deletePayment(payment.value.id)
+    ElMessage.success('已删除')
+    router.push('/crm/payments')
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
   }
 }
 
@@ -166,9 +235,6 @@ async function rejectRefund(row) {
 function formatAmount(v) {
   return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
-function formatDate(v) {
-  return v ? String(v).replace('T', ' ').slice(0, 16) : '—'
-}
 
 onMounted(async () => {
   await loadMembers()
@@ -196,17 +262,26 @@ onMounted(async () => {
       </div>
       <div class="detail-page__actions">
         <el-button
-          v-if="canConfirm() && payment.status === 'pending'"
+          v-if="canEdit() && canMutate && payment.status === 'pending'"
+          @click="openEdit"
+        >编辑</el-button>
+        <el-button
+          v-if="canDelete() && canMutate && payment.status === 'pending'"
+          type="danger"
+          @click="handleDelete"
+        >删除</el-button>
+        <el-button
+          v-if="canConfirm() && canMutate && payment.status === 'pending'"
           type="success"
           @click="handleConfirm"
         >确认到账</el-button>
         <el-button
-          v-if="canReverse() && payment.status === 'confirmed'"
+          v-if="canReverse() && canMutate && payment.status === 'confirmed'"
           type="warning"
           @click="handleReverse"
         >冲销</el-button>
         <el-button
-          v-if="canCreate() && payment.status === 'confirmed'"
+          v-if="canCreate() && canMutate && payment.status === 'confirmed'"
           type="primary"
           @click="openRefund"
         >申请退款</el-button>
@@ -216,8 +291,25 @@ onMounted(async () => {
     <div v-if="payment" class="detail-page__body page-card">
       <el-tabs v-model="activeTab">
         <el-tab-pane label="基本信息" name="basic">
+          <div style="margin-bottom: 16px">
+            <div style="font-weight: 600; margin-bottom: 8px">标签</div>
+            <CrmEntityTags
+              entity-type="payment"
+              :entity-id="payment.id"
+              :editable="canEdit() && canMutate"
+            />
+          </div>
           <el-descriptions :column="2" border>
             <el-descriptions-item label="回款号">{{ payment.payment_number }}</el-descriptions-item>
+            <el-descriptions-item label="客户">
+              <el-link
+                v-if="customer"
+                type="primary"
+                @click="router.push(`/crm/customers/${customer.id}`)"
+              >{{ customer.company_name }}</el-link>
+              <span v-else-if="payment.customer_id || order?.customer_id">{{ payment.customer_id || order?.customer_id }}</span>
+              <span v-else>—</span>
+            </el-descriptions-item>
             <el-descriptions-item label="关联订单">
               <el-link
                 v-if="order"
@@ -231,8 +323,15 @@ onMounted(async () => {
             <el-descriptions-item label="收款方式">{{ METHOD_META[payment.method] || payment.method }}</el-descriptions-item>
             <el-descriptions-item label="状态">{{ STATUS_META[payment.status]?.label }}</el-descriptions-item>
             <el-descriptions-item label="备注" :span="2">{{ payment.remark || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ formatDate(payment.created_at) }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ formatDateTime(payment.created_at, { withSeconds: false }) }}</el-descriptions-item>
           </el-descriptions>
+          <div style="margin-top: 16px">
+            <CrmEntityAttachments
+              entity-type="payment"
+              :entity-id="payment.id"
+              :editable="canEdit() && canMutate"
+            />
+          </div>
         </el-tab-pane>
 
         <el-tab-pane :label="`退款（${orderRefunds.length}）`" name="refunds">
@@ -332,6 +431,38 @@ onMounted(async () => {
       <template #footer>
         <el-button @click="refundDialog = false">取消</el-button>
         <el-button type="primary" :loading="saving" @click="submitRefund">提交</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="editDialog" title="编辑回款" width="460px">
+      <el-form label-width="88px">
+        <el-form-item label="金额" required>
+          <el-input-number v-model="editForm.amount" :min="0" :precision="2" :controls="false" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="到账日">
+          <el-date-picker
+            v-model="editForm.paid_at"
+            type="datetime"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="收款方式">
+          <el-select v-model="editForm.method" style="width: 100%">
+            <el-option label="银行" value="bank" />
+            <el-option label="微信" value="wechat" />
+            <el-option label="支付宝" value="alipay" />
+            <el-option label="现金" value="cash" />
+            <el-option label="其他" value="other" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="editForm.remark" type="textarea" :rows="2" maxlength="500" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editDialog = false">取消</el-button>
+        <el-button type="primary" :loading="editSaving" @click="submitEdit">保存</el-button>
       </template>
     </el-dialog>
   </div>

@@ -26,6 +26,7 @@ import {
   hasActiveFilters,
   suggestViewNameFromFilters,
 } from '../../utils/crmAdvancedFilter'
+import { LEAD_SOURCE_OPTIONS, LEAD_STATUS_OPTIONS } from '../../utils/entityForm'
 
 const router = useRouter()
 const route = useRoute()
@@ -50,6 +51,9 @@ const advancedFilters = ref(emptyFilters())
 const advancedFilterVisible = ref(false)
 const searchKeyword = ref('')
 const appliedSearchKeyword = ref('')
+const statusFilter = ref('')
+const sourceFilter = ref('')
+const ownerFilter = ref('')
 let searchDebounceTimer = null
 const SEARCH_DEBOUNCE_MS = 400
 const sortBy = ref('')
@@ -66,14 +70,33 @@ const tableSortKey = computed(() => `${sortBy.value}-${sortDir.value}`)
 const activeView = computed(
   () => views.value.find((v) => String(v.id) === String(activeViewId.value)) || null,
 )
+const hasQuickFilters = computed(
+  () => !!(statusFilter.value || sourceFilter.value || ownerFilter.value),
+)
 const hasDraftFilters = computed(
-  () => hasActiveFilters(advancedFilters.value) || !!appliedSearchKeyword.value.trim(),
+  () =>
+    hasActiveFilters(advancedFilters.value) ||
+    !!appliedSearchKeyword.value.trim() ||
+    hasQuickFilters.value,
 )
 const hasTemporaryFilter = computed(
-  () => !activeViewId.value && (hasActiveFilters(advancedFilters.value) || !!appliedSearchKeyword.value.trim()),
+  () =>
+    !activeViewId.value &&
+    (hasActiveFilters(advancedFilters.value) ||
+      !!appliedSearchKeyword.value.trim() ||
+      hasQuickFilters.value),
 )
 const advancedFilterCount = computed(() => countActiveFilters(advancedFilters.value))
 const fieldMap = computed(() => Object.fromEntries((fields.value || []).map((f) => [f.field_key, f])))
+const statusOptions = computed(() => {
+  const fromSchema = fields.value?.find((f) => f.field_key === 'status')?.options
+  return Array.isArray(fromSchema) && fromSchema.length ? fromSchema : LEAD_STATUS_OPTIONS
+})
+const sourceOptions = computed(() => {
+  const fromSchema = fields.value?.find((f) => f.field_key === 'source')?.options
+  return Array.isArray(fromSchema) && fromSchema.length ? fromSchema : LEAD_SOURCE_OPTIONS
+})
+const ownerOptions = computed(() => (members.value || []).filter((m) => m.is_active !== false))
 const defaultTableSort = computed(() =>
   sortBy.value
     ? { prop: sortBy.value, order: sortDir.value === 'asc' ? 'ascending' : 'descending' }
@@ -83,6 +106,12 @@ const sortDisabled = computed(() => !!activeViewId.value)
 
 const canCreate = () => hasPermission(auth.permissions, 'crm.lead.create')
 const canDelete = () => hasPermission(auth.permissions, 'crm.lead.delete')
+const canDeleteRow = (row) => {
+  if (!canDelete() || !row?.owner_user_id || !auth.user?.id) return false
+  const a = String(row.owner_user_id).replace(/-/g, '').toLowerCase()
+  const b = String(auth.user.id).replace(/-/g, '').toLowerCase()
+  return a === b
+}
 const canSaveView = () => hasPermission(auth.permissions, 'crm.view.save_own')
 const canManagePublic = () => hasPermission(auth.permissions, 'crm.view.manage_public')
 const canImport = () => hasPermission(auth.permissions, 'crm.lead.import')
@@ -112,6 +141,9 @@ async function loadLeads() {
       if (filtersParam) params.filters = filtersParam
       const q = appliedSearchKeyword.value.trim()
       if (q) params.q = q
+      if (statusFilter.value) params.status = statusFilter.value
+      if (sourceFilter.value) params.source = sourceFilter.value
+      if (ownerFilter.value) params.owner_id = ownerFilter.value
       if (sortBy.value) {
         params.sort_by = sortBy.value
         params.sort_dir = sortDir.value || 'desc'
@@ -215,12 +247,21 @@ function onViewChange() {
   advancedFilters.value = emptyFilters()
   searchKeyword.value = ''
   appliedSearchKeyword.value = ''
+  statusFilter.value = ''
+  sourceFilter.value = ''
+  ownerFilter.value = ''
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer)
     searchDebounceTimer = null
   }
   sortBy.value = ''
   sortDir.value = 'desc'
+  page.value = 1
+  loadLeads()
+}
+
+function onQuickFilterChange() {
+  if (activeViewId.value) return
   page.value = 1
   loadLeads()
 }
@@ -298,6 +339,9 @@ function clearTemporaryFilters() {
   advancedFilters.value = emptyFilters()
   searchKeyword.value = ''
   appliedSearchKeyword.value = ''
+  statusFilter.value = ''
+  sourceFilter.value = ''
+  ownerFilter.value = ''
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer)
     searchDebounceTimer = null
@@ -313,7 +357,23 @@ function onImportCommand(command) {
 
 async function onExportCommand(format) {
   try {
-    const { data } = await crmApi.exportLeads(format)
+    const params = { format }
+    if (activeViewId.value) {
+      params.view_id = activeViewId.value
+    } else {
+      const q = appliedSearchKeyword.value.trim()
+      if (q) params.q = q
+      if (statusFilter.value) params.status = statusFilter.value
+      if (sourceFilter.value) params.source = sourceFilter.value
+      if (ownerFilter.value) params.owner_id = ownerFilter.value
+      const filtersParam = filtersPayloadForApi(advancedFilters.value, fields.value)
+      if (filtersParam) params.filters = filtersParam
+      if (sortBy.value) {
+        params.sort_by = sortBy.value
+        params.sort_dir = sortDir.value || 'desc'
+      }
+    }
+    const { data, headers } = await crmApi.exportLeads(params)
     const blob = data instanceof Blob ? data : new Blob([data])
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -321,7 +381,12 @@ async function onExportCommand(format) {
     a.download = `leads.${format === 'xlsx' ? 'xlsx' : 'csv'}`
     a.click()
     URL.revokeObjectURL(url)
-    ElMessage.success('导出已开始')
+    const rowCount = headers?.['x-export-row-count'] ?? headers?.['X-Export-Row-Count']
+    ElMessage.success(
+      rowCount != null && rowCount !== ''
+        ? `已按当前筛选导出 ${rowCount} 条`
+        : '已按当前筛选条件导出',
+    )
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
   }
@@ -441,6 +506,43 @@ onBeforeUnmount(() => {
           @clear="onSearchClear"
           @keyup.enter="onSearch"
         />
+        <el-select
+          v-model="statusFilter"
+          class="crm-list-filter-select"
+          placeholder="线索状态"
+          clearable
+          :disabled="!!activeViewId"
+          @change="onQuickFilterChange"
+        >
+          <el-option v-for="opt in statusOptions" :key="opt" :label="opt" :value="opt" />
+        </el-select>
+        <el-select
+          v-model="sourceFilter"
+          class="crm-list-filter-select crm-list-filter-select--wide"
+          placeholder="线索来源"
+          clearable
+          filterable
+          :disabled="!!activeViewId"
+          @change="onQuickFilterChange"
+        >
+          <el-option v-for="opt in sourceOptions" :key="opt" :label="opt" :value="opt" />
+        </el-select>
+        <el-select
+          v-model="ownerFilter"
+          class="crm-list-filter-select crm-list-filter-select--wide"
+          placeholder="负责人"
+          clearable
+          filterable
+          :disabled="!!activeViewId"
+          @change="onQuickFilterChange"
+        >
+          <el-option
+            v-for="m in ownerOptions"
+            :key="m.user_id"
+            :label="m.display_name || m.phone"
+            :value="m.user_id"
+          />
+        </el-select>
         <el-button
           class="crm-adv-filter-btn"
           :disabled="!!activeViewId"
@@ -528,7 +630,7 @@ onBeforeUnmount(() => {
       <el-table-column label="操作" width="132" fixed="right" align="center" @click.stop>
         <template #default="{ row }">
           <el-button link type="primary" @click.stop="goDetail(row)">详情</el-button>
-          <el-button v-if="canDelete()" link type="danger" @click.stop="handleDelete(row)">删除</el-button>
+          <el-button v-if="canDeleteRow(row)" link type="danger" @click.stop="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>

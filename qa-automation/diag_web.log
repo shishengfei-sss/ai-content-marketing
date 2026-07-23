@@ -1,0 +1,16 @@
+register err: None
+login title: 智营获客 - AI 内容营销
+web-signature: phone-placeholder-inputs=1 login-buttons=1
+after login url: http://127.0.0.1:5173/dashboard
+localStorage keys: ['token']
+  /dashboard               url=http://127.0.0.1:5173/dashboard                    redirected=False bodylen=359
+  /crm/leads               url=http://127.0.0.1:5173/crm/leads                    redirected=False bodylen=292
+  /crm/customers           url=http://127.0.0.1:5173/crm/customers                redirected=False bodylen=271
+  /settings/crm-schema     url=http://127.0.0.1:5173/settings/crm-schema          redirected=False bodylen=2268
+  /settings/members        url=http://127.0.0.1:5173/settings/members             redirected=False bodylen=0
+  /agent                   url=http://127.0.0.1:5173/agent                        redirected=False bodylen=0
+  /analytics               url=http://127.0.0.1:5173/analytics                    redirected=False bodylen=152
+  /contents                url=http://127.0.0.1:5173/contents                     redirected=False bodylen=190
+  /knowledge               url=http://127.0.0.1:5173/knowledge                    redirected=False bodylen=259
+  /admin/tenants           url=http://127.0.0.1:5173/dashboard                    redirected=False bodylen=359
+  /admin/assistants        url=http://127.0.0.1:5173/dashboard                    redirected=False bodylen=359

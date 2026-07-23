@@ -42,16 +42,32 @@ const stageTotals = computed(() => {
   return map
 })
 
+async function loadAllOpenDeals() {
+  const pageSize = 500
+  const all = []
+  let page = 1
+  let total = Infinity
+  while (all.length < total) {
+    const dealData = await crmApi.listDeals({ page, page_size: pageSize, status: 'open' })
+    const items = dealData?.items || []
+    total = Number(dealData?.total ?? items.length)
+    all.push(...items)
+    if (!items.length || items.length < pageSize) break
+    page += 1
+  }
+  return all
+}
+
 async function loadData() {
   loading.value = true
   try {
     await loadMembers()
-    const [pipeData, dealData] = await Promise.all([
+    const [pipeData, openDeals] = await Promise.all([
       crmApi.listPipelines(),
-      crmApi.listDeals({ page: 1, page_size: 9999, status: 'open' }),
+      loadAllOpenDeals(),
     ])
     pipelines.value = Array.isArray(pipeData) ? pipeData : []
-    deals.value = (dealData?.items || []).filter((d) => d.status === 'open')
+    deals.value = openDeals.filter((d) => d.status === 'open')
   } catch (e) {
     uni.showToast({ title: e.message || '加载失败', icon: 'none' })
   } finally {

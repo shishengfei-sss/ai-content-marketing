@@ -9,6 +9,12 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import TenantContext
 from app.models.crm import CrmTask, Customer, Deal, Lead
+from app.services.crm.crm_scope_service import (
+    apply_customer_list_scope,
+    apply_deal_list_scope,
+    apply_lead_list_scope,
+    apply_task_list_scope,
+)
 
 
 def source_roi_report(
@@ -18,8 +24,9 @@ def source_roi_report(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
 ) -> dict:
-    """按来源汇总线索量、转化率、平均转化周期、CPL。"""
+    """按来源汇总线索量、转化率、平均转化周期、CPL（受线索可见范围约束）。"""
     q = db.query(Lead).filter(Lead.tenant_id == ctx.tenant_id, Lead.deleted_at.is_(None))
+    q = apply_lead_list_scope(q, ctx, db)
     if start_date is not None:
         q = q.filter(Lead.created_at >= start_date)
     if end_date is not None:
@@ -84,9 +91,13 @@ def lead_customer_funnel_report(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
 ) -> dict:
+    """线索→客户→商机漏斗（分别套用线索/客户/商机可见范围）。"""
     lead_q = db.query(Lead).filter(Lead.tenant_id == ctx.tenant_id, Lead.deleted_at.is_(None))
+    lead_q = apply_lead_list_scope(lead_q, ctx, db)
     cust_q = db.query(Customer).filter(Customer.tenant_id == ctx.tenant_id, Customer.deleted_at.is_(None))
+    cust_q = apply_customer_list_scope(cust_q, ctx, db)
     deal_q = db.query(Deal).filter(Deal.tenant_id == ctx.tenant_id, Deal.deleted_at.is_(None))
+    deal_q = apply_deal_list_scope(deal_q, ctx, db)
     if start_date is not None:
         lead_q = lead_q.filter(Lead.created_at >= start_date)
         cust_q = cust_q.filter(Customer.created_at >= start_date)
@@ -101,6 +112,7 @@ def lead_customer_funnel_report(
     status_q = db.query(Lead.status, func.count(Lead.id)).filter(
         Lead.tenant_id == ctx.tenant_id, Lead.deleted_at.is_(None)
     )
+    status_q = apply_lead_list_scope(status_q, ctx, db)
     if start_date is not None:
         status_q = status_q.filter(Lead.created_at >= start_date)
     if end_date is not None:
@@ -115,6 +127,7 @@ def lead_customer_funnel_report(
     source_q = db.query(Lead.source, func.count(Lead.id)).filter(
         Lead.tenant_id == ctx.tenant_id, Lead.deleted_at.is_(None)
     )
+    source_q = apply_lead_list_scope(source_q, ctx, db)
     if start_date is not None:
         source_q = source_q.filter(Lead.created_at >= start_date)
     if end_date is not None:
@@ -126,6 +139,7 @@ def lead_customer_funnel_report(
             Lead.deleted_at.is_(None),
             Lead.status == "已转化",
         )
+        conv_q = apply_lead_list_scope(conv_q, ctx, db)
         if src is None:
             conv_q = conv_q.filter(Lead.source.is_(None))
         else:
@@ -160,61 +174,61 @@ def lead_customer_funnel_report(
 
 
 def sales_board_report(db: Session, ctx: TenantContext) -> dict:
+    """销售看板指标：按线索/商机/任务可见范围汇总（与列表权限一致）。"""
     uid = ctx.user.id
+    lead_base = db.query(func.count(Lead.id)).filter(
+        Lead.tenant_id == ctx.tenant_id,
+        Lead.deleted_at.is_(None),
+    )
+    lead_base = apply_lead_list_scope(lead_base, ctx, db)
+
     open_leads = (
-        db.query(func.count(Lead.id))
-        .filter(
-            Lead.tenant_id == ctx.tenant_id,
-            Lead.deleted_at.is_(None),
-            Lead.owner_user_id == uid,
-            Lead.status != "已转化",
-        )
-        .scalar()
-        or 0
-    )
-    open_deals = (
-        db.query(func.count(Deal.id))
-        .filter(
-            Deal.tenant_id == ctx.tenant_id,
-            Deal.deleted_at.is_(None),
-            Deal.owner_user_id == uid,
-            Deal.status == "open",
-        )
-        .scalar()
-        or 0
-    )
-    won_amount = (
-        db.query(func.coalesce(func.sum(Deal.amount), 0))
-        .filter(
-            Deal.tenant_id == ctx.tenant_id,
-            Deal.deleted_at.is_(None),
-            Deal.owner_user_id == uid,
-            Deal.status == "won",
-        )
-        .scalar()
-        or 0
-    )
-    open_tasks = (
-        db.query(func.count(CrmTask.id))
-        .filter(
-            CrmTask.tenant_id == ctx.tenant_id,
-            CrmTask.deleted_at.is_(None),
-            CrmTask.owner_user_id == uid,
-            CrmTask.status.in_(("open", "in_progress")),
-        )
-        .scalar()
+        lead_base.filter(Lead.status != "已转化").scalar()
         or 0
     )
     week_ago = datetime.now(timezone.utc) - timedelta(days=7)
     new_leads_7d = (
-        db.query(func.count(Lead.id))
-        .filter(
-            Lead.tenant_id == ctx.tenant_id,
-            Lead.deleted_at.is_(None),
-            Lead.owner_user_id == uid,
-            Lead.created_at >= week_ago,
-        )
-        .scalar()
+        apply_lead_list_scope(
+            db.query(func.count(Lead.id)).filter(
+                Lead.tenant_id == ctx.tenant_id,
+                Lead.deleted_at.is_(None),
+                Lead.created_at >= week_ago,
+            ),
+            ctx,
+            db,
+        ).scalar()
+        or 0
+    )
+
+    deal_base = apply_deal_list_scope(
+        db.query(Deal).filter(Deal.tenant_id == ctx.tenant_id, Deal.deleted_at.is_(None)),
+        ctx,
+        db,
+    )
+    open_deals = deal_base.filter(Deal.status == "open").count()
+    won_amount = (
+        apply_deal_list_scope(
+            db.query(func.coalesce(func.sum(Deal.amount), 0)).filter(
+                Deal.tenant_id == ctx.tenant_id,
+                Deal.deleted_at.is_(None),
+                Deal.status == "won",
+            ),
+            ctx,
+            db,
+        ).scalar()
+        or 0
+    )
+
+    open_tasks = (
+        apply_task_list_scope(
+            db.query(func.count(CrmTask.id)).filter(
+                CrmTask.tenant_id == ctx.tenant_id,
+                CrmTask.deleted_at.is_(None),
+                CrmTask.status.in_(("open", "in_progress")),
+            ),
+            ctx,
+            db,
+        ).scalar()
         or 0
     )
     return {

@@ -6,6 +6,7 @@ from sqlalchemy import engine_from_config, pool
 from app.config import settings
 from app.database import Base
 from app.models import Content, LLMConfig, Tenant, User  # noqa: F401
+from app.models.tender import IcpConfig, PlatformTenderLead, ScoredTenderLead  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)

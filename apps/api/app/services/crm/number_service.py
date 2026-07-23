@@ -74,6 +74,7 @@ def get_rule(db: Session, tenant_id: UUID, entity_type: str) -> EntityNumberRule
             tenant_id=tenant_id,
             entity_type=entity_type,
             prefix=seed["prefix"],
+            suffix="",
             date_format=seed["date_format"],
             seq_width=seed["seq_width"],
             reset_period=seed["reset_period"],
@@ -114,7 +115,8 @@ def generate_number(db: Session, tenant_id: UUID, entity_type: str) -> str:
 
     seq_str = str(counter.seq).zfill(rule.seq_width)
     date_part = now.strftime(rule.date_format) if rule.date_format else ""
-    number = f"{rule.prefix}{date_part}{seq_str}"
+    suffix = getattr(rule, "suffix", None) or ""
+    number = f"{rule.prefix}{date_part}{seq_str}{suffix}"
     return number
 
 
@@ -132,14 +134,81 @@ def list_rules(db: Session, tenant_id: UUID) -> list[EntityNumberRule]:
                     tenant_id=tenant_id,
                     entity_type=entity_type,
                     prefix=seed["prefix"],
+                    suffix="",
                     date_format=seed["date_format"],
                     seq_width=seed["seq_width"],
                     reset_period=seed["reset_period"],
                     enabled=True,
                 )
             )
-    rules.sort(key=lambda r: list(DEFAULT_RULE_SEEDS.keys()).index(r.entity_type))
+    rules.sort(key=lambda r: list(DEFAULT_RULE_SEEDS.keys()).index(r.entity_type)
+               if r.entity_type in DEFAULT_RULE_SEEDS else 999)
     return rules
+
+
+def _valid_custom_entity_type(entity_type: str) -> bool:
+    """允许系统内置类型，或小写字母开头的自定义 entity_type（如 qa_entity_xx）。"""
+    import re
+
+    if entity_type in DEFAULT_RULE_SEEDS:
+        return True
+    return bool(re.fullmatch(r"[a-z][a-z0-9_]{1,48}", entity_type or ""))
+
+
+def create_rule(
+    db: Session,
+    tenant_id: UUID,
+    *,
+    entity_type: str,
+    prefix: str = "",
+    suffix: str = "",
+    date_format: str = "%Y%m%d",
+    seq_width: int = 3,
+    reset_period: str = "daily",
+    enabled: bool = True,
+) -> EntityNumberRule:
+    if not _valid_custom_entity_type(entity_type):
+        raise ValueError(f"未知实体类型: {entity_type}")
+    if reset_period not in RESET_PERIOD_LABELS:
+        raise ValueError(f"非法重置周期: {reset_period}")
+    existing = (
+        db.query(EntityNumberRule)
+        .filter(
+            uuid_eq(EntityNumberRule.tenant_id, tenant_id),
+            EntityNumberRule.entity_type == entity_type,
+        )
+        .first()
+    )
+    if existing:
+        raise ValueError(f"实体 {entity_type} 的编号规则已存在")
+    rule = EntityNumberRule(
+        tenant_id=tenant_id,
+        entity_type=entity_type,
+        prefix=prefix or "",
+        suffix=suffix or "",
+        date_format=date_format or "",
+        seq_width=max(1, min(int(seq_width), 8)),
+        reset_period=reset_period,
+        enabled=enabled,
+    )
+    db.add(rule)
+    db.flush()
+    return rule
+
+
+def delete_rule(db: Session, tenant_id: UUID, entity_type: str) -> None:
+    rule = (
+        db.query(EntityNumberRule)
+        .filter(
+            uuid_eq(EntityNumberRule.tenant_id, tenant_id),
+            EntityNumberRule.entity_type == entity_type,
+        )
+        .first()
+    )
+    if not rule:
+        raise ValueError("编号规则不存在")
+    db.delete(rule)
+    db.flush()
 
 
 def update_rule(
@@ -148,6 +217,7 @@ def update_rule(
     entity_type: str,
     *,
     prefix: Optional[str] = None,
+    suffix: Optional[str] = None,
     date_format: Optional[str] = None,
     seq_width: Optional[int] = None,
     reset_period: Optional[str] = None,
@@ -156,6 +226,8 @@ def update_rule(
     rule = get_rule(db, tenant_id, entity_type)
     if prefix is not None:
         rule.prefix = prefix
+    if suffix is not None:
+        rule.suffix = suffix
     if date_format is not None:
         rule.date_format = date_format
     if seq_width is not None:

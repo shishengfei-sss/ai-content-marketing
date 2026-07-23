@@ -12,6 +12,8 @@ export const TASK_PRIORITY_LABELS = {
   high: '高',
 }
 
+import { formatDateTime, parseApiDateTime } from './datetime'
+
 export function getTaskStatusActions(status) {
   if (status === 'done' || status === 'cancelled') return []
   const actions = []
@@ -40,30 +42,23 @@ export function isActiveTaskStatus(status) {
 }
 
 export function formatTaskDateTime(value, { empty = '—' } = {}) {
-  if (!value) return empty
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return empty
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatDateTime(value, { empty, withSeconds: false })
 }
 
 export function formatDueAtRelative(value) {
   if (!value) return '未设置'
-  const date = new Date(value)
+  const date = parseApiDateTime(value)
+  if (!date) return '未设置'
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const target = new Date(date.getFullYear(), date.getMonth(), date.getDate())
   const diff = Math.round((target - today) / 86400000)
-  const time = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  if (diff < 0) return `已逾期 ${date.toLocaleDateString('zh-CN')} ${time}`
+  const time = formatDateTime(value, { empty: '', withSeconds: false }).split(' ')[1] || ''
+  const day = formatDateTime(value, { empty: '', withSeconds: false }).split(' ')[0] || ''
+  if (diff < 0) return `已逾期 ${day} ${time}`
   if (diff === 0) return `今天 ${time}`
   if (diff === 1) return `明天 ${time}`
-  return `${date.toLocaleDateString('zh-CN')} ${time}`
+  return `${day} ${time}`
 }
 
 export const TASK_TIME_FIELDS = [

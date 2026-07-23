@@ -13,7 +13,16 @@ from app.config import settings
 from app.dependencies import TenantContext
 from app.models.crm import Attachment, Deal
 
-ATTACHMENT_ENTITY_TYPES = {"deal", "customer", "lead", "quote", "contract", "order"}
+ATTACHMENT_ENTITY_TYPES = {
+    "deal",
+    "customer",
+    "lead",
+    "quote",
+    "contract",
+    "order",
+    "payment",
+    "product",
+}
 
 _MAX_SIZE = 50 * 1024 * 1024  # 50MB
 
@@ -31,7 +40,14 @@ def _assert_can_access_entity(ctx: TenantContext, db: Session, entity_type: str,
             raise HTTPException(status_code=404, detail="商机不存在")
         from app.services.crm.crm_scope_service import assert_can_view_deal
 
-        assert_can_view_deal(ctx, db, deal.owner_user_id, deal.territory_id)
+        assert_can_view_deal(
+            ctx,
+            db,
+            deal.owner_user_id,
+            deal.territory_id,
+            created_by_user_id=deal.created_by_user_id,
+            manager_user_id=getattr(deal, "manager_user_id", None),
+        )
     else:
         # 其它实体暂以租户内可见为基线，不做细粒度校验
         pass

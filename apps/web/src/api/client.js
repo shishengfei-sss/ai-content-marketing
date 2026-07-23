@@ -187,12 +187,15 @@ export const analyticsApi = {
 }
 
 export const knowledgeApi = {
-  list: () => api.get('/api/v1/knowledge/documents'),
+  list: (params) => api.get('/api/v1/knowledge/documents', { params }),
+  get: (id) => api.get(`/api/v1/knowledge/documents/${id}`),
+  update: (id, data) => api.patch(`/api/v1/knowledge/documents/${id}`, data),
   uploadText: (data) => api.post('/api/v1/knowledge/documents/text', data),
   uploadFile: (formData) =>
     api.post('/api/v1/knowledge/documents/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+  search: (params) => api.get('/api/v1/knowledge/search', { params }),
   remove: (id) => api.delete(`/api/v1/knowledge/documents/${id}`),
 }
 
@@ -226,6 +229,8 @@ export const teamApi = {
   updateMember: (id, data) => api.patch(`/api/v1/team/members/${id}`, data),
   updateMemberRole: (id, role_id) => api.patch(`/api/v1/team/members/${id}/role`, { role_id }),
   disableMember: (id) => api.post(`/api/v1/team/members/${id}/disable`),
+  enableMember: (id) => api.post(`/api/v1/team/members/${id}/enable`),
+  resetMemberPassword: (id, data) => api.post(`/api/v1/team/members/${id}/reset-password`, data),
 }
 
 export const wechatApi = {
@@ -250,6 +255,10 @@ export const crmApi = {
   deleteCustomer: (id) => api.delete(`/api/v1/crm/customers/${id}`),
   listContacts: (customerId) => api.get(`/api/v1/crm/customers/${customerId}/contacts`),
   createContact: (customerId, data) => api.post(`/api/v1/crm/customers/${customerId}/contacts`, data),
+  updateContact: (customerId, contactId, data) =>
+    api.patch(`/api/v1/crm/customers/${customerId}/contacts/${contactId}`, data),
+  deleteContact: (customerId, contactId) =>
+    api.delete(`/api/v1/crm/customers/${customerId}/contacts/${contactId}`),
   listActivities: (params) => api.get('/api/v1/crm/activities', { params }),
   createActivity: (data) => api.post('/api/v1/crm/activities', data),
   updateActivity: (id, data) => api.patch(`/api/v1/crm/activities/${id}`, data),
@@ -261,6 +270,7 @@ export const crmApi = {
   listSalesProfiles: () => api.get('/api/v1/crm/sales-profiles'),
   updateSalesProfile: (membershipId, data) =>
     api.patch(`/api/v1/crm/sales-profiles/${membershipId}`, data),
+  listAssignableOwners: (params) => api.get('/api/v1/crm/assignable-owners', { params }),
   listTasks: (params) => api.get('/api/v1/crm/tasks', { params }),
   createTask: (data) => api.post('/api/v1/crm/tasks', data),
   updateTask: (id, data) => api.patch(`/api/v1/crm/tasks/${id}`, data),
@@ -270,6 +280,8 @@ export const crmApi = {
   reclaimLeadToPool: (id, body) => api.post(`/api/v1/crm/leads/${id}/reclaim-to-pool`, body),
   listLeadPools: () => api.get('/api/v1/crm/lead-pools'),
   createLeadPool: (data) => api.post('/api/v1/crm/lead-pools', data),
+  updateLeadPool: (id, data) => api.patch(`/api/v1/crm/lead-pools/${id}`, data),
+  deleteLeadPool: (id) => api.delete(`/api/v1/crm/lead-pools/${id}`),
   listLeadPoolLeads: (poolId) => api.get(`/api/v1/crm/lead-pools/${poolId}/leads`),
   claimLeadFromPool: (poolId, leadId) =>
     api.post(`/api/v1/crm/lead-pools/${poolId}/claim`, { lead_id: leadId }),
@@ -279,6 +291,9 @@ export const crmApi = {
   deleteLeadScoringRule: (id) => api.delete(`/api/v1/crm/lead-scoring/rules/${id}`),
   listCustomerPools: () => api.get('/api/v1/crm/customer-pools'),
   createCustomerPool: (data) => api.post('/api/v1/crm/customer-pools', data),
+  updateCustomerPool: (id, data) => api.patch(`/api/v1/crm/customer-pools/${id}`, data),
+  deleteCustomerPool: (id) => api.delete(`/api/v1/crm/customer-pools/${id}`),
+  listCustomerPoolCustomers: (poolId) => api.get(`/api/v1/crm/customer-pools/${poolId}/customers`),
   reclaimCustomerToPool: (id, body) => api.post(`/api/v1/crm/customers/${id}/reclaim-to-pool`, body),
   claimCustomerFromPool: (poolId, customerId) =>
     api.post(`/api/v1/crm/customer-pools/${poolId}/claim`, { customer_id: customerId }),
@@ -288,10 +303,15 @@ export const crmApi = {
   deleteAssignmentRule: (id) => api.delete(`/api/v1/crm/assignment-rules/${id}`),
   listAddresses: (params) => api.get('/api/v1/crm/addresses', { params }),
   createAddress: (data) => api.post('/api/v1/crm/addresses', data),
+  updateAddress: (id, data) => api.put(`/api/v1/crm/addresses/${id}`, data),
+  deleteAddress: (id) => api.delete(`/api/v1/crm/addresses/${id}`),
   listTags: () => api.get('/api/v1/crm/tags'),
   createTag: (data) => api.post('/api/v1/crm/tags', data),
+  updateTag: (id, data) => api.patch(`/api/v1/crm/tags/${id}`, data),
+  deleteTag: (id) => api.delete(`/api/v1/crm/tags/${id}`),
   listEntityTags: (params) => api.get('/api/v1/crm/entity-tags', { params }),
   bindEntityTag: (data) => api.post('/api/v1/crm/entity-tags', data),
+  unbindEntityTag: (params) => api.delete('/api/v1/crm/entity-tags', { params }),
   listTeamMembers: (params) => api.get('/api/v1/crm/team-members', { params }),
   addTeamMember: (data) => api.post('/api/v1/crm/team-members', data),
   listBant: (leadId) => api.get(`/api/v1/crm/leads/${leadId}/bant`),
@@ -300,10 +320,16 @@ export const crmApi = {
   unreadNotificationCount: () => api.get('/api/v1/crm/notifications/unread-count'),
   markNotificationRead: (id) => api.post(`/api/v1/crm/notifications/${id}/read`),
   markAllNotificationsRead: () => api.post('/api/v1/crm/notifications/read-all'),
-  exportLeads: (format = 'csv') =>
-    api.get(`/api/v1/crm/export/leads`, { params: { format }, responseType: 'blob' }),
-  exportCustomers: (format = 'csv') =>
-    api.get(`/api/v1/crm/export/customers`, { params: { format }, responseType: 'blob' }),
+  exportLeads: (params = {}) =>
+    api.get(`/api/v1/crm/export/leads`, {
+      params: typeof params === 'string' ? { format: params } : { format: 'csv', ...params },
+      responseType: 'blob',
+    }),
+  exportCustomers: (params = {}) =>
+    api.get(`/api/v1/crm/export/customers`, {
+      params: typeof params === 'string' ? { format: params } : { format: 'csv', ...params },
+      responseType: 'blob',
+    }),
   leadFunnel: (params) => api.get('/api/v1/analytics/lead-funnel', { params }),
   salesBoard: () => api.get('/api/v1/analytics/sales-board'),
   sourceRoi: (params) => api.get('/api/v1/analytics/source-roi', { params }),
@@ -320,6 +346,11 @@ export const crmApi = {
   createCampaign: (data) => api.post('/api/v1/crm/campaigns', data),
   updateCampaign: (id, data) => api.patch(`/api/v1/crm/campaigns/${id}`, data),
   deleteCampaign: (id) => api.delete(`/api/v1/crm/campaigns/${id}`),
+  listCampaignChannels: (params) => api.get('/api/v1/crm/campaign-channels', { params }),
+  createCampaignChannel: (data) => api.post('/api/v1/crm/campaign-channels', data),
+  updateCampaignChannel: (id, data) => api.patch(`/api/v1/crm/campaign-channels/${id}`, data),
+  deleteCampaignChannel: (id) => api.delete(`/api/v1/crm/campaign-channels/${id}`),
+  seedCampaignChannels: () => api.post('/api/v1/crm/campaign-channels/seed-defaults'),
   linkCampaignContent: (campaignId, contentId) =>
     api.post(`/api/v1/crm/campaigns/${campaignId}/contents`, { content_id: contentId }),
   unlinkCampaignContent: (campaignId, contentId) =>
@@ -336,6 +367,8 @@ export const crmApi = {
   getSchema: (entityType) => api.get(`/api/v1/crm/schema/${entityType}`),
   createSchemaField: (entityType, data) =>
     api.post(`/api/v1/crm/schema/${entityType}/fields`, data),
+  updateSchemaField: (entityType, fieldKey, data) =>
+    api.patch(`/api/v1/crm/schema/${entityType}/fields/${fieldKey}`, data),
   deleteSchemaField: (entityType, fieldKey) =>
     api.delete(`/api/v1/crm/schema/${entityType}/fields/${fieldKey}`),
   getViewPreferences: (entityType) => api.get(`/api/v1/me/view-preferences/${entityType}`),
@@ -346,8 +379,11 @@ export const crmApi = {
   createView: (data) => api.post('/api/v1/crm/views', data),
   updateView: (id, data) => api.patch(`/api/v1/crm/views/${id}`, data),
   deleteView: (id) => api.delete(`/api/v1/crm/views/${id}`),
-  downloadImportTemplate: async (entityType) => {
-    const res = await api.get(`/api/v1/crm/import/template/${entityType}`, { responseType: 'blob' })
+  downloadImportTemplate: async (entityType, format = 'xlsx') => {
+    const res = await api.get(`/api/v1/crm/import/template/${entityType}`, {
+      params: { format },
+      responseType: 'blob',
+    })
     return res.data
   },
   uploadImportJob: async (entityType, file) => {
@@ -402,6 +438,7 @@ export const crmApi = {
   downloadAttachment: (id) => api.get(`/api/v1/crm/attachments/${id}/download`, { responseType: 'blob' }),
   attachmentDownloadUrl: (id) => `/api/v1/crm/attachments/${id}/download`,
   convertDealToOrder: (id) => api.post(`/api/v1/crm/deals/${id}/convert-to-order`),
+  reopenDeal: (id) => api.post(`/api/v1/crm/deals/${id}/reopen`),
   generateDealQuote: (id) => api.post(`/api/v1/crm/deals/${id}/generate-quote`),
   dealFunnel: (params) => api.get('/api/v1/analytics/deal-funnel', { params }),
   dealForecast: (params) => api.get('/api/v1/analytics/deal-forecast', { params }),
@@ -430,6 +467,15 @@ export const crmApi = {
   createProductCategory: (data) => api.post('/api/v1/crm/product-categories', data),
   updateProductCategory: (id, data) => api.patch(`/api/v1/crm/product-categories/${id}`, data),
   deleteProductCategory: (id) => api.delete(`/api/v1/crm/product-categories/${id}`),
+  listProductUnits: (params) => api.get('/api/v1/crm/product-units', { params }),
+  createProductUnit: (data) => api.post('/api/v1/crm/product-units', data),
+  updateProductUnit: (id, data) => api.patch(`/api/v1/crm/product-units/${id}`, data),
+  deleteProductUnit: (id) => api.delete(`/api/v1/crm/product-units/${id}`),
+  seedProductUnits: () => api.post('/api/v1/crm/product-units/seed-defaults'),
+  listProductSpecModels: (params) => api.get('/api/v1/crm/product-spec-models', { params }),
+  createProductSpecModel: (data) => api.post('/api/v1/crm/product-spec-models', data),
+  updateProductSpecModel: (id, data) => api.patch(`/api/v1/crm/product-spec-models/${id}`, data),
+  deleteProductSpecModel: (id) => api.delete(`/api/v1/crm/product-spec-models/${id}`),
   listContractTemplates: (params) => api.get('/api/v1/crm/contract-templates', { params }),
   createContractTemplate: (data) => api.post('/api/v1/crm/contract-templates', data),
   createContractFromTemplate: (data) => api.post('/api/v1/crm/contracts/from-template', data),
@@ -449,6 +495,35 @@ export const crmApi = {
   listPriceBookEntries: (id) => api.get(`/api/v1/crm/price-books/${id}/entries`),
   createPriceBookEntry: (id, data) => api.post(`/api/v1/crm/price-books/${id}/entries`, data),
   deletePriceBookEntry: (id) => api.delete(`/api/v1/crm/price-books/entries/${id}`),
+  // v1.3 CPQ
+  listCpqProducts: () => api.get('/api/v1/crm/cpq/products'),
+  resolveCpqPrice: (data) => api.post('/api/v1/crm/cpq/resolve-price', data),
+  calculateCpq: (data) => api.post('/api/v1/crm/cpq/calculate', data),
+  createCpqQuote: (data) => api.post('/api/v1/crm/cpq/quotes', data),
+  // v1.3 招标线索 L2 + ICP
+  getIcpConfig: () => api.get('/api/v1/crm/icp-config'),
+  saveIcpConfig: (data) => api.put('/api/v1/crm/icp-config', data),
+  listTenderLeads: (params) => api.get('/api/v1/crm/tender-leads', { params }),
+  getTenderLead: (id) => api.get(`/api/v1/crm/tender-leads/${id}`),
+  claimTenderLead: (id) => api.post(`/api/v1/crm/tender-leads/${id}/claim`),
+  ignoreTenderLead: (id) => api.post(`/api/v1/crm/tender-leads/${id}/ignore`),
+  getTenderLeadAnalytics: () => api.get('/api/v1/crm/tender-lead-analytics'),
+  parseCpqRequirements: (data) => api.post('/api/v1/crm/cpq/ai-parse', data),
+  startQuotePdf: (quoteId) => api.post(`/api/v1/crm/cpq/quotes/${quoteId}/pdf`),
+  getQuotePdfStatus: (quoteId) => api.get(`/api/v1/crm/cpq/quotes/${quoteId}/pdf-status`),
+  downloadQuotePdfUrl: (quoteId) => `/api/v1/crm/cpq/quotes/${quoteId}/pdf/download`,
+  cloneQuote: (id) => api.post(`/api/v1/crm/quotes/${id}/clone`),
+  listCpqProductParams: (productId, params) =>
+    api.get(`/api/v1/crm/cpq/products/${productId}/params`, { params }),
+  createCpqProductParam: (productId, data) =>
+    api.post(`/api/v1/crm/cpq/products/${productId}/params`, data),
+  updateCpqProductParam: (paramId, data) => api.patch(`/api/v1/crm/cpq/params/${paramId}`, data),
+  deleteCpqProductParam: (paramId) => api.delete(`/api/v1/crm/cpq/params/${paramId}`),
+  createCpqParamPricing: (paramId, data) =>
+    api.post(`/api/v1/crm/cpq/params/${paramId}/pricings`, data),
+  updateCpqParamPricing: (pricingId, data) =>
+    api.patch(`/api/v1/crm/cpq/pricings/${pricingId}`, data),
+  deleteCpqParamPricing: (pricingId) => api.delete(`/api/v1/crm/cpq/pricings/${pricingId}`),
   // v0.7 报价
   listQuotes: (params) => api.get('/api/v1/crm/quotes', { params }),
   getQuote: (id) => api.get(`/api/v1/crm/quotes/${id}`),
@@ -457,6 +532,8 @@ export const crmApi = {
   deleteQuote: (id) => api.delete(`/api/v1/crm/quotes/${id}`),
   sendQuote: (id) => api.post(`/api/v1/crm/quotes/${id}/send`),
   acceptQuote: (id) => api.post(`/api/v1/crm/quotes/${id}/accept`),
+  rejectQuote: (id, data) => api.post(`/api/v1/crm/quotes/${id}/reject`, data || {}),
+  recallQuote: (id) => api.post(`/api/v1/crm/quotes/${id}/recall`),
   convertQuoteToOrder: (id) => api.post(`/api/v1/crm/quotes/${id}/convert-to-order`),
   // v0.7 合同
   listContracts: (params) => api.get('/api/v1/crm/contracts', { params }),
@@ -464,13 +541,26 @@ export const crmApi = {
   createContract: (data) => api.post('/api/v1/crm/contracts', data),
   updateContract: (id, data) => api.patch(`/api/v1/crm/contracts/${id}`, data),
   deleteContract: (id) => api.delete(`/api/v1/crm/contracts/${id}`),
+  sendContract: (id) => api.post(`/api/v1/crm/contracts/${id}/send`),
+  submitContract: (id) => api.post(`/api/v1/crm/contracts/${id}/submit`),
+  approveContract: (id) => api.post(`/api/v1/crm/contracts/${id}/approve`),
+  rejectContract: (id, data) => api.post(`/api/v1/crm/contracts/${id}/reject`, data),
+  withdrawContract: (id) => api.post(`/api/v1/crm/contracts/${id}/withdraw`),
   signContract: (id, data) => api.post(`/api/v1/crm/contracts/${id}/sign`, data),
+  activateContract: (id) => api.post(`/api/v1/crm/contracts/${id}/activate`),
+  terminateContract: (id) => api.post(`/api/v1/crm/contracts/${id}/terminate`),
+  cloneContract: (id) => api.post(`/api/v1/crm/contracts/${id}/clone`),
+  renewAsContract: (id) => api.post(`/api/v1/crm/contracts/${id}/renew-contract`),
   convertContractToOrder: (id) => api.post(`/api/v1/crm/contracts/${id}/convert-to-order`),
+  batchContractAction: (data) => api.post('/api/v1/crm/contracts/batch-action', data),
+  exportContracts: (params = {}) =>
+    api.get(`/api/v1/crm/export/contracts`, { params, responseType: 'blob' }),
   renewContract: (id) => api.post(`/api/v1/crm/contracts/${id}/renew`),
   listContractAmendments: (id) => api.get(`/api/v1/crm/contracts/${id}/amendments`),
   createContractAmendment: (id, data) => api.post(`/api/v1/crm/contracts/${id}/amendments`, data),
   approveContractAmendment: (id) => api.post(`/api/v1/crm/contracts/amendments/${id}/approve`),
   executeContractAmendment: (id) => api.post(`/api/v1/crm/contracts/amendments/${id}/execute`),
+  createContractFromTemplate: (data) => api.post('/api/v1/crm/contracts/from-template', data),
   // v0.7 订单
   listOrders: (params) => api.get('/api/v1/crm/orders', { params }),
   getOrder: (id) => api.get(`/api/v1/crm/orders/${id}`),
@@ -482,6 +572,15 @@ export const crmApi = {
   submitOrder: (id) => api.post(`/api/v1/crm/orders/${id}/submit`),
   approveOrder: (id) => api.post(`/api/v1/crm/orders/${id}/approve`),
   rejectOrder: (id, data) => api.post(`/api/v1/crm/orders/${id}/reject`, data),
+  withdrawOrder: (id) => api.post(`/api/v1/crm/orders/${id}/withdraw`),
+  completeOrder: (id) => api.post(`/api/v1/crm/orders/${id}/complete`),
+  cloneOrder: (id, params = {}) => api.post(`/api/v1/crm/orders/${id}/clone`, null, { params }),
+  batchOrderAction: (data) => api.post('/api/v1/crm/orders/batch-action', data),
+  exportOrders: (params = {}) =>
+    api.get(`/api/v1/crm/export/orders`, {
+      params,
+      responseType: 'blob',
+    }),
   listOrderApprovals: (id) => api.get(`/api/v1/crm/orders/${id}/approvals`),
   reviseOrder: (id, data) => api.post(`/api/v1/crm/orders/${id}/revise`, data),
   listOrderRevisions: (id) => api.get(`/api/v1/crm/orders/${id}/revisions`),
@@ -517,8 +616,10 @@ export const crmApi = {
   rejectRefund: (id) => api.post(`/api/v1/crm/payments/refunds/${id}/reject`),
   // v0.8 编号规则
   listNumberRules: () => api.get('/api/v1/crm/number-rules'),
+  createNumberRule: (data) => api.post('/api/v1/crm/number-rules', data),
   updateNumberRule: (entityType, data) =>
     api.put(`/api/v1/crm/number-rules/${entityType}`, data),
+  deleteNumberRule: (entityType) => api.delete(`/api/v1/crm/number-rules/${entityType}`),
 }
 
 export const adminApi = {
@@ -542,4 +643,32 @@ export const adminApi = {
   getPlatformLlm: () => api.get('/api/v1/admin/platform-llm'),
   updatePlatformLlm: (data) => api.patch('/api/v1/admin/platform-llm', data),
   testPlatformLlm: (data) => api.post('/api/v1/admin/platform-llm/test', data || {}),
+  // v1.3 平台招标线索 L1
+  listPlatformTenderLeads: (params) => api.get('/api/v1/admin/platform-tender-leads', { params }),
+  createPlatformTenderLead: (data) => api.post('/api/v1/admin/platform-tender-leads', data),
+  updatePlatformTenderLead: (id, data) => api.patch(`/api/v1/admin/platform-tender-leads/${id}`, data),
+  deletePlatformTenderLead: (id) => api.delete(`/api/v1/admin/platform-tender-leads/${id}`),
+  publishPlatformTenderLead: (id) => api.post(`/api/v1/admin/platform-tender-leads/${id}/publish`),
+  unpublishPlatformTenderLead: (id) => api.post(`/api/v1/admin/platform-tender-leads/${id}/unpublish`),
+  downloadPlatformTenderTemplate: () =>
+    api.get('/api/v1/admin/platform-tender-leads/excel-template', { responseType: 'blob' }),
+  previewPlatformTenderExcel: (formData) =>
+    api.post('/api/v1/admin/platform-tender-leads/excel/preview', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  confirmPlatformTenderExcel: (formData) =>
+    api.post('/api/v1/admin/platform-tender-leads/excel/confirm', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  parsePlatformTenderAttachment: (formData) =>
+    api.post('/api/v1/admin/platform-tender-leads/parse-attachment', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  parsePlatformTenderText: (data) =>
+    api.post('/api/v1/admin/platform-tender-leads/parse-text', data),
+  getPlatformTenderParseJob: (id) => api.get(`/api/v1/admin/platform-tender-leads/parse-jobs/${id}`),
+  listPlatformTenderParseJobs: (params) =>
+    api.get('/api/v1/admin/platform-tender-leads/parse-jobs', { params }),
+  confirmPlatformTenderParseJob: (id, data) =>
+    api.post(`/api/v1/admin/platform-tender-leads/parse-jobs/${id}/confirm`, data),
 }

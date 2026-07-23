@@ -34,15 +34,55 @@ async function openCreate() {
   if (!canCreate()) return
   form.value = { order_id: '', amount: '', paid_at: '', method: 'bank', remark: '' }
   try {
-    const data = await crmApi.listOrders({ page: 1, page_size: 50, status: 'confirmed' })
-    orderOptions.value = (data?.items || []).map((o) => ({
-      id: o.id,
-      label: `${o.order_number} · ${o.title}`,
-    }))
+    const data = await crmApi.listOrders({
+      page: 1,
+      page_size: 50,
+      // BR-PAY-01：仅已确认/执行中/已完成可登记回款
+      filters: JSON.stringify({
+        logic: 'and',
+        conditions: [{ field_key: 'status', op: 'in', value: ['confirmed', 'executing', 'completed'] }],
+      }),
+    })
+    orderOptions.value = (data?.items || [])
+      .filter((o) => ['confirmed', 'executing', 'completed'].includes(o.status))
+      .map((o) => ({
+        id: o.id,
+        label: `${o.order_number} · ${o.title}`,
+        amount: Number(o.amount || 0),
+      }))
   } catch {
     orderOptions.value = []
   }
   createVisible.value = true
+}
+
+/** 未回款 = 订单金额 − 已确认回款 */
+async function onOrderPick(e) {
+  const order = orderOptions.value[e.detail.value]
+  form.value.order_id = order?.id || ''
+  if (!order?.id) {
+    form.value.amount = ''
+    return
+  }
+  // 先用列表缓存金额即时带出，再按已确认回款精算
+  if (order.amount > 0) {
+    form.value.amount = String(Math.round(Number(order.amount) * 100) / 100)
+  }
+  try {
+    const [orderDetail, pays] = await Promise.all([
+      crmApi.getOrder(order.id),
+      // page_size 上限 100，超过会 422 导致金额无法带出
+      crmApi.listPayments({ order_id: order.id, page: 1, page_size: 100 }),
+    ])
+    const orderAmount = Number(orderDetail?.amount || order.amount || 0)
+    const paidTotal = (pays?.items || [])
+      .filter((p) => p.status === 'confirmed')
+      .reduce((acc, p) => acc + Number(p.amount || 0), 0)
+    const unpaid = Math.max(0, Math.round((orderAmount - paidTotal) * 100) / 100)
+    form.value.amount = unpaid > 0 ? String(unpaid) : ''
+  } catch {
+    form.value.amount = order.amount ? String(order.amount) : ''
+  }
 }
 
 async function submitPayment() {
@@ -118,7 +158,7 @@ onShow(ensurePerms)
         <picker
           :range="orderOptions"
           range-key="label"
-          @change="(e) => (form.order_id = orderOptions[e.detail.value]?.id || '')"
+          @change="onOrderPick"
         >
           <view class="picker">{{ orderOptions.find((o) => o.id === form.order_id)?.label || '选择订单' }}</view>
         </picker>

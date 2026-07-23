@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
@@ -7,30 +7,64 @@ import { contentApi, crmApi } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { hasPermission } from '../../config/permissions'
 import {
-  CAMPAIGN_CHANNEL_OPTIONS,
+  CAMPAIGN_CURRENCY_OPTIONS,
   CAMPAIGN_STATUS_OPTIONS,
+  CAMPAIGN_TYPE_OPTIONS,
+  CHANNEL_CONTENT_TYPE_OPTIONS,
+  CHANNEL_EXECUTION_STATUS_OPTIONS,
+  buildChannelLabelMap,
   campaignDateToIso,
   campaignStatusLabel,
   campaignStatusTagType,
+  campaignTypeLabel,
+  channelContentTypeLabel,
+  channelExecutionStatusLabel,
+  channelsToOptions,
   formatCampaignChannels,
   formatCampaignPeriod,
+  showCampaignLocation,
   toCampaignDateValue,
 } from '../../utils/campaignMeta'
 import {
+  TASK_PRIORITY_LABELS,
+  TASK_PRIORITY_TYPES,
   TASK_STATUS_LABELS,
   TASK_STATUS_TYPES,
   formatTaskDateTime,
 } from '../../utils/taskMeta'
 import CrmDetailShell from '../../components/crm/CrmDetailShell.vue'
 import CrmEntityFormDialog from '../../components/crm/CrmEntityFormDialog.vue'
+import { useTeamMembers } from '../../composables/useTeamMembers'
+import { formatDateTime } from '../../utils/datetime'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { resolveMemberName, loadMembers, members } = useTeamMembers()
+const assignableMembers = ref([])
+const assigneeOptions = computed(() =>
+  assignableMembers.value.filter((m) => m.is_active !== false),
+)
+
+async function loadAssignableAssignees(includeUserId = '') {
+  try {
+    const { data } = await crmApi.listAssignableOwners({
+      include_user_id: includeUserId || undefined,
+    })
+    assignableMembers.value = Array.isArray(data) ? data : []
+  } catch {
+    assignableMembers.value = []
+  }
+}
 
 const loading = ref(false)
 const activeTab = ref('overview')
 const campaign = ref(null)
+const territories = ref([])
+const segments = ref([])
+const channelRows = ref([])
+const channelOptions = computed(() => channelsToOptions(channelRows.value))
+const channelLabelMap = computed(() => buildChannelLabelMap(channelRows.value))
 
 const leads = ref([])
 const leadsTotal = ref(0)
@@ -51,6 +85,7 @@ const executionsLoading = ref(false)
 const performance = ref(null)
 const execDialog = ref(false)
 const execSaving = ref(false)
+const editingExecId = ref('')
 const execForm = ref({ channel: '', content_type: 'post', cost: 0, impressions: 0, clicks: 0, leads_generated: 0, status: 'planned' })
 
 const editVisible = ref(false)
@@ -58,13 +93,22 @@ const editSaving = ref(false)
 const editForm = ref({
   name: '',
   status: 'draft',
+  campaign_type: null,
   start_at: null,
   end_at: null,
   goal: '',
   channels: [],
   description: '',
   budget: null,
+  currency: 'CNY',
+  expected_leads: null,
+  location: '',
+  owner_user_id: null,
+  territory_id: null,
+  target_segment_id: null,
 })
+
+const locationVisible = computed(() => showCampaignLocation(editForm.value.campaign_type))
 
 const leadCreateVisible = ref(false)
 const linkLeadVisible = ref(false)
@@ -78,37 +122,91 @@ const taskCreating = ref(false)
 const taskForm = ref({
   title: '',
   description: '',
+  planned_start_at: '',
   due_at: '',
   priority: 'normal',
+  assignee_user_id: '',
+  link_id: '',
 })
+const taskLinkType = ref('none')
+const taskLinkOptions = ref([])
+const taskLinkLoading = ref(false)
 
 const canEdit = () => hasPermission(auth.permissions, 'crm.campaign.edit')
 const canManage = () => hasPermission(auth.permissions, 'crm.campaign.manage')
 const canCreateLead = () => hasPermission(auth.permissions, 'crm.lead.create')
 const canEditLead = () => hasPermission(auth.permissions, 'crm.lead.edit')
 const canCreateTask = () => hasPermission(auth.permissions, 'crm.task.create')
+const canAssignTask = () => hasPermission(auth.permissions, 'crm.task.assign')
+const canCreateContent = () => hasPermission(auth.permissions, 'content.create')
+const canViewContent = () =>
+  hasPermission(auth.permissions, 'content.view_own') ||
+  hasPermission(auth.permissions, 'content.view_all')
 
 const platformLabels = { wechat: '公众号', xhs: '小红书', douyin: '抖音' }
+const contentStatusLabels = {
+  draft: '草稿',
+  scheduled: '已排期',
+  publishing: '发布中',
+  published: '已发布',
+  failed: '发布失败',
+  exported: '已导出',
+}
 
-const summaryCards = computed(() => [
-  { label: '关联线索', value: campaign.value?.lead_count ?? leadsTotal.value ?? 0 },
-  { label: '关联任务', value: campaign.value?.task_count ?? tasksTotal.value ?? 0 },
-  { label: '关联内容', value: campaign.value?.content_count ?? contents.value.length ?? 0 },
-  {
-    label: '预算/花费',
-    value: campaign.value?.budget != null
-      ? `¥${Number(campaign.value.budget).toLocaleString()} / ¥${Number(campaign.value.spent || 0).toLocaleString()}`
-      : `花费 ¥${Number(campaign.value?.spent || 0).toLocaleString()}`,
-  },
-])
+const linkContentVisible = ref(false)
+const linkContentLoading = ref(false)
+const linkContentSaving = ref(false)
+const linkContentOptions = ref([])
+const linkContentId = ref('')
+
+const summaryCards = computed(() => {
+  const actualLeads = campaign.value?.lead_count ?? leadsTotal.value ?? 0
+  const expected = campaign.value?.expected_leads
+  return [
+    {
+      label: '线索（预期/实际）',
+      value: expected != null ? `${expected} / ${actualLeads}` : actualLeads,
+    },
+    { label: '关联任务', value: campaign.value?.task_count ?? tasksTotal.value ?? 0 },
+    { label: '关联内容', value: campaign.value?.content_count ?? contents.value.length ?? 0 },
+    {
+      label: '预算/花费',
+      value: campaign.value?.budget != null
+        ? `¥${Number(campaign.value.budget).toLocaleString()} / ¥${Number(campaign.value.spent || 0).toLocaleString()}`
+        : `花费 ¥${Number(campaign.value?.spent || 0).toLocaleString()}`,
+    },
+  ]
+})
 
 const leadInitialValues = computed(() => ({
   campaign_id: route.params.id,
 }))
 
-function ownerLabel(ownerUserId) {
-  if (!ownerUserId) return '—'
-  return ownerUserId === auth.user?.id ? '我' : '同事'
+function territoryName(id) {
+  if (!id) return '—'
+  return territories.value.find((t) => t.id === id)?.name || '—'
+}
+
+function segmentName(id) {
+  if (!id) return '—'
+  return segments.value.find((s) => s.id === id)?.name || '—'
+}
+
+async function loadLookups() {
+  try {
+    const [terrRes, segRes, chRes] = await Promise.all([
+      crmApi.listTerritories(),
+      crmApi.listSegments(),
+      crmApi.listCampaignChannels({ active_only: true }),
+    ])
+    territories.value = Array.isArray(terrRes.data) ? terrRes.data : (terrRes.data?.items || [])
+    segments.value = Array.isArray(segRes.data) ? segRes.data : (segRes.data?.items || [])
+    channelRows.value = Array.isArray(chRes.data) ? chRes.data : []
+  } catch {
+    territories.value = []
+    segments.value = []
+    channelRows.value = []
+  }
 }
 
 async function loadCampaign() {
@@ -154,11 +252,74 @@ async function loadContents() {
       page: 1,
       page_size: 50,
     })
-    contents.value = data.items || []
+    contents.value = (data.items || []).map((item) => ({
+      ...item,
+      title: item.topic || item.title || '—',
+    }))
   } catch {
     contents.value = []
   } finally {
     contentsLoading.value = false
+  }
+}
+
+function goCreateContent() {
+  router.push({ path: '/create', query: { campaign_id: route.params.id } })
+}
+
+function openLinkContent() {
+  linkContentId.value = ''
+  linkContentOptions.value = []
+  linkContentVisible.value = true
+}
+
+async function searchLinkContents(query) {
+  linkContentLoading.value = true
+  try {
+    const { data } = await contentApi.list({
+      q: query?.trim() || undefined,
+      page: 1,
+      page_size: 30,
+    })
+    const linked = new Set(contents.value.map((c) => c.id))
+    linkContentOptions.value = (data.items || [])
+      .filter((item) => !linked.has(item.id))
+      .map((item) => ({
+        id: item.id,
+        label: `${item.topic || '未命名'} · ${platformLabels[item.platform] || item.platform || '—'}`,
+      }))
+  } catch {
+    linkContentOptions.value = []
+  } finally {
+    linkContentLoading.value = false
+  }
+}
+
+async function submitLinkContent() {
+  if (!linkContentId.value) {
+    ElMessage.warning('请选择要关联的内容')
+    return
+  }
+  linkContentSaving.value = true
+  try {
+    await crmApi.linkCampaignContent(route.params.id, linkContentId.value)
+    ElMessage.success('已关联内容')
+    linkContentVisible.value = false
+    await Promise.all([loadContents(), loadCampaign()])
+  } catch (e) {
+    ElMessage.error(e.message || '关联失败')
+  } finally {
+    linkContentSaving.value = false
+  }
+}
+
+async function unlinkContent(row) {
+  try {
+    await crmApi.unlinkCampaignContent(route.params.id, row.id)
+    ElMessage.success('已取消关联')
+    await Promise.all([loadContents(), loadCampaign()])
+  } catch (e) {
+    ElMessage.error(e.message || '取消关联失败')
   }
 }
 
@@ -196,20 +357,50 @@ async function loadDetail() {
   }
 }
 
+function emptyExecForm() {
+  return { channel: '', content_type: 'post', cost: 0, impressions: 0, clicks: 0, leads_generated: 0, status: 'planned' }
+}
+
 function openExecDialog() {
-  execForm.value = { channel: '', content_type: 'post', cost: 0, impressions: 0, clicks: 0, leads_generated: 0, status: 'planned' }
+  editingExecId.value = ''
+  execForm.value = emptyExecForm()
+  execDialog.value = true
+}
+
+function openEditExec(row) {
+  editingExecId.value = row.id
+  execForm.value = {
+    channel: row.channel || '',
+    content_type: row.content_type || 'post',
+    cost: Number(row.cost || 0),
+    impressions: Number(row.impressions || 0),
+    clicks: Number(row.clicks || 0),
+    leads_generated: Number(row.leads_generated || 0),
+    status: row.status || 'planned',
+  }
   execDialog.value = true
 }
 
 async function submitExec() {
-  if (!execForm.value.channel.trim()) { ElMessage.warning('请填写渠道'); return }
+  if (!execForm.value.channel?.trim()) { ElMessage.warning('请选择渠道'); return }
   execSaving.value = true
   try {
-    await crmApi.createCampaignExecution(route.params.id, {
-      ...execForm.value,
+    const payload = {
       channel: execForm.value.channel.trim(),
-    })
-    ElMessage.success('已添加渠道执行')
+      content_type: execForm.value.content_type,
+      cost: execForm.value.cost,
+      impressions: execForm.value.impressions,
+      clicks: execForm.value.clicks,
+      leads_generated: execForm.value.leads_generated,
+      status: execForm.value.status,
+    }
+    if (editingExecId.value) {
+      await crmApi.updateCampaignExecution(editingExecId.value, payload)
+      ElMessage.success('渠道执行已更新')
+    } else {
+      await crmApi.createCampaignExecution(route.params.id, payload)
+      ElMessage.success('已添加渠道执行')
+    }
     execDialog.value = false
     await Promise.all([loadExecutions(), loadPerformance(), loadCampaign()])
   } catch (e) {
@@ -260,12 +451,19 @@ function openEdit() {
   editForm.value = {
     name: campaign.value.name || '',
     status: campaign.value.status || 'draft',
+    campaign_type: campaign.value.campaign_type || null,
     start_at: toCampaignDateValue(campaign.value.start_at),
     end_at: toCampaignDateValue(campaign.value.end_at),
     goal: campaign.value.goal || '',
     channels: [...(campaign.value.channels || [])],
     description: campaign.value.description || '',
     budget: campaign.value.budget != null ? Number(campaign.value.budget) : null,
+    currency: campaign.value.currency || 'CNY',
+    expected_leads: campaign.value.expected_leads != null ? Number(campaign.value.expected_leads) : null,
+    location: campaign.value.location || '',
+    owner_user_id: campaign.value.owner_user_id || null,
+    territory_id: campaign.value.territory_id || null,
+    target_segment_id: campaign.value.target_segment_id || null,
   }
   editVisible.value = true
 }
@@ -279,14 +477,20 @@ async function submitEdit() {
   try {
     const payload = {
       name: editForm.value.name.trim(),
+      campaign_type: editForm.value.campaign_type || null,
       start_at: campaignDateToIso(editForm.value.start_at),
       end_at: campaignDateToIso(editForm.value.end_at),
       goal: editForm.value.goal?.trim() || null,
       channels: editForm.value.channels || [],
       description: editForm.value.description?.trim() || null,
       budget: editForm.value.budget,
+      currency: editForm.value.currency || 'CNY',
+      expected_leads: editForm.value.expected_leads,
+      location: locationVisible.value ? (editForm.value.location?.trim() || null) : null,
+      owner_user_id: editForm.value.owner_user_id || null,
+      territory_id: editForm.value.territory_id || null,
+      target_segment_id: editForm.value.target_segment_id || null,
     }
-    if (canManage()) payload.status = editForm.value.status
     await crmApi.updateCampaign(route.params.id, payload)
     ElMessage.success('活动已更新')
     editVisible.value = false
@@ -310,7 +514,7 @@ async function changeStatus(status) {
 }
 
 async function onLeadCreated() {
-  await Promise.all([loadLeads(), loadCampaign()])
+  await Promise.all([loadLeads(), loadCampaign(), loadPerformance()])
   activeTab.value = 'leads'
 }
 
@@ -351,7 +555,7 @@ async function submitLinkLead() {
     await crmApi.updateLead(linkLeadId.value, { campaign_id: route.params.id })
     ElMessage.success('已关联线索')
     linkLeadVisible.value = false
-    await Promise.all([loadLeads(), loadCampaign()])
+    await Promise.all([loadLeads(), loadCampaign(), loadPerformance()])
     activeTab.value = 'leads'
   } catch (e) {
     ElMessage.error(e.message || '关联失败')
@@ -364,25 +568,68 @@ async function unlinkLead(row) {
   try {
     await crmApi.updateLead(row.id, { campaign_id: null })
     ElMessage.success('已取消关联')
-    await Promise.all([loadLeads(), loadCampaign()])
+    await Promise.all([loadLeads(), loadCampaign(), loadPerformance()])
   } catch (e) {
     ElMessage.error(e.message || '操作失败')
   }
 }
 
-function openCreateTask() {
+async function openCreateTask() {
   taskForm.value = {
     title: '',
     description: '',
+    planned_start_at: '',
     due_at: '',
     priority: 'normal',
+    assignee_user_id: auth.user?.id || '',
+    link_id: '',
   }
+  taskLinkType.value = 'none'
+  taskLinkOptions.value = []
   taskCreateVisible.value = true
+  await loadAssignableAssignees(auth.user?.id)
+}
+
+function onTaskLinkTypeChange() {
+  taskForm.value.link_id = ''
+  taskLinkOptions.value = []
+  if (taskLinkType.value === 'lead' || taskLinkType.value === 'customer') {
+    searchTaskLinkOptions('')
+  }
+}
+
+async function searchTaskLinkOptions(query) {
+  if (taskLinkType.value === 'none') return
+  taskLinkLoading.value = true
+  try {
+    const params = { page: 1, page_size: 20 }
+    if (query?.trim()) params.q = query.trim()
+    const { data } =
+      taskLinkType.value === 'lead'
+        ? await crmApi.listLeads(params)
+        : await crmApi.listCustomers(params)
+    taskLinkOptions.value = (data.items || []).map((item) => {
+      if (taskLinkType.value === 'lead') {
+        const parts = [item.company_name, item.contact_name, item.phone || item.mobile].filter(Boolean)
+        return { id: item.id, label: parts.join(' · ') || String(item.id).slice(0, 8) }
+      }
+      const parts = [item.company_name, item.phone || item.mobile].filter(Boolean)
+      return { id: item.id, label: parts.join(' · ') || String(item.id).slice(0, 8) }
+    })
+  } catch {
+    taskLinkOptions.value = []
+  } finally {
+    taskLinkLoading.value = false
+  }
 }
 
 async function submitCreateTask() {
   if (!taskForm.value.title.trim()) {
     ElMessage.warning('请填写任务标题')
+    return
+  }
+  if (taskLinkType.value !== 'none' && !taskForm.value.link_id) {
+    ElMessage.warning(taskLinkType.value === 'lead' ? '请选择关联线索' : '请选择关联客户')
     return
   }
   taskCreating.value = true
@@ -392,13 +639,22 @@ async function submitCreateTask() {
       priority: taskForm.value.priority || 'normal',
       status: 'open',
       campaign_id: route.params.id,
-      assignee_user_id: auth.user?.id,
+      assignee_user_id: taskForm.value.assignee_user_id || auth.user?.id,
     }
     if (taskForm.value.description.trim()) {
       payload.description = taskForm.value.description.trim()
     }
+    if (taskForm.value.planned_start_at) {
+      payload.planned_start_at = new Date(taskForm.value.planned_start_at).toISOString()
+    }
     if (taskForm.value.due_at) {
       payload.due_at = new Date(taskForm.value.due_at).toISOString()
+    }
+    if (taskLinkType.value === 'lead' && taskForm.value.link_id) {
+      payload.lead_id = taskForm.value.link_id
+    }
+    if (taskLinkType.value === 'customer' && taskForm.value.link_id) {
+      payload.customer_id = taskForm.value.link_id
     }
     await crmApi.createTask(payload)
     ElMessage.success('任务已创建并关联到本活动')
@@ -412,7 +668,14 @@ async function submitCreateTask() {
   }
 }
 
-onMounted(loadDetail)
+onMounted(async () => {
+  await Promise.all([loadMembers(), loadLookups()])
+  await loadDetail()
+})
+
+watch(activeTab, (tab) => {
+  if (tab === 'roi') loadPerformance()
+})
 </script>
 
 <template>
@@ -431,17 +694,26 @@ onMounted(loadDetail)
               {{ campaignStatusLabel(campaign.status) }}
             </el-tag>
             <span>{{ formatCampaignPeriod(campaign) }}</span>
-            <span>负责人：{{ ownerLabel(campaign.owner_user_id) }}</span>
+            <span>负责人：{{ resolveMemberName(campaign.owner_user_id) }}</span>
           </div>
         </div>
         <div class="detail-actions">
           <el-button v-if="canManage() && campaign.status === 'draft'" type="success" @click="changeStatus('active')">
             启动活动
           </el-button>
-          <el-button v-if="canManage() && campaign.status === 'active'" @click="changeStatus('ended')">
+          <el-button v-if="canManage() && campaign.status === 'active'" type="warning" plain @click="changeStatus('paused')">
+            暂停活动
+          </el-button>
+          <el-button v-if="canManage() && campaign.status === 'paused'" type="success" @click="changeStatus('active')">
+            恢复活动
+          </el-button>
+          <el-button
+            v-if="canManage() && (campaign.status === 'active' || campaign.status === 'paused')"
+            @click="changeStatus('ended')"
+          >
             结束活动
           </el-button>
-          <el-button v-if="canEdit()" @click="openEdit">编辑</el-button>
+          <el-button v-if="canEdit() && campaign.status !== 'ended'" @click="openEdit">编辑</el-button>
         </div>
       </div>
 
@@ -463,17 +735,25 @@ onMounted(loadDetail)
                 {{ campaignStatusLabel(campaign?.status) }}
               </el-tag>
             </el-descriptions-item>
+            <el-descriptions-item label="活动类型">{{ campaignTypeLabel(campaign?.campaign_type) }}</el-descriptions-item>
             <el-descriptions-item label="活动周期">{{ formatCampaignPeriod(campaign) }}</el-descriptions-item>
             <el-descriptions-item label="投放渠道">
-              {{ formatCampaignChannels(campaign?.channels) }}
+              {{ formatCampaignChannels(campaign?.channels, channelLabelMap) }}
             </el-descriptions-item>
-            <el-descriptions-item label="负责人">{{ ownerLabel(campaign?.owner_user_id) }}</el-descriptions-item>
+            <el-descriptions-item v-if="showCampaignLocation(campaign?.campaign_type)" label="活动地点">
+              {{ campaign?.location || '—' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="负责人">{{ resolveMemberName(campaign?.owner_user_id) }}</el-descriptions-item>
+            <el-descriptions-item label="归属地区">{{ territoryName(campaign?.territory_id) }}</el-descriptions-item>
+            <el-descriptions-item label="目标细分">{{ segmentName(campaign?.target_segment_id) }}</el-descriptions-item>
+            <el-descriptions-item label="预期线索">{{ campaign?.expected_leads ?? '—' }}</el-descriptions-item>
             <el-descriptions-item label="预算">
               {{ campaign?.budget != null ? '¥' + formatMoney(campaign.budget) : '—' }}
               <span v-if="campaign" class="muted"> / 已花 ¥{{ formatMoney(campaign.spent) }}</span>
+              <span v-if="campaign?.currency" class="muted"> · {{ campaign.currency }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="更新时间">
-              {{ campaign?.updated_at ? new Date(campaign.updated_at).toLocaleString('zh-CN') : '—' }}
+              {{ formatDateTime(campaign?.updated_at) }}
             </el-descriptions-item>
             <el-descriptions-item label="活动目标" :span="2">{{ campaign?.goal || '—' }}</el-descriptions-item>
             <el-descriptions-item label="策划说明" :span="2">{{ campaign?.description || '—' }}</el-descriptions-item>
@@ -481,19 +761,38 @@ onMounted(loadDetail)
         </el-tab-pane>
 
         <el-tab-pane label="内容" name="contents">
+          <div class="tab-toolbar">
+            <div class="tab-toolbar__hint">将创作内容归属到本活动，便于统计关联内容数</div>
+            <div class="tab-toolbar__actions">
+              <el-button v-if="canEdit() && canViewContent()" @click="openLinkContent">关联已有内容</el-button>
+              <el-button v-if="canCreateContent()" type="primary" :icon="Plus" @click="goCreateContent">
+                去创作
+              </el-button>
+            </div>
+          </div>
           <el-table v-loading="contentsLoading" :data="contents" stripe @row-click="goContent">
             <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
             <el-table-column label="平台" width="100">
               <template #default="{ row }">{{ platformLabels[row.platform] || row.platform || '—' }}</template>
             </el-table-column>
-            <el-table-column prop="status" label="状态" width="110" />
+            <el-table-column label="状态" width="110">
+              <template #default="{ row }">{{ contentStatusLabels[row.status] || row.status || '—' }}</template>
+            </el-table-column>
             <el-table-column label="更新时间" width="160">
               <template #default="{ row }">
-                {{ row.updated_at ? new Date(row.updated_at).toLocaleString('zh-CN') : '—' }}
+                {{ formatDateTime(row.updated_at) }}
+              </template>
+            </el-table-column>
+            <el-table-column v-if="canEdit()" label="操作" width="100" fixed="right" align="center">
+              <template #default="{ row }">
+                <el-button link type="danger" size="small" @click.stop="unlinkContent(row)">取消关联</el-button>
               </template>
             </el-table-column>
           </el-table>
-          <el-empty v-if="!contentsLoading && !contents.length" description="暂无关联内容，可在创作页选择本活动" />
+          <el-empty
+            v-if="!contentsLoading && !contents.length"
+            description="暂无关联内容，可关联已有内容或去创作"
+          />
         </el-tab-pane>
 
         <el-tab-pane label="线索" name="leads">
@@ -544,7 +843,7 @@ onMounted(loadDetail)
             </div>
           </div>
           <el-table v-loading="tasksLoading" :data="tasks" stripe>
-            <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
+            <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
             <el-table-column label="状态" width="100" align="center">
               <template #default="{ row }">
                 <el-tag size="small" :type="TASK_STATUS_TYPES[row.status] || 'info'" effect="light" round>
@@ -552,15 +851,28 @@ onMounted(loadDetail)
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="计划完成" width="160">
+            <el-table-column label="优先级" width="80" align="center">
               <template #default="{ row }">
-                {{ formatTaskDateTime(row.due_at) }}
+                <el-tag
+                  size="small"
+                  :type="TASK_PRIORITY_TYPES[row.priority] || 'info'"
+                  :effect="row.priority === 'high' ? 'dark' : 'plain'"
+                >
+                  {{ TASK_PRIORITY_LABELS[row.priority] || row.priority }}
+                </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="更新时间" width="160">
-              <template #default="{ row }">
-                {{ formatTaskDateTime(row.updated_at) }}
-              </template>
+            <el-table-column label="执行人" width="110" show-overflow-tooltip>
+              <template #default="{ row }">{{ resolveMemberName(row.assignee_user_id) }}</template>
+            </el-table-column>
+            <el-table-column label="计划开始" width="150">
+              <template #default="{ row }">{{ formatTaskDateTime(row.planned_start_at) }}</template>
+            </el-table-column>
+            <el-table-column label="计划完成" width="150">
+              <template #default="{ row }">{{ formatTaskDateTime(row.due_at) }}</template>
+            </el-table-column>
+            <el-table-column label="更新时间" width="150">
+              <template #default="{ row }">{{ formatTaskDateTime(row.updated_at) }}</template>
             </el-table-column>
           </el-table>
           <el-empty v-if="!tasksLoading && !tasks.length" description="暂无关联任务，点击上方新建" />
@@ -581,16 +893,21 @@ onMounted(loadDetail)
           </div>
           <el-table v-loading="executionsLoading" :data="executions" border size="small" empty-text="暂无渠道执行">
             <el-table-column prop="channel" label="渠道" width="120" />
-            <el-table-column prop="content_type" label="类型" width="90" />
+            <el-table-column label="类型" width="90">
+              <template #default="{ row }">{{ channelContentTypeLabel(row.content_type) }}</template>
+            </el-table-column>
             <el-table-column label="成本" width="110" align="right">
               <template #default="{ row }">¥{{ formatMoney(row.cost) }}</template>
             </el-table-column>
             <el-table-column prop="impressions" label="曝光" width="90" align="right" />
             <el-table-column prop="clicks" label="点击" width="90" align="right" />
             <el-table-column prop="leads_generated" label="线索" width="90" align="right" />
-            <el-table-column prop="status" label="状态" width="100" />
-            <el-table-column v-if="canEdit()" label="操作" width="80" align="center">
+            <el-table-column label="状态" width="100">
+              <template #default="{ row }">{{ channelExecutionStatusLabel(row.status) }}</template>
+            </el-table-column>
+            <el-table-column v-if="canEdit()" label="操作" width="120" align="center" fixed="right">
               <template #default="{ row }">
+                <el-button link type="primary" @click="openEditExec(row)">编辑</el-button>
                 <el-button link type="danger" @click="removeExec(row)">删除</el-button>
               </template>
             </el-table-column>
@@ -600,7 +917,7 @@ onMounted(loadDetail)
         <el-tab-pane label="ROI 分析" name="roi">
           <div v-if="performance" class="roi-grid">
             <div class="roi-card"><span>总投入</span><strong>¥{{ formatMoney(performance.total_cost) }}</strong></div>
-            <div class="roi-card"><span>线索</span><strong>{{ performance.leads_count }}</strong></div>
+            <div class="roi-card"><span>关联线索</span><strong>{{ performance.leads_count }}</strong></div>
             <div class="roi-card"><span>转化客户</span><strong>{{ performance.customers_count }}</strong></div>
             <div class="roi-card"><span>ROI</span><strong>{{ performance.roi }}%</strong></div>
             <div class="roi-card"><span>CPL</span><strong>¥{{ formatMoney(performance.cost_per_lead) }}</strong></div>
@@ -613,25 +930,28 @@ onMounted(loadDetail)
             </el-table-column>
             <el-table-column prop="impressions" label="曝光" align="right" />
             <el-table-column prop="clicks" label="点击" align="right" />
-            <el-table-column prop="leads_generated" label="线索" align="right" />
+            <el-table-column prop="leads_generated" label="填报线索" align="right" />
             <el-table-column label="CPL" align="right">
               <template #default="{ row }">¥{{ formatMoney(row.cost_per_lead) }}</template>
             </el-table-column>
           </el-table>
+          <p v-if="performance" class="field-hint" style="margin-top: 8px">
+            「关联线索」来自活动下 CRM 线索；渠道表「填报线索」来自渠道执行手工录入，两者口径不同。
+          </p>
           <el-empty v-else description="暂无效果数据" :image-size="64" />
         </el-tab-pane>
       </el-tabs>
     </div>
 
-    <el-dialog v-model="editVisible" title="编辑活动" width="560px" destroy-on-close>
-      <el-form label-width="88px">
+    <el-dialog v-model="editVisible" title="编辑活动" width="640px" destroy-on-close>
+      <el-form label-width="96px">
         <el-form-item label="活动名称" required>
           <el-input v-model="editForm.name" maxlength="200" show-word-limit />
         </el-form-item>
-        <el-form-item v-if="canManage()" label="状态">
-          <el-select v-model="editForm.status" style="width: 100%">
+        <el-form-item label="活动类型">
+          <el-select v-model="editForm.campaign_type" clearable placeholder="请选择" style="width: 100%">
             <el-option
-              v-for="item in CAMPAIGN_STATUS_OPTIONS"
+              v-for="item in CAMPAIGN_TYPE_OPTIONS"
               :key="item.value"
               :label="item.label"
               :value="item.value"
@@ -657,15 +977,56 @@ onMounted(loadDetail)
         <el-form-item label="投放渠道">
           <el-select v-model="editForm.channels" multiple collapse-tags style="width: 100%">
             <el-option
-              v-for="item in CAMPAIGN_CHANNEL_OPTIONS"
+              v-for="item in channelOptions"
               :key="item.value"
               :label="item.label"
               :value="item.value"
             />
           </el-select>
+          <div class="field-hint">
+            可在
+            <router-link to="/settings/campaign-channels">设置 → 活动投放渠道</router-link>
+            维护选项
+          </div>
+        </el-form-item>
+        <el-form-item v-if="locationVisible" label="活动地点">
+          <el-input v-model="editForm.location" placeholder="城市 / 场馆" maxlength="200" />
         </el-form-item>
         <el-form-item label="预算">
-          <el-input-number v-model="editForm.budget" :min="0" :precision="2" :controls="false" style="width: 100%" />
+          <div class="form-inline-row">
+            <el-input-number v-model="editForm.budget" :min="0" :precision="2" :controls="false" style="flex: 1" />
+            <el-select v-model="editForm.currency" style="width: 100px">
+              <el-option
+                v-for="item in CAMPAIGN_CURRENCY_OPTIONS"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </div>
+        </el-form-item>
+        <el-form-item label="预期线索">
+          <el-input-number v-model="editForm.expected_leads" :min="0" :precision="0" :controls="false" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="负责人">
+          <el-select v-model="editForm.owner_user_id" filterable clearable style="width: 100%">
+            <el-option
+              v-for="m in members"
+              :key="m.user_id"
+              :label="m.display_name || m.phone || m.user_id"
+              :value="m.user_id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="归属地区">
+          <el-select v-model="editForm.territory_id" filterable clearable placeholder="可选" style="width: 100%">
+            <el-option v-for="t in territories" :key="t.id" :label="t.name" :value="t.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="目标细分">
+          <el-select v-model="editForm.target_segment_id" filterable clearable placeholder="可选" style="width: 100%">
+            <el-option v-for="s in segments" :key="s.id" :label="s.name" :value="s.id" />
+          </el-select>
         </el-form-item>
         <el-form-item label="活动目标">
           <el-input v-model="editForm.goal" type="textarea" :rows="2" />
@@ -680,17 +1041,41 @@ onMounted(loadDetail)
       </template>
     </el-dialog>
 
-    <el-dialog v-model="execDialog" title="添加渠道执行" width="480px" destroy-on-close>
-      <el-form label-width="96px">
+    <el-dialog
+      v-model="execDialog"
+      :title="editingExecId ? '编辑渠道执行' : '添加渠道执行'"
+      width="480px"
+      destroy-on-close
+    >      <el-form label-width="96px">
         <el-form-item label="渠道" required>
-          <el-input v-model="execForm.channel" placeholder="如 公众号 / 小红书" />
+          <el-select
+            v-model="execForm.channel"
+            filterable
+            allow-create
+            default-first-option
+            placeholder="选择或输入渠道"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="item in channelOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.label"
+            />
+          </el-select>
+          <div class="field-hint">
+            选项来自
+            <router-link to="/settings/campaign-channels">设置 → 活动投放渠道</router-link>
+          </div>
         </el-form-item>
         <el-form-item label="类型">
           <el-select v-model="execForm.content_type" style="width: 100%">
-            <el-option label="帖子" value="post" />
-            <el-option label="广告" value="ad" />
-            <el-option label="文章" value="article" />
-            <el-option label="邮件" value="email" />
+            <el-option
+              v-for="item in CHANNEL_CONTENT_TYPE_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="成本"><el-input-number v-model="execForm.cost" :min="0" :precision="2" :controls="false" style="width: 100%" /></el-form-item>
@@ -699,9 +1084,12 @@ onMounted(loadDetail)
         <el-form-item label="线索数"><el-input-number v-model="execForm.leads_generated" :min="0" :controls="false" style="width: 100%" /></el-form-item>
         <el-form-item label="状态">
           <el-select v-model="execForm.status" style="width: 100%">
-            <el-option label="计划中" value="planned" />
-            <el-option label="已发布" value="published" />
-            <el-option label="已暂停" value="paused" />
+            <el-option
+              v-for="item in CHANNEL_EXECUTION_STATUS_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
       </el-form>
@@ -747,15 +1135,76 @@ onMounted(loadDetail)
       </template>
     </el-dialog>
 
-    <el-dialog v-model="taskCreateVisible" title="新建活动任务" width="520px" destroy-on-close>
+    <el-dialog
+      v-model="linkContentVisible"
+      title="关联已有内容"
+      width="520px"
+      destroy-on-close
+      @opened="searchLinkContents('')"
+    >
+      <el-form label-position="top">
+        <el-form-item label="选择内容" required>
+          <el-select
+            v-model="linkContentId"
+            filterable
+            remote
+            clearable
+            :remote-method="searchLinkContents"
+            :loading="linkContentLoading"
+            placeholder="搜索主题/标题"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="opt in linkContentOptions"
+              :key="opt.id"
+              :label="opt.label"
+              :value="opt.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="linkContentVisible = false">取消</el-button>
+        <el-button type="primary" :loading="linkContentSaving" @click="submitLinkContent">关联</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="taskCreateVisible" title="新建活动任务" width="600px" destroy-on-close>
       <el-form label-position="top" @submit.prevent="submitCreateTask">
         <el-form-item label="任务标题" required>
-          <el-input v-model="taskForm.title" maxlength="200" show-word-limit placeholder="例如：活动回访、资料发送" />
+          <el-input
+            v-model="taskForm.title"
+            maxlength="200"
+            show-word-limit
+            placeholder="例如：活动回访、资料发送"
+          />
         </el-form-item>
         <el-form-item label="备注说明">
-          <el-input v-model="taskForm.description" type="textarea" :rows="2" placeholder="选填" />
+          <el-input
+            v-model="taskForm.description"
+            type="textarea"
+            :rows="2"
+            maxlength="2000"
+            show-word-limit
+            placeholder="补充背景、注意事项等（选填）"
+          />
         </el-form-item>
         <div class="task-create-row">
+          <el-form-item v-if="canAssignTask()" label="执行人" class="task-create-row__col">
+            <el-select
+              v-model="taskForm.assignee_user_id"
+              filterable
+              placeholder="选择执行人（本组织范围）"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="m in assigneeOptions"
+                :key="m.user_id"
+                :label="m.display_name || m.phone || m.user_id"
+                :value="m.user_id"
+              />
+            </el-select>
+          </el-form-item>
           <el-form-item label="优先级" class="task-create-row__col">
             <el-select v-model="taskForm.priority" style="width: 100%">
               <el-option label="低" value="low" />
@@ -763,10 +1212,52 @@ onMounted(loadDetail)
               <el-option label="高" value="high" />
             </el-select>
           </el-form-item>
+        </div>
+        <div class="task-create-row">
+          <el-form-item label="计划开始" class="task-create-row__col">
+            <el-date-picker
+              v-model="taskForm.planned_start_at"
+              type="datetime"
+              placeholder="计划何时开始"
+              style="width: 100%"
+            />
+          </el-form-item>
           <el-form-item label="计划完成" class="task-create-row__col">
-            <el-date-picker v-model="taskForm.due_at" type="datetime" placeholder="计划完成时间" style="width: 100%" />
+            <el-date-picker
+              v-model="taskForm.due_at"
+              type="datetime"
+              placeholder="计划何时完成"
+              style="width: 100%"
+            />
           </el-form-item>
         </div>
+        <el-form-item label="关联对象">
+          <el-radio-group v-model="taskLinkType" @change="onTaskLinkTypeChange">
+            <el-radio-button value="none">不关联</el-radio-button>
+            <el-radio-button value="lead">线索</el-radio-button>
+            <el-radio-button value="customer">客户</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="taskLinkType !== 'none'" :label="taskLinkType === 'lead' ? '选择线索' : '选择客户'" required>
+          <el-select
+            v-model="taskForm.link_id"
+            filterable
+            remote
+            clearable
+            :remote-method="searchTaskLinkOptions"
+            :loading="taskLinkLoading"
+            :placeholder="taskLinkType === 'lead' ? '搜索线索' : '搜索客户'"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="opt in taskLinkOptions"
+              :key="opt.id"
+              :label="opt.label"
+              :value="opt.id"
+            />
+          </el-select>
+        </el-form-item>
+        <div class="field-hint">本任务将自动关联当前营销活动</div>
       </el-form>
       <template #footer>
         <el-button @click="taskCreateVisible = false">取消</el-button>
@@ -868,6 +1359,9 @@ onMounted(loadDetail)
 }
 
 .muted { color: var(--el-text-color-secondary); font-size: 12px; margin-left: 6px; }
+.form-inline-row { display: flex; gap: 8px; width: 100%; align-items: center; }
+.field-hint { margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary); }
+.field-hint a { color: var(--el-color-primary); }
 .roi-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -137,6 +137,7 @@ import {
   formatCompactMoney,
   formatRelativeTime,
 } from '@/utils/h5Format'
+import { formatTimeOfDay } from '@/utils/datetime'
 import { hasAnyCrmListPermission, hasAnyPermission, hasPermission } from '@/utils/permissions'
 import { ensureSession } from '@/utils/session'
 
@@ -189,7 +190,7 @@ const canListDeals = computed(() =>
   ]),
 )
 const canListQuotes = computed(() =>
-  hasAnyPermission(permissions.value, ['crm.quote.list_own', 'crm.quote.list_all']),
+  hasAnyPermission(permissions.value, ['crm.quote.list_own', 'crm.quote.list_team', 'crm.quote.list_all']),
 )
 const canCreateActivity = computed(() => hasPermission(permissions.value, 'crm.activity.create'))
 const canCreateLead = computed(() => hasPermission(permissions.value, 'crm.lead.create'))
@@ -229,8 +230,7 @@ const quickActions = computed(() => {
 })
 
 function formatTime(iso) {
-  if (!iso) return ''
-  return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return formatTimeOfDay(iso, { empty: '' })
 }
 
 async function loadPerformance() {

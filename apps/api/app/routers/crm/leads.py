@@ -92,6 +92,8 @@ def list_leads(
 
     status: str | None = Query(default=None),
 
+    source: str | None = Query(default=None, description="线索来源"),
+
     filters: str | None = Query(default=None, description="高级筛选 JSON"),
 
     campaign_id: UUID | None = Query(default=None),
@@ -163,9 +165,11 @@ def list_leads(
             query = apply_view_filters(query, db, ctx.tenant_id, "lead", parsed_filters)
             filters_applied = True
 
-        elif status:
-
+        # 快捷筛选与高级筛选可同时生效（AND）
+        if status:
             query = query.filter(Lead.status == status)
+        if source:
+            query = query.filter(Lead.source == source)
 
         query = apply_view_search(query, "lead", q)
 
@@ -174,16 +178,10 @@ def list_leads(
             sort_spec = [{"field_key": sort_by, "dir": (sort_dir or "desc").lower()}]
         query = apply_view_sort(query, "lead", sort_spec)
 
-
-
     if owner_id is not None:
-
         query = query.filter(Lead.owner_user_id == owner_id)
 
-
-
     if campaign_id is not None:
-
         query = query.filter(Lead.campaign_id == campaign_id)
 
 
@@ -386,5 +384,5 @@ def delete_lead(
 
     lead = require_lead(db, ctx, lead_id)
 
-    soft_delete_lead(db, lead)
+    soft_delete_lead(db, ctx, lead)
 

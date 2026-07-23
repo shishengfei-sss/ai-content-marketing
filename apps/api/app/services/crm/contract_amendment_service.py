@@ -1,6 +1,8 @@
-"""合同补充协议（v1.0 P1-E）。"""
+"""合同补充协议（v1.0 P1-E + 执行回写增强）。"""
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -29,17 +31,45 @@ def list_amendments(db: Session, ctx: TenantContext, contract_id: UUID) -> list[
 def create_amendment(
     db: Session, ctx: TenantContext, contract_id: UUID, data: ContractAmendmentCreate
 ) -> ContractAmendment:
-    require_contract(db, ctx, contract_id)
+    contract = require_contract(db, ctx, contract_id)
+    if contract.status not in ("signed", "executing"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="仅已签署/执行中的合同可建补充协议",
+        )
     if data.change_type not in CONTRACT_AMENDMENT_CHANGE_TYPES:
         raise HTTPException(status_code=422, detail=f"change_type 无效: {data.change_type}")
+
+    original_value = data.original_value
+    new_value = data.new_value
+    if data.change_type == "amount_change" and original_value is None:
+        original_value = str(contract.amount)
+    if data.change_type == "term_change":
+        if original_value is None:
+            original_value = json.dumps(
+                {
+                    "start_date": contract.start_date.isoformat() if contract.start_date else None,
+                    "end_date": contract.end_date.isoformat() if contract.end_date else None,
+                },
+                ensure_ascii=False,
+            )
+        if new_value is None and (data.new_start_date is not None or data.new_end_date is not None):
+            new_value = json.dumps(
+                {
+                    "start_date": data.new_start_date.isoformat() if data.new_start_date else None,
+                    "end_date": data.new_end_date.isoformat() if data.new_end_date else None,
+                },
+                ensure_ascii=False,
+            )
+
     row = ContractAmendment(
         tenant_id=ctx.tenant_id,
         parent_contract_id=contract_id,
         amendment_number=generate_number(db, ctx.tenant_id, "contract_amendment"),
         title=data.title.strip(),
         change_type=data.change_type,
-        original_value=data.original_value,
-        new_value=data.new_value,
+        original_value=original_value,
+        new_value=new_value,
         amount_delta=data.amount_delta,
         status="draft",
         created_by_user_id=ctx.user.id,
@@ -95,12 +125,50 @@ def approve_amendment(db: Session, ctx: TenantContext, amendment: ContractAmendm
     return amendment
 
 
+def _parse_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = value.strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def execute_amendment(db: Session, ctx: TenantContext, amendment: ContractAmendment) -> ContractAmendment:
     contract = require_contract(db, ctx, amendment.parent_contract_id)
     if amendment.status not in ("draft", "approved"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="当前状态不可执行")
+
     if amendment.change_type == "amount_change" and amendment.amount_delta is not None:
-        contract.amount = float(contract.amount or 0) + float(amendment.amount_delta)
+        delta = float(amendment.amount_delta)
+        contract.amount = round(float(contract.amount or 0) + delta, 2)
+        if contract.signed_amount is not None:
+            contract.signed_amount = round(float(contract.signed_amount) + delta, 2)
+        else:
+            contract.signed_amount = contract.amount
+    elif amendment.change_type == "term_change":
+        payload: dict = {}
+        if amendment.new_value:
+            try:
+                parsed = json.loads(amendment.new_value)
+                if isinstance(parsed, dict):
+                    payload = parsed
+            except json.JSONDecodeError:
+                # 兼容纯日期字符串 → 视为 end_date
+                dt = _parse_dt(amendment.new_value)
+                if dt:
+                    payload = {"end_date": dt.isoformat()}
+        if payload.get("start_date"):
+            start = payload["start_date"]
+            contract.start_date = start if isinstance(start, datetime) else _parse_dt(str(start))
+        if payload.get("end_date"):
+            end = payload["end_date"]
+            contract.end_date = end if isinstance(end, datetime) else _parse_dt(str(end))
+
     amendment.status = "executed"
     db.commit()
     db.refresh(amendment)

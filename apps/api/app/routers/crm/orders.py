@@ -1,4 +1,4 @@
-"""订单 API（v0.7 CRM-2/3）。"""
+"""订单 API（v0.7 CRM-2/3 + v1.0 增强 + 状态机/批量/毛利）。"""
 
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ from app.schemas.crm_deals import (
     DeliveryOut,
     InvoiceCreate,
     InvoiceOut,
+    OrderBatchAction,
+    OrderBatchActionResult,
     OrderCreate,
     OrderListResponse,
     OrderOut,
@@ -29,17 +31,22 @@ from app.services.crm.filter_query import parse_list_filters_param
 from app.services.crm.invoice_service import create_invoice, list_order_invoices
 from app.services.crm.order_service import (
     approve_order,
+    batch_order_action,
     cancel_order,
+    clone_order,
+    complete_order,
     confirm_order,
     create_order,
     list_order_approvals,
     list_order_revisions,
+    order_to_out,
     reject_order,
     require_order,
     revise_order,
     soft_delete_order,
     submit_order,
     update_order,
+    withdraw_order,
 )
 from app.services.crm.view_service import (
     apply_view_filters,
@@ -118,7 +125,7 @@ def list_orders(
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
     return OrderListResponse(
-        items=[OrderOut.model_validate(i) for i in items],
+        items=[order_to_out(db, i) for i in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -128,6 +135,17 @@ def list_orders(
     )
 
 
+@router.post("/batch-action", response_model=OrderBatchActionResult)
+def batch_orders_endpoint(
+    body: OrderBatchAction,
+    ctx: TenantContext = Depends(
+        require_any_permission("crm.order.place", "crm.order.edit")
+    ),
+    db: Session = Depends(get_db),
+):
+    return batch_order_action(db, ctx, body)
+
+
 @router.post("", response_model=OrderOut, status_code=201)
 def post_order(
     body: OrderCreate,
@@ -135,7 +153,7 @@ def post_order(
     db: Session = Depends(get_db),
 ):
     o = create_order(db, ctx, body)
-    return OrderOut.model_validate(o)
+    return order_to_out(db, o)
 
 
 @router.get("/{order_id}", response_model=OrderOut)
@@ -145,7 +163,7 @@ def get_order_detail(
     db: Session = Depends(get_db),
 ):
     o = require_order(db, ctx, order_id)
-    return OrderOut.model_validate(o)
+    return order_to_out(db, o)
 
 
 @router.patch("/{order_id}", response_model=OrderOut)
@@ -157,7 +175,7 @@ def patch_order(
 ):
     o = require_order(db, ctx, order_id)
     o = update_order(db, ctx, o, body)
-    return OrderOut.model_validate(o)
+    return order_to_out(db, o)
 
 
 @router.post("/{order_id}/confirm", response_model=OrderOut)
@@ -168,7 +186,7 @@ def confirm_order_endpoint(
 ):
     o = require_order(db, ctx, order_id)
     o = confirm_order(db, ctx, o)
-    return OrderOut.model_validate(o)
+    return order_to_out(db, o)
 
 
 @router.post("/{order_id}/submit", response_model=OrderOut)
@@ -179,7 +197,7 @@ def submit_order_endpoint(
 ):
     o = require_order(db, ctx, order_id)
     o = submit_order(db, ctx, o)
-    return OrderOut.model_validate(o)
+    return order_to_out(db, o)
 
 
 @router.post("/{order_id}/approve", response_model=OrderOut)
@@ -190,7 +208,7 @@ def approve_order_endpoint(
 ):
     o = require_order(db, ctx, order_id)
     o = approve_order(db, ctx, o)
-    return OrderOut.model_validate(o)
+    return order_to_out(db, o)
 
 
 @router.post("/{order_id}/reject", response_model=OrderOut)
@@ -202,7 +220,41 @@ def reject_order_endpoint(
 ):
     o = require_order(db, ctx, order_id)
     o = reject_order(db, ctx, o, body.reason)
-    return OrderOut.model_validate(o)
+    return order_to_out(db, o)
+
+
+@router.post("/{order_id}/withdraw", response_model=OrderOut)
+def withdraw_order_endpoint(
+    order_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.order.place")),
+    db: Session = Depends(get_db),
+):
+    o = require_order(db, ctx, order_id)
+    o = withdraw_order(db, ctx, o)
+    return order_to_out(db, o)
+
+
+@router.post("/{order_id}/complete", response_model=OrderOut)
+def complete_order_endpoint(
+    order_id: UUID,
+    ctx: TenantContext = Depends(require_permission("crm.order.edit")),
+    db: Session = Depends(get_db),
+):
+    o = require_order(db, ctx, order_id)
+    o = complete_order(db, ctx, o)
+    return order_to_out(db, o)
+
+
+@router.post("/{order_id}/clone", response_model=OrderOut, status_code=201)
+def clone_order_endpoint(
+    order_id: UUID,
+    as_template: bool = Query(default=False),
+    ctx: TenantContext = Depends(require_permission("crm.order.create")),
+    db: Session = Depends(get_db),
+):
+    o = require_order(db, ctx, order_id)
+    cloned = clone_order(db, ctx, o, as_template=as_template)
+    return order_to_out(db, cloned)
 
 
 @router.get("/{order_id}/approvals", response_model=list[ApprovalInstanceOut])
@@ -224,7 +276,7 @@ def cancel_order_endpoint(
 ):
     o = require_order(db, ctx, order_id)
     o = cancel_order(db, ctx, o)
-    return OrderOut.model_validate(o)
+    return order_to_out(db, o)
 
 
 @router.post("/{order_id}/revise", response_model=OrderOut, status_code=201)
@@ -236,7 +288,7 @@ def revise_order_endpoint(
 ):
     o = require_order(db, ctx, order_id)
     revised = revise_order(db, ctx, o, reason=body.reason, lines=body.lines, title=body.title)
-    return OrderOut.model_validate(revised)
+    return order_to_out(db, revised)
 
 
 @router.get("/{order_id}/revisions", response_model=list[OrderOut])
@@ -246,7 +298,7 @@ def list_order_revisions_endpoint(
     db: Session = Depends(get_db),
 ):
     items = list_order_revisions(db, ctx, order_id)
-    return [OrderOut.model_validate(i) for i in items]
+    return [order_to_out(db, i) for i in items]
 
 
 @router.get("/{order_id}/deliveries", response_model=list[DeliveryOut])
@@ -298,4 +350,4 @@ def delete_order_endpoint(
     db: Session = Depends(get_db),
 ):
     o = require_order(db, ctx, order_id)
-    soft_delete_order(db, o)
+    soft_delete_order(db, ctx, o)

@@ -10,10 +10,12 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import SessionLocal
-from app.routers import admin, agent, analytics, assistants, auth, brand_settings, content, crm, dashboard, knowledge, llm_settings, me, team, templates, tenant, wechat_settings
+from app.runtime_stamp import health_payload
+from app.routers import admin, admin_platform_tender, agent, analytics, assistants, auth, brand_settings, content, crm, dashboard, knowledge, llm_settings, me, team, templates, tenant, wechat_settings
 from app.services.publish_service import process_due_scheduled_async
 from app.services.crm.pool_reclaim_job import process_auto_reclaim
 from app.services.crm.contract_expiry_job import process_contract_expiry
+from app.services.crm.quote_expiry_job import process_quote_expiry
 
 logger = logging.getLogger(__name__)
 
@@ -60,17 +62,33 @@ async def _crm_contract_expiry_scheduler_loop() -> None:
             db.close()
 
 
+async def _crm_quote_expiry_scheduler_loop() -> None:
+    """报价过期标记（默认每小时）。"""
+    interval = max(60, int(getattr(settings, "CRM_QUOTE_EXPIRY_POLL_SEC", 3600) or 3600))
+    while True:
+        await asyncio.sleep(interval)
+        db = SessionLocal()
+        try:
+            process_quote_expiry(db)
+        except Exception:
+            logger.exception("CRM quote expiry scheduler error")
+        finally:
+            db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.storage_published_dir.mkdir(parents=True, exist_ok=True)
     task = asyncio.create_task(_publish_scheduler_loop())
     reclaim_task = asyncio.create_task(_crm_reclaim_scheduler_loop())
     expiry_task = asyncio.create_task(_crm_contract_expiry_scheduler_loop())
+    quote_expiry_task = asyncio.create_task(_crm_quote_expiry_scheduler_loop())
     yield
     task.cancel()
     reclaim_task.cancel()
     expiry_task.cancel()
-    for t in (task, reclaim_task, expiry_task):
+    quote_expiry_task.cancel()
+    for t in (task, reclaim_task, expiry_task, quote_expiry_task):
         try:
             await t
         except asyncio.CancelledError:
@@ -98,6 +116,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         detail = "营销顾问配置未初始化，请执行 alembic upgrade head"
     return JSONResponse(status_code=500, content={"detail": detail})
 
+from app.middleware.rate_limit import RateLimitMiddleware
+
 origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -106,6 +126,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RateLimitMiddleware)
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(assistants.router, prefix="/api/v1")
@@ -121,6 +142,7 @@ app.include_router(team.router, prefix="/api/v1")
 app.include_router(tenant.router, prefix="/api/v1")
 app.include_router(agent.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
+app.include_router(admin_platform_tender.router, prefix="/api/v1")
 app.include_router(crm.router, prefix="/api/v1")
 app.include_router(me.router, prefix="/api/v1")
 
@@ -133,4 +155,4 @@ app.mount("/storage/exports", StaticFiles(directory=str(exports_dir)), name="exp
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return health_payload()

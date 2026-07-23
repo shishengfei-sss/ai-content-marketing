@@ -8,18 +8,21 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.dependencies import TenantContext
-from app.models.crm import Contract, CrmActivity, Customer, Deal, Lead, Order
+from app.models.crm import Contract, CrmActivity, Customer, Deal, Lead, Order, Quote
 from app.permissions import SYSTEM_ROLE_ADMIN
 from app.schemas.crm import ActivityCreate, ActivityUpdate, validate_activity_type, validate_lead_status
 from app.services.crm.crm_scope_service import (
+    assert_can_mutate_customer,
+    assert_can_mutate_lead,
     assert_can_view_contract,
     assert_can_view_customer,
     assert_can_view_deal,
     assert_can_view_lead,
     assert_can_view_order,
+    assert_can_view_quote,
 )
 
-_ENTITY_ACTIVITY_TYPES = frozenset({"order", "contract"})
+_ENTITY_ACTIVITY_TYPES = frozenset({"order", "contract", "quote"})
 
 
 def _write_follow_up_meta(
@@ -65,13 +68,13 @@ def create_activity(db: Session, ctx: TenantContext, data: ActivityCreate) -> Cr
 
     if entity_type:
         if entity_type not in _ENTITY_ACTIVITY_TYPES:
-            raise HTTPException(status_code=400, detail="entity_type 仅支持 order / contract")
+            raise HTTPException(status_code=400, detail="entity_type 仅支持 order / contract / quote")
         if entity_type == "order":
             order = db.query(Order).filter(Order.id == entity_id, Order.tenant_id == ctx.tenant_id).first()
             if not order:
                 raise HTTPException(status_code=404, detail="订单不存在")
             assert_can_view_order(ctx, db, order.owner_user_id)
-        else:
+        elif entity_type == "contract":
             contract = (
                 db.query(Contract)
                 .filter(Contract.id == entity_id, Contract.tenant_id == ctx.tenant_id)
@@ -80,6 +83,11 @@ def create_activity(db: Session, ctx: TenantContext, data: ActivityCreate) -> Cr
             if not contract:
                 raise HTTPException(status_code=404, detail="合同不存在")
             assert_can_view_contract(ctx, db, contract.owner_user_id)
+        else:
+            quote = db.query(Quote).filter(Quote.id == entity_id, Quote.tenant_id == ctx.tenant_id).first()
+            if not quote:
+                raise HTTPException(status_code=404, detail="报价不存在")
+            assert_can_view_quote(ctx, db, quote.owner_user_id)
 
         activity = CrmActivity(
             tenant_id=ctx.tenant_id,
@@ -102,7 +110,15 @@ def create_activity(db: Session, ctx: TenantContext, data: ActivityCreate) -> Cr
         lead = db.query(Lead).filter(Lead.id == data.lead_id, Lead.tenant_id == ctx.tenant_id).first()
         if not lead or lead.deleted_at:
             raise HTTPException(status_code=404, detail="线索不存在")
-        assert_can_view_lead(ctx, db, lead.owner_user_id, lead.territory_id)
+        assert_can_view_lead(
+            ctx,
+            db,
+            lead.owner_user_id,
+            lead.territory_id,
+            created_by_user_id=lead.created_by_user_id,
+            manager_user_id=getattr(lead, "manager_user_id", None),
+            pool_id=getattr(lead, "pool_id", None),
+        )
     elif data.customer_id:
         customer = (
             db.query(Customer)
@@ -111,12 +127,28 @@ def create_activity(db: Session, ctx: TenantContext, data: ActivityCreate) -> Cr
         )
         if not customer or customer.deleted_at:
             raise HTTPException(status_code=404, detail="客户不存在")
-        assert_can_view_customer(ctx, db, customer.owner_user_id, customer.territory_id)
+        assert_can_view_customer(
+            ctx,
+            db,
+            customer.owner_user_id,
+            customer.territory_id,
+            created_by_user_id=customer.created_by_user_id,
+            manager_user_id=getattr(customer, "manager_user_id", None),
+            pool_id=getattr(customer, "pool_id", None),
+        )
+        assert_can_mutate_customer(ctx, customer)
     else:
         deal = db.query(Deal).filter(Deal.id == data.deal_id, Deal.tenant_id == ctx.tenant_id).first()
         if not deal:
             raise HTTPException(status_code=404, detail="商机不存在")
-        assert_can_view_deal(ctx, db, deal.owner_user_id, deal.territory_id)
+        assert_can_view_deal(
+            ctx,
+            db,
+            deal.owner_user_id,
+            deal.territory_id,
+            created_by_user_id=deal.created_by_user_id,
+            manager_user_id=getattr(deal, "manager_user_id", None),
+        )
 
     activity = CrmActivity(
         tenant_id=ctx.tenant_id,
@@ -137,8 +169,7 @@ def create_activity(db: Session, ctx: TenantContext, data: ActivityCreate) -> Cr
         if data.status is not None:
             status_val = str(data.status).strip()
             if status_val and status_val != (lead.status or ""):
-                if "crm.lead.edit" not in _role_permissions(ctx):
-                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权修改线索状态")
+                assert_can_mutate_lead(ctx, lead)
                 try:
                     validate_lead_status(status_val)
                 except ValueError as e:
@@ -168,13 +199,13 @@ def list_activities(
 
     if et:
         if et not in _ENTITY_ACTIVITY_TYPES:
-            raise HTTPException(status_code=400, detail="entity_type 仅支持 order / contract")
+            raise HTTPException(status_code=400, detail="entity_type 仅支持 order / contract / quote")
         if et == "order":
             order = db.query(Order).filter(Order.id == entity_id, Order.tenant_id == ctx.tenant_id).first()
             if not order:
                 raise HTTPException(status_code=404, detail="订单不存在")
             assert_can_view_order(ctx, db, order.owner_user_id)
-        else:
+        elif et == "contract":
             contract = (
                 db.query(Contract)
                 .filter(Contract.id == entity_id, Contract.tenant_id == ctx.tenant_id)
@@ -183,6 +214,11 @@ def list_activities(
             if not contract:
                 raise HTTPException(status_code=404, detail="合同不存在")
             assert_can_view_contract(ctx, db, contract.owner_user_id)
+        else:
+            quote = db.query(Quote).filter(Quote.id == entity_id, Quote.tenant_id == ctx.tenant_id).first()
+            if not quote:
+                raise HTTPException(status_code=404, detail="报价不存在")
+            assert_can_view_quote(ctx, db, quote.owner_user_id)
         query = db.query(CrmActivity).filter(
             CrmActivity.tenant_id == ctx.tenant_id,
             CrmActivity.entity_type == et,
@@ -194,7 +230,15 @@ def list_activities(
         lead = db.query(Lead).filter(Lead.id == lead_id, Lead.tenant_id == ctx.tenant_id).first()
         if not lead or lead.deleted_at:
             raise HTTPException(status_code=404, detail="线索不存在")
-        assert_can_view_lead(ctx, db, lead.owner_user_id, lead.territory_id)
+        assert_can_view_lead(
+            ctx,
+            db,
+            lead.owner_user_id,
+            lead.territory_id,
+            created_by_user_id=lead.created_by_user_id,
+            manager_user_id=getattr(lead, "manager_user_id", None),
+            pool_id=getattr(lead, "pool_id", None),
+        )
         query = db.query(CrmActivity).filter(CrmActivity.lead_id == lead_id)
     elif customer_id:
         customer = (
@@ -204,13 +248,28 @@ def list_activities(
         )
         if not customer or customer.deleted_at:
             raise HTTPException(status_code=404, detail="客户不存在")
-        assert_can_view_customer(ctx, db, customer.owner_user_id, customer.territory_id)
+        assert_can_view_customer(
+            ctx,
+            db,
+            customer.owner_user_id,
+            customer.territory_id,
+            created_by_user_id=customer.created_by_user_id,
+            manager_user_id=getattr(customer, "manager_user_id", None),
+            pool_id=getattr(customer, "pool_id", None),
+        )
         query = db.query(CrmActivity).filter(CrmActivity.customer_id == customer_id)
     elif deal_id:
         deal = db.query(Deal).filter(Deal.id == deal_id, Deal.tenant_id == ctx.tenant_id).first()
         if not deal:
             raise HTTPException(status_code=404, detail="商机不存在")
-        assert_can_view_deal(ctx, db, deal.owner_user_id, deal.territory_id)
+        assert_can_view_deal(
+            ctx,
+            db,
+            deal.owner_user_id,
+            deal.territory_id,
+            created_by_user_id=deal.created_by_user_id,
+            manager_user_id=getattr(deal, "manager_user_id", None),
+        )
         query = db.query(CrmActivity).filter(CrmActivity.deal_id == deal_id)
     else:
         raise HTTPException(status_code=400, detail="必须指定 lead_id、customer_id、deal_id 或 entity_type+entity_id")

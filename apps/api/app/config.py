@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     PUBLISH_POLL_SEC: int = 30
     CRM_RECLAIM_POLL_SEC: int = 300
     CRM_CONTRACT_EXPIRY_POLL_SEC: int = 3600
+    CRM_QUOTE_EXPIRY_POLL_SEC: int = 3600
 
     CORS_ORIGINS: str = (
         "http://127.0.0.1:5173,http://localhost:5173,"

@@ -1,0 +1,89 @@
+<!-- campaign field enhancement UI/UX -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>营销活动字段增强 UI/UX — 智营获客</title>
+<style>
+@font-face { font-family:'InstrumentSans'; src:url('./_shared/fonts/InstrumentSans-Regular.ttf') format('truetype'); font-weight:400; }
+@font-face { font-family:'InstrumentSans'; src:url('./_shared/fonts/InstrumentSans-Bold.ttf') format('truetype'); font-weight:700; }
+:root { --bg:#f7f8fa;--ink:#1a1d23;--muted:#6b7280;--rule:#e5e7eb;--accent:#1677ff;--font:'InstrumentSans',-apple-system,'PingFang SC','Microsoft YaHei',sans-serif; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--ink);padding:2rem 1rem;line-height:1.6}
+.page{max-width:920px;margin:0 auto}
+h1{font-size:1.45rem;margin-bottom:.25rem}
+.sub{color:var(--muted);font-size:.9rem;margin-bottom:1.5rem}
+.panel{background:#fff;border:1px solid var(--rule);border-radius:10px;padding:1.1rem 1.2rem;margin-bottom:1rem;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.panel h2{font-size:.95rem;margin-bottom:.7rem}
+.form{display:grid;gap:.55rem}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:.55rem}
+@media(max-width:640px){.row2{grid-template-columns:1fr}}
+.field{border:1px solid var(--rule);border-radius:8px;padding:.5rem .65rem;background:#fafbfc}
+.field label{display:block;font-size:.7rem;color:var(--muted);font-weight:600;margin-bottom:.15rem}
+.field .v{font-size:.84rem}
+.field.req label::after{content:' *';color:#ef4444}
+.hint{font-size:.78rem;color:var(--muted);margin-top:.5rem}
+.footer{display:flex;justify-content:flex-end;gap:.5rem;margin-top:.9rem}
+.btn{padding:.4rem .9rem;border-radius:6px;border:1px solid var(--rule);background:#fff;font-size:.84rem}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin-top:.75rem}
+@media(max-width:640px){.kpi{grid-template-columns:1fr 1fr}}
+.kpi div{background:#f8fafc;border:1px solid var(--rule);border-radius:8px;padding:.55rem;text-align:center}
+.kpi span{display:block;font-size:.7rem;color:var(--muted)}
+.kpi strong{font-size:.95rem}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>营销活动 · 新建/编辑表单</h1>
+  <p class="sub">对齐小 PRD v1.0 · P0 露出预算/负责人等 · P1 类型/预期线索/地点</p>
+
+  <div class="panel">
+    <h2>新建活动（宽约 640px）</h2>
+    <div class="form">
+      <div class="field req"><label>活动名称</label><div class="v">2026 Q3 小红书推广活动</div></div>
+      <div class="row2">
+        <div class="field"><label>活动类型</label><div class="v">内容投放</div></div>
+        <div class="field"><label>状态</label><div class="v">草稿（仅编辑+manage）</div></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>开始日期</label><div class="v">2026-08-01</div></div>
+        <div class="field"><label>结束日期</label><div class="v">2026-08-31</div></div>
+      </div>
+      <div class="field"><label>投放渠道</label><div class="v">小红书 ×</div></div>
+      <div class="row2">
+        <div class="field"><label>预算</label><div class="v">¥ 10,000.00</div></div>
+        <div class="field"><label>币种</label><div class="v">CNY</div></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>预期线索</label><div class="v">50</div></div>
+        <div class="field"><label>目标客户细分</label><div class="v">电子行业潜客</div></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>负责人</label><div class="v">当前用户（可改）</div></div>
+        <div class="field"><label>归属地区</label><div class="v">华东</div></div>
+      </div>
+      <div class="field"><label>活动地点</label><div class="v">线下/展会/培训时强调显示</div></div>
+      <div class="field"><label>活动目标</label><div class="v">电子行业企业客户</div></div>
+      <div class="field"><label>策划说明</label><div class="v">产品推广</div></div>
+    </div>
+    <p class="hint">地点：活动类型为线下活动 / 展会 / 培训时优先展示；其他类型可折叠。</p>
+    <div class="footer">
+      <button class="btn">取消</button>
+      <button class="btn primary">保存</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>详情 KPI 补充</h2>
+    <div class="kpi">
+      <div><span>关联线索</span><strong>12</strong></div>
+      <div><span>预期线索</span><strong>50</strong></div>
+      <div><span>预算/花费</span><strong>¥1万 / ¥3千</strong></div>
+      <div><span>活动类型</span><strong>内容投放</strong></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

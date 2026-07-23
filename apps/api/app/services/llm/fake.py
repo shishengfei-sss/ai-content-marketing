@@ -17,14 +17,19 @@ MOCK_PROPOSALS = json.dumps(
 
 
 def _extract_proposal_topic(user_text: str) -> str:
-    for marker in ("用户选题：", "主题是", "主题：", "选题："):
+    for marker in ("用户选题：", "主题是", "主题为", "主题：", "选题："):
         if marker in user_text:
             line = user_text.split(marker, 1)[1].split("\n")[0].strip()
+            # 去掉常见前缀残留，如「[平台: 公众号] …」
+            if line.startswith("[") and "]" in line:
+                line = line.split("]", 1)[1].strip()
             if line and line not in ("...", "…"):
                 return line[:80]
     for line in user_text.splitlines():
         text = line.strip()
-        if len(text) >= 4 and not text.startswith("请为"):
+        if text.startswith("[") and "]" in text:
+            text = text.split("]", 1)[1].strip()
+        if len(text) >= 2 and not text.startswith("请为"):
             return text[:80]
     return "营销内容"
 
@@ -120,8 +125,10 @@ class FakeLLMProvider(LLMProvider):
                     ensure_ascii=False,
                 )
             else:
+                # 跟随用户输入主题，避免联调时误以为真实模型「跑偏」到财税 demo
+                topic = _extract_proposal_topic(user_text) or _extract_proposal_topic(convo_text)
                 content = json.dumps(
-                    {"action": "proceed", "topic": "税务合规营销内容", "clarify_question": None},
+                    {"action": "proceed", "topic": topic, "clarify_question": None},
                     ensure_ascii=False,
                 )
         elif "意图解析" in system_text:
@@ -257,6 +264,53 @@ class FakeLLMProvider(LLMProvider):
                     "summary": "用户讨论了公众号报税提醒内容创作。",
                     "topics": ["公众号", "报税提醒"],
                 },
+                ensure_ascii=False,
+            )
+        elif "CPQ 配置助手" in system_text or "工业品 CPQ" in system_text:
+            # 从 user JSON 里挑选项命中
+            try:
+                payload = json.loads(user_text)
+            except json.JSONDecodeError:
+                payload = {}
+            req_text = str(payload.get("requirement_text") or "")
+            params = payload.get("params") or []
+            recs = []
+            for p in params:
+                name = p.get("param_name")
+                opts = p.get("options") or []
+                if not name or not isinstance(opts, list):
+                    continue
+                opts_sorted = sorted([str(o) for o in opts], key=len, reverse=True)
+                hit = next((o for o in opts_sorted if o and o in req_text), None)
+                if hit:
+                    recs.append(
+                        {
+                            "param_name": name,
+                            "suggested_value": hit,
+                            "confidence": 0.9,
+                            "reason": f"FakeLLM：文本命中「{hit}」",
+                        }
+                    )
+            qty = None
+            import re as _re
+
+            m = _re.search(r"(\d+(?:\.\d+)?)\s*(台|套|件|个)", req_text)
+            if m:
+                qty = float(m.group(1))
+            content = json.dumps(
+                {
+                    "recommendations": recs,
+                    "quantity": qty,
+                    "notes": "FakeLLM CPQ 推荐（须人审）",
+                },
+                ensure_ascii=False,
+            )
+        elif "招投标公告结构化" in system_text or "招标线索" in system_text:
+            from app.services.tender_parse_service import _heuristic_extract
+
+            data = _heuristic_extract(user_text, "paste-fake.txt")
+            content = json.dumps(
+                {k: v for k, v in data.items() if not str(k).startswith("_")},
                 ensure_ascii=False,
             )
         elif "clarify" in user_text.lower() or user_text.strip() in ("", "帮我写点东西"):

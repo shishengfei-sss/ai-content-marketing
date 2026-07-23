@@ -33,6 +33,10 @@ def list_attachments_endpoint(
             "crm.customer.view",
             "crm.contract.view",
             "crm.order.view",
+            "crm.quote.view",
+            "crm.payment.view",
+            "crm.product.view",
+            "crm.product.manage",
         )
     ),
     db: Session = Depends(get_db),
@@ -53,6 +57,10 @@ def upload_attachment_endpoint(
             "crm.customer.edit",
             "crm.contract.edit",
             "crm.order.edit",
+            "crm.quote.edit",
+            "crm.payment.edit",
+            "crm.payment.create",
+            "crm.product.manage",
         )
     ),
     db: Session = Depends(get_db),
@@ -73,6 +81,10 @@ def download_attachment_endpoint(
             "crm.customer.view",
             "crm.contract.view",
             "crm.order.view",
+            "crm.quote.view",
+            "crm.payment.view",
+            "crm.product.view",
+            "crm.product.manage",
         )
     ),
     db: Session = Depends(get_db),
@@ -96,6 +108,10 @@ def delete_attachment_endpoint(
             "crm.customer.edit",
             "crm.contract.edit",
             "crm.order.edit",
+            "crm.quote.edit",
+            "crm.payment.edit",
+            "crm.payment.create",
+            "crm.product.manage",
         )
     ),
     db: Session = Depends(get_db),

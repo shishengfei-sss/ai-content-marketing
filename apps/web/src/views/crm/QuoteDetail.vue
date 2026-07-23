@@ -11,6 +11,7 @@ import CrmEntityTags from '../../components/crm/CrmEntityTags.vue'
 import CrmEntityAttachments from '../../components/crm/CrmEntityAttachments.vue'
 import CrmLineItemsEditor from '../../components/crm/CrmLineItemsEditor.vue'
 import { ArrowLeft } from '@element-plus/icons-vue'
+import { formatDate, formatDateTime } from '../../utils/datetime'
 
 const route = useRoute()
 const router = useRouter()
@@ -37,6 +38,14 @@ const canConvert = () => hasPermission(auth.permissions, 'crm.order.convert')
 const canDelete = () => hasPermission(auth.permissions, 'crm.quote.delete')
 const canView = () => hasPermission(auth.permissions, 'crm.quote.view')
 const canWriteActivity = () => hasPermission(auth.permissions, 'crm.activity.create')
+
+function sameUserId(a, b) {
+  if (!a || !b) return false
+  return String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
+}
+const isQuoteOwner = computed(() => sameUserId(quote.value?.owner_user_id, auth.user?.id))
+/** 编辑 / 发送 / 接受 / 转单 / 删除：权限 + 负责人 */
+const canMutateQuote = computed(() => isQuoteOwner.value)
 const canDeleteActivity = (item) =>
   hasPermission(auth.permissions, 'crm.activity.create') &&
   (item.created_by_user_id === auth.user?.id || hasPermission(auth.permissions, 'crm.admin'))
@@ -44,10 +53,21 @@ const canDeleteActivity = (item) =>
 const linesSubTotal = computed(() =>
   (quote.value?.lines || []).reduce((s, l) => s + Number(l.line_total || 0), 0),
 )
+const taxTotal = computed(() => {
+  if (quote.value?.tax_total != null) return Number(quote.value.tax_total)
+  return (quote.value?.lines || []).reduce((s, l) => s + Number(l.tax_amount || 0), 0)
+})
+const amountInclTax = computed(() => {
+  if (quote.value?.amount_incl_tax != null) return Number(quote.value.amount_incl_tax)
+  return Number(quote.value?.total_amount || 0) + taxTotal.value
+})
 const orderDiscountAmount = computed(() => {
   const rate = Number(quote.value?.discount_rate || 0)
   if (!rate || !linesSubTotal.value) return 0
-  return Math.round(linesSubTotal.value * (rate / 100) * 100) / 100
+  // 行未税已含头折时，用「折前估算」：折后 / (1-rate)
+  const after = linesSubTotal.value
+  const before = Math.round((after / (1 - rate / 100)) * 100) / 100
+  return Math.round((before - after) * 100) / 100
 })
 
 const STATUS_META = {
@@ -132,11 +152,22 @@ async function handleAccept() {
 async function handleReject() {
   try {
     await ElMessageBox.confirm('确定拒绝该报价？', '拒绝报价', { type: 'warning' })
-    await crmApi.updateQuote(quote.value.id, { status: 'rejected' })
+    await crmApi.rejectQuote(quote.value.id)
     ElMessage.success('已拒绝')
     await loadQuote()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message || '操作失败')
+  }
+}
+
+async function handleRecall() {
+  try {
+    await ElMessageBox.confirm('撤回后报价将回到草稿，可继续编辑。确定撤回？', '撤回报价', { type: 'warning' })
+    await crmApi.recallQuote(quote.value.id)
+    ElMessage.success('已撤回为草稿')
+    await loadQuote()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.message || '撤回失败')
   }
 }
 
@@ -250,7 +281,6 @@ async function saveLines(lines) {
 }
 
 function formatAmount(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
-function formatDate(v) { return v ? String(v).replace('T', ' ').slice(0, 16) : '' }
 
 onMounted(async () => {
   await loadMembers()
@@ -271,7 +301,9 @@ onMounted(async () => {
         <div class="detail-page__meta">
           <el-tag :type="STATUS_META[quote.status]?.type">{{ STATUS_META[quote.status]?.label }}</el-tag>
           <el-tag v-if="quote.cpq_config_snapshot" type="warning" size="small">CPQ</el-tag>
-          <span class="detail-page__amount">¥{{ formatAmount(quote.total_amount) }}</span>
+          <span class="detail-page__amount">未税 ¥{{ formatAmount(quote.total_amount) }}</span>
+          <span v-if="taxTotal">税额 ¥{{ formatAmount(taxTotal) }}</span>
+          <span v-if="taxTotal" class="detail-page__amount">价税 ¥{{ formatAmount(amountInclTax) }}</span>
           <span>{{ quote.quote_number }}</span>
           <span>负责人：{{ resolveMemberName(quote.owner_user_id) }}</span>
         </div>
@@ -284,12 +316,17 @@ onMounted(async () => {
           type="warning"
           @click="goCpqReconfigure"
         >CPQ 改参</el-button>
-        <el-button v-if="canEdit() && quote.status === 'draft'" @click="editVisible = true">编辑</el-button>
-        <el-button v-if="canSend() && quote.status === 'draft'" type="warning" @click="handleSend">发送</el-button>
-        <el-button v-if="canAccept() && quote.status === 'sent'" type="success" @click="handleAccept">接受</el-button>
-        <el-button v-if="canEdit() && quote.status === 'sent'" type="danger" plain @click="handleReject">拒绝</el-button>
-        <el-button v-if="canConvert() && quote.status === 'accepted'" type="primary" @click="handleConvert">转化为订单</el-button>
-        <el-button v-if="canDelete()" type="danger" @click="handleDelete">删除</el-button>
+        <el-button v-if="canEdit() && canMutateQuote && quote.status === 'draft'" @click="editVisible = true">编辑</el-button>
+        <el-button v-if="canSend() && canMutateQuote && quote.status === 'draft'" type="warning" @click="handleSend">发送</el-button>
+        <el-button v-if="canAccept() && canMutateQuote && quote.status === 'sent'" type="success" @click="handleAccept">接受</el-button>
+        <el-button v-if="canEdit() && canMutateQuote && quote.status === 'sent'" @click="handleRecall">撤回</el-button>
+        <el-button v-if="canEdit() && canMutateQuote && quote.status === 'sent'" type="danger" plain @click="handleReject">拒绝</el-button>
+        <el-button v-if="canConvert() && canMutateQuote && quote.status === 'accepted'" type="primary" @click="handleConvert">转化为订单</el-button>
+        <el-button
+          v-if="canDelete() && canMutateQuote && ['draft', 'rejected', 'expired'].includes(quote.status)"
+          type="danger"
+          @click="handleDelete"
+        >删除</el-button>
       </div>
     </div>
 
@@ -299,7 +336,7 @@ onMounted(async () => {
         <CrmEntityTags
           entity-type="quote"
           :entity-id="quote.id"
-          :editable="canEdit() && quote.status === 'draft'"
+          :editable="canEdit() && canMutateQuote && quote.status === 'draft'"
         />
       </el-card>
 
@@ -315,9 +352,12 @@ onMounted(async () => {
           <el-descriptions-item label="折扣金额">
             {{ orderDiscountAmount > 0 ? `¥${formatAmount(orderDiscountAmount)}` : '—' }}
           </el-descriptions-item>
+          <el-descriptions-item label="未税合计">¥{{ formatAmount(quote.total_amount) }}</el-descriptions-item>
+          <el-descriptions-item label="税额合计">¥{{ formatAmount(taxTotal) }}</el-descriptions-item>
+          <el-descriptions-item label="价税合计">¥{{ formatAmount(amountInclTax) }}</el-descriptions-item>
           <el-descriptions-item label="有效期">{{ formatDate(quote.valid_until) || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="创建时间">{{ formatDate(quote.created_at) }}</el-descriptions-item>
-          <el-descriptions-item label="更新时间">{{ formatDate(quote.updated_at) }}</el-descriptions-item>
+          <el-descriptions-item label="创建时间">{{ formatDateTime(quote.created_at, { withSeconds: false }) }}</el-descriptions-item>
+          <el-descriptions-item label="更新时间">{{ formatDateTime(quote.updated_at, { withSeconds: false }) }}</el-descriptions-item>
           <el-descriptions-item v-if="quote.converted_order_id" label="转出订单">
             <el-link type="primary" @click="router.push(`/crm/orders/${quote.converted_order_id}`)">查看订单</el-link>
           </el-descriptions-item>
@@ -339,7 +379,7 @@ onMounted(async () => {
             <span>报价明细</span>
             <div>
               <el-button
-                v-if="canEdit() && quote.status === 'draft' && !linesEditing"
+                v-if="canEdit() && canMutateQuote && quote.status === 'draft' && !linesEditing"
                 size="small"
                 type="primary"
                 @click="linesEditing = true"
@@ -361,7 +401,7 @@ onMounted(async () => {
         <CrmEntityAttachments
           entity-type="quote"
           :entity-id="quote.id"
-          :editable="canEdit() && quote.status === 'draft'"
+          :editable="canEdit() && canMutateQuote && quote.status === 'draft'"
         />
       </el-card>
 
@@ -388,7 +428,7 @@ onMounted(async () => {
           <el-timeline-item
             v-for="item in activities"
             :key="item.id"
-            :timestamp="new Date(item.created_at).toLocaleString('zh-CN')"
+            :timestamp="formatDateTime(item.created_at)"
             placement="top"
           >
             <div class="crm-timeline__card">
