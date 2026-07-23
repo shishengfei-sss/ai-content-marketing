@@ -75,10 +75,22 @@ STANDARD_REPLIES: dict[str, str] = {
         "下一步：说一个你想推广的产品或服务，我们继续。"
     ),
 
+    "unsafe": (
+        "这类内容涉及人身攻击、辱骂或危险表述，我无法协助创作。"
+        "我只帮你写合规的营销内容（公众号 / 小红书 / 抖音）。"
+        "下一步：换一个产品、服务或品牌话题，我们重新开始。"
+    ),
+
+    "revise_feedback": (
+        "收到，上一批方案没对上你的需求。"
+        "请具体告诉我：想要的语气、受众、切入角度，或必须包含的要点，我按你的要求重新出方案。"
+        "下一步：直接说你希望怎么改。"
+    ),
+
 }
 
 
-_REPLY_OVERRIDE_CLASSES = frozenset({"joke", "off_topic", "insult"})
+_REPLY_OVERRIDE_CLASSES = frozenset({"joke", "off_topic", "insult", "unsafe", "revise_feedback"})
 
 _PLATFORM_PREFIX_RE = re.compile(r"\[平台[^\]]*\]\s*", re.IGNORECASE)
 
@@ -87,6 +99,53 @@ _MAX_CLARIFY_TURNS = 2
 _MIN_EFFECTIVE_CHARS = 4
 
 _CHINESE_CHAR_RE = re.compile(r"[\u4e00-\u9fff]")
+
+_INSULT_RE = re.compile(
+    r"(傻子|傻逼|白痴|脑残|智障|废物|滚蛋|去死吧|你妈的|他妈的|草你|操你|垃圾货)",
+    re.IGNORECASE,
+)
+
+_UNSAFE_RE = re.compile(
+    r"(自杀|自尽|去死吧|问候.*(妈|母)|骂(他|她|你)?妈|人身攻击|喷死|问候她妈|问候他妈)",
+    re.IGNORECASE,
+)
+
+# 模糊不满：需要追问怎么改
+_REVISE_VAGUE_RE = re.compile(
+    r"(不一样|不满意|不是我想要|认真(思考|点|一点)?|换一批|不对劲|跑偏)",
+    re.IGNORECASE,
+)
+
+# 具体改稿指令：应继续改正文，不可当违规/不可再空追问
+_REVISE_EDIT_RE = re.compile(
+    r"(改一下|修改|改成|改改|改下|去掉|删掉|删除|不要出现|别写|"
+    r"字数|太长|太短|缩短|精简|压缩|语气|风格|幽默|"
+    r"配图|图片|插图|题目|标题|"
+    r"例子|案例|换一个|换掉|换成|不好|不对|重写|润色|优化|调整|这段|这句|这里|"
+    r"写清楚|写详细|讲清楚|说清楚|补充|加上|展开|完善|充实|再补|"
+    r"详细写|详细一点|再详细|怎么种|如何种|注意事项|要注意|推荐的|"
+    r"输出视频|视频脚本|改成笔记|换成脚本|转为脚本|改成小红书|改成抖音|改成公众号)",
+    re.IGNORECASE,
+)
+
+
+def _local_input_class(text: str) -> str | None:
+    """本地边界分类，避免短句辱骂/违规稿被当「过短」或误放行出方案。"""
+    # 具体改稿优先：避免会话历史里的违规词让 LLM 误判当前改稿指令
+    if _REVISE_EDIT_RE.search(text):
+        return "revise_edit"
+    if _UNSAFE_RE.search(text):
+        return "unsafe"
+    if _INSULT_RE.search(text):
+        return "insult"
+    if _REVISE_VAGUE_RE.search(text):
+        return "revise_feedback"
+    return None
+
+
+def is_content_revise_request(text: str) -> bool:
+    """供创作页判断：用户是否在对已有正文提修改意见。"""
+    return bool(_REVISE_EDIT_RE.search(_strip_platform_prefix(text) or text))
 
 
 def _strip_platform_prefix(message: str) -> str:
@@ -146,6 +205,10 @@ def _merge_user_messages(db: Session, session: AgentSession, current: str) -> st
 def _local_clarify(message: str) -> str | None:
 
     text = _strip_platform_prefix(message)
+
+    boundary = _local_input_class(text)
+    if boundary and boundary in STANDARD_REPLIES:
+        return STANDARD_REPLIES[boundary]
 
     if _effective_length(text) < _MIN_EFFECTIVE_CHARS:
 
@@ -290,7 +353,19 @@ async def run_create_preflight(
 
     )
 
-
+    # 本地边界优先：辱骂/违规不可被 LLM 误判为 proceed；具体改稿不可被误判为 unsafe
+    local_cls = _local_input_class(text)
+    if local_cls == "revise_edit":
+        intent.action = "proceed"
+        intent.input_class = "revise_edit"
+        intent.clarify_question = None
+        if not (intent.topic or "").strip():
+            intent.topic = text
+    elif local_cls in _REPLY_OVERRIDE_CLASSES:
+        intent.action = "clarify"
+        intent.input_class = local_cls
+        intent.clarify_question = STANDARD_REPLIES[local_cls]
+        intent.topic = ""
 
     if intent.action == "clarify" or not (intent.topic or text):
 

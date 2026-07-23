@@ -281,12 +281,17 @@ async def _revise_content(ctx: AgentToolContext, args: dict[str, Any]) -> dict[s
         content_id,
         instruction,
         llm_source=str(args.get("llm_source") or "platform"),
+        platform=args.get("platform"),
+        content_format=args.get("content_format"),
+        video_duration_sec=args.get("video_duration_sec"),
     )
     return {
         "content_id": str(content.id),
         "topic": content.topic,
         "body_preview": (content.body or "")[:200],
         "status": content.status,
+        "platform": content.platform,
+        "content_format": content.content_format,
     }
 
 
@@ -580,12 +585,16 @@ _register(
 
 _register(
     "revise_content",
-    "按指令改稿（B3 实现，当前占位）",
+    "按指令改稿；可指定目标平台与形态（如小红书视频脚本）",
     {
         "type": "object",
         "properties": {
             "content_id": {"type": "string", "format": "uuid"},
             "instruction": {"type": "string"},
+            "platform": {"type": "string", "enum": ["wechat", "xhs", "douyin"]},
+            "content_format": {"type": "string", "enum": ["article", "note", "video_script"]},
+            "video_duration_sec": {"type": "integer"},
+            "llm_source": {"type": "string", "enum": ["platform", "tenant"]},
         },
         "required": ["content_id", "instruction"],
     },

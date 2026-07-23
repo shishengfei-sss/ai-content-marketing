@@ -15,11 +15,13 @@ from app.schemas import (
     ContentOut,
     ContentProposalsRequest,
     ContentProposalsResponse,
+    ContentReviseRequest,
     ExportResponse,
     ReviewActionRequest,
     ScheduleRequest,
 )
 from app.services.content_generation_service import run_generate_content, run_generate_proposals
+from app.services.content_revise_service import revise_content_body
 from app.services.content_service import get_content_for_tenant
 from app.services.export_service import export_douyin_markdown, export_video_script_markdown, export_xhs_zip
 from app.services.publish_service import execute_publish, reset_for_retry, schedule_content
@@ -137,6 +139,27 @@ def get_content(
     content = get_content_for_tenant(db, content_id, ctx.tenant_id)
     if not can_view_content(ctx, content.author_id):
         raise HTTPException(status_code=403, detail="无权查看该内容")
+    return _content_out(content)
+
+
+@router.post("/{content_id}/revise", response_model=ContentOut)
+async def revise_content(
+    content_id: UUID,
+    body: ContentReviseRequest,
+    ctx: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+):
+    """按用户意见改写已生成正文（不扣平台额度）。"""
+    content = await revise_content_body(
+        db,
+        ctx,
+        content_id,
+        body.instruction,
+        llm_source=body.llm_source,
+        platform=body.platform,
+        content_format=body.content_format,
+        video_duration_sec=body.video_duration_sec,
+    )
     return _content_out(content)
 
 

@@ -103,10 +103,83 @@ const advisorDesc = computed(
 
 const GREETING_RE = /^(你好|您好|hi|hello|在吗|试试|测试|help)[!.?。！？\s]*$/i
 const TOO_VAGUE_RE = /^(写(一)?篇|帮我写|生成(一个)?|来(一)?个|写个|写脚本|写笔记|创作)[!.?。！？\s]*$/i
+const INSULT_RE = /(傻子|傻逼|白痴|脑残|智障|废物|滚蛋|去死吧|你妈的|他妈的)/
+const UNSAFE_RE = /(自杀|自尽|去死吧|问候.*(妈|母)|骂(他|她|你)?妈|人身攻击|喷死)/
+const REVISE_VAGUE_RE = /(不一样|不满意|不是我想要|认真(思考|点|一点)?|换一批|不对劲|跑偏)/
+const REVISE_EDIT_RE =
+  /(改一下|修改|改成|改改|改下|去掉|删掉|删除|不要出现|别写|字数|太长|太短|缩短|精简|压缩|语气|风格|幽默|配图|图片|插图|题目|标题|例子|案例|换一个|换掉|换成|不好|不对|重写|润色|优化|调整|这段|这句|这里|写清楚|写详细|讲清楚|说清楚|补充|加上|展开|完善|充实|再补|详细写|详细一点|再详细|怎么种|如何种|注意事项|要注意|推荐的|输出视频|视频脚本|改成笔记|换成脚本|转为脚本|改成小红书|改成抖音|改成公众号)/
+const FORMAT_ADAPT_RE =
+  /(输出|改成|换成|转为|改写为|改编成|变成|生成).{0,12}(视频脚本|短视频|口播|分镜|脚本|笔记|文章)|(视频脚本|短视频脚本|口播脚本)|(改成|换成|转为).{0,6}(小红书|抖音|公众号|微信)|(小红书笔记|抖音脚本|公众号文章)/
+const NEW_TOPIC_RE =
+  /^(帮我)?(再)?写(一)?(篇|个)|帮我写|生成(一篇|一个)?|新开一篇|换个主题|重新选题|另外写/
+
+const BOUNDARY_REPLIES = {
+  insult:
+    '我理解你可能有些着急，但我会始终保持尊重。我是营销创作顾问，准备好就告诉我你的创作主题。下一步：说一个你想推广的产品或服务，我们继续。',
+  unsafe:
+    '这类内容涉及人身攻击、辱骂或危险表述，我无法协助创作。我只帮你写合规的营销内容（公众号 / 小红书 / 抖音）。下一步：换一个产品、服务或品牌话题，我们重新开始。',
+  revise_feedback:
+    '收到，上一批方案没对上你的需求。请具体告诉我：想要的语气、受众、切入角度，或必须包含的要点，我按你的要求重新出方案。下一步：直接说你希望怎么改。',
+}
+
+function looksLikeNewTopic(text) {
+  const t = String(text || '').trim()
+  return NEW_TOPIC_RE.test(t) && !REVISE_EDIT_RE.test(t) && !FORMAT_ADAPT_RE.test(t)
+}
+
+function parseAdaptTarget(text) {
+  const raw = String(text || '').trim()
+  const t = raw.replace(/^\[平台[^\]]*\]\s*/i, '').trim()
+  let platformCode = null
+  let format = null
+  if (/(小红书|\bxhs\b)/i.test(raw) || /小红书/.test(t)) platformCode = 'xhs'
+  else if (/(抖音|\bdouyin\b)/i.test(raw) || /抖音/.test(t)) platformCode = 'douyin'
+  else if (/(公众号|微信|\bwechat\b)/i.test(raw) || /(公众号|微信)/.test(t)) platformCode = 'wechat'
+
+  if (/(视频脚本|短视频|口播|分镜)/.test(t)) format = 'video_script'
+  else if (/(笔记|图文笔记)/.test(t)) format = 'note'
+  else if (/(文章|图文文章)/.test(t) && !/视频/.test(t)) format = 'article'
+
+  const isAdapt = FORMAT_ADAPT_RE.test(t) || FORMAT_ADAPT_RE.test(raw)
+  return { platformCode, format, isAdapt }
+}
+
+function looksLikeContentRevise(text) {
+  const t = String(text || '')
+    .replace(/^\[平台[^\]]*\]\s*/i, '')
+    .trim()
+  if (!t) return false
+  if (looksLikeNewTopic(t)) return false
+  if (FORMAT_ADAPT_RE.test(t) || REVISE_EDIT_RE.test(t)) return true
+  if (GREETING_RE.test(t) || TOO_VAGUE_RE.test(t) || INSULT_RE.test(t) || UNSAFE_RE.test(t)) {
+    return false
+  }
+  // 已有正文时：短中反馈默认当改稿（避免「写清楚怎么种」这类又跳回出方案）
+  if (findLatestContentResult() && t.length <= 200) {
+    return /(不好|不对|换|改|删|加|太|不要|别|重写|润色|优化|调整|例子|案例|写清|详细|补充|完善|注意|怎么|如何|推荐|输出|脚本|笔记|文章)/.test(
+      t,
+    )
+  }
+  return false
+}
+
+function findLatestContentResult() {
+  for (let i = messages.value.length - 1; i >= 0; i -= 1) {
+    const m = messages.value[i]
+    if (m?.type === 'result' && m.contentId) return m
+  }
+  return null
+}
 
 function localPreflightCheck(text) {
   const t = text.trim()
-  if (t.length < 6) {
+  // 具体改稿交给正文改稿链路，不在此拦截
+  if (REVISE_EDIT_RE.test(t)) return null
+  if (UNSAFE_RE.test(t)) return BOUNDARY_REPLIES.unsafe
+  if (INSULT_RE.test(t)) return BOUNDARY_REPLIES.insult
+  if (REVISE_VAGUE_RE.test(t)) return BOUNDARY_REPLIES.revise_feedback
+  const cnLen = (t.match(/[\u4e00-\u9fff]/g) || []).length
+  if (cnLen < 4 && t.length < 6) {
     return '请补充更具体的创作需求，例如：主题、目标读者或想强调的核心要点。'
   }
   if (GREETING_RE.test(t)) {
@@ -380,6 +453,22 @@ async function loadAdvisor() {
   }
 }
 
+async function refreshModelTag() {
+  try {
+    if (llmSource.value === 'platform') {
+      const q = llmQuota.value
+      if (q.platform_provider || q.platform_model) {
+        modelTag.value = `${q.platform_provider || 'deepseek'} · ${q.platform_model || 'deepseek-v4-flash'}`
+        return
+      }
+    }
+    const { data } = await llmApi.get()
+    modelTag.value = `${data.provider} · ${data.model}`
+  } catch {
+    modelTag.value = '未配置模型'
+  }
+}
+
 async function loadLlmQuota() {
   try {
     const { data } = await llmApi.getQuota()
@@ -391,6 +480,7 @@ async function loadLlmQuota() {
         llmSource.value = 'tenant'
       }
     }
+    await refreshModelTag()
   } catch {
     /* ignore */
   }
@@ -410,16 +500,13 @@ function pickLlmSource(source) {
     return
   }
   llmSource.value = source
+  refreshModelTag()
 }
 
 onMounted(async () => {
   if (auth.isLoggedIn && !auth.user) await auth.fetchMe()
-  try {
-    const { data } = await llmApi.get()
-    modelTag.value = `${data.provider} · ${data.model}`
-  } catch {
-    modelTag.value = '未配置模型'
-  }
+  await loadLlmQuota()
+  await refreshModelTag()
   try {
     const { data } = await wechatApi.get()
     wechatSettings.value = data
@@ -654,12 +741,65 @@ async function fetchProposals(topic) {
   }
 }
 
+async function handleReviseContent(resultMsg, instruction, adapt = null) {
+  generating.value = true
+  streamBuffer.value = ''
+  const targetPlatform = adapt?.platformCode || platform.value || 'wechat'
+  const targetFormat =
+    adapt?.format || contentFormat.value || defaultContentFormat(targetPlatform)
+  if (adapt?.platformCode) {
+    platform.value = adapt.platformCode
+  }
+  if (adapt?.format || adapt?.platformCode) {
+    contentFormat.value = resolveContentFormat(targetPlatform, targetFormat)
+  }
+  const isAdapt = !!(adapt && adapt.isAdapt)
+  workflowStep.value = isAdapt ? '正在改写为新平台/形态…' : '正在按你的意见改稿…'
+  scrollToBottom()
+  try {
+    const payload = {
+      instruction,
+      llm_source: llmSource.value,
+      platform: platform.value || targetPlatform,
+      content_format: contentFormat.value || targetFormat,
+    }
+    if ((payload.content_format || '') === 'video_script') {
+      payload.video_duration_sec = videoDurationSec.value
+    }
+    const { data } = await contentApi.revise(resultMsg.contentId, payload)
+    pushContentResult(data, {
+      platform: data.platform || platform.value || 'wechat',
+    })
+    ElMessage.success(isAdapt ? '已改写为新平台/形态' : '已按意见改稿')
+  } catch (e) {
+    ElMessage.error(formatApiError(e, '改稿失败'))
+    messages.value.push({
+      role: 'assistant',
+      type: 'text',
+      content: `改稿失败：${formatApiError(e, '请稍后重试')}`,
+    })
+  } finally {
+    generating.value = false
+    streamBuffer.value = ''
+    workflowStep.value = ''
+    await scrollToBottom()
+  }
+}
+
 async function handleSend() {
   const text = inputText.value.trim()
   if (!text || generating.value || proposing.value) return
 
   messages.value.push({ role: 'user', type: 'text', content: buildUserPrompt(text) })
   inputText.value = ''
+
+  const latestResult = findLatestContentResult()
+  const adapt = parseAdaptTarget(text)
+  if (latestResult && (adapt.isAdapt || looksLikeContentRevise(text))) {
+    await handleReviseContent(latestResult, text, adapt.isAdapt ? adapt : null)
+    return
+  }
+
   proposing.value = true
   streamBuffer.value = ''
   workflowStep.value = useWorkflow ? '预检中…' : '正在生成方案…'

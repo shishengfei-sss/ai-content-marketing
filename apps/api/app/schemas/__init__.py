@@ -192,7 +192,7 @@ class LLMSettingsUpdate(BaseModel):
     provider: str = "deepseek"
     base_url: str = "https://api.deepseek.com"
     api_key: str | None = None
-    model: str = "deepseek-chat"
+    model: str = "deepseek-v4-flash"
     timeout_sec: int = 60
     is_active: bool = True
 
@@ -212,6 +212,8 @@ class LLMQuotaOut(BaseModel):
     has_tenant_key: bool
     platform_available: bool
     default_free_quota: int = 100
+    platform_provider: str = "deepseek"
+    platform_model: str = "deepseek-v4-flash"
 
 
 class PlatformLLMSettingsOut(BaseModel):
@@ -240,6 +242,14 @@ class PlatformLLMTestRequest(BaseModel):
     api_key: str | None = None
     model: str | None = None
     timeout_sec: int | None = Field(default=None, ge=10, le=300)
+
+
+class ContentReviseRequest(BaseModel):
+    instruction: str = Field(min_length=2, max_length=4000)
+    llm_source: str = Field(default="platform", pattern="^(platform|tenant)$")
+    platform: str | None = Field(default=None, pattern="^(wechat|xhs|douyin)$")
+    content_format: str | None = Field(default=None, pattern="^(article|note|video_script)$")
+    video_duration_sec: int | None = Field(default=None, description="视频脚本时长上限：15/30/45/60")
 
 
 class ContentGenerateRequest(BaseModel):

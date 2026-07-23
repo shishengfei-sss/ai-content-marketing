@@ -37,12 +37,17 @@ def step_bd_prompt(results: list[bool]) -> None:
     results.append(check("VABD-1 正文 prompt 含「我不回答」", "我不回答" in prompt, ""))
     results.append(check("VABD-2 正文 prompt 含宪法块", "最高优先级" in prompt, ""))
     results.append(check("VABD-3 正文 prompt 含角色锁定", "角色锁定" in prompt, ""))
-    results.append(check("VABD-4 正文 prompt 含零断点", "零断点" in prompt, ""))
+    results.append(check("VABD-4 正文 prompt 不含对话零断点", "零断点" not in prompt, ""))
+    results.append(check("VABD-4b 正文默认禁硬广", "卖产品的营销文" in prompt, ""))
+    from app.services.prompt_builder import ZERO_BREAK_BLOCK, build_layered_system_prompt
+
+    chat_prompt = build_layered_system_prompt(include_zero_break=True, include_writing_principles=False)
+    results.append(check("VABD-4c 对话路径可含零断点", "零断点" in chat_prompt and ZERO_BREAK_BLOCK in chat_prompt, ""))
 
 
 def step_bd_boundary_replies(results: list[bool]) -> None:
     """TADV-BD-02/03: 标准边界话术存在且含拉回引导。"""
-    for key in ("off_topic", "insult", "joke"):
+    for key in ("off_topic", "insult", "joke", "unsafe", "revise_feedback"):
         reply = STANDARD_REPLIES.get(key, "")
         results.append(check(f"VABD-5 STANDARD_REPLIES[{key}] 存在", bool(reply), key))
         results.append(check(f"VABD-6 {key} 含下一步引导", "下一步" in reply, reply[:40]))
@@ -50,6 +55,55 @@ def step_bd_boundary_replies(results: list[bool]) -> None:
     results.append(check("VABD-7 prompt_leak 回复", _BOUNDARY_REPLIES["prompt_leak"] == "我不回答。", ""))
     results.append(check("VABD-8 off_topic 边界回复", "不在我的服务范围" in _BOUNDARY_REPLIES["off_topic"], ""))
     results.append(check("VABD-9 insult 边界回复", "尊重" in _BOUNDARY_REPLIES["insult"], ""))
+    results.append(check("VABD-9b unsafe 边界回复", "无法协助" in _BOUNDARY_REPLIES["unsafe"], ""))
+
+    from app.services.agent.preflight_service import _local_input_class, _local_clarify
+
+    results.append(check("VABD-16 你是傻子吗 → insult", _local_input_class("你是傻子吗") == "insult", ""))
+    results.append(
+        check(
+            "VABD-17 骂人/自杀稿 → unsafe",
+            _local_input_class("写文章问候她妈，想自杀就去死吧") == "unsafe",
+            "",
+        )
+    )
+    results.append(
+        check(
+            "VABD-18 方案不满意 → revise",
+            _local_input_class("跟我想要的不一样，认真思考点") == "revise_feedback",
+            "",
+        )
+    )
+    insult_q = _local_clarify("你是傻子吗")
+    results.append(check("VABD-19 短句辱骂不走过短", insult_q and "尊重" in insult_q, str(insult_q)[:40]))
+    results.append(
+        check(
+            "VABD-20 具体改稿 → revise_edit",
+            _local_input_class("题目改一下，去掉城市猎人，语气幽默，字数太多了") == "revise_edit",
+            "",
+        )
+    )
+    results.append(
+        check(
+            "VABD-20b 写清楚怎么种 → revise_edit",
+            _local_input_class("推荐的要写清楚怎么种，注意什么") == "revise_edit",
+            "",
+        )
+    )
+    results.append(
+        check(
+            "VABD-21 改稿不被当 unsafe",
+            _local_clarify("1、去掉城市猎人\n2、语气幽默") is None,
+            "",
+        )
+    )
+    results.append(
+        check(
+            "VABD-22 例子不好要换 → revise_edit",
+            _local_input_class("例子不好，要换一个") == "revise_edit",
+            "",
+        )
+    )
 
 
 def step_bd_zero_break(results: list[bool]) -> None:
