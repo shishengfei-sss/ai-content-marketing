@@ -5,6 +5,7 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import uuid_eq
@@ -12,6 +13,17 @@ from app.models import TenantMembership, TenantRole, TenantRolePermission, User
 from app.permissions import ALL_PERMISSIONS, SYSTEM_ROLE_ADMIN, SYSTEM_ROLE_EDITOR
 from app.services.auth_service import hash_password, reset_user_password
 from app.services.membership_service import get_membership, seed_tenant_roles
+
+
+def _role_id_db_text(db: Session, role_id: UUID) -> str:
+    """返回 tenant_roles.id 在库中的原始文本（SQLite 可能带/不带连字符）。"""
+    raw = db.execute(
+        text("SELECT id FROM tenant_roles WHERE CAST(id AS TEXT) = :a OR CAST(id AS TEXT) = :b"),
+        {"a": str(role_id), "b": role_id.hex},
+    ).scalar()
+    if raw is None:
+        raise HTTPException(status_code=404, detail="角色不存在")
+    return str(raw)
 
 
 def _is_admin_role(role: TenantRole | None) -> bool:
@@ -92,12 +104,31 @@ def update_role_permissions(
         invalid = set(permissions) - set(ALL_PERMISSIONS)
         if invalid:
             raise HTTPException(status_code=400, detail=f"无效权限: {', '.join(sorted(invalid))}")
-        role.permissions.clear()
-        db.flush()
-        for code in permissions:
-            db.add(TenantRolePermission(role_id=role.id, permission_code=code))
+        # SQLite 下 UUID 可能带/不带连字符：
+        # 1) relationship.clear() 的 DELETE 常匹配 0 行；
+        # 2) ORM Uuid(CHAR32) 写入 .hex，若父行 id 带连字符，joinedload JOIN 对不上。
+        db.query(TenantRolePermission).filter(uuid_eq(TenantRolePermission.role_id, role.id)).delete(
+            synchronize_session=False
+        )
+        db.expire(role, ["permissions"])
+        role_id_text = _role_id_db_text(db, role.id)
+        for code in sorted(set(permissions)):
+            db.execute(
+                text(
+                    "INSERT INTO tenant_role_permissions (id, role_id, permission_code) "
+                    "VALUES (:id, :role_id, :code)"
+                ),
+                {"id": str(uuid4()), "role_id": role_id_text, "code": code},
+            )
     db.commit()
-    db.refresh(role)
+    role = (
+        db.query(TenantRole)
+        .options(joinedload(TenantRole.permissions))
+        .filter(uuid_eq(TenantRole.id, role_id), TenantRole.tenant_id == tenant_id)
+        .first()
+    )
+    if not role:
+        raise HTTPException(status_code=500, detail="角色更新后读取失败")
     return role
 
 
