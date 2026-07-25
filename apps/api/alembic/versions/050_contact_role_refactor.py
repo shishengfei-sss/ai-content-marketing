@@ -26,7 +26,7 @@ def upgrade() -> None:
     conn.execute(
         sa.text(
             "UPDATE contacts SET contact_role = '决策者' "
-            "WHERE is_decision_maker = 1 OR is_decision_maker = true"
+            "WHERE is_decision_maker IS TRUE"
         )
     )
 
@@ -48,7 +48,7 @@ def downgrade() -> None:
     conn = op.get_bind()
     conn.execute(
         sa.text(
-            "UPDATE contacts SET is_decision_maker = 1 "
+            "UPDATE contacts SET is_decision_maker = true "
             "WHERE contact_role = '决策者'"
         )
     )

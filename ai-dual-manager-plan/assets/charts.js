@@ -1,4 +1,4 @@
-// Charts for AI Dual Manager Unified Plan
+// Charts for AI Triple Manager Unified Plan
 (function() {
   var style = getComputedStyle(document.documentElement);
   var accent = style.getPropertyValue('--accent').trim();
@@ -9,7 +9,7 @@
   var bg2 = style.getPropertyValue('--bg2').trim();
   var bg = style.getPropertyValue('--bg').trim();
 
-  // ============ Chart 1: Dual Manager Architecture Tree ============
+  // ============ Chart 1: Triple Manager Architecture Tree ============
   var chartArch = echarts.init(document.getElementById('chart-arch'), null, { renderer: 'svg' });
   chartArch.setOption({
     animation: false,
@@ -36,28 +36,23 @@
             ]
           },
           {
-            name: 'AI销售经理Supervisor\nP-MGR | 线索+商机+报价\n8子Agent',
+            name: 'AI销售经理Supervisor\nP-MGR | 分析+商机+客户+教练\n4子Agent',
             itemStyle: { color: accent, borderColor: accent },
             label: { fontSize: 12, fontWeight: 600, color: '#fff' },
             children: [
-              { name: '分析官' },
-              { name: '商机官' },
-              { name: '内容官' },
-              { name: '报价官' },
-              { name: '线索官' },
-              { name: '客户官' },
-              { name: '教练官' },
-              { name: '协同官' }
+              { name: '分析官 AnalystAgent' },
+              { name: '商机官 OpportunityAgent' },
+              { name: '客户官 CustomerAgent' },
+              { name: '教练官 CoachAgent' }
             ]
           },
           {
-            name: 'AI服务经理Supervisor\nP-SVC | 工单+健康+知识\n3专家Agent',
+            name: 'AI服务经理Supervisor\nP-SVC | 工单+健康+续约\n2专家Agent',
             itemStyle: { color: '#7c3aed', borderColor: '#7c3aed' },
             label: { fontSize: 12, fontWeight: 600, color: '#fff' },
             children: [
-              { name: 'Support 服务官' },
-              { name: 'Health 健康官' },
-              { name: 'Knowledge 知识官' }
+              { name: '服务官 SupportAgent' },
+              { name: '客户成功官 CSMHealthAgent' }
             ]
           },
           {
@@ -135,11 +130,11 @@
     '报价/合同', '用户/增长'
   ];
 
-  // Marketing coverage (10 domains, scored 0-10)
+  // Marketing coverage (3 expert agents, scored 0-10)
   var marketingScores = [10, 6, 10, 4, 10, 10, 7, 10, 0, 10];
-  // Sales coverage (7 domains, scored 0-10)
+  // Sales coverage (4 sub-agents, scored 0-10)
   var salesScores = [8, 10, 7, 10, 8, 2, 10, 0, 10, 3];
-  // Service coverage (6 core domains mapped onto the 10-axis framework, scored 0-10)
+  // Service coverage (2 expert agents, scored 0-10)
   var serviceScores = [5, 3, 5, 10, 8, 0, 7, 3, 2, 8];
 
   chartRadar.setOption({
@@ -178,21 +173,21 @@
       data: [
         {
           value: marketingScores,
-          name: 'AI营销经理（10大职责域）',
+          name: 'AI营销经理（3专家Agent）',
           itemStyle: { color: accent2 },
           lineStyle: { color: accent2, width: 2 },
           areaStyle: { color: accent2, opacity: 0.15 }
         },
         {
           value: salesScores,
-          name: 'AI销售经理（7大职责域）',
+          name: 'AI销售经理（4子Agent）',
           itemStyle: { color: accent },
           lineStyle: { color: accent, width: 2 },
           areaStyle: { color: accent, opacity: 0.15 }
         },
         {
           value: serviceScores,
-          name: 'AI服务经理（6大职责域）',
+          name: 'AI服务经理（2专家Agent）',
           itemStyle: { color: '#7c3aed' },
           lineStyle: { color: '#7c3aed', width: 2 },
           areaStyle: { color: '#7c3aed', opacity: 0.15 }
@@ -324,11 +319,11 @@
     { name: 'P0: 共享数据打通', weeks: [0, 3], color: ink },
     { name: 'P1: 三人格+骨架', weeks: [2, 5], color: accent2 },
     { name: 'P2-MKT: 营销三专家Agent', weeks: [4, 8], color: accent2 },
-    { name: 'P2-SALES: 销售三子Agent', weeks: [4, 7], color: accent },
-    { name: 'P2-SVC: 服务三子Agent', weeks: [4, 8], color: '#7c3aed' },
+    { name: 'P2-SALES: 销售四子Agent', weeks: [4, 8], color: accent },
+    { name: 'P2-SVC: 服务两子Agent', weeks: [4, 7], color: '#7c3aed' },
     { name: 'P3-MKT: 营销完整职能', weeks: [8, 14], color: accent2 },
-    { name: 'P3-SALES: 销售完整职能', weeks: [7, 13], color: accent },
-    { name: 'P3-SVC: 服务完整职能', weeks: [8, 14], color: '#7c3aed' },
+    { name: 'P3-SALES: 销售完整职能', weeks: [8, 14], color: accent },
+    { name: 'P3-SVC: 服务完整职能', weeks: [7, 13], color: '#7c3aed' },
     { name: 'P4: 三Manager自治闭环', weeks: [14, 18], color: '#7c3aed' },
     { name: 'P5: 三Manager自进化', weeks: [18, 26], color: muted }
   ];

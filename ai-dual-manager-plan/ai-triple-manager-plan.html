@@ -246,9 +246,9 @@
       </div>
       <div class="grid-4" style="margin-top:1rem;">
         <div class="stat"><span class="num">3</span><span class="label">Supervisor大脑</span></div>
-        <div class="stat"><span class="num">14</span><span class="label">子Agent（营销3+销售8+服务3）</span></div>
+        <div class="stat"><span class="num">9</span><span class="label">子Agent（营销3+销售4+服务2）</span></div>
         <div class="stat"><span class="num">6+3+6</span><span class="label">资料库（营销6库+销售3库+服务6库）</span></div>
-        <div class="stat"><span class="num">16+16+12</span><span class="label">工具（营销16+销售16+服务12）</span></div>
+        <div class="stat"><span class="num">16+12+8</span><span class="label">工具（营销16+销售12+服务8）</span></div>
       </div>
     </section>
 
@@ -320,7 +320,7 @@
               <tr><td>Workflow + Confirm闸</td><td>v0.4 Agent C1–C3</td><td>AI不能擅自发邮件/报价/分配/发文/动预算/改服务等级</td></tr>
               <tr><td>混合RAG（pgvector + 重排）</td><td>v0.4 Agent C4</td><td>营销库/线索库/产品价库/行业库/服务库的事实来源与溯源</td></tr>
               <tr><td>人格库</td><td>人格库设计手册</td><td>P-MKT营销经理人格 + P-MGR销售经理人格 + P-SVC服务经理人格</td></tr>
-              <tr><td>营销资料库</td><td>已有方案</td><td>营销Creator取素材 + 销售内容官取案例话术 + 知识官取FAQ素材</td></tr>
+              <tr><td>营销资料库</td><td>已有方案</td><td>营销Creator取素材 + 销售客户官取案例话术 + 服务官取FAQ素材</td></tr>
               <tr><td>CRM适配器</td><td>v1.6 D7/FR-11</td><td>营销只读CRM + 销售读写CRM + 服务读写CRM（含工单/满意度）</td></tr>
               <tr><td>长期记忆 L0–L4</td><td>v0.4 Agent LM</td><td>跨会话记忆，三Manager各自独立记忆空间 + 共享经验池</td></tr>
             </tbody>
@@ -350,26 +350,22 @@
             </thead>
             <tbody>
               <tr><td>1</td><td><strong>战略与目标</strong></td><td>年度/季度销售目标制定与拆解（区域/行业/产品线）；销售策略与打法；市场与竞争格局判断</td><td>分析官 + Supervisor</td></tr>
-              <tr><td>2</td><td><strong>线索与商机</strong></td><td>线索获取/清洗/分配；线索培育孵化；商机阶段推进策略；销售预测与赢单率</td><td>线索官 / 商机官</td></tr>
+              <tr><td>2</td><td><strong>线索与商机</strong></td><td>线索获取/清洗/分配；线索培育孵化；商机阶段推进策略；销售预测与赢单率</td><td>分析官 / 商机官</td></tr>
               <tr><td>3</td><td><strong>客户经营</strong></td><td>关键客户经营策略；决策链（DMU）梳理；客户分层与价值经营；流失预警</td><td>客户官</td></tr>
-              <tr><td>4</td><td><strong>报价与合同</strong></td><td>配置-定价-报价（CPQ）；折扣/底价护栏与审批；投标应标；合同评审要点</td><td>报价官</td></tr>
-              <tr><td>5</td><td><strong>团队管理</strong></td><td>线索/商机分配；销售辅导（coaching）与陪访；绩效考核与激励；复盘与经验沉淀</td><td>协同官 / 教练官</td></tr>
-              <tr><td>6</td><td><strong>过程与协同</strong></td><td>销售过程管理（拜访/跟进计划）；跨部门协同（市场/产品/交付/财务）；周会/经营会组织</td><td>协同官</td></tr>
-              <tr><td>7</td><td><strong>内容产出</strong></td><td>给销售的话术/模板/培训材料；给客户的方案/提案/复盘报告；经营分析报告</td><td>内容官</td></tr>
+              <tr><td>4</td><td><strong>报价与合同</strong></td><td>配置-定价-报价（CPQ）；折扣/底价护栏与审批；投标应标；合同评审要点</td><td>商机官</td></tr>
+              <tr><td>5</td><td><strong>团队管理</strong></td><td>线索/商机分配；销售辅导（coaching）与陪访；绩效考核与激励；复盘与经验沉淀</td><td>教练官</td></tr>
+              <tr><td>6</td><td><strong>过程与协同</strong></td><td>销售过程管理（拜访/跟进计划）；跨部门协同（市场/产品/交付/财务）；周会/经营会组织</td><td>教练官</td></tr>
+              <tr><td>7</td><td><strong>内容产出</strong></td><td>给销售的话术/模板/培训材料；给客户的方案/提案/复盘报告；经营分析报告</td><td>客户官 / 教练官</td></tr>
             </tbody>
           </table>
         </div>
 
-        <h3>2.3 八个子Agent</h3>
+        <h3>2.3 四个子Agent</h3>
         <div class="grid-4">
-          <div class="card card-accent2"><strong>分析官</strong><br><span style="font-size:0.82rem;color:var(--muted);">预测/赢单率/差距/看板</span></div>
-          <div class="card card-accent"><strong>商机官</strong><br><span style="font-size:0.82rem;color:var(--muted);">推进策略/停滞预警/行动建议</span></div>
-          <div class="card card-accent2"><strong>客户官</strong><br><span style="font-size:0.82rem;color:var(--muted);">画像/决策链/分层/流失预警</span></div>
-          <div class="card card-accent"><strong>报价官</strong><br><span style="font-size:0.82rem;color:var(--muted);">CPQ/底价护栏/投标应标</span></div>
-          <div class="card card-accent2"><strong>内容官</strong><br><span style="font-size:0.82rem;color:var(--muted);">复用v0.6/复盘/方案/话术</span></div>
-          <div class="card card-accent"><strong>教练官</strong><br><span style="font-size:0.82rem;color:var(--muted);">陪练/拜访辅导/丢单复盘</span></div>
-          <div class="card card-accent2"><strong>线索官</strong><br><span style="font-size:0.82rem;color:var(--muted);">清洗/评分/分配/培育</span></div>
-          <div class="card card-accent"><strong>协同官</strong><br><span style="font-size:0.82rem;color:var(--muted);">任务/跟进/周会/经营会</span></div>
+          <div class="card card-accent2"><strong>分析官</strong><br><span style="font-size:0.82rem;color:var(--muted);">预测/差距/线索评分/看板</span></div>
+          <div class="card card-accent"><strong>商机官</strong><br><span style="font-size:0.82rem;color:var(--muted);">推进/停滞/CPQ报价/方案</span></div>
+          <div class="card card-accent2"><strong>客户官</strong><br><span style="font-size:0.82rem;color:var(--muted);">画像/决策链/分层/话术</span></div>
+          <div class="card card-accent"><strong>教练官</strong><br><span style="font-size:0.82rem;color:var(--muted);">陪练/复盘/周会/协同</span></div>
         </div>
 
         <h3>2.4 关键设计原则</h3>
@@ -509,32 +505,35 @@
             </thead>
             <tbody>
               <tr><td>1</td><td><strong>工单处理与服务交付</strong></td><td>工单分类/分级/智能分派；SLA监控；解决方案推荐；工单升级与升级路径</td><td>服务官</td><td><span class="badge badge-new">NEW</span></td></tr>
-              <tr><td>2</td><td><strong>客户健康度管理</strong></td><td>健康评分模型；流失预警；产品采用率追踪；NRR（净收入留存）监控</td><td>客户健康官</td><td><span class="badge badge-new">NEW</span></td></tr>
-              <tr><td>3</td><td><strong>知识库与自助服务</strong></td><td>FAQ/解决方案库维护；故障排查指南；自助内容生成；知识缺口识别</td><td>知识官</td><td><span class="badge badge-new">NEW</span></td></tr>
-              <tr><td>4</td><td><strong>满意度与反馈管理</strong></td><td>CSAT/NPS跟踪；verbatim反馈分析；改进建议闭环；满意度趋势预警</td><td>客户健康官 + 知识官</td><td><span class="badge badge-new">NEW</span></td></tr>
-              <tr><td>5</td><td><strong>续约与扩展</strong></td><td>续约预测与提前干预；增购/扩展机会识别；客户生命周期价值(CLV)管理</td><td>客户健康官 + Supervisor</td><td><span class="badge badge-new">NEW</span></td></tr>
-              <tr><td>6</td><td><strong>主动服务与预警</strong></td><td>产品使用引导；异常主动预警（如功能闲置/故障）；周期性客户关怀</td><td>服务官 + 客户健康官</td><td><span class="badge badge-new">NEW</span></td></tr>
+              <tr><td>2</td><td><strong>客户健康度管理</strong></td><td>健康评分模型；流失预警；产品采用率追踪；NRR（净收入留存）监控</td><td>客户成功官</td><td><span class="badge badge-new">NEW</span></td></tr>
+              <tr><td>3</td><td><strong>知识库与自助服务</strong></td><td>FAQ/解决方案库维护；故障排查指南；自助内容生成；知识缺口识别</td><td>服务官</td><td><span class="badge badge-new">NEW</span></td></tr>
+              <tr><td>4</td><td><strong>满意度与反馈管理</strong></td><td>CSAT/NPS跟踪；verbatim反馈分析；改进建议闭环；满意度趋势预警</td><td>客户成功官</td><td><span class="badge badge-new">NEW</span></td></tr>
+              <tr><td>5</td><td><strong>续约与扩展</strong></td><td>续约预测与提前干预；增购/扩展机会识别；客户生命周期价值(CLV)管理</td><td>客户成功官 + Supervisor</td><td><span class="badge badge-new">NEW</span></td></tr>
+              <tr><td>6</td><td><strong>主动服务与预警</strong></td><td>产品使用引导；异常主动预警（如功能闲置/故障）；周期性客户关怀</td><td>服务官 + 客户成功官</td><td><span class="badge badge-new">NEW</span></td></tr>
             </tbody>
           </table>
         </div>
 
-        <h3>3B.3 三个专家Agent</h3>
-        <div class="grid-3">
+        <h3>3B.3 两个专家Agent</h3>
+        <div class="grid-2">
           <div class="card" style="border-left:4px solid #7c3aed;">
             <h4 style="color:#7c3aed;">服务官 SupportAgent</h4>
-            <p style="font-size:0.85rem;color:var(--muted);">"快速响应、精准解决"</p>
+            <p style="font-size:0.85rem;color:var(--muted);">"快速响应、精准解决、知识沉淀"</p>
             <ul>
               <li>工单智能分类与分派</li>
               <li>SLA监控与超时预警</li>
               <li>历史工单相似匹配</li>
               <li>解决方案自动推荐</li>
               <li>工单升级路径建议</li>
+              <li>FAQ/解决方案库维护</li>
+              <li>故障排查指南生成</li>
+              <li>工单→知识自动沉淀</li>
               <li>服务负载均衡分析</li>
             </ul>
           </div>
           <div class="card" style="border-left:4px solid #0891b2;">
-            <h4 style="color:#0891b2;">客户健康官 HealthAgent</h4>
-            <p style="font-size:0.85rem;color:var(--muted);">"防患于未然"</p>
+            <h4 style="color:#0891b2;">客户成功官 CSMHealthAgent</h4>
+            <p style="font-size:0.85rem;color:var(--muted);">"防患于未然、经营长期关系"</p>
             <ul>
               <li>客户健康评分建模</li>
               <li>流失风险预警与干预</li>
@@ -542,18 +541,8 @@
               <li>NRR趋势分析</li>
               <li>续约预测与提前触达</li>
               <li>增购/扩展机会识别</li>
-            </ul>
-          </div>
-          <div class="card" style="border-left:4px solid #16a34a;">
-            <h4 style="color:#16a34a;">知识官 KnowledgeAgent</h4>
-            <p style="font-size:0.85rem;color:var(--muted);">"让知识自己生长"</p>
-            <ul>
-              <li>FAQ/解决方案库维护</li>
-              <li>故障排查指南生成</li>
-              <li>自助服务内容产出</li>
-              <li>知识缺口识别与补充</li>
-              <li>工单→知识自动沉淀</li>
-              <li>客户自助率提升建议</li>
+              <li>CSAT/NPS跟踪与情感分析</li>
+              <li>客户生命周期价值(CLV)管理</li>
             </ul>
           </div>
         </div>
@@ -573,12 +562,12 @@
               <tr><th>库</th><th>核心问题</th><th>更新频率</th><th>对应Agent</th></tr>
             </thead>
             <tbody>
-              <tr><td><strong>知识FAQ库</strong></td><td>客户常问什么？标准答案是什么？</td><td>随时新增（工单→知识自动沉淀）</td><td>KnowledgeAgent</td></tr>
-              <tr><td><strong>工单历史库</strong></td><td>类似问题以前怎么解决的？</td><td>每工单一结</td><td>SupportAgent/KnowledgeAgent</td></tr>
-              <tr><td><strong>客户健康库</strong></td><td>哪些客户有流失风险？</td><td>日级计算 + 实时预警</td><td>HealthAgent</td></tr>
-              <tr><td><strong>产品使用库</strong></td><td>客户用了哪些功能？用得怎么样？</td><td>日级同步</td><td>HealthAgent/SupportAgent</td></tr>
+              <tr><td><strong>知识FAQ库</strong></td><td>客户常问什么？标准答案是什么？</td><td>随时新增（工单→知识自动沉淀）</td><td>SupportAgent</td></tr>
+              <tr><td><strong>工单历史库</strong></td><td>类似问题以前怎么解决的？</td><td>每工单一结</td><td>SupportAgent</td></tr>
+              <tr><td><strong>客户健康库</strong></td><td>哪些客户有流失风险？</td><td>日级计算 + 实时预警</td><td>CSMHealthAgent</td></tr>
+              <tr><td><strong>产品使用库</strong></td><td>客户用了哪些功能？用得怎么样？</td><td>日级同步</td><td>CSMHealthAgent</td></tr>
               <tr><td><strong>服务SLA库</strong></td><td>服务效率达标吗？瓶颈在哪？</td><td>日级汇总 + 周报</td><td>SupportAgent</td></tr>
-              <tr><td><strong>客户反馈库</strong></td><td>客户在抱怨/赞美什么？</td><td>实时采集 + 周级分析</td><td>HealthAgent/KnowledgeAgent</td></tr>
+              <tr><td><strong>客户反馈库</strong></td><td>客户在抱怨/赞美什么？</td><td>实时采集 + 周级分析</td><td>CSMHealthAgent</td></tr>
             </tbody>
           </table>
         </div>
@@ -587,7 +576,7 @@
         <div class="grid-2">
           <div class="card card-accent">
             <h4>服务分层</h4>
-            <p style="font-size:0.88rem;">L1自助（知识库/FAQ）→ L2在线（工单处理）→ L3专属（健康官1v1关怀）→ L4专家（升级人工）。AI负责L1-L3的智能化，L4由人工兜底。</p>
+            <p style="font-size:0.88rem;">L1自助（知识库/FAQ）→ L2在线（工单处理）→ L3专属（客户成功官1v1关怀）→ L4专家（升级人工）。AI负责L1-L3的智能化，L4由人工兜底。</p>
           </div>
           <div class="card card-accent2">
             <h4>闭环学习</h4>
@@ -618,7 +607,7 @@
             <tbody>
               <tr><td><strong>战略规划</strong></td><td>市场/品牌定位、营销计划、预算分配</td><td>销售目标拆解、销售策略打法</td><td>服务/体验战略、CX指标（CSAT/NPS/CES）、SLA体系</td><td>营销品牌战略牵引服务体验标准；销售目标影响服务续约目标</td></tr>
               <tr><td><strong>线索/商机</strong></td><td>线索培育MQL->SQL移交</td><td>线索分配/清洗/跟进、商机推进</td><td>（不直接获客）接管成交客户 Onboarding</td><td><strong>销售成交→服务交接SLA</strong>（签约即起服务建档）</td></tr>
-              <tr><td><strong>内容产出</strong></td><td>品牌内容、PR稿、内容日历</td><td>销售话术、方案提案、复盘报告</td><td>FAQ/知识文章、对客公告、服务话术</td><td>营销内容官产素材→销售/服务内容官转化为对客方案与FAQ</td></tr>
+              <tr><td><strong>内容产出</strong></td><td>品牌内容、PR稿、内容日历</td><td>销售话术、方案提案、复盘报告</td><td>FAQ/知识文章、对客公告、服务话术</td><td>营销Creator产素材→销售客户官转化为对客方案，服务官转化为FAQ</td></tr>
               <tr><td><strong>客户经营</strong></td><td>用户分层画像（营销视角）</td><td>客户经营策略、决策链、流失预警（成交前）</td><td>健康度/续约/增购/流失预警（成交后全生命周期）</td><td>销售管成交前客户经营，服务管成交后；健康预警回流销售做增购</td></tr>
               <tr><td><strong>数据/分析</strong></td><td>ROI归因、渠道效能、品牌健康</td><td>销售预测、赢单率、经营报表</td><td>CSAT/NPS/健康分/SLA达成</td><td>CRM数据营销只读、销售/服务读写（含工单/满意度）</td></tr>
               <tr><td><strong>活动/投放</strong></td><td>活动策划、预算优化、投放</td><td>（不涉及）</td><td>客户成功活动/用户大会（轻量）</td><td>服务客户活动由营销策划、服务执行</td></tr>
@@ -678,8 +667,8 @@
             <h4>AI销售经理</h4>
             <p><strong>SalesManagerSupervisor</strong></p>
             <ul>
-              <li>8个子Agent: 分析/商机/客户/报价/内容/教练/线索/协同</li>
-              <li>16个工具（分析8+商机/线索/客户/报价/教练/协同各1-2）</li>
+              <li>4个子Agent: 分析/商机/客户/教练</li>
+              <li>12个工具（分析4+商机3+客户2+教练3）</li>
               <li>CRM读写 + 三库RAG + CPQ</li>
               <li>人格: P-MGR（目标感/决断/可解释/守边界）</li>
               <li>Confirm闸: 发邮件/报价/改分配</li>
@@ -713,7 +702,7 @@
               <tr><td>人格库</td><td>设计手册</td><td>P-MKT营销经理人格</td><td>P-MGR销售经理人格</td><td>P-SVC服务经理人格</td></tr>
               <tr><td>长期记忆</td><td>v0.4 LM</td><td>跨会话记忆</td><td>跨会话记忆</td><td>跨会话记忆</td></tr>
               <tr><td>CRM适配器</td><td>v1.6 D7</td><td>只读（Lead/Customer/Deal）</td><td>读写（全部CRM模块）</td><td>读写（Ticket/Satisfaction）+只读聚合</td></tr>
-              <tr><td>营销资料库</td><td>已有</td><td>Creator素材+案例</td><td>内容官话术+方案</td><td>知识官取FAQ素材</td></tr>
+              <tr><td>营销资料库</td><td>已有</td><td>Creator素材+案例</td><td>客户官话术+方案</td><td>服务官取FAQ素材</td></tr>
             </tbody>
           </table>
         </div>
@@ -810,7 +799,7 @@
               <div class="flow-step"><span class="step-num">1</span><span><strong>线索成熟判定</strong>：营销Manager（Campaigner）检测到Lead满足MQL标准</span></div>
               <div class="flow-step"><span class="step-num">2</span><span><strong>营销整理线索档案</strong>：汇总行为数据+画像+互动记录，生成线索档案</span></div>
               <div class="flow-step"><span class="step-num">3</span><span><strong>发起移交流程</strong>：通过CRM"线索移交"接口，附线索档案，推送到销售Manager</span></div>
-              <div class="flow-step"><span class="step-num">4</span><span><strong>销售接收与响应</strong>：销售Manager（线索官）接收，在SLA时间内确认或退回</span></div>
+              <div class="flow-step"><span class="step-num">4</span><span><strong>销售接收与响应</strong>：销售Manager（分析官）接收，在SLA时间内确认或退回</span></div>
               <div class="flow-step"><span class="step-num">5</span><span><strong>跟进与反馈</strong>：销售跟进后，定期更新状态；营销追踪转化</span></div>
               <div class="flow-step"><span class="step-num">6</span><span><strong>闭环数据回流</strong>：转化/丢单/退回原因写入CRM，营销用于优化培育策略</span></div>
             </div>
@@ -902,7 +891,7 @@
                 <strong>Campaigner</strong>：活动策划时参考历史方案模板
               </div>
               <div class="card" style="margin:0.5rem 0;">
-                <strong>销售内容官</strong>：生成对客方案时取案例和话术
+                <strong>销售客户官</strong>：生成对客方案时取案例和话术
               </div>
             </div>
           </div>
@@ -1289,13 +1278,13 @@
             </table>
           </div>
           <h4>维护流程</h4>
-          <div class="flow-step"><span class="step-num">1</span><span><strong>工单自动沉淀</strong>：已解决工单 → KnowledgeAgent提取Q&A → 自动入库（待审核状态）</span></div>
+          <div class="flow-step"><span class="step-num">1</span><span><strong>工单自动沉淀</strong>：已解决工单 → SupportAgent提取Q&A → 自动入库（待审核状态）</span></div>
           <div class="flow-step"><span class="step-num">2</span><span><strong>人工审核</strong>：服务运营每日审核待审FAQ，确认准确后发布</span></div>
-          <div class="flow-step"><span class="step-num">3</span><span><strong>过期巡检</strong>：每月扫描last_verified_at超90天的条目，KnowledgeAgent标记"需复核"</span></div>
+          <div class="flow-step"><span class="step-num">3</span><span><strong>过期巡检</strong>：每月扫描last_verified_at超90天的条目，SupportAgent标记"需复核"</span></div>
           <div class="flow-step"><span class="step-num">4</span><span><strong>效果反馈</strong>：客户搜索FAQ后仍转人工 → 标记FAQ质量差 → 触发重写</span></div>
           <div class="lib-grid">
             <div><div class="lib-section-title">更新频率</div><p>持续（工单→知识自动沉淀）+ 日审（人工确认）+ 月巡检</p></div>
-            <div><div class="lib-section-title">负责人</div><p>服务运营（审核）+ KnowledgeAgent（自动沉淀）</p></div>
+            <div><div class="lib-section-title">负责人</div><p>服务运营（审核）+ SupportAgent（自动沉淀）</p></div>
           </div>
         </div>
 
@@ -1350,12 +1339,12 @@
                 <tr><td>risk_level</td><td>enum</td><td>green/yellow/red（自动计算）</td></tr>
                 <tr><td>churn_probability</td><td>float</td><td>流失概率预测（0-1）</td></tr>
                 <tr><td>next_renewal_date</td><td>date</td><td>下次续约日期</td></tr>
-                <tr><td>recommended_action</td><td>text</td><td>HealthAgent建议的干预动作</td></tr>
+                <tr><td>recommended_action</td><td>text</td><td>CSMHealthAgent建议的干预动作</td></tr>
               </tbody>
             </table>
           </div>
           <h4>维护流程</h4>
-          <div class="flow-step"><span class="step-num">1</span><span><strong>日级计算</strong>：每日凌晨HealthAgent从CRM/产品使用库/工单库拉取数据，计算健康评分</span></div>
+          <div class="flow-step"><span class="step-num">1</span><span><strong>日级计算</strong>：每日凌晨CSMHealthAgent从CRM/产品使用库/工单库拉取数据，计算健康评分</span></div>
           <div class="flow-step"><span class="step-num">2</span><span><strong>阈值预警</strong>：健康分低于阈值或流失概率>0.3 → 自动触发EventBus事件 → 推送预警</span></div>
           <div class="flow-step"><span class="step-num">3</span><span><strong>干预闭环</strong>：干预动作执行后，跟踪客户健康分变化 → 回流健康库验证干预效果</span></div>
           <div class="flow-step"><span class="step-num">4</span><span><strong>模型迭代</strong>：季度评估churn_probability准确率，调整权重</span></div>
@@ -1371,7 +1360,7 @@
             </div>
           </div>
           <p><strong>数据来源</strong>：产品埋点/日志自动采集（需产品团队对接）。核心指标：功能采用率、登录频次、核心流程完成率、异常操作频次。</p>
-          <p><strong>维护方式</strong>：全自动，无需人工维护。产品埋点 → ETL → 产品使用库 → HealthAgent计算健康分。</p>
+          <p><strong>维护方式</strong>：全自动，无需人工维护。产品埋点 → ETL → 产品使用库 → CSMHealthAgent计算健康分。</p>
         </div>
 
         <h3>12B.5 服务SLA库</h3>
@@ -1397,7 +1386,7 @@
             </div>
           </div>
           <p><strong>数据来源</strong>：CSAT（工单关闭后弹窗）、NPS（季度问卷）、verbatim（开放式评论）、社媒提及。</p>
-          <p><strong>维护方式</strong>：自动采集 + HealthAgent情感分析归类 + 产品/运营每月review改进建议。</p>
+          <p><strong>维护方式</strong>：自动采集 + CSMHealthAgent情感分析归类 + 产品/运营每月review改进建议。</p>
         </div>
 
         <h3>12B.7 服务库治理原则</h3>
@@ -1711,7 +1700,7 @@ MQL到SQL移交必须走SLA规则。
                 <li><strong>三库RAG</strong>：营销资料库/销售线索资料库/产品价库CPQ</li>
                 <li><strong>长期记忆</strong>：L0-L4跨会话记忆</li>
                 <li><strong>品牌配置</strong>（只读）</li>
-                <li><strong>Agent注册表</strong>：8个子Agent路由规则</li>
+                <li><strong>Agent注册表</strong>：4个子Agent路由规则</li>
               </ul>
             </div>
             <div>
@@ -1725,7 +1714,7 @@ MQL到SQL移交必须走SLA规则。
             </div>
             <div>
               <div class="lib-section-title">工作流</div>
-              <div class="flow-step"><span class="step-num">1</span><span><strong>意图识别</strong>：判断属于分析/商机/报价/内容/团队哪类</span></div>
+              <div class="flow-step"><span class="step-num">1</span><span><strong>意图识别</strong>：判断属于分析/商机/客户/教练哪类</span></div>
               <div class="flow-step"><span class="step-num">2</span><span><strong>任务拆分</strong>：复杂请求拆成多个子任务</span></div>
               <div class="flow-step"><span class="step-num">3</span><span><strong>委派执行</strong>：用delegate_task发给对应子Agent</span></div>
               <div class="flow-step"><span class="step-num">4</span><span><strong>结果汇总</strong>：merge_results合并，生成可解释总结</span></div>
@@ -1739,11 +1728,12 @@ MQL到SQL移交必须走SLA规则。
 [L2 角色锁定] 资深销售经理（P-MGR人格）
     目标感/决断/可解释/守边界（不擅自对外承诺）
 [L3 稳定人格] 目标导向，数据说话，决断力强
-[L4 核心任务] 七大职责域，调度8个子Agent
+[L4 核心任务] 七大职责域，调度4个子Agent
 [L5 路由规则]
-    "预测/差距/赢单率" -> 分析官
-    "商机/推进/停滞" -> 商机官
-    "报价/CPQ/底价" -> 报价官
+    "预测/差距/线索评分" -> 分析官
+    "商机/推进/停滞/报价/CPQ" -> 商机官
+    "客户/画像/决策链/话术" -> 客户官
+    "陪练/复盘/周会/协同" -> 教练官
     "分线索/写周报" -> Supervisor直管
 [L7 安全] 发邮件/报价/分配须人确认
     禁用："我替你决定了""已经帮你发了"
@@ -1766,58 +1756,30 @@ MQL到SQL移交必须走SLA规则。
             <tbody>
               <tr>
                 <td><strong>分析官 AnalystAgent</strong></td>
-                <td>基于v1.2报表做销售预测、赢单率分析、差距分析、经营看板问答</td>
-                <td>CRM报表 + 商机数据</td>
-                <td>可解释输出模板（结论->依据->建议）</td>
+                <td>基于v1.2报表做销售预测、赢单率分析、差距分析、经营看板问答；线索清洗/评分/按规则分配</td>
+                <td>CRM报表 + 商机数据 + 线索库</td>
+                <td>可解释输出模板（结论->依据->建议）+ 接v1.2分配规则</td>
                 <td>Phase 2</td>
               </tr>
               <tr>
                 <td><strong>商机官 OpportunityAgent</strong></td>
-                <td>商机阶段推进策略、停滞预警、下一步行动建议</td>
-                <td>CRM商机 + 线索库相似案例RAG</td>
-                <td>读商机+线索库 -> 推进策略（带溯源）</td>
+                <td>线索培育 + 商机阶段推进策略、停滞预警、下一步行动建议；封装CPQ报价/底价护栏/投标应标；方案提案生成</td>
+                <td>CRM商机 + 线索库相似案例RAG + 产品价库/CPQ引擎</td>
+                <td>读商机+线索库 -> 推进策略（带溯源）；AI只出价建议，底价走规则</td>
                 <td>Phase 2</td>
-              </tr>
-              <tr>
-                <td><strong>内容官 ContentAgent</strong></td>
-                <td>复用v0.6营销顾问，扩展复盘报告/方案提案/对客话术</td>
-                <td>营销资料库 + 线索库</td>
-                <td>create_content + 带溯源</td>
-                <td>Phase 2</td>
-              </tr>
-              <tr>
-                <td><strong>线索官 LeadAgent</strong></td>
-                <td>线索清洗/评分/按规则分配/培育话术</td>
-                <td>CRM线索 + LeadScoringRule</td>
-                <td>接v1.2分配规则</td>
-                <td>Phase 3</td>
               </tr>
               <tr>
                 <td><strong>客户官 CustomerAgent</strong></td>
-                <td>客户画像、决策链梳理、分层经营、流失预警</td>
-                <td>CRM客户 + 线索库</td>
-                <td>客户经营策略生成</td>
-                <td>Phase 3</td>
-              </tr>
-              <tr>
-                <td><strong>报价官 QuoteAgent</strong></td>
-                <td>封装v1.3-v1.5 CPQ，配置/定价/底价护栏/投标应标</td>
-                <td>产品价库 + CPQ引擎</td>
-                <td>AI只出价建议，底价走规则</td>
+                <td>客户画像、决策链梳理、分层经营、流失预警；复用v0.6扩展对客话术/复盘报告/方案提案</td>
+                <td>CRM客户 + 线索库 + 营销资料库</td>
+                <td>客户经营策略生成 + create_content（带溯源）</td>
                 <td>Phase 3</td>
               </tr>
               <tr>
                 <td><strong>教练官 CoachAgent</strong></td>
-                <td>话术陪练、拜访辅导、丢单复盘</td>
-                <td>话术库 + 知识库</td>
-                <td>对销售的一对一辅导</td>
-                <td>Phase 3</td>
-              </tr>
-              <tr>
-                <td><strong>协同官 OpsAgent</strong></td>
-                <td>任务触发、跟进提醒、周会/经营会材料自动生成</td>
-                <td>CRM + 日历</td>
-                <td>复用OpsAgent</td>
+                <td>话术陪练、拜访辅导、丢单复盘；任务触发、跟进提醒、周会/经营会材料自动生成</td>
+                <td>话术库 + 知识库 + CRM + 日历</td>
+                <td>一对一辅导 + 复用OpsAgent</td>
                 <td>Phase 3</td>
               </tr>
             </tbody>
@@ -1844,7 +1806,7 @@ MQL到SQL移交必须走SLA规则。
                 <li><strong>服务六库RAG</strong>：知识FAQ/工单历史/客户健康/产品使用/服务SLA/客户反馈</li>
                 <li><strong>长期记忆</strong>：L0-L4跨会话记忆</li>
                 <li><strong>品牌配置</strong>（只读）</li>
-                <li><strong>Agent注册表</strong>：3个子Agent路由规则</li>
+                <li><strong>Agent注册表</strong>：2个子Agent路由规则</li>
               </ul>
             </div>
             <div>
@@ -1858,7 +1820,7 @@ MQL到SQL移交必须走SLA规则。
             </div>
             <div>
               <div class="lib-section-title">工作流</div>
-              <div class="flow-step"><span class="step-num">1</span><span><strong>意图识别</strong>：判断属于工单/健康/知识/续约哪类</span></div>
+              <div class="flow-step"><span class="step-num">1</span><span><strong>意图识别</strong>：判断属于工单/知识还是健康/续约哪类</span></div>
               <div class="flow-step"><span class="step-num">2</span><span><strong>任务拆分</strong>：复杂请求拆成多个子任务</span></div>
               <div class="flow-step"><span class="step-num">3</span><span><strong>委派执行</strong>：用delegate_task发给对应子Agent</span></div>
               <div class="flow-step"><span class="step-num">4</span><span><strong>结果汇总</strong>：merge_results合并，生成可解释总结</span></div>
@@ -1872,11 +1834,10 @@ MQL到SQL移交必须走SLA规则。
 [L2 角色锁定] 资深服务经理（P-SVC人格）
     共情/专业/可靠/守边界（不擅自改服务等级/退款）
 [L3 稳定人格] 客户至上，长期关系导向，稳字当头
-[L4 核心任务] 六大职责域，调度3个子Agent
+[L4 核心任务] 六大职责域，调度2个子Agent
 [L5 路由规则]
-    "工单/分派/SLA" -> 服务官
-    "健康/续约/流失" -> 客户健康官
-    "FAQ/知识/自助" -> 知识官
+    "工单/分派/SLA/FAQ/知识/排查" -> 服务官
+    "健康/续约/流失/NPS/增购" -> 客户成功官
 [L7 安全] 服务等级变更/退款/补偿/流失标记须人确认
     禁用："我帮你退款了""已经标记流失"
 </pre>
@@ -1898,24 +1859,17 @@ MQL到SQL移交必须走SLA规则。
             <tbody>
               <tr>
                 <td><strong>服务官 SupportAgent</strong></td>
-                <td>工单分类/分派、SLA监控与超时预警、相似工单匹配、解决方案推荐、升级路径建议</td>
-                <td>工单历史库 + 知识FAQ库</td>
-                <td>工单分派 + 相似匹配（带溯源）</td>
+                <td>工单分类/分派、SLA监控与超时预警、相似工单匹配、解决方案推荐、升级路径建议；FAQ/解决方案库维护、故障排查指南生成、工单→知识自动沉淀、服务负载均衡分析</td>
+                <td>工单历史库 + 知识FAQ库 + 服务SLA库</td>
+                <td>工单分派 + 相似匹配（带溯源）+ 知识抽取</td>
                 <td>Phase 2</td>
               </tr>
               <tr>
-                <td><strong>客户健康官 HealthAgent</strong></td>
-                <td>健康评分建模、流失预警与干预、NRR趋势、续约预测与提前触达、增购机会识别</td>
-                <td>客户健康库 + 产品使用库 + CRM合同</td>
-                <td>健康评分 + 续约预测</td>
+                <td><strong>客户成功官 CSMHealthAgent</strong></td>
+                <td>健康评分建模、流失预警与干预、NRR趋势、续约预测与提前触达、增购机会识别；CSAT/NPS跟踪与情感分析、客户生命周期价值(CLV)管理</td>
+                <td>客户健康库 + 产品使用库 + 客户反馈库 + CRM合同</td>
+                <td>健康评分 + 续约预测 + 情感分析</td>
                 <td>Phase 2</td>
-              </tr>
-              <tr>
-                <td><strong>知识官 KnowledgeAgent</strong></td>
-                <td>FAQ/解决方案库维护、故障排查指南生成、自助内容产出、知识缺口识别、工单→知识沉淀</td>
-                <td>知识FAQ库 + 工单历史库</td>
-              <td>知识抽取 + 自助率提升</td>
-              <td>Phase 2</td>
               </tr>
             </tbody>
           </table>
@@ -1967,14 +1921,13 @@ MQL到SQL移交必须走SLA规则。
         </div>
 
         <div class="phase">
-          <div class="phase-title">Phase 2 · 销售三子Agent + 营销三专家Agent + 服务三子Agent（3-4周，并行构建）</div>
+          <div class="phase-title">Phase 2 · 销售双子Agent + 营销三专家Agent + 服务双子Agent（3-4周，并行构建）</div>
           <div class="phase-time">目标：先点亮三Manager最高频、数据最齐的Agent</div>
           <div class="card">
             <h4>销售侧</h4>
             <ul>
-              <li><strong>分析官</strong>：基于v1.2报表，预测/赢单率/差距/看板问答</li>
-              <li><strong>商机官</strong>：商机推进策略、停滞预警、下一步行动</li>
-              <li><strong>内容官</strong>：复用v0.6，扩展复盘/方案/话术</li>
+              <li><strong>分析官</strong>：基于v1.2报表，预测/赢单率/差距/线索评分/看板问答</li>
+              <li><strong>商机官</strong>：商机推进策略、停滞预警、CPQ报价、方案提案</li>
             </ul>
             <h4>营销侧</h4>
             <ul>
@@ -1984,9 +1937,8 @@ MQL到SQL移交必须走SLA规则。
             </ul>
             <h4>服务侧</h4>
             <ul>
-              <li><strong>服务官</strong>：工单分派/SLA监控/相似匹配/解决方案推荐</li>
-              <li><strong>客户健康官</strong>：健康评分/流失预警/续约预测</li>
-              <li><strong>知识官</strong>：FAQ/解决方案库维护、工单→知识沉淀</li>
+              <li><strong>服务官</strong>：工单分派/SLA监控/相似匹配/解决方案推荐/FAQ维护/工单→知识沉淀</li>
+              <li><strong>客户成功官</strong>：健康评分/流失预警/续约预测/CSAT·NPS/增购识别</li>
             </ul>
           </div>
         </div>
@@ -1997,9 +1949,9 @@ MQL到SQL移交必须走SLA规则。
           <div class="card">
             <h4>核心交付</h4>
             <ul>
-              <li>销售：线索官/客户官/报价官(CPQ)/教练官/协同官全部上线</li>
+              <li>销售：客户官/教练官上线，补齐7大职责域</li>
               <li>营销：Strategist扩展（招标/预算）、Creator扩展（舆情/SEO全域）、Campaigner扩展（线索培育/SLA协同）</li>
-              <li>服务：服务官/客户健康官/知识官深化，覆盖6大职责域（工单/健康/知识/满意度/续约/主动服务）</li>
+              <li>服务：服务官/客户成功官深化，覆盖6大职责域（工单/健康/知识/满意度/续约/主动服务）</li>
               <li>线索MQL→SQL SLA + 销售→服务成交移交SLA + 服务→销售增购回流SLA 三向协同打通</li>
               <li>端到端跑通"营销获客→线索培育→移交销售→跟进→报价→复盘→移交服务→续约/增购"全链路</li>
             </ul>
@@ -2040,7 +1992,7 @@ MQL到SQL移交必须走SLA规则。
         <h2>十六、三Manager MVP与验收</h2>
 
         <div class="card card-accent">
-          <strong>建议Phase 1 + Phase 2合并为第一个可演示闭环（营销+销售）</strong>。MVP 首刀刻意收窄：聚焦两个人格 + 两个Supervisor骨架 + 销售三子Agent（分析官+商机官+内容官）+ 营销三专家Agent（Strategist+Creator+Campaigner）；服务Manager 在 Phase 2 后接入，复用已建底座。
+          <strong>建议Phase 1 + Phase 2合并为第一个可演示闭环（营销+销售）</strong>。MVP 首刀刻意收窄：聚焦两个人格 + 两个Supervisor骨架 + 销售双子Agent（分析官+商机官）+ 营销三专家Agent（Strategist+Creator+Campaigner）；服务Manager 在 Phase 2 后接入，复用已建底座。
         </div>
 
         <h3>销售MVP Demo</h3>
@@ -2059,7 +2011,7 @@ MQL到SQL移交必须走SLA规则。
         <div class="card">
           <h4>Demo 3：团队复盘</h4>
           <p><strong>用户</strong>："帮我写本周团队复盘。"</p>
-          <p><strong>预期</strong>：内容官生成带溯源报告，提交前需人确认。</p>
+          <p><strong>预期</strong>：教练官生成带溯源报告，提交前需人确认。</p>
           <p style="font-size:0.85rem;color:var(--warn);margin-top:0.25rem;"><strong>验收红线</strong>：报告中 ≥ 80%的关键数据点附带溯源标注；Confirm闸在提交前拦截。</p>
         </div>
 
@@ -2122,7 +2074,7 @@ MQL到SQL移交必须走SLA规则。
               <tr><td>CRM数据质量</td><td>高</td><td>CRM字段不齐/不准，AI判断就歪</td><td>Phase 0数据治理先行</td></tr>
               <tr><td>报价幻觉</td><td>高</td><td>对外报价/合同结论不可靠</td><td>可解释+溯源+Confirm闸</td></tr>
               <tr><td>过度自动化</td><td>高</td><td>AI擅自分配/发信</td><td>Confirm闸+审计</td></tr>
-              <tr><td>多Agent调度失控</td><td>中</td><td>8个子Agent调度复杂度高</td><td>注册表+Supervisor单点编排</td></tr>
+              <tr><td>多Agent调度失控</td><td>中</td><td>9个子Agent调度复杂度</td><td>注册表+Supervisor单点编排</td></tr>
               <tr><td>成本</td><td>中</td><td>多Agent+RAG+大模型调用</td><td>沿用现有额度机制</td></tr>
             </tbody>
           </table>
@@ -2160,7 +2112,7 @@ MQL到SQL移交必须走SLA规则。
               <tr><td>营销创作顾问（小营）</td><td>v0.6 Advisor</td><td><span class="badge badge-new">已完成</span></td><td>复用为营销Creator + 销售ContentAgent的核心</td></tr>
               <tr><td>CRM五大模块</td><td>v0.7-v1.0 Lead/Customer/Deal/Contract</td><td><span class="badge badge-new">已完成</span></td><td>销售Manager读写；营销Manager只读聚合</td></tr>
               <tr><td>经营报表与预警、分配规则</td><td>v1.2 CRM运营报表</td><td><span class="badge badge-new">已完成</span></td><td>销售分析官数据底</td></tr>
-              <tr><td>招标线索 + CPQ + 产品主数据 + 报价价税</td><td>v1.3-v1.5</td><td><span class="badge badge-new">已完成</span></td><td>销售报价官的确定性引擎</td></tr>
+              <tr><td>招标线索 + CPQ + 产品主数据 + 报价价税</td><td>v1.3-v1.5</td><td><span class="badge badge-new">已完成</span></td><td>销售商机官的确定性引擎</td></tr>
               <tr><td>CRM适配器解耦</td><td>v1.6 D7 / FR-11</td><td><span class="badge badge-new">已完成</span></td><td>三Manager共用CRM适配器</td></tr>
               <tr><td>人格库</td><td>人格库设计手册</td><td><span class="badge badge-new">已完成</span></td><td>P-MGR（销售经理）+ P-MKT（营销经理）+ P-SVC（服务经理）稳定人格</td></tr>
               <tr><td>客户细分 + 线索评分</td><td>CustomerSegment / LeadScoringRule</td><td><span class="badge badge-new">已完成</span></td><td>营销用户分层库扩展基础</td></tr>
@@ -2181,7 +2133,7 @@ MQL到SQL移交必须走SLA规则。
               <tr><td>v0.7-v1.0</td><td>CRM五大模块：Lead/Customer/Deal/Contract/回款</td><td>apps/api/models/crm/</td></tr>
               <tr><td>v1.2</td><td>CRM运营报表 + 提醒 + 分配规则</td><td>apps/api/services/reporting/</td></tr>
               <tr><td>v1.3-v1.5</td><td>招标线索 + CPQ + 产品主数据 + 报价价税</td><td>apps/api/services/cpq/</td></tr>
-              <tr><td>v1.6</td><td>AI销售经理MVP：SalesManagerSupervisor + 分析官/商机官/内容官</td><td>docs/v1.6-ai销售经理-执行计划.md</td></tr>
+              <tr><td>v1.6</td><td>AI销售经理MVP：SalesManagerSupervisor + 分析官/商机官</td><td>docs/v1.6-ai销售经理-执行计划.md</td></tr>
               <tr><td>BR-01</td><td>业务规则：写操作/对外动作必须Confirm闸拦截</td><td>v0.4 C3</td></tr>
               <tr><td>FR-11</td><td>功能需求：CRM适配器解耦，支持多Agent共享</td><td>v1.6 D7</td></tr>
               <tr><td>L0-L4</td><td>长期记忆分层：会话/日/周/月/跨会话</td><td>v0.4 Agent LM</td></tr>
@@ -2333,11 +2285,7 @@ MQL到SQL移交必须走SLA规则。
                     <span style="font-size:.74rem;background:var(--bg2);border:1px solid var(--rule);border-radius:20px;padding:.18rem .6rem;">分析官</span>
                     <span style="font-size:.74rem;background:var(--bg2);border:1px solid var(--rule);border-radius:20px;padding:.18rem .6rem;">商机官</span>
                     <span style="font-size:.74rem;background:var(--bg2);border:1px solid var(--rule);border-radius:20px;padding:.18rem .6rem;">客户官</span>
-                    <span style="font-size:.74rem;background:var(--bg2);border:1px solid var(--rule);border-radius:20px;padding:.18rem .6rem;">报价官</span>
-                    <span style="font-size:.74rem;background:var(--bg2);border:1px solid var(--rule);border-radius:20px;padding:.18rem .6rem;">内容官</span>
                     <span style="font-size:.74rem;background:var(--bg2);border:1px solid var(--rule);border-radius:20px;padding:.18rem .6rem;">教练官</span>
-                    <span style="font-size:.74rem;background:var(--bg2);border:1px solid var(--rule);border-radius:20px;padding:.18rem .6rem;">线索官</span>
-                    <span style="font-size:.74rem;background:var(--bg2);border:1px solid var(--rule);border-radius:20px;padding:.18rem .6rem;">协同官</span>
                   </div>
                 </div>
                 <div style="border-radius:10px;padding:1rem 1.1rem;border:2px solid #7c3aed;background:#faf5ff;">
@@ -2345,8 +2293,7 @@ MQL到SQL移交必须走SLA规则。
                   <div style="font-size:.72rem;color:var(--muted);margin-bottom:.6rem;">管"续约" · 读写 CRM（含工单）</div>
                   <div style="display:flex;flex-wrap:wrap;gap:.35rem;">
                     <span style="font-size:.74rem;background:var(--bg2);border:1px solid var(--rule);border-radius:20px;padding:.18rem .6rem;">服务官 Support</span>
-                    <span style="font-size:.74rem;background:var(--bg2);border:1px solid var(--rule);border-radius:20px;padding:.18rem .6rem;">客户健康官 Health</span>
-                    <span style="font-size:.74rem;background:var(--bg2);border:1px solid var(--rule);border-radius:20px;padding:.18rem .6rem;">知识官 Knowledge</span>
+                    <span style="font-size:.74rem;background:var(--bg2);border:1px solid var(--rule);border-radius:20px;padding:.18rem .6rem;">客户成功官 CSMHealth</span>
                   </div>
                 </div>
               </div>
@@ -2430,7 +2377,7 @@ MQL到SQL移交必须走SLA规则。
                 <div style="display:flex;align-items:center;color:var(--accent2);font-weight:800;">→</div>
                 <div style="font-size:.74rem;background:#fff;border:1px solid var(--accent2);border-radius:7px;padding:.45rem .6rem;flex:1;min-width:140px;"><strong style="display:block;color:var(--accent2);font-size:.76rem;">EventBus</strong>发布LeadMatured(MQL)事件+线索档案</div>
                 <div style="display:flex;align-items:center;color:var(--accent2);font-weight:800;">→</div>
-                <div style="font-size:.74rem;background:#fff;border:1px solid var(--accent2);border-radius:7px;padding:.45rem .6rem;flex:1;min-width:140px;"><strong style="display:block;color:var(--accent2);font-size:.76rem;">销售 线索官</strong>订阅→起SLA计时(4h分配/24h首触)</div>
+                <div style="font-size:.74rem;background:#fff;border:1px solid var(--accent2);border-radius:7px;padding:.45rem .6rem;flex:1;min-width:140px;"><strong style="display:block;color:var(--accent2);font-size:.76rem;">销售 分析官</strong>订阅→起SLA计时(4h分配/24h首触)</div>
                 <div style="display:flex;align-items:center;color:var(--accent2);font-weight:800;">→</div>
                 <div style="font-size:.74rem;background:#fff;border:1px solid var(--accent2);border-radius:7px;padding:.45rem .6rem;flex:1;min-width:140px;"><strong style="display:block;color:var(--accent2);font-size:.76rem;">退回/转化事件</strong>回流EventBus→营销优化培育</div>
               </div>
@@ -2478,7 +2425,7 @@ MQL到SQL移交必须走SLA规则。
               <tr>
                 <td><code>LeadMatured(MQL)</code></td>
                 <td>营销 Campaigner</td>
-                <td>销售 线索官</td>
+                <td>销售 分析官</td>
                 <td>线索评分达MQL阈值</td>
                 <td>4h内分配 / 24h内首触</td>
               </tr>
@@ -2505,21 +2452,21 @@ MQL到SQL移交必须走SLA规则。
               </tr>
               <tr>
                 <td><code>DealClosed(Won/Lost)</code></td>
-                <td>销售 报价官</td>
-                <td>营销 Campaigner + 分析官 + 服务 HealthAgent</td>
+                <td>销售 商机官</td>
+                <td>营销 Campaigner + 分析官 + 服务 CSMHealthAgent</td>
                 <td>商机关闭</td>
                 <td>营销归因优化 + 赢单/丢单复盘 + 服务初始化客户健康档案</td>
               </tr>
               <tr>
                 <td><code>HealthRiskAlert</code></td>
-                <td>服务 HealthAgent</td>
+                <td>服务 CSMHealthAgent</td>
                 <td>服务 Supervisor + 销售 客户官</td>
                 <td>客户健康度低于阈值</td>
                 <td>主动关怀 + 销售介入挽回</td>
               </tr>
               <tr>
                 <td><code>RenewalDue</code></td>
-                <td>服务 HealthAgent</td>
+                <td>服务 CSMHealthAgent</td>
                 <td>服务 Supervisor + 销售 Supervisor</td>
                 <td>续约到期前N天</td>
                 <td>续约预案 + 增购推荐</td>
@@ -2579,11 +2526,7 @@ agent_registry:
   - analyst
   - opportunity
   - customer
-  - quoting
-  - content
   - coach
-  - lead
-  - coordinator
 rag_sources:
   - sales_lead_library
   - product_price_library
@@ -2600,8 +2543,7 @@ confirm_triggers:
   - publish_kb
 agent_registry:
   - support
-  - health
-  - knowledge
+  - csm_health
 rag_sources:
   - knowledge_faq_library
   - ticket_history_library
@@ -2744,7 +2686,7 @@ rag_sources:
       <div class="sources">
         <h2>参考资料</h2>
         <ol>
-          <li id="cite-1"><span class="src-title">AI资深销售经理·总体方案. 7大职责域/8子Agent/分阶段路线图/商业视角.</span><span class="src-url">E:\ai-content-marketing\AI资深销售经理-总体方案.md</span></li>
+          <li id="cite-1"><span class="src-title">AI资深销售经理·总体方案. 7大职责域/原8子Agent精简为4子Agent（分析官/商机官/客户官/教练官）/分阶段路线图/商业视角.</span><span class="src-url">E:\ai-content-marketing\AI资深销售经理-总体方案.md</span></li>
           <li id="cite-2"><span class="src-title">v1.6 AI销售经理·执行计划. Phase 1中枢+Phase 2三子Agent/角色映射/人格P-MGR.</span><span class="src-url">E:\ai-content-marketing\docs\v1.6-ai销售经理-执行计划.md</span></li>
           <li id="cite-3"><span class="src-title">AI资深营销经理·最终实施方案. 双中枢架构/十大职责域/三大专家Agent/六大营销库.</span><span class="src-url">E:\ai-content-marketing\ai-marketing-manager-final\ai-marketing-manager-final.html</span></li>
           <li id="cite-4"><span class="src-title">五大营销子库搭建方案. 竞品营销库/活动效果库/用户分层库/舆情声量库/行业洞察库.</span><span class="src-url">用户上传文档</span></li>

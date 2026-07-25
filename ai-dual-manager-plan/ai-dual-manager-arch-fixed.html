@@ -114,9 +114,7 @@
         <div class="tag">管"成单" · 读写 CRM</div>
         <div class="chips">
           <span class="chip">分析官</span><span class="chip">商机官</span>
-          <span class="chip">客户官</span><span class="chip">报价官</span>
-          <span class="chip">内容官</span><span class="chip">教练官</span>
-          <span class="chip">线索官</span><span class="chip">协同官</span>
+          <span class="chip">客户官</span><span class="chip">教练官</span>
         </div>
       </div>
       <div class="mgr v">
@@ -124,8 +122,7 @@
         <div class="tag">管"续约" · 读写 CRM（含工单/健康度）</div>
         <div class="chips">
           <span class="chip">服务官 Support</span>
-          <span class="chip">客户健康官 Health</span>
-          <span class="chip">知识官 Knowledge</span>
+          <span class="chip">客户成功官 CSMHealth</span>
         </div>
       </div>
     </div>
@@ -200,7 +197,7 @@
       <div class="conn">→</div>
       <div class="node"><b>EventBus</b>发布 LeadMatured(MQL) 事件 + 线索档案</div>
       <div class="conn">→</div>
-      <div class="node"><b>销售 线索官</b>订阅 → 起 SLA 计时（4h 分配 / 24h 首触）</div>
+      <div class="node"><b>销售 分析官</b>订阅 → 起 SLA 计时（4h 分配 / 24h 首触）</div>
       <div class="conn">→</div>
       <div class="node"><b>退回 / 转化事件</b>回流 EventBus → 营销优化培育</div>
     </div>
@@ -214,7 +211,7 @@
       <div class="conn2">→</div>
       <div class="node2"><b>EventBus</b>发布 DealClosed 事件 + 客户档案 + 成交备注</div>
       <div class="conn2">→</div>
-      <div class="node2"><b>服务 HealthAgent</b>订阅 → 初始化健康评分 + 启动 onboarding</div>
+      <div class="node2"><b>服务 CSMHealthAgent</b>订阅 → 初始化健康评分 + 启动 onboarding</div>
       <div class="conn2">→</div>
       <div class="node2"><b>续约/流失事件</b>回流 EventBus → 销售提前介入</div>
     </div>
@@ -224,7 +221,7 @@
   <div class="seam2" style="border-color:var(--warn);background:#fef2f2;margin-top:.4rem;">
     <h3 style="color:var(--warn);">协同缝 C：服务 → 销售 / 营销（预警回流）</h3>
     <div class="flow" style="gap:.3rem;">
-      <div class="node" style="border-color:var(--warn);"><b style="color:var(--warn);">服务 HealthAgent</b>健康度低于阈值</div>
+      <div class="node" style="border-color:var(--warn);"><b style="color:var(--warn);">服务 CSMHealthAgent</b>健康度低于阈值</div>
       <div class="conn" style="color:var(--warn);">→</div>
       <div class="node" style="border-color:var(--warn);"><b style="color:var(--warn);">EventBus</b>发布 HealthRiskAlert + 客户画像</div>
       <div class="conn" style="color:var(--warn);">→</div>
@@ -248,7 +245,7 @@
   <div class="notes">
     <h2>相对原始方案的关键修正</h2>
     <ul>
-      <li><span class="badge b-new">新增</span><span class="k">服务 Manager（P-SVC）</span>：覆盖成交后 → 交付 → 续约/扩展全生命周期，补齐"获客→成单→续约"闭环。含服务官、客户健康官、知识官 3 个子 Agent + 6 大服务资料库。</li>
+      <li><span class="badge b-new">新增</span><span class="k">服务 Manager（P-SVC）</span>：覆盖成交后 → 交付 → 续约/扩展全生命周期，补齐"获客→成单→续约"闭环。含服务官、客户成功官 2 个子 Agent + 6 大服务资料库。</li>
       <li><span class="badge b-new">新增</span><span class="k">护栏执行层 PEP</span>：Confirm 闸从"Prompt 约定"提升为工具执行边界的硬拦截 + 审计 + 行级授权，安全不再寄托于模型自觉。服务域额外覆盖工单状态变更、知识条目删除等操作。</li>
       <li><span class="badge b-new">新增</span><span class="k">EventBus 事件总线</span>：线索 SLA、停滞预警、舆情异动、<b>健康风险预警、续约到期、工单升级</b>改为订阅式，解决原"隐式轮询/靠 CRM 能力悬空"问题。</li>
       <li><span class="badge b-fix">修正</span><span class="k">策略配置层</span>：三 Manager 差异（权限/Confirm 触发点/人格/注册表）抽成配置，而非写死在七层 Prompt，可审计、可回归。</li>
