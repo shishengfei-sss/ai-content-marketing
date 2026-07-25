@@ -172,50 +172,62 @@
     <view class="chat-footer">
       <view class="compose-box">
         <view class="compose-meta">
-          <view class="meta-track">
-            <text class="meta-track__label">AI</text>
-            <view class="meta-pills">
-              <view
-                class="meta-pill"
-                :class="{ 'meta-pill--active': llmSource === 'platform' }"
-                @click="pickLlmSource('platform')"
-              >
-                平台 {{ llmQuota.remaining }}/{{ llmQuota.quota_limit }}
-              </view>
-              <view
-                class="meta-pill"
-                :class="{ 'meta-pill--active': llmSource === 'tenant', 'meta-pill--disabled': !llmQuota.has_tenant_key }"
-                @click="pickLlmSource('tenant')"
-              >
-                我的 Key
+          <view class="meta-summary" @click="metaExpanded = !metaExpanded">
+            <view class="meta-summary__main">
+              <text class="meta-summary__chip">{{ metaAiLabel }}</text>
+              <text class="meta-summary__dot">·</text>
+              <text class="meta-summary__chip">{{ platformMap[platform] || platform }}</text>
+              <text class="meta-summary__dot">·</text>
+              <text class="meta-summary__chip">{{ formatMap[contentFormat] || contentFormat }}</text>
+            </view>
+            <text class="meta-summary__action">{{ metaExpanded ? '收起' : '调整' }}</text>
+          </view>
+          <view v-if="metaExpanded" class="compose-meta__body">
+            <view class="meta-track">
+              <text class="meta-track__label">AI</text>
+              <view class="meta-pills">
+                <view
+                  class="meta-pill"
+                  :class="{ 'meta-pill--active': llmSource === 'platform' }"
+                  @click="pickLlmSource('platform')"
+                >
+                  平台 {{ llmQuota.remaining }}/{{ llmQuota.quota_limit }}
+                </view>
+                <view
+                  class="meta-pill"
+                  :class="{ 'meta-pill--active': llmSource === 'tenant', 'meta-pill--disabled': !llmQuota.has_tenant_key }"
+                  @click="pickLlmSource('tenant')"
+                >
+                  我的 Key
+                </view>
               </view>
             </view>
-          </view>
-          <view class="meta-track">
-            <text class="meta-track__label">平台</text>
-            <view class="meta-pills">
-              <view
-                v-for="p in platforms"
-                :key="p.value"
-                class="meta-pill"
-                :class="{ 'meta-pill--active': platform === p.value }"
-                @click="pickPlatform(p.value)"
-              >
-                {{ p.label }}
+            <view class="meta-track">
+              <text class="meta-track__label">平台</text>
+              <view class="meta-pills">
+                <view
+                  v-for="p in platforms"
+                  :key="p.value"
+                  class="meta-pill"
+                  :class="{ 'meta-pill--active': platform === p.value }"
+                  @click="pickPlatform(p.value)"
+                >
+                  {{ p.label }}
+                </view>
               </view>
             </view>
-          </view>
-          <view class="meta-track">
-            <text class="meta-track__label">形态</text>
-            <view class="meta-pills">
-              <view
-                v-for="f in formatOptions"
-                :key="f.value"
-                class="meta-pill"
-                :class="{ 'meta-pill--active': contentFormat === f.value }"
-                @click="pickContentFormat(f.value)"
-              >
-                {{ f.label }}
+            <view class="meta-track">
+              <text class="meta-track__label">形态</text>
+              <view class="meta-pills">
+                <view
+                  v-for="f in formatOptions"
+                  :key="f.value"
+                  class="meta-pill"
+                  :class="{ 'meta-pill--active': contentFormat === f.value }"
+                  @click="pickContentFormat(f.value)"
+                >
+                  {{ f.label }}
+                </view>
               </view>
             </view>
           </view>
@@ -320,6 +332,8 @@ const advisor = ref(null)
 const llmSource = ref('platform')
 
 const llmQuota = ref({ remaining: 100, quota_limit: 100, has_tenant_key: false })
+
+const metaExpanded = ref(false)
 
 const agentSessionId = ref(uni.getStorageSync('agent_session_id') || '')
 const sessionPanelVisible = ref(false)
@@ -657,6 +671,11 @@ function resolveContentFormat(platform, currentFormat) {
 
 
 const formatOptions = computed(() => formatOptionsForPlatform(platform.value))
+
+const metaAiLabel = computed(() => {
+  if (llmSource.value === 'tenant') return '我的 Key'
+  return `平台 ${llmQuota.value.remaining}/${llmQuota.value.quota_limit}`
+})
 
 
 
@@ -1835,6 +1854,84 @@ onShow(async () => {
 
 .compose-meta {
 
+  background: #fafbfc;
+
+  border-bottom: 1rpx solid #f0f0f0;
+
+}
+
+
+
+.meta-summary {
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 16rpx;
+
+  padding: 16rpx 20rpx;
+
+}
+
+
+
+.meta-summary__main {
+
+  display: flex;
+
+  align-items: center;
+
+  flex-wrap: wrap;
+
+  gap: 8rpx;
+
+  min-width: 0;
+
+  flex: 1;
+
+}
+
+
+
+.meta-summary__chip {
+
+  font-size: 24rpx;
+
+  color: #333;
+
+  font-weight: 500;
+
+}
+
+
+
+.meta-summary__dot {
+
+  font-size: 22rpx;
+
+  color: #c0c4cc;
+
+}
+
+
+
+.meta-summary__action {
+
+  flex-shrink: 0;
+
+  font-size: 24rpx;
+
+  color: #1677ff;
+
+}
+
+
+
+.compose-meta__body {
+
   display: flex;
 
   flex-wrap: wrap;
@@ -1843,11 +1940,7 @@ onShow(async () => {
 
   gap: 16rpx 20rpx;
 
-  padding: 16rpx 20rpx;
-
-  background: #fafbfc;
-
-  border-bottom: 1rpx solid #f0f0f0;
+  padding: 0 20rpx 16rpx;
 
 }
 

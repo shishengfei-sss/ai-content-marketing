@@ -124,6 +124,8 @@ export const contentApi = {
     request({ url: '/api/v1/content/proposals', method: 'POST', data: payload }),
   generate: (payload) =>
     request({ url: '/api/v1/content/generate', method: 'POST', data: payload }),
+  revise: (id, payload) =>
+    request({ url: `/api/v1/content/${id}/revise`, method: 'POST', data: payload }),
   publish: (id) => request({ url: `/api/v1/content/${id}/publish`, method: 'POST' }),
   retryPublish: (id) =>
     request({ url: `/api/v1/content/${id}/retry-publish`, method: 'POST' }),
@@ -234,6 +236,8 @@ export const crmApi = {
   getDeal: (id) => request({ url: `/api/v1/crm/deals/${id}` }),
   updateDeal: (id, data) => request({ url: `/api/v1/crm/deals/${id}`, method: 'PATCH', data }),
   changeDealStage: (id, data) => request({ url: `/api/v1/crm/deals/${id}/stage`, method: 'POST', data }),
+  closeDeal: (id, data) => request({ url: `/api/v1/crm/deals/${id}/close`, method: 'POST', data }),
+  reopenDeal: (id) => request({ url: `/api/v1/crm/deals/${id}/reopen`, method: 'POST' }),
   listDealActivities: (id) => request({ url: `/api/v1/crm/deals/${id}/activities` }),
   createDealActivity: (id, data) => request({ url: `/api/v1/crm/deals/${id}/activities`, method: 'POST', data }),
   listPipelines: () => request({ url: '/api/v1/crm/pipelines' }),
@@ -261,10 +265,14 @@ export const crmApi = {
   signContract: (id, data) => request({ url: `/api/v1/crm/contracts/${id}/sign`, method: 'POST', data }),
   activateContract: (id) => request({ url: `/api/v1/crm/contracts/${id}/activate`, method: 'POST' }),
   terminateContract: (id) => request({ url: `/api/v1/crm/contracts/${id}/terminate`, method: 'POST' }),
+  convertContractToOrder: (id) =>
+    request({ url: `/api/v1/crm/contracts/${id}/convert-to-order`, method: 'POST' }),
   cloneContract: (id) => request({ url: `/api/v1/crm/contracts/${id}/clone`, method: 'POST' }),
   listPayments: (params) => request({ url: `/api/v1/crm/payments${buildCrmQuery(params)}` }),
   getPayment: (id) => request({ url: `/api/v1/crm/payments/${id}` }),
   createPayment: (data) => request({ url: '/api/v1/crm/payments', method: 'POST', data }),
+  confirmPayment: (id) => request({ url: `/api/v1/crm/payments/${id}/confirm`, method: 'POST' }),
+  reversePayment: (id) => request({ url: `/api/v1/crm/payments/${id}/reverse`, method: 'POST' }),
   listProducts: (params) => request({ url: `/api/v1/crm/products${buildCrmQuery(params)}` }),
   getProduct: (id) => request({ url: `/api/v1/crm/products/${id}` }),
   createTask: (data) => request({ url: '/api/v1/crm/tasks', method: 'POST', data }),

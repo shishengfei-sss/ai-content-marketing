@@ -86,6 +86,7 @@ export const contentApi = {
   calendar: () => api.get('/api/v1/content/calendar'),
   proposals: (data) => api.post('/api/v1/content/proposals', data),
   generate: (data) => api.post('/api/v1/content/generate', data),
+  revise: (id, data) => api.post(`/api/v1/content/${id}/revise`, data),
   submitReview: (id, comment = '') =>
     api.post(`/api/v1/content/${id}/submit-review`, { comment }),
   approve: (id, comment = '') => api.post(`/api/v1/content/${id}/approve`, { comment }),

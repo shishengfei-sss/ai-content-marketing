@@ -7,7 +7,7 @@ const form = ref({
   provider: 'deepseek',
   base_url: 'https://api.deepseek.com',
   api_key: '',
-  model: 'deepseek-chat',
+  model: 'deepseek-v4-flash',
   timeout_sec: 60,
 })
 const maskedKey = ref('')
@@ -131,7 +131,7 @@ async function handleSave() {
         </el-form-item>
 
         <el-form-item label="模型名称">
-          <el-input v-model="form.model" placeholder="deepseek-chat" />
+          <el-input v-model="form.model" placeholder="deepseek-v4-flash" />
         </el-form-item>
 
         <el-form-item label="超时（秒）">

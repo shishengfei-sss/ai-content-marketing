@@ -167,7 +167,7 @@ def restore_platform_deepseek(admin_token: str, *, force: bool = False) -> None:
         if row:
             row.provider = "deepseek"
             row.base_url = settings.DEEPSEEK_BASE_URL or "https://api.deepseek.com"
-            row.model = settings.DEEPSEEK_MODEL or "deepseek-chat"
+            row.model = settings.DEEPSEEK_MODEL or "deepseek-v4-flash"
             row.is_active = True
             if settings.DEEPSEEK_API_KEY:
                 row.api_key_encrypted = encrypt_api_key(settings.DEEPSEEK_API_KEY)
@@ -179,7 +179,7 @@ def restore_platform_deepseek(admin_token: str, *, force: bool = False) -> None:
     body: dict = {
         "provider": "deepseek",
         "base_url": settings.DEEPSEEK_BASE_URL or "https://api.deepseek.com",
-        "model": settings.DEEPSEEK_MODEL or "deepseek-chat",
+        "model": settings.DEEPSEEK_MODEL or "deepseek-v4-flash",
         "is_active": True,
     }
     if settings.DEEPSEEK_API_KEY:

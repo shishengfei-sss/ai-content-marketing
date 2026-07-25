@@ -5,6 +5,7 @@ import { crmApi, teamApi } from '@/utils/api'
 import { ensureSession } from '@/utils/session'
 import { hasPermission } from '@/utils/permissions'
 import { CONTRACT_STATUS_LABEL, formatMoney } from '@/utils/crmConstants'
+import { contractActions } from '@/utils/contractActions'
 
 const contractId = ref('')
 const loading = ref(false)
@@ -15,18 +16,33 @@ const relatedOrders = ref([])
 const members = ref([])
 const permissions = ref([])
 const userId = ref('')
+const rejectVisible = ref(false)
+const rejectReason = ref('')
 
 const TYPE_LABEL = { new: '新签', renewal: '续约', addon: '增订' }
-
-const canEdit = () => hasPermission(permissions.value, 'crm.contract.edit')
-const canSign = () => hasPermission(permissions.value, 'crm.contract.sign')
 
 function sameUserId(a, b) {
   if (!a || !b) return false
   return String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
 }
 const isOwner = computed(() => sameUserId(contract.value?.owner_user_id, userId.value))
-const canMutate = computed(() => isOwner.value)
+const actions = computed(() =>
+  contractActions({
+    status: contract.value?.status,
+    isOwner: isOwner.value,
+    canEdit: hasPermission(permissions.value, 'crm.contract.edit'),
+    canSign: hasPermission(permissions.value, 'crm.contract.sign'),
+    canApprove: hasPermission(permissions.value, 'crm.contract.approve'),
+    canCreate: hasPermission(permissions.value, 'crm.contract.create'),
+    canDelete: hasPermission(permissions.value, 'crm.contract.delete'),
+    canConvert: hasPermission(permissions.value, 'crm.order.convert'),
+  }),
+)
+const hasAnyAction = computed(() =>
+  ['send', 'submit', 'withdraw', 'approve', 'reject', 'sign', 'activate', 'terminate', 'convert', 'clone'].some(
+    (k) => actions.value[k],
+  ),
+)
 
 const ownerLabel = computed(() => {
   if (!contract.value?.owner_user_id) return '—'
@@ -50,7 +66,11 @@ async function loadDetail() {
     const data = await crmApi.getContract(contractId.value)
     contract.value = data
     if (data.customer_id) {
-      try { customer.value = await crmApi.getCustomer(data.customer_id) } catch { customer.value = null }
+      try {
+        customer.value = await crmApi.getCustomer(data.customer_id)
+      } catch {
+        customer.value = null
+      }
     }
     try {
       const orders = await crmApi.listOrders({ contract_id: contractId.value, page: 1, page_size: 50 })
@@ -85,6 +105,18 @@ function handleSend() {
 function handleSubmit() {
   runAction(() => crmApi.submitContract(contract.value.id), '已提交')
 }
+function handleWithdraw() {
+  uni.showModal({
+    title: '撤回审批',
+    content: '确定撤回？合同将回到草稿。',
+    success: (res) => {
+      if (res.confirm) runAction(() => crmApi.withdrawContract(contract.value.id), '已撤回')
+    },
+  })
+}
+function handleApprove() {
+  runAction(() => crmApi.approveContract(contract.value.id), '已通过')
+}
 function handleSign() {
   uni.showModal({
     title: '签署合同',
@@ -92,9 +124,10 @@ function handleSign() {
     success: (res) => {
       if (res.confirm) {
         runAction(
-          () => crmApi.signContract(contract.value.id, {
-            signed_amount: contract.value.signed_amount ?? contract.value.amount,
-          }),
+          () =>
+            crmApi.signContract(contract.value.id, {
+              signed_amount: contract.value.signed_amount ?? contract.value.amount,
+            }),
           '已签署',
         )
       }
@@ -118,6 +151,42 @@ function handleTerminate() {
       if (res.confirm) runAction(() => crmApi.terminateContract(contract.value.id), '已终止')
     },
   })
+}
+function handleConvert() {
+  uni.showModal({
+    title: '生成订单',
+    content: '确定从该合同生成订单？',
+    success: (res) => {
+      if (!res.confirm) return
+      runAction(async () => {
+        const data = await crmApi.convertContractToOrder(contract.value.id)
+        const orderId = data?.order_id || data?.id
+        if (orderId) {
+          uni.navigateTo({ url: `/pages/crm/order-detail?id=${orderId}` })
+        }
+      }, '已生成订单')
+    },
+  })
+}
+function handleClone() {
+  runAction(async () => {
+    const data = await crmApi.cloneContract(contract.value.id)
+    if (data?.id) {
+      uni.navigateTo({ url: `/pages/crm/contract-detail?id=${data.id}` })
+    }
+  }, '已复制')
+}
+async function submitReject() {
+  if (!rejectReason.value.trim()) {
+    uni.showToast({ title: '请填写驳回原因', icon: 'none' })
+    return
+  }
+  await runAction(
+    () => crmApi.rejectContract(contract.value.id, { reason: rejectReason.value.trim() }),
+    '已驳回',
+  )
+  rejectVisible.value = false
+  rejectReason.value = ''
 }
 
 function goOrder(item) {
@@ -161,42 +230,17 @@ onLoad((query) => {
         </view>
       </view>
 
-      <view v-if="canMutate" class="actions">
-        <button
-          v-if="canEdit() && ['draft', 'rejected'].includes(contract.status)"
-          class="act"
-          hover-class="none"
-          :disabled="acting"
-          @tap="handleSend"
-        >发送</button>
-        <button
-          v-if="canSign() && ['draft', 'sent', 'rejected'].includes(contract.status)"
-          class="act act--primary"
-          hover-class="none"
-          :disabled="acting"
-          @tap="handleSubmit"
-        >提交</button>
-        <button
-          v-if="canSign() && ['draft', 'sent'].includes(contract.status)"
-          class="act act--ok"
-          hover-class="none"
-          :disabled="acting"
-          @tap="handleSign"
-        >签署</button>
-        <button
-          v-if="canEdit() && contract.status === 'signed'"
-          class="act act--primary"
-          hover-class="none"
-          :disabled="acting"
-          @tap="handleActivate"
-        >开始执行</button>
-        <button
-          v-if="canEdit() && ['signed', 'executing'].includes(contract.status)"
-          class="act act--danger"
-          hover-class="none"
-          :disabled="acting"
-          @tap="handleTerminate"
-        >终止</button>
+      <view v-if="hasAnyAction" class="actions">
+        <button v-if="actions.send" class="act" hover-class="none" :disabled="acting" @tap="handleSend">发送</button>
+        <button v-if="actions.submit" class="act act--primary" hover-class="none" :disabled="acting" @tap="handleSubmit">提交</button>
+        <button v-if="actions.withdraw" class="act" hover-class="none" :disabled="acting" @tap="handleWithdraw">撤回</button>
+        <button v-if="actions.approve" class="act act--ok" hover-class="none" :disabled="acting" @tap="handleApprove">通过</button>
+        <button v-if="actions.reject" class="act act--danger" hover-class="none" :disabled="acting" @tap="rejectVisible = true">驳回</button>
+        <button v-if="actions.sign" class="act act--ok" hover-class="none" :disabled="acting" @tap="handleSign">签署</button>
+        <button v-if="actions.activate" class="act act--primary" hover-class="none" :disabled="acting" @tap="handleActivate">开始执行</button>
+        <button v-if="actions.terminate" class="act act--danger" hover-class="none" :disabled="acting" @tap="handleTerminate">终止</button>
+        <button v-if="actions.convert" class="act act--primary" hover-class="none" :disabled="acting" @tap="handleConvert">生成订单</button>
+        <button v-if="actions.clone" class="act" hover-class="none" :disabled="acting" @tap="handleClone">复制</button>
       </view>
 
       <view class="section">
@@ -220,6 +264,17 @@ onLoad((query) => {
       </view>
     </template>
     <view v-else class="empty">合同不存在</view>
+
+    <view v-if="rejectVisible" class="mask" @tap.self="rejectVisible = false">
+      <view class="dialog" @tap.stop>
+        <text class="dialog__title">驳回审批</text>
+        <textarea v-model="rejectReason" class="textarea" maxlength="500" placeholder="请填写驳回原因" />
+        <view class="dialog__acts">
+          <button class="act" hover-class="none" @tap="rejectVisible = false">取消</button>
+          <button class="act act--danger" hover-class="none" :disabled="acting" @tap="submitReject">确认驳回</button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -253,4 +308,16 @@ onLoad((query) => {
 .line-card__name { display: block; font-size: 14px; font-weight: 500; }
 .line-card__meta { display: block; margin-top: 4px; font-size: 12px; color: #64748b; }
 .empty, .empty-inline { text-align: center; color: #94a3b8; padding: 24px 0; font-size: 13px; }
+.mask {
+  position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.dialog { width: 100%; max-width: 360px; background: #fff; border-radius: 12px; padding: 16px; }
+.dialog__title { display: block; font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+.textarea {
+  width: 100%; min-height: 90px; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 10px; font-size: 14px; box-sizing: border-box;
+}
+.dialog__acts { display: flex; gap: 10px; margin-top: 12px; }
+.dialog__acts .act { flex: 1; }
 </style>

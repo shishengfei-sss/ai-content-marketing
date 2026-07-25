@@ -42,7 +42,11 @@ from app.services.admin_tenant_service import (
 from app.services.crypto import decrypt_api_key, encrypt_api_key, mask_api_key
 from app.services.llm.base import LLMMessage
 from app.services.llm.factory import get_provider
-from app.services.platform_llm_service import get_platform_config, resolve_platform_api_key
+from app.services.platform_llm_service import (
+    get_platform_config,
+    normalize_deepseek_model,
+    resolve_platform_api_key,
+)
 from app.services.knowledge_service import index_document
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -543,6 +547,9 @@ def update_platform_llm_settings(
     api_key = updates.pop("api_key", None)
     if updates.get("provider") == "fake" and os.environ.get("FORCE_FAKE_PLATFORM_LLM") != "1":
         raise HTTPException(status_code=400, detail="fake 提供方已停用，请使用 deepseek / openai_compatible / dashscope")
+    provider_for_model = updates.get("provider") or (row.provider if row else "deepseek")
+    if "model" in updates and (provider_for_model or "").strip().lower() == "deepseek":
+        updates["model"] = normalize_deepseek_model(updates["model"])
     for field, value in updates.items():
         setattr(row, field, value)
     if api_key:
@@ -564,7 +571,9 @@ async def test_platform_llm_settings(
     if provider == "fake" and os.environ.get("FORCE_FAKE_PLATFORM_LLM") != "1":
         raise HTTPException(status_code=400, detail="fake 提供方已停用，请使用 deepseek / openai_compatible / dashscope")
     base_url = (body.base_url if body and body.base_url else None) or (row.base_url if row else "https://api.deepseek.com")
-    model = (body.model if body and body.model else None) or (row.model if row else "deepseek-chat")
+    model = (body.model if body and body.model else None) or (row.model if row else "deepseek-v4-flash")
+    if (provider or "").strip().lower() == "deepseek":
+        model = normalize_deepseek_model(model)
     timeout_sec = (body.timeout_sec if body and body.timeout_sec else None) or (row.timeout_sec if row else 60)
 
     api_key = ""

@@ -7,7 +7,7 @@ const connectionForm = ref({
   provider: 'deepseek',
   base_url: 'https://api.deepseek.com',
   api_key: '',
-  model: 'deepseek-chat',
+  model: 'deepseek-v4-flash',
 })
 const policyForm = ref({
   timeout_sec: 60,
@@ -26,10 +26,32 @@ const providers = [
   { value: 'dashscope', label: '通义千问' },
 ]
 
+/** DeepSeek 官方 API model id（大小写敏感，不可写成 DeepSeek-V4-Flash） */
+const DEEPSEEK_MODELS = [
+  { value: 'deepseek-v4-flash', label: 'deepseek-v4-flash（推荐）' },
+  { value: 'deepseek-v4-pro', label: 'deepseek-v4-pro' },
+]
+
+const MODEL_ALIAS = {
+  'DeepSeek-V4-Flash': 'deepseek-v4-flash',
+  'DeepSeek-V3-Flash': 'deepseek-v4-flash',
+  'deepseek-v3-flash': 'deepseek-v4-flash',
+  'deepseek-chat': 'deepseek-v4-flash',
+  'deepseek-reasoner': 'deepseek-v4-flash',
+}
+
+function normalizeModel(provider, model) {
+  const raw = (model || '').trim()
+  if (provider !== 'deepseek') return raw
+  if (MODEL_ALIAS[raw]) return MODEL_ALIAS[raw]
+  if (MODEL_ALIAS[raw.toLowerCase()]) return MODEL_ALIAS[raw.toLowerCase()]
+  return raw
+}
+
 function applyConfig(data) {
   connectionForm.value.provider = data.provider
   connectionForm.value.base_url = data.base_url
-  connectionForm.value.model = data.model
+  connectionForm.value.model = normalizeModel(data.provider, data.model)
   connectionForm.value.api_key = ''
   policyForm.value.timeout_sec = Number(data.timeout_sec)
   policyForm.value.default_free_quota = Number(data.default_free_quota)
@@ -50,6 +72,10 @@ async function handleTest() {
   testing.value = true
   testResult.value = null
   try {
+    connectionForm.value.model = normalizeModel(
+      connectionForm.value.provider,
+      connectionForm.value.model,
+    )
     const payload = {
       provider: connectionForm.value.provider,
       base_url: connectionForm.value.base_url,
@@ -70,6 +96,10 @@ async function handleTest() {
 async function handleSaveConnection() {
   savingConnection.value = true
   try {
+    connectionForm.value.model = normalizeModel(
+      connectionForm.value.provider,
+      connectionForm.value.model,
+    )
     const payload = {
       provider: connectionForm.value.provider,
       base_url: connectionForm.value.base_url,
@@ -130,7 +160,25 @@ onMounted(loadConfig)
           <el-input v-model="connectionForm.base_url" />
         </el-form-item>
         <el-form-item label="Model">
-          <el-input v-model="connectionForm.model" />
+          <el-select
+            v-if="connectionForm.provider === 'deepseek'"
+            v-model="connectionForm.model"
+            filterable
+            allow-create
+            default-first-option
+            style="width: 100%"
+          >
+            <el-option
+              v-for="m in DEEPSEEK_MODELS"
+              :key="m.value"
+              :label="m.label"
+              :value="m.value"
+            />
+          </el-select>
+          <el-input v-else v-model="connectionForm.model" />
+          <div class="hint">
+            DeepSeek 仅支持小写官方 id：deepseek-v4-flash / deepseek-v4-pro（不要写成 DeepSeek-V3-Flash）
+          </div>
         </el-form-item>
         <el-form-item label="API Key">
           <el-input

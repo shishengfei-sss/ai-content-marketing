@@ -74,10 +74,13 @@ export const PRIORITY_OPTIONS = [
   { value: 'high', label: '高' },
 ]
 
-/** datetime-local 字符串 → ISO */
+/** datetime-local 字符串 → ISO（兼容 iOS 对无秒/无时区的解析） */
 export function datetimeLocalToIso(localStr) {
   if (!localStr || !String(localStr).trim()) return null
-  const d = new Date(localStr)
+  let s = String(localStr).trim().replace(' ', 'T')
+  // iOS：需要完整到秒，且无时区时按本地时间理解
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) s = `${s}:00`
+  const d = new Date(s)
   if (Number.isNaN(d.getTime())) return null
   return d.toISOString()
 }

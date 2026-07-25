@@ -11,6 +11,31 @@ from app.services.crypto import decrypt_api_key
 
 REAL_PLATFORM_PROVIDERS = frozenset({"deepseek", "openai_compatible", "dashscope"})
 
+_DEEPSEEK_MODEL_ALIASES = {
+    "deepseek-v4-flash": "deepseek-v4-flash",
+    "deepseek-v4-pro": "deepseek-v4-pro",
+    "deepseek-chat": "deepseek-v4-flash",
+    "deepseek-reasoner": "deepseek-v4-flash",
+    "deepseek-v3-flash": "deepseek-v4-flash",
+}
+
+
+def normalize_deepseek_model(model: str | None) -> str:
+    """DeepSeek model id 大小写敏感；纠正常见错误写法。"""
+    raw = (model or "").strip()
+    if not raw:
+        return "deepseek-v4-flash"
+    if raw in _DEEPSEEK_MODEL_ALIASES:
+        return _DEEPSEEK_MODEL_ALIASES[raw]
+    lowered = raw.lower()
+    if lowered in _DEEPSEEK_MODEL_ALIASES:
+        return _DEEPSEEK_MODEL_ALIASES[lowered]
+    # DeepSeek-V4-Flash / DeepSeek_V4_Flash 等
+    compact = lowered.replace("_", "-")
+    if compact in _DEEPSEEK_MODEL_ALIASES:
+        return _DEEPSEEK_MODEL_ALIASES[compact]
+    return raw
+
 
 def normalize_platform_provider(provider: str | None) -> str:
     name = (provider or "deepseek").strip().lower()
@@ -59,11 +84,29 @@ def get_quota_status(db: Session, tenant_id: UUID) -> dict:
     limit = resolve_quota_limit(db, usage)
     remaining = max(0, limit - usage.used_count)
     platform = get_platform_config(db)
-    platform_ready = bool(
+    is_fake = bool(
         platform
-        and platform.is_active
-        and (platform.api_key_encrypted or settings.DEEPSEEK_API_KEY or settings.LLM_API_KEY)
+        and (platform.provider == "fake" or platform.base_url == "http://fake.local")
     )
+    has_key = bool(
+        platform
+        and (
+            resolve_platform_api_key(platform)
+            or settings.DEEPSEEK_API_KEY
+            or settings.LLM_API_KEY
+        )
+    )
+    # fake 仅 CI 可用；产品侧若残留 fake 仍视为可用（会回退 deepseek），但暴露真实模型名
+    platform_ready = bool(platform and platform.is_active and (has_key or is_fake))
+    if is_fake:
+        provider_name, model_name = "deepseek", normalize_deepseek_model(
+            settings.DEEPSEEK_MODEL or "deepseek-v4-flash"
+        )
+    else:
+        provider_name = normalize_platform_provider(platform.provider) if platform else "deepseek"
+        model_name = normalize_deepseek_model(
+            platform.model if platform else (settings.DEEPSEEK_MODEL or "deepseek-v4-flash")
+        )
     return {
         "used_count": usage.used_count,
         "quota_limit": limit,
@@ -71,6 +114,8 @@ def get_quota_status(db: Session, tenant_id: UUID) -> dict:
         "has_tenant_key": tenant_has_own_key(db, tenant_id),
         "platform_available": platform_ready,
         "default_free_quota": platform.default_free_quota if platform else 100,
+        "platform_provider": provider_name,
+        "platform_model": model_name,
     }
 
 

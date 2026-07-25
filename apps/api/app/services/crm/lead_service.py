@@ -55,6 +55,15 @@ def get_lead(db: Session, tenant_id: UUID, lead_id: UUID) -> Lead | None:
     )
 
 
+def heal_converted_lead_status(db: Session, lead: Lead) -> Lead:
+    """已关联客户但状态被跟进改乱时，纠正为「已转化」。"""
+    if lead.converted_customer_id and lead.status != "已转化":
+        lead.status = "已转化"
+        db.commit()
+        db.refresh(lead)
+    return lead
+
+
 def create_lead(db: Session, ctx: TenantContext, data: LeadCreate) -> Lead:
     from app.services.text_sanitize import sanitize_plain_text
 
@@ -197,6 +206,8 @@ def update_lead(db: Session, ctx: TenantContext, lead: Lead, data: LeadUpdate) -
         lead.country = data.country
     if data.status is not None:
         validate_lead_status(data.status)
+        if (lead.converted_customer_id or lead.status == "已转化") and data.status != "已转化":
+            raise HTTPException(status_code=409, detail="线索已转化，不可改回其他状态")
         lead.status = data.status
     if data.remark is not None:
         lead.remark = data.remark

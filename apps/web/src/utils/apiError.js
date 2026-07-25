@@ -36,11 +36,22 @@ export function formatApiError(err, fallback = '操作失败') {
   if (isRouteNotFoundError(err)) return ROUTE_NOT_FOUND_HINT
   const msg = String(err?.message || fallback).trim()
   if (msg.toLowerCase() === 'not found') return ROUTE_NOT_FOUND_HINT
-  if (
-    err?.status === 502 ||
+
+  const looksLikeTransport502 =
+    msg.toLowerCase().includes('bad gateway') ||
     msg.includes('status code 502') ||
-    msg.toLowerCase().includes('bad gateway')
-  ) {
+    msg === 'Network Error' ||
+    !msg ||
+    msg === fallback
+
+  if (err?.status === 502 || msg.includes('status code 502') || msg.toLowerCase().includes('bad gateway')) {
+    // 后端已返回具体原因（如 DeepSeek Key 无效）时保留原文，勿覆盖成「API 未启动」
+    if (!looksLikeTransport502 && /预检失败|API Key|未配置|额度|DeepSeek|鉴权|Authorization/i.test(msg)) {
+      return msg
+    }
+    if (!looksLikeTransport502 && msg.length > 8 && !/^Request failed/i.test(msg)) {
+      return msg
+    }
     return BAD_GATEWAY_HINT
   }
   if (

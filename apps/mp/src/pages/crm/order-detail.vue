@@ -5,6 +5,7 @@ import { crmApi, teamApi } from '@/utils/api'
 import { ensureSession } from '@/utils/session'
 import { hasPermission } from '@/utils/permissions'
 import { ORDER_STATUS_LABEL, formatMoney } from '@/utils/crmConstants'
+import { orderActions } from '@/utils/orderActions'
 import { formatDate } from '@/utils/datetime'
 
 const orderId = ref('')
@@ -16,12 +17,29 @@ const members = ref([])
 const permissions = ref([])
 const rejectVisible = ref(false)
 const rejectReason = ref('')
+const currentUserId = ref('')
 
 const SOURCE_LABEL = { deal: '商机', quote: '报价', contract: '合同', manual: '手工' }
 
-const canPlace = () => hasPermission(permissions.value, 'crm.order.place')
-const canApprove = () => hasPermission(permissions.value, 'crm.order.approve')
-const canEdit = () => hasPermission(permissions.value, 'crm.order.edit')
+function sameUserId(a, b) {
+  if (!a || !b) return false
+  return String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
+}
+const isOwner = computed(() => sameUserId(order.value?.owner_user_id, currentUserId.value))
+const actions = computed(() =>
+  orderActions({
+    status: order.value?.status,
+    isOwner: isOwner.value,
+    canEdit: hasPermission(permissions.value, 'crm.order.edit'),
+    canPlace: hasPermission(permissions.value, 'crm.order.place'),
+    canApprove: hasPermission(permissions.value, 'crm.order.approve'),
+    canCreate: hasPermission(permissions.value, 'crm.order.create'),
+    canDelete: hasPermission(permissions.value, 'crm.order.delete'),
+  }),
+)
+const hasAnyAction = computed(() =>
+  ['submit', 'withdraw', 'approve', 'reject', 'complete', 'cancel', 'clone'].some((k) => actions.value[k]),
+)
 
 const ownerLabel = computed(() => {
   if (!order.value?.owner_user_id) return '—'
@@ -35,6 +53,7 @@ async function loadDetail() {
   try {
     const user = await ensureSession()
     permissions.value = user?.permissions || []
+    currentUserId.value = user?.id || user?.user_id || ''
     try {
       members.value = await teamApi.listMembers()
       if (!Array.isArray(members.value)) members.value = []
@@ -71,14 +90,8 @@ async function runAction(fn, okMsg) {
   }
 }
 
-function handleConfirm() {
-  runAction(() => crmApi.confirmOrder(order.value.id), '已确认')
-}
 function handleSubmit() {
-  runAction(async () => {
-    const data = await crmApi.submitOrder(order.value.id)
-    return data
-  }, '已提交')
+  runAction(() => crmApi.submitOrder(order.value.id), '已提交')
 }
 function handleWithdraw() {
   uni.showModal({
@@ -109,6 +122,14 @@ function handleCancel() {
       if (res.confirm) runAction(() => crmApi.cancelOrder(order.value.id), '已取消')
     },
   })
+}
+function handleClone() {
+  runAction(async () => {
+    const data = await crmApi.cloneOrder(order.value.id)
+    if (data?.id) {
+      uni.navigateTo({ url: `/pages/crm/order-detail?id=${data.id}` })
+    }
+  }, '已复制')
 }
 async function submitReject() {
   if (!rejectReason.value.trim()) {
@@ -155,49 +176,56 @@ onLoad((query) => {
         </view>
       </view>
 
-      <view class="actions">
+      <view v-if="hasAnyAction" class="actions">
         <button
-          v-if="canPlace() && (order.status === 'draft' || order.status === 'rejected')"
+          v-if="actions.submit"
           class="act act--primary"
           hover-class="none"
           :disabled="acting"
           @tap="handleSubmit"
         >提交</button>
         <button
-          v-if="canPlace() && order.status === 'pending_approval'"
+          v-if="actions.withdraw"
           class="act"
           hover-class="none"
           :disabled="acting"
           @tap="handleWithdraw"
         >撤回</button>
         <button
-          v-if="canApprove() && order.status === 'pending_approval'"
+          v-if="actions.approve"
           class="act act--ok"
           hover-class="none"
           :disabled="acting"
           @tap="handleApprove"
         >通过</button>
         <button
-          v-if="canApprove() && order.status === 'pending_approval'"
+          v-if="actions.reject"
           class="act act--danger"
           hover-class="none"
           :disabled="acting"
           @tap="rejectVisible = true"
         >驳回</button>
         <button
-          v-if="canEdit() && (order.status === 'confirmed' || order.status === 'executing')"
+          v-if="actions.complete"
           class="act act--ok"
           hover-class="none"
           :disabled="acting"
           @tap="handleComplete"
         >完成</button>
         <button
-          v-if="canEdit() && ['pending_approval', 'approved', 'confirmed', 'executing'].includes(order.status)"
+          v-if="actions.cancel"
           class="act"
           hover-class="none"
           :disabled="acting"
           @tap="handleCancel"
         >取消</button>
+        <button
+          v-if="actions.clone"
+          class="act"
+          hover-class="none"
+          :disabled="acting"
+          @tap="handleClone"
+        >复制</button>
       </view>
 
       <view class="section">

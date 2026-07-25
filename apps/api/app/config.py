@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "deepseek"
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
-    DEEPSEEK_MODEL: str = "deepseek-chat"
+    DEEPSEEK_MODEL: str = "deepseek-v4-flash"
 
     LLM_BASE_URL: str = "https://api.openai.com/v1"
     LLM_API_KEY: str = ""

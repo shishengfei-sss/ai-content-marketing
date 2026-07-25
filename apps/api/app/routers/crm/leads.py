@@ -38,6 +38,8 @@ from app.services.crm.lead_service import (
 
     create_lead,
 
+    heal_converted_lead_status,
+
     require_lead,
 
     soft_delete_lead,
@@ -247,6 +249,8 @@ def get_lead_detail(
 ):
 
     lead = require_lead(db, ctx, lead_id)
+
+    lead = heal_converted_lead_status(db, lead)
 
     return LeadOut.model_validate(lead)
 

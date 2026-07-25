@@ -514,7 +514,11 @@ onMounted(async () => {
         </el-tooltip>
         <el-button v-if="canAssign()" @click="assignVisible = true">分配负责人</el-button>
         <el-button v-if="canMutateLead()" type="warning" plain @click="openReclaim">退回公海</el-button>
-        <el-button v-if="canConvert() && lead.status !== '已转化'" type="primary" @click="handleConvert">
+        <el-button
+          v-if="canConvert() && lead.status !== '已转化' && !lead.converted_customer_id"
+          type="primary"
+          @click="handleConvert"
+        >
           转化客户
         </el-button>
       </template>
@@ -587,7 +591,7 @@ onMounted(async () => {
                 style="width: 190px"
               />
               <el-select
-                v-if="canMutateLead()"
+                v-if="canMutateLead() && lead.status !== '已转化' && !lead.converted_customer_id"
                 v-model="activityForm.status"
                 placeholder="线索状态"
                 style="width: 120px"
@@ -599,6 +603,12 @@ onMounted(async () => {
                   :value="item"
                 />
               </el-select>
+              <el-tag
+                v-else-if="lead.status === '已转化' || lead.converted_customer_id"
+                type="success"
+              >
+                已转化
+              </el-tag>
               <el-button type="primary" @click="submitActivity">提交</el-button>
             </div>
           </div>

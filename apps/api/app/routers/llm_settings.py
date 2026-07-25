@@ -51,7 +51,7 @@ def get_llm_settings(
     return LLMSettingsOut(
         provider="deepseek",
         base_url="https://api.deepseek.com",
-        model="deepseek-chat",
+        model="deepseek-v4-flash",
         timeout_sec=60,
         is_active=True,
         api_key_masked="",

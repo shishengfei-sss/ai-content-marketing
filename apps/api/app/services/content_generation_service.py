@@ -49,17 +49,22 @@ _LLM_CONFIG_CODES = frozenset(
 
 def raise_llm_config_error(exc: ValueError, *, fallback_detail: str = "操作失败，请重试") -> None:
     code = str(exc)
-    if code == "LLM_TENANT_KEY_NOT_CONFIGURED":
+    if "LLM_TENANT_KEY_NOT_CONFIGURED" in code:
         raise HTTPException(status_code=400, detail="请先在设置中配置我的 API Key") from exc
-    if code == "LLM_PLATFORM_NOT_CONFIGURED":
+    if "LLM_PLATFORM_NOT_CONFIGURED" in code:
         raise HTTPException(status_code=400, detail="平台 AI 未配置，请使用我的 API Key 或联系管理员") from exc
+    if "LLM_API_KEY_INVALID" in code:
+        raise HTTPException(
+            status_code=400,
+            detail="DeepSeek API Key 无效或已过期。请在管理后台「平台 AI」或设置「我的 API Key」更新，并同步 apps/api/.env 的 DEEPSEEK_API_KEY",
+        ) from exc
     if code == "INVALID_LLM_SOURCE":
         raise HTTPException(status_code=400, detail="无效的 AI 来源") from exc
-    if code == "LLM_API_KEY_NOT_CONFIGURED":
+    if code == "LLM_API_KEY_NOT_CONFIGURED" or "LLM_" in code:
         raise HTTPException(status_code=400, detail="请先配置 AI 模型 API Key") from exc
     if code in _LLM_CONFIG_CODES:
         raise HTTPException(status_code=400, detail="AI 配置异常，请检查模型设置") from exc
-    raise HTTPException(status_code=502, detail=fallback_detail) from exc
+    raise HTTPException(status_code=400, detail=fallback_detail) from exc
 
 
 def validate_content_params(platform: str, content_format: str) -> str:

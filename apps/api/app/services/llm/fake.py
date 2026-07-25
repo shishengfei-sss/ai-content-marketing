@@ -110,7 +110,37 @@ class FakeLLMProvider(LLMProvider):
         convo_text = " ".join(m.content for m in messages)
 
         if "创作预检" in system_text:
-            if "你好" in user_text and len(user_text.strip()) < 12:
+            if any(w in user_text for w in ("自杀", "问候她妈", "问候他妈", "人身攻击")):
+                content = json.dumps(
+                    {
+                        "action": "clarify",
+                        "topic": "",
+                        "clarify_question": "这类内容我无法协助创作，请换合规营销主题。",
+                        "input_class": "unsafe",
+                    },
+                    ensure_ascii=False,
+                )
+            elif any(w in user_text for w in ("傻子", "傻逼", "白痴", "脑残")):
+                content = json.dumps(
+                    {
+                        "action": "clarify",
+                        "topic": "",
+                        "clarify_question": "我会保持尊重，请告诉我你的创作主题。",
+                        "input_class": "insult",
+                    },
+                    ensure_ascii=False,
+                )
+            elif any(w in user_text for w in ("不一样", "不满意", "认真点", "换一批")):
+                content = json.dumps(
+                    {
+                        "action": "clarify",
+                        "topic": "",
+                        "clarify_question": "请具体说希望改的语气、受众或切入角度。",
+                        "input_class": "revise_feedback",
+                    },
+                    ensure_ascii=False,
+                )
+            elif "你好" in user_text and len(user_text.strip()) < 12:
                 content = json.dumps(
                     {"action": "clarify", "topic": "", "clarify_question": "请说明具体创作主题与目标读者。"},
                     ensure_ascii=False,

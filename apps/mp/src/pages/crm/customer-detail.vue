@@ -22,9 +22,18 @@ const bizSummary = ref('')
 const activityForm = ref({ content: '' })
 const assignVisible = ref(false)
 const selectedOwner = ref('')
+const currentUserId = ref('')
 
 const canActivity = () => hasPermission(permissions.value, 'crm.activity.create')
+const canEdit = () => hasPermission(permissions.value, 'crm.customer.edit')
 const canAssign = () => hasPermission(permissions.value, 'crm.customer.assign')
+const sameUserId = (a, b) =>
+  !!a && !!b && String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
+const isCustomerOwner = () => sameUserId(customer.value?.owner_user_id, currentUserId.value)
+/** 编辑 / 工商查询等：权限 + 负责人 */
+const canMutateCustomer = () => canEdit() && isCustomerOwner()
+/** 写跟进：跟进权限 + 负责人（与 Web 对齐） */
+const canWriteCustomerActivity = () => canActivity() && isCustomerOwner()
 
 const ownerLabel = computed(() => {
   if (!customer.value?.owner_user_id) return '未分配'
@@ -44,6 +53,7 @@ async function loadDetail() {
   try {
     const user = await ensureSession()
     permissions.value = user?.permissions || []
+    currentUserId.value = user?.id || ''
     const [custData, contactList, timeline, chain] = await Promise.all([
       crmApi.getCustomer(customerId.value),
       crmApi.listContacts(customerId.value),
@@ -117,7 +127,7 @@ function contactName(id) {
 }
 
 async function lookupBusiness() {
-  if (!customer.value?.company_name) return
+  if (!canMutateCustomer() || !customer.value?.company_name) return
   try {
     const data = await crmApi.businessLookup(customer.value.company_name)
     if (data?.available) {
@@ -132,6 +142,10 @@ async function lookupBusiness() {
 }
 
 async function submitActivity() {
+  if (!canWriteCustomerActivity()) {
+    uni.showToast({ title: '仅客户负责人可写跟进', icon: 'none' })
+    return
+  }
   if (!activityForm.value.content.trim()) {
     uni.showToast({ title: '请填写跟进内容', icon: 'none' })
     return
@@ -173,7 +187,7 @@ onLoad((query) => {
       <text class="meta">负责人：{{ ownerLabel }}</text>
       <text v-if="bizSummary" class="meta">工商：{{ bizSummary }}</text>
       <view class="acts">
-        <button class="btn" size="mini" @click="lookupBusiness">工商查询</button>
+        <button v-if="canMutateCustomer()" class="btn" size="mini" @click="lookupBusiness">工商查询</button>
         <button v-if="canAssign()" class="btn btn--primary" size="mini" @click="openAssign">分配负责人</button>
       </view>
       <view v-if="contacts.length" class="contacts">
@@ -191,7 +205,7 @@ onLoad((query) => {
 
     <view class="section">
       <text class="section__title">跟进</text>
-      <view v-if="canActivity()" class="form">
+      <view v-if="canWriteCustomerActivity()" class="form">
         <textarea
           v-model="activityForm.content"
           class="textarea"
@@ -214,6 +228,7 @@ onLoad((query) => {
         ref="taskPanelRef"
         entity-type="customer"
         :entity-id="customerId"
+        :allow-create="isCustomerOwner()"
         @changed="onTasksChanged"
       />
     </view>

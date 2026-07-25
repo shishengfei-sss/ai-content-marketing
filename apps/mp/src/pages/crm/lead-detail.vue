@@ -36,6 +36,8 @@ const canEditLead = () => canEditPerm() && isLeadOwner()
 const canConvert = () => hasPermission(permissions.value, 'crm.lead.convert') && isLeadOwner()
 const canAssign = () => hasPermission(permissions.value, 'crm.lead.assign')
 const canDeleteLead = () => hasPermission(permissions.value, 'crm.lead.delete') && isLeadOwner()
+const isConverted = () =>
+  lead.value?.status === '已转化' || !!lead.value?.converted_customer_id
 const reclaimVisible = ref(false)
 const reclaimSaving = ref(false)
 const reclaimPools = ref([])
@@ -256,6 +258,9 @@ async function handleConvert() {
       loadDetail()
     }
   } catch (e) {
+    if (e.status === 409 && String(e.message || '').includes('已转化')) {
+      loadDetail()
+    }
     uni.showToast({ title: e.message || '转化失败', icon: 'none' })
   }
 }
@@ -314,6 +319,12 @@ async function handleDelete() {
   }
 }
 
+function openConvertedCustomer() {
+  const id = lead.value?.converted_customer_id
+  if (!id) return
+  uni.navigateTo({ url: `/pages/crm/customer-detail?id=${id}` })
+}
+
 onLoad((query) => {
   leadId.value = query.id || ''
   loadDetail()
@@ -350,7 +361,15 @@ onLoad((query) => {
         </button>
         <button v-if="canAssign()" class="btn" size="mini" @click="openAssign">分配负责人</button>
         <button v-if="canEditLead()" class="btn" size="mini" @click="openReclaim">退回公海</button>
-        <button v-if="canConvert() && lead.status !== '已转化'" class="btn btn--primary" size="mini" @click="handleConvert">
+        <button
+          v-if="lead.converted_customer_id"
+          class="btn btn--primary"
+          size="mini"
+          @click="openConvertedCustomer"
+        >
+          查看客户
+        </button>
+        <button v-if="canConvert() && !isConverted()" class="btn btn--primary" size="mini" @click="handleConvert">
           转化客户
         </button>
         <button v-if="canDeleteLead()" class="btn btn--danger" size="mini" @click="handleDelete">删除</button>
@@ -368,13 +387,17 @@ onLoad((query) => {
           :cursor-spacing="20"
         />
         <view
-          v-if="canEditLead()"
+          v-if="canEditLead() && !isConverted()"
           class="status-pick"
           @tap="openActivityStatusSheet"
         >
           <text class="status-pick__label">线索状态</text>
           <text class="status-pick__value">{{ activityForm.status || '请选择' }}</text>
           <text class="status-pick__arrow">▾</text>
+        </view>
+        <view v-else-if="isConverted()" class="status-pick status-pick--readonly">
+          <text class="status-pick__label">线索状态</text>
+          <text class="status-pick__value">已转化</text>
         </view>
         <button class="btn btn--primary" size="mini" hover-class="none" @tap="submitActivity">提交</button>
       </view>
@@ -631,6 +654,11 @@ onLoad((query) => {
   border-radius: 8px;
   background: #fff;
   box-sizing: border-box;
+}
+
+.status-pick--readonly {
+  background: #f8fafc;
+  border-style: dashed;
 }
 
 .status-pick__label {

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三Manager架构 · 修正版</title>
+<style>
+  :root{
+    --bg:#fafaf9; --bg2:#f0efed; --ink:#1c1917; --muted:#78716c; --rule:#e7e5e4;
+    --accent:#b45309; --accent2:#0f766e; --accent3:#7c3aed; --warn:#dc2626; --ok:#16a34a;
+    --new:#dc2626; --fix:#7c3aed;
+    --font: system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:var(--font);color:var(--ink);background:var(--bg);line-height:1.65;padding:2.2rem 1rem;}
+  .page{max-width:1080px;margin:0 auto;}
+  h1{font-size:1.9rem;font-weight:800;letter-spacing:-0.02em;}
+  .sub{color:var(--muted);margin:.4rem 0 1.4rem;font-size:.95rem;}
+  .legend{display:flex;flex-wrap:wrap;gap:.6rem;margin-bottom:1.6rem;}
+  .legend span{font-size:.78rem;display:inline-flex;align-items:center;gap:.35rem;color:var(--muted);}
+  .sw{width:14px;height:14px;border-radius:3px;display:inline-block;border:1.5px solid var(--rule);}
+  .sw.m{background:var(--accent);border-color:var(--accent);}
+  .sw.s{background:var(--accent2);border-color:var(--accent2);}
+  .sw.v{background:var(--accent3);border-color:var(--accent3);}
+  .sw.n{background:#fff;border-color:var(--new);box-shadow:inset 0 0 0 2px var(--new);}
+  .sw.f{background:#fff;border-color:var(--fix);box-shadow:inset 0 0 0 2px var(--fix);}
+  .sw.b{background:var(--bg2);}
+
+  .tier{border:1px solid var(--rule);border-radius:12px;padding:1.1rem 1.2rem;margin-bottom:.55rem;background:#fff;}
+  .tier-title{font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.7rem;}
+  .arrow{text-align:center;color:var(--muted);font-size:1.1rem;line-height:1;margin:.15rem 0;}
+
+  .mgr-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;}
+  .mgr{border-radius:10px;padding:1rem 1.1rem;border:2px solid;}
+  .mgr.m{border-color:var(--accent);background:#fffbeb;}
+  .mgr.s{border-color:var(--accent2);background:#f0fdfa;}
+  .mgr.v{border-color:var(--accent3);background:#faf5ff;}
+  .mgr h3{font-size:1.05rem;margin-bottom:.2rem;}
+  .mgr .tag{font-size:.72rem;color:var(--muted);margin-bottom:.6rem;}
+  .chips{display:flex;flex-wrap:wrap;gap:.35rem;}
+  .chip{font-size:.74rem;background:var(--bg2);border:1px solid var(--rule);border-radius:20px;padding:.18rem .6rem;}
+
+  .policy-band{border:1.5px dashed var(--fix);border-radius:10px;padding:.8rem 1rem;background:#faf5ff;text-align:center;font-size:.85rem;}
+  .policy-band b{color:var(--fix);}
+
+  .runtime{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem;}
+  .comp{border:1px solid var(--rule);border-radius:9px;padding:.7rem .8rem;background:var(--bg);}
+  .comp h4{font-size:.86rem;margin-bottom:.3rem;}
+  .comp p{font-size:.74rem;color:var(--muted);line-height:1.5;}
+  .comp.new{border-color:var(--new);background:#fef2f2;}
+  .comp.new h4{color:var(--new);}
+  .comp.fix{border-color:var(--fix);background:#faf5ff;}
+  .comp.fix h4{color:var(--fix);}
+  .grp-label{grid-column:1/-1;font-size:.7rem;font-weight:800;color:var(--muted);letter-spacing:.06em;margin-top:.3rem;border-top:1px dashed var(--rule);padding-top:.5rem;}
+
+  .data-row{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem;}
+  .data{border:1px solid var(--rule);border-radius:9px;padding:.7rem .8rem;background:var(--bg2);font-size:.78rem;}
+  .data b{display:block;margin-bottom:.25rem;font-size:.82rem;}
+
+  .seam{border:1.5px solid var(--accent2);border-radius:10px;padding:1rem 1.1rem;background:#ecfeff;margin-top:.4rem;}
+  .seam h3{font-size:.95rem;color:var(--accent2);margin-bottom:.6rem;}
+  .flow{display:flex;align-items:stretch;gap:.3rem;flex-wrap:wrap;}
+  .node{font-size:.74rem;background:#fff;border:1px solid var(--accent2);border-radius:7px;padding:.45rem .6rem;flex:1;min-width:120px;}
+  .node b{display:block;color:var(--accent2);font-size:.76rem;}
+  .conn{display:flex;align-items:center;color:var(--accent2);font-weight:800;}
+
+  .seam2{border:1.5px solid var(--accent3);border-radius:10px;padding:1rem 1.1rem;background:#f5f3ff;margin-top:.4rem;}
+  .seam2 h3{font-size:.95rem;color:var(--accent3);margin-bottom:.6rem;}
+  .flow2{display:flex;align-items:stretch;gap:.3rem;flex-wrap:wrap;}
+  .node2{font-size:.74rem;background:#fff;border:1px solid var(--accent3);border-radius:7px;padding:.45rem .6rem;flex:1;min-width:120px;}
+  .node2 b{display:block;color:var(--accent3);font-size:.76rem;}
+  .conn2{display:flex;align-items:center;color:var(--accent3);font-weight:800;}
+
+  .notes{margin-top:1.6rem;}
+  .notes h2{font-size:1.15rem;margin-bottom:.8rem;border-bottom:2px solid var(--accent);padding-bottom:.4rem;display:inline-block;}
+  .notes li{margin-bottom:.5rem;font-size:.88rem;}
+  .notes .k{font-weight:700;}
+  .badge{font-size:.68rem;font-weight:800;padding:.1rem .45rem;border-radius:4px;margin-right:.3rem;}
+  .b-new{background:#fee2e2;color:#991b1b;}
+  .b-fix{background:#ede9fe;color:#5b21b6;}
+  footer{margin-top:2rem;font-size:.75rem;color:var(--muted);border-top:1px solid var(--rule);padding-top:1rem;}
+  @media(max-width:760px){.mgr-row,.runtime,.data-row{grid-template-columns:1fr;}.flow,.flow2{flex-direction:column;}.conn,.conn2{transform:rotate(90deg);}}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>AI 三 Manager 架构 · 修正版</h1>
+  <div class="sub">在原始"三中枢（营销 + 销售 + 服务）+ 共享底座"思路上，补强 <b>护栏执行层 / 事件总线 / 策略配置层 / 记忆边界 / 可观测平面</b>，并把差异从 Prompt 提升到架构强制层。覆盖 <b>获客 → 成单 → 续约</b> 全生命周期。</div>
+
+  <div class="legend">
+    <span><i class="sw m"></i>营销 Manager 实例</span>
+    <span><i class="sw s"></i>销售 Manager 实例</span>
+    <span><i class="sw v"></i>服务 Manager 实例</span>
+    <span><i class="sw b"></i>原始共享组件</span>
+    <span><i class="sw n"></i>新增强制层</span>
+    <span><i class="sw f"></i>修正 / 澄清点</span>
+  </div>
+
+  <!-- Tier 0: 三 Manager 实例 -->
+  <div class="tier">
+    <div class="tier-title">Tier 0 · 三 Manager 实例（插件式，非手搓）</div>
+    <div class="mgr-row">
+      <div class="mgr m">
+        <h3>AI 营销经理 · P-MKT</h3>
+        <div class="tag">管"获客" · 只读 CRM</div>
+        <div class="chips">
+          <span class="chip">策略洞察官 Strategist</span>
+          <span class="chip">内容品牌官 Creator</span>
+          <span class="chip">活动增长官 Campaigner</span>
+        </div>
+      </div>
+      <div class="mgr s">
+        <h3>AI 销售经理 · P-MGR</h3>
+        <div class="tag">管"成单" · 读写 CRM</div>
+        <div class="chips">
+          <span class="chip">分析官</span><span class="chip">商机官</span>
+          <span class="chip">客户官</span><span class="chip">报价官</span>
+          <span class="chip">内容官</span><span class="chip">教练官</span>
+          <span class="chip">线索官</span><span class="chip">协同官</span>
+        </div>
+      </div>
+      <div class="mgr v">
+        <h3>AI 服务经理 · P-SVC</h3>
+        <div class="tag">管"续约" · 读写 CRM（含工单/健康度）</div>
+        <div class="chips">
+          <span class="chip">服务官 Support</span>
+          <span class="chip">客户健康官 Health</span>
+          <span class="chip">知识官 Knowledge</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- 策略配置层（修正） -->
+  <div class="policy-band">
+    <b>策略配置层（per-manager policy）</b>：权限范围 · Confirm 触发点 · 人格 · Agent 注册表 —— 以 <b>配置（YAML/JSON）</b> 驱动，差异化不再写死在 Prompt 里，便于审计与回归。三 Manager 独立配置，互不串味。
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- Tier 1: Manager Runtime -->
+  <div class="tier">
+    <div class="tier-title">Tier 1 · Manager Runtime（共享底座，一次构建多实例复用）</div>
+    <div class="runtime">
+
+      <div class="grp-label">编排层</div>
+      <div class="comp"><h4>Supervisor 调度</h4><p>意图识别 / 任务拆分 / 委派 / 汇总。三 Manager 共用同一运行时，仅参数不同。</p></div>
+      <div class="comp"><h4>ReAct 工具调用</h4><p>子 Agent 通用工具执行层。</p></div>
+      <div class="comp"><h4>Workflow 编排</h4><p>多步任务状态机，含超时降级（简单问题不调多 Agent）。</p></div>
+
+      <div class="grp-label">护栏执行层（新增 · 独立于 LLM）</div>
+      <div class="comp new"><h4>PEP · Confirm 闸硬拦截</h4><p>发邮件/报价/分配/发文/投放/动预算/改工单状态/删知识条目 在<b>工具执行边界</b>强制人审，不依赖模型自觉。</p></div>
+      <div class="comp new"><h4>审计留痕</h4><p>所有增删改 + 每次建议的"结论→依据→工具链"全量留痕。</p></div>
+      <div class="comp new"><h4>行级授权</h4><p>营销只读 / 销售读写 / 服务读写（工单+健康度）由 PEP + CRM 适配器双重强制，杜绝越界。</p></div>
+
+      <div class="grp-label">集成层（新增 · 事件驱动）</div>
+      <div class="comp new"><h4>EventBus 事件总线</h4><p>LeadMatured(MQL) / 停滞预警 / 舆情异动 / 退回超时升级 / HealthRiskAlert / RenewalDue / TicketEscalated。协同缝从轮询变订阅。</p></div>
+
+      <div class="grp-label">智能层（向量库统一澄清）</div>
+      <div class="comp fix"><h4>混合 RAG</h4><p>统一向量库：<b>pgvector 或 Qdrant 二选一并声明</b>（原文档两处冲突），+ 重排。入库即写 embedding。</p></div>
+      <div class="comp"><h4>长期记忆 L0–L4</h4><p>见下方记忆边界修正，私有空间与共享池显式划分。</p></div>
+
+      <div class="grp-label">可观测平面（新增）</div>
+      <div class="comp new"><h4>决策追踪 + 评估</h4><p>采纳率 / 预测准确率 / AI 建议胜率 / 闭环学习回流（结果→归因→重排）。</p></div>
+    </div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- Tier 2: 适配器 -->
+  <div class="tier">
+    <div class="tier-title">Tier 2 · 接入 / 适配层</div>
+    <div class="runtime">
+      <div class="comp"><h4>CRM 适配器</h4><p>营销只读（Lead/Customer/Deal 聚合）；销售读写（含 Contract/Payment）；服务读写（Ticket/Satisfaction/HealthScore）。权限由 PEP 强制。</p></div>
+      <div class="comp"><h4>外部采集适配器</h4><p>竞品官网/社媒 RSS/招标/行业报告 —— 仅公开数据，遵守 robots 与合规。</p></div>
+      <div class="comp"><h4>广告/表单回传</h4><p>投放与线索数据自动回写 CRM / 活动效果库。</p></div>
+    </div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- Tier 3: 数据 -->
+  <div class="tier">
+    <div class="tier-title">Tier 3 · 数据资产</div>
+    <div class="data-row">
+      <div class="data"><b>CRM 核心</b>Lead / Customer / Deal / Contract / Payment / Product / Ticket / Satisfaction / HealthScore</div>
+      <div class="data"><b>六大营销库</b>营销资料 / 竞品 / 活动效果 / 用户分层 / 舆情 / 行业洞察<br><span style="color:var(--muted)">营销读写 · 销售/服务只读</span></div>
+      <div class="data"><b>销售三库</b>销售线索库 / 产品价库 / CPQ 引擎<br><span style="color:var(--muted)">销售读写 · 营销/服务不可访问</span></div>
+    </div>
+    <div class="data-row" style="margin-top:.8rem;">
+      <div class="data"><b>服务六库</b>知识FAQ / 工单历史 / 客户健康 / 产品使用 / 服务SLA / 客户反馈<br><span style="color:var(--muted)">服务读写 · 营销/销售只读（知识FAQ）</span></div>
+      <div class="data"><b>共享经验池</b>脱敏赢单案例 / 标准话术 / 常见坑点 / 最佳实践<br><span style="color:var(--muted)">三 Manager 只读引用 · 写入须经策略配置批准</span></div>
+      <div class="data"><b>人格与策略库</b>角色定义 / 语气风格 / 行业模板 / 企业规则<br><span style="color:var(--muted)">各 Manager 独立私有空间</span></div>
+    </div>
+  </div>
+
+  <!-- 协同缝 1：营销 → 销售 -->
+  <div class="seam">
+    <h3>协同缝 A：营销 → 销售（事件驱动）</h3>
+    <div class="flow">
+      <div class="node"><b>营销 Campaigner</b>检测线索达 MQL 标准</div>
+      <div class="conn">→</div>
+      <div class="node"><b>EventBus</b>发布 LeadMatured(MQL) 事件 + 线索档案</div>
+      <div class="conn">→</div>
+      <div class="node"><b>销售 线索官</b>订阅 → 起 SLA 计时（4h 分配 / 24h 首触）</div>
+      <div class="conn">→</div>
+      <div class="node"><b>退回 / 转化事件</b>回流 EventBus → 营销优化培育</div>
+    </div>
+  </div>
+
+  <!-- 协同缝 2：销售 → 服务 -->
+  <div class="seam2">
+    <h3>协同缝 B：销售 → 服务（事件驱动）</h3>
+    <div class="flow2">
+      <div class="node2"><b>销售 客户官</b>成交后触发客户移交</div>
+      <div class="conn2">→</div>
+      <div class="node2"><b>EventBus</b>发布 DealClosed 事件 + 客户档案 + 成交备注</div>
+      <div class="conn2">→</div>
+      <div class="node2"><b>服务 HealthAgent</b>订阅 → 初始化健康评分 + 启动 onboarding</div>
+      <div class="conn2">→</div>
+      <div class="node2"><b>续约/流失事件</b>回流 EventBus → 销售提前介入</div>
+    </div>
+  </div>
+
+  <!-- 协同缝 3：服务 → 销售/营销 -->
+  <div class="seam2" style="border-color:var(--warn);background:#fef2f2;margin-top:.4rem;">
+    <h3 style="color:var(--warn);">协同缝 C：服务 → 销售 / 营销（预警回流）</h3>
+    <div class="flow" style="gap:.3rem;">
+      <div class="node" style="border-color:var(--warn);"><b style="color:var(--warn);">服务 HealthAgent</b>健康度低于阈值</div>
+      <div class="conn" style="color:var(--warn);">→</div>
+      <div class="node" style="border-color:var(--warn);"><b style="color:var(--warn);">EventBus</b>发布 HealthRiskAlert + 客户画像</div>
+      <div class="conn" style="color:var(--warn);">→</div>
+      <div class="node" style="border-color:var(--warn);"><b style="color:var(--warn);">销售 客户官 + 服务 Supervisor</b>联合制定挽回方案</div>
+      <div class="conn" style="color:var(--warn);">→</div>
+      <div class="node" style="border-color:var(--warn);"><b style="color:var(--warn);">挽回结果</b>回流知识库 → 产品改进反馈</div>
+    </div>
+  </div>
+
+  <!-- 记忆边界修正 -->
+  <div class="tier" style="margin-top:1rem;">
+    <div class="tier-title">记忆边界修正（原文档独立 vs 共享矛盾）</div>
+    <div class="runtime">
+      <div class="comp fix"><h4>私有空间（各 Manager 独立）</h4><p>L0–L4 各自隔离，避免人格混淆与跨域串味。营销/销售/服务各有独立的记忆空间。</p></div>
+      <div class="comp fix"><h4>共享经验池（脱敏、显式边界）</h4><p>仅脱敏后的赢单案例/话术/坑/服务解决方案 跨域引用，写入须经策略配置批准。</p></div>
+      <div class="comp fix"><h4>L0–L4 须就地定义</h4><p>原文档为黑盒（仅引 v0.4 LM）。本架构要求明确每级含义与生命周期。</p></div>
+    </div>
+  </div>
+
+  <!-- 差异说明 -->
+  <div class="notes">
+    <h2>相对原始方案的关键修正</h2>
+    <ul>
+      <li><span class="badge b-new">新增</span><span class="k">服务 Manager（P-SVC）</span>：覆盖成交后 → 交付 → 续约/扩展全生命周期，补齐"获客→成单→续约"闭环。含服务官、客户健康官、知识官 3 个子 Agent + 6 大服务资料库。</li>
+      <li><span class="badge b-new">新增</span><span class="k">护栏执行层 PEP</span>：Confirm 闸从"Prompt 约定"提升为工具执行边界的硬拦截 + 审计 + 行级授权，安全不再寄托于模型自觉。服务域额外覆盖工单状态变更、知识条目删除等操作。</li>
+      <li><span class="badge b-new">新增</span><span class="k">EventBus 事件总线</span>：线索 SLA、停滞预警、舆情异动、<b>健康风险预警、续约到期、工单升级</b>改为订阅式，解决原"隐式轮询/靠 CRM 能力悬空"问题。</li>
+      <li><span class="badge b-fix">修正</span><span class="k">策略配置层</span>：三 Manager 差异（权限/Confirm 触发点/人格/注册表）抽成配置，而非写死在七层 Prompt，可审计、可回归。</li>
+      <li><span class="badge b-fix">修正</span><span class="k">向量库统一</span>：原文档 pgvector 与 Qdrant 冲突，本图明确二选一并声明职责。</li>
+      <li><span class="badge b-fix">修正</span><span class="k">记忆边界</span>：独立私有空间 + 显式共享经验池，L0–L4 黑盒须定义。</li>
+      <li><span class="badge b-new">新增</span><span class="k">可观测平面</span>：决策追踪链 + 采纳率/胜率评估 + 闭环学习回流，支撑"越用越像资深"。</li>
+      <li><span class="badge b-fix">修正</span><span class="k">平台化定位</span>：三 Manager 是 Manager Runtime 的前三个插件实例，直接支撑商业篇"AI 管理层矩阵"愿景。</li>
+    </ul>
+  </div>
+
+  <footer>
+    修正版架构图 · 基于《AI资深营销经理 + AI资深销售经理 + AI资深服务经理 · 统一实施方案 v1.0-unified》评审补强 · 自包含 HTML，无外部依赖。
+  </footer>
+</div>
+</body>
+</html>

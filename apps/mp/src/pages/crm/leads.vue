@@ -534,9 +534,9 @@ onShow(loadData)
             </view>
           </view>
           <text v-else class="card__meta card__meta--empty">暂无更多信息</text>
-          <view v-if="canActivity()" class="card__foot" @click.stop>
+          <view class="card__foot" @click.stop>
             <view class="card__actions">
-              <view class="card__action" @tap="openActivity(item)">写跟进</view>
+              <view v-if="canActivity()" class="card__action" @tap="openActivity(item)">写跟进</view>
               <view class="card__action card__action--ghost" @tap="goDetail(item)">详情</view>
             </view>
           </view>

@@ -19,6 +19,8 @@ import {
 const props = defineProps({
   entityType: { type: String, required: true },
   entityId: { type: String, required: true },
+  /** 与 Web 对齐：客户详情仅负责人可新建任务 */
+  allowCreate: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['changed'])
@@ -39,7 +41,7 @@ const form = ref({
   priority: 'normal',
 })
 
-const canCreate = () => hasPermission(permissions.value, 'crm.task.create')
+const canCreate = () => props.allowCreate && hasPermission(permissions.value, 'crm.task.create')
 const canEdit = () => hasPermission(permissions.value, 'crm.task.edit')
 
 const openCount = computed(() => tasks.value.filter((t) => isActiveTaskStatus(t.status)).length)
@@ -81,12 +83,65 @@ function onDescInput(e) {
   form.value.description = e.detail?.value ?? e.target?.value ?? ''
 }
 
-function onPlannedStartInput(e) {
-  form.value.planned_start_at = e.detail?.value ?? e.target?.value ?? ''
+function pad2(n) {
+  return String(n).padStart(2, '0')
 }
 
-function onDueInput(e) {
-  form.value.due_at = e.detail?.value ?? e.target?.value ?? ''
+function todayDateStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
+/** 拆分 YYYY-MM-DDTHH:mm */
+function splitLocal(localStr) {
+  if (!localStr || !String(localStr).includes('T')) return { date: '', time: '' }
+  const [date, timePart] = String(localStr).split('T')
+  return { date: date || '', time: (timePart || '').slice(0, 5) }
+}
+
+function joinLocal(date, time, fallbackTime = '09:00') {
+  if (!date) return ''
+  return `${date}T${time || fallbackTime}`
+}
+
+function localDatePart(localStr) {
+  return splitLocal(localStr).date || todayDateStr()
+}
+
+function localTimePart(localStr, fallback = '09:00') {
+  return splitLocal(localStr).time || fallback
+}
+
+function onPlannedDateChange(e) {
+  const date = e.detail?.value || ''
+  const { time } = splitLocal(form.value.planned_start_at)
+  form.value.planned_start_at = joinLocal(date, time, '09:00')
+}
+
+function onPlannedTimeChange(e) {
+  const time = e.detail?.value || ''
+  const { date } = splitLocal(form.value.planned_start_at)
+  form.value.planned_start_at = joinLocal(date || todayDateStr(), time, '09:00')
+}
+
+function onDueDateChange(e) {
+  const date = e.detail?.value || ''
+  const { time } = splitLocal(form.value.due_at)
+  form.value.due_at = joinLocal(date, time, '18:00')
+}
+
+function onDueTimeChange(e) {
+  const time = e.detail?.value || ''
+  const { date } = splitLocal(form.value.due_at)
+  form.value.due_at = joinLocal(date || todayDateStr(), time, '18:00')
+}
+
+function clearPlannedStart() {
+  form.value.planned_start_at = ''
+}
+
+function clearDueAt() {
+  form.value.due_at = ''
 }
 
 function pickPriority(value) {
@@ -250,22 +305,72 @@ defineExpose({ reload: loadTasks })
         />
         <view class="entity-tasks__form-row">
           <view class="entity-tasks__field">
-            <text class="entity-tasks__label">计划开始</text>
-            <input
-              :value="form.planned_start_at"
-              class="input input--dt"
-              type="datetime-local"
-              @input="onPlannedStartInput"
-            />
+            <view class="entity-tasks__label-row">
+              <text class="entity-tasks__label">计划开始</text>
+              <text
+                v-if="form.planned_start_at"
+                class="entity-tasks__clear"
+                @tap.stop="clearPlannedStart"
+              >清除</text>
+            </view>
+            <view class="entity-tasks__dt">
+              <picker
+                mode="date"
+                :value="localDatePart(form.planned_start_at)"
+                @change="onPlannedDateChange"
+              >
+                <view class="input input--dt input--picker">
+                  <text :class="{ 'input--ph': !splitLocal(form.planned_start_at).date }">
+                    {{ splitLocal(form.planned_start_at).date || '选择日期' }}
+                  </text>
+                </view>
+              </picker>
+              <picker
+                mode="time"
+                :value="localTimePart(form.planned_start_at, '09:00')"
+                @change="onPlannedTimeChange"
+              >
+                <view class="input input--dt input--picker">
+                  <text :class="{ 'input--ph': !splitLocal(form.planned_start_at).time }">
+                    {{ splitLocal(form.planned_start_at).time || '选择时间' }}
+                  </text>
+                </view>
+              </picker>
+            </view>
           </view>
           <view class="entity-tasks__field">
-            <text class="entity-tasks__label">计划完成</text>
-            <input
-              :value="form.due_at"
-              class="input input--dt"
-              type="datetime-local"
-              @input="onDueInput"
-            />
+            <view class="entity-tasks__label-row">
+              <text class="entity-tasks__label">计划完成</text>
+              <text
+                v-if="form.due_at"
+                class="entity-tasks__clear"
+                @tap.stop="clearDueAt"
+              >清除</text>
+            </view>
+            <view class="entity-tasks__dt">
+              <picker
+                mode="date"
+                :value="localDatePart(form.due_at)"
+                @change="onDueDateChange"
+              >
+                <view class="input input--dt input--picker">
+                  <text :class="{ 'input--ph': !splitLocal(form.due_at).date }">
+                    {{ splitLocal(form.due_at).date || '选择日期' }}
+                  </text>
+                </view>
+              </picker>
+              <picker
+                mode="time"
+                :value="localTimePart(form.due_at, '18:00')"
+                @change="onDueTimeChange"
+              >
+                <view class="input input--dt input--picker">
+                  <text :class="{ 'input--ph': !splitLocal(form.due_at).time }">
+                    {{ splitLocal(form.due_at).time || '选择时间' }}
+                  </text>
+                </view>
+              </picker>
+            </view>
           </view>
         </view>
         <view class="status-pick" @tap="prioritySheetVisible = true">
@@ -456,9 +561,45 @@ defineExpose({ reload: loadTasks })
   gap: 4px;
 }
 
+.entity-tasks__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .entity-tasks__label {
   font-size: 12px;
   color: #64748b;
+}
+
+.entity-tasks__clear {
+  font-size: 12px;
+  color: #1677ff;
+  padding: 2px 4px;
+}
+
+.entity-tasks__dt {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 8px;
+}
+
+.entity-tasks__dt picker {
+  width: 100%;
+  min-width: 0;
+}
+
+.entity-tasks__dt .input {
+  margin-bottom: 0;
+}
+
+.input--picker {
+  display: flex;
+  align-items: center;
+}
+
+.input--ph {
+  color: #94a3b8;
 }
 
 .input,

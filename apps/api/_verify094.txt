@@ -1,0 +1,2 @@
+('sales_manager', 'crm.quote.list_own')
+('sales_manager', 'crm.quote.list_team')

@@ -73,6 +73,10 @@ class OpenAICompatibleProvider(LLMProvider):
 
         async with httpx.AsyncClient(timeout=timeout_sec) as client:
             resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code == 401:
+                raise ValueError(
+                    "LLM_API_KEY_INVALID: DeepSeek API Key 无效或已过期，请更新平台/租户 Key"
+                )
             resp.raise_for_status()
             data = resp.json()
 

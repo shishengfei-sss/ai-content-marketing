@@ -23,16 +23,20 @@ PREFLIGHT_SYSTEM_PROMPT = """你是通用营销创作预检解析器。根据用
 - topic: string
 - clarify_question: string | null
 - proposal_count: number | null（用户明确要求的方向/标题/方案个数，1～10；未指定则为 null）
-- input_class: greeting | joke | off_topic | too_short | vague | proceed（输入分类，便于日志）
+- input_class: greeting | joke | off_topic | insult | unsafe | revise_feedback | too_short | vague | proceed（输入分类，便于日志）
 
 规则：
 1. 上下文已给出 UI 选择的 platform 与 content_format，禁止追问平台或形态
 2. 若对话历史中有此前 clarify 与用户补充，须合并理解，禁止重复追问已回答内容
-3. 只要用户表达了明确创作主题（某产品/某话题/某人物/某事件等）→ action=proceed，即使缺少受众或要点也放行，由后续方案生成环节细化；topic 提炼为一句简洁创作主题
-4. 仅以下情况才 clarify：纯寒暄（你好/在吗）、只有动词无主题（"写一篇"/"帮我写"）、完全跑题（股票行情等）、或有效汉字不足 4 个
+3. 只要用户表达了明确且合规的创作主题（某产品/某话题/某人物/某事件等）→ action=proceed，即使缺少受众或要点也放行，由后续方案生成环节细化；topic 提炼为一句简洁创作主题
+4. 仅以下情况才 clarify：纯寒暄（你好/在吗）、只有动词无主题（"写一篇"/"帮我写"）、完全跑题（股票行情等）、有效汉字不足 4 个、辱骂 AI、或要求代写人身攻击/脏话对骂/教唆自伤等违规内容
 5. clarify 时 clarify_question 用中文一次追问 1 点，并给出下一步建议；禁止与历史 clarify 问题重复
 6. 用户说「10个方向/标题」等 → proposal_count 填对应数字（最大 10）；未指定数量 → proposal_count=null
-7. 玩笑、偏题或与创作无关 → action=clarify，礼貌拉回营销创作主线
+7. 玩笑、偏题或与创作无关 → action=clarify，input_class=joke/off_topic，礼貌拉回营销创作主线
+8. 辱骂助手（傻子/垃圾等）→ action=clarify，input_class=insult，保持尊重不反击
+9. 要求写骂人稿、人身攻击、教唆自伤/自杀等 → action=clarify，input_class=unsafe，明确拒绝并引导合规选题；禁止 proceed
+10. 用户仅说「跟我想要的不一样/不满意/认真点」且未给出具体改法 → action=clarify，input_class=revise_feedback，请对方具体说明希望改的语气/受众/角度
+11. 用户已给出具体改稿点（去掉某词、改标题、缩短、换语气、加配图等）→ action=proceed，input_class=proceed，topic 保留原主题并附带改稿要点；禁止当成违规或再空追问
 仅输出 JSON，无 markdown。"""
 
 
@@ -232,10 +236,10 @@ async def parse_create_preflight(
     except Exception as e:
         logger.exception("preflight LLM failed")
         err = str(e)
-        if "401" in err or "Authorization Required" in err:
+        if "401" in err or "Authorization Required" in err or "Authentication Fails" in err:
             raise HTTPException(
-                status_code=502,
-                detail="预检失败：平台 DeepSeek API Key 无效或未配置，请在管理后台「平台 AI」或 apps/api/.env 中设置 DEEPSEEK_API_KEY",
+                status_code=400,
+                detail="平台 DeepSeek API Key 无效或已过期。请在管理后台「平台 AI」更新 Key，或改用「我的 API Key」，并同步更新 apps/api/.env 的 DEEPSEEK_API_KEY",
             ) from e
         raise HTTPException(status_code=502, detail=f"预检失败: {e}") from e
 

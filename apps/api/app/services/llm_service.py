@@ -5,6 +5,10 @@
 - llm_source=tenant：租户自有 Key，不扣平台额度
 """
 
+from __future__ import annotations
+
+import logging
+import os
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -21,6 +25,8 @@ from app.services.platform_llm_service import (
     normalize_platform_provider,
     resolve_platform_api_key,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -66,8 +72,10 @@ class LLMService:
             if not platform or not platform.is_active:
                 raise ValueError("LLM_PLATFORM_NOT_CONFIGURED")
 
-            # 离线验收 / CI：平台配置为 fake 时使用 FakeLLMProvider
-            if platform.provider == "fake" or platform.base_url == "http://fake.local":
+            # 仅 CI / 离线验收显式开启时允许 Fake；避免测试残留导致创作页一直套模板
+            force_fake = os.environ.get("FORCE_FAKE_PLATFORM_LLM") == "1"
+            is_fake = platform.provider == "fake" or platform.base_url == "http://fake.local"
+            if is_fake and force_fake:
                 return ResolvedLLMConfig(
                     provider="fake",
                     base_url=platform.base_url or "http://fake.local",
@@ -76,10 +84,25 @@ class LLMService:
                     timeout_sec=platform.timeout_sec,
                     source="platform",
                 )
+            if is_fake and not force_fake:
+                logger.warning(
+                    "platform LLM is fake but FORCE_FAKE_PLATFORM_LLM!=1; "
+                    "falling back to deepseek to avoid stub proposals in product UI"
+                )
 
-            provider_name = normalize_platform_provider(platform.provider)
-            base_url = platform.base_url
-            model = platform.model
+            provider_name = normalize_platform_provider(
+                "deepseek" if is_fake else platform.provider
+            )
+            base_url = (
+                "https://api.deepseek.com"
+                if is_fake
+                else (platform.base_url or "https://api.deepseek.com")
+            )
+            model = "deepseek-v4-flash" if is_fake else platform.model
+            if not is_fake and provider_name == "deepseek":
+                from app.services.platform_llm_service import normalize_deepseek_model
+
+                model = normalize_deepseek_model(model)
             api_key = resolve_platform_api_key(platform)
             if not api_key:
                 raise ValueError("LLM_PLATFORM_NOT_CONFIGURED")

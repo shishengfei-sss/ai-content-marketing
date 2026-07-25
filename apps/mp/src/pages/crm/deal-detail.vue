@@ -34,8 +34,26 @@ const activityTypeOptions = [
 ]
 
 const canEdit = () => hasPermission(permissions.value, 'crm.deal.edit')
-const canAssign = () => hasPermission(permissions.value, 'crm.deal.assign')
+const canAssignPerm = () => hasPermission(permissions.value, 'crm.deal.assign')
 const canActivity = () => hasPermission(permissions.value, 'crm.activity.create')
+const canClosePerm = () => hasPermission(permissions.value, 'crm.deal.close')
+const canReopenPerm = () => hasPermission(permissions.value, 'crm.deal.reopen')
+const currentUserId = ref('')
+const sameUserId = (a, b) =>
+  !!a && !!b && String(a).replace(/-/g, '').toLowerCase() === String(b).replace(/-/g, '').toLowerCase()
+const isDealOwner = () => sameUserId(deal.value?.owner_user_id, currentUserId.value)
+const isClosed = computed(() => ['won', 'lost', 'abandoned'].includes(deal.value?.status))
+/** 编辑 / 推进阶段：权限 + 负责人 + 未关闭 */
+const canMutateDeal = () => canEdit() && isDealOwner() && !isClosed.value
+/** 写跟进：跟进权限 + 负责人（与 Web 对齐） */
+const canWriteDealActivity = () => canActivity() && isDealOwner()
+const canAssign = () => canAssignPerm() && !isClosed.value
+const canCloseDeal = () => canClosePerm() && isDealOwner() && !isClosed.value
+const canReopenDeal = () => canReopenPerm() && isClosed.value
+
+const closeVisible = ref(false)
+const closeBusy = ref(false)
+const closeForm = ref({ status: 'won', amount: null, reason: '' })
 
 const stages = computed(() => {
   const pipe = pipelines.value.find((p) => String(p.id) === String(deal.value?.pipeline_id))
@@ -75,14 +93,13 @@ const extraFields = computed(() => {
     }))
 })
 
-const isClosed = computed(() => ['won', 'lost', 'abandoned'].includes(deal.value?.status))
-
 async function loadDetail() {
   if (!dealId.value) return
   loading.value = true
   try {
     const user = await ensureSession()
     permissions.value = user?.permissions || []
+    currentUserId.value = user?.id || ''
     await loadSchema()
     const [dealData, pipeData, acts] = await Promise.all([
       crmApi.getDeal(dealId.value),
@@ -157,12 +174,16 @@ async function submitAssign() {
 }
 
 function openStageSheet() {
-  if (!canEdit() || isClosed.value) return
+  if (!canMutateDeal()) {
+    uni.showToast({ title: '仅商机负责人可推进阶段', icon: 'none' })
+    return
+  }
   stageSheetVisible.value = true
 }
 
 async function pickStage(stage) {
   stageSheetVisible.value = false
+  if (!canMutateDeal()) return
   if (!stage || String(stage.id) === String(deal.value?.stage_id)) return
   try {
     await crmApi.changeDealStage(dealId.value, { stage_id: stage.id })
@@ -174,6 +195,10 @@ async function pickStage(stage) {
 }
 
 async function submitActivity() {
+  if (!canWriteDealActivity()) {
+    uni.showToast({ title: '仅商机负责人可写跟进', icon: 'none' })
+    return
+  }
   if (!activityForm.value.content.trim()) {
     uni.showToast({ title: '请填写跟进内容', icon: 'none' })
     return
@@ -190,6 +215,58 @@ async function submitActivity() {
   } catch (e) {
     uni.showToast({ title: e.message || '添加失败', icon: 'none' })
   }
+}
+
+function openClose(status) {
+  if (!canCloseDeal()) return
+  closeForm.value = {
+    status,
+    amount: status === 'won' ? Number(deal.value?.amount || 0) : null,
+    reason: '',
+  }
+  closeVisible.value = true
+}
+
+async function submitClose() {
+  if (!canCloseDeal() || closeBusy.value) return
+  if (closeForm.value.status === 'lost' && !closeForm.value.reason?.trim()) {
+    uni.showToast({ title: '请填写输单原因', icon: 'none' })
+    return
+  }
+  closeBusy.value = true
+  try {
+    await crmApi.closeDeal(dealId.value, {
+      status: closeForm.value.status,
+      amount: closeForm.value.status === 'won' ? Number(closeForm.value.amount || 0) : null,
+      loss_reason: closeForm.value.reason || null,
+      reason: closeForm.value.reason || null,
+    })
+    uni.showToast({ title: '商机已关闭', icon: 'success' })
+    closeVisible.value = false
+    await loadDetail()
+  } catch (e) {
+    uni.showToast({ title: e.message || '关闭失败', icon: 'none' })
+  } finally {
+    closeBusy.value = false
+  }
+}
+
+function handleReopen() {
+  if (!canReopenDeal()) return
+  uni.showModal({
+    title: '重开商机',
+    content: '将恢复为进行中，并回退到管道首个非终态阶段。确定重开？',
+    success: async (res) => {
+      if (!res.confirm) return
+      try {
+        await crmApi.reopenDeal(dealId.value)
+        uni.showToast({ title: '商机已重开', icon: 'success' })
+        await loadDetail()
+      } catch (e) {
+        uni.showToast({ title: e.message || '重开失败', icon: 'none' })
+      }
+    },
+  })
 }
 
 function activityTypeLabel(type) {
@@ -225,13 +302,16 @@ onLoad((query) => {
             <text class="stat__lbl">当前阶段</text>
           </view>
         </view>
-        <view v-if="canEdit() && !isClosed" class="stage-pick" @tap="openStageSheet">
+        <view v-if="canMutateDeal()" class="stage-pick" @tap="openStageSheet">
           <text class="stage-pick__label">推进阶段</text>
           <text class="stage-pick__value">{{ currentStageName }}</text>
           <text class="stage-pick__arrow">▾</text>
         </view>
-        <view v-if="canAssign()" class="hero-actions">
-          <button class="btn" size="mini" hover-class="none" @tap="openAssign">分配负责人</button>
+        <view v-if="canAssign() || canCloseDeal() || canReopenDeal()" class="hero-actions">
+          <button v-if="canAssign()" class="btn" size="mini" hover-class="none" @tap="openAssign">分配负责人</button>
+          <button v-if="canCloseDeal()" class="btn btn--ok" size="mini" hover-class="none" @tap="openClose('won')">赢单</button>
+          <button v-if="canCloseDeal()" class="btn btn--danger" size="mini" hover-class="none" @tap="openClose('lost')">输单</button>
+          <button v-if="canReopenDeal()" class="btn btn--warn" size="mini" hover-class="none" @tap="handleReopen">重开</button>
         </view>
       </view>
 
@@ -256,7 +336,7 @@ onLoad((query) => {
 
       <view class="section">
         <text class="section__title">跟进记录</text>
-        <view v-if="canActivity()" class="form">
+        <view v-if="canWriteDealActivity()" class="form">
           <picker :range="activityTypeOptions" range-key="label" @change="(e) => (activityForm.activity_type = activityTypeOptions[e.detail.value].value)">
             <view class="picker">类型：{{ activityTypeLabel(activityForm.activity_type) }}</view>
           </picker>
@@ -311,6 +391,36 @@ onLoad((query) => {
         <view class="dialog__acts">
           <button class="btn" hover-class="none" @tap="assignVisible = false">取消</button>
           <button class="btn btn--primary" hover-class="none" @tap="submitAssign">保存</button>
+        </view>
+      </view>
+    </view>
+
+    <view v-if="closeVisible" class="mask mask--center" @tap="closeVisible = false">
+      <view class="dialog" @tap.stop>
+        <text class="dialog__title">{{ closeForm.status === 'won' ? '确认赢单' : '确认输单' }}</text>
+        <input
+          v-if="closeForm.status === 'won'"
+          v-model="closeForm.amount"
+          class="input"
+          type="digit"
+          placeholder="成交金额"
+        />
+        <textarea
+          v-if="closeForm.status === 'lost'"
+          v-model="closeForm.reason"
+          class="textarea"
+          placeholder="输单原因（必填）"
+          :adjust-position="true"
+        />
+        <view class="dialog__acts">
+          <button class="btn" hover-class="none" @tap="closeVisible = false">取消</button>
+          <button
+            class="btn"
+            :class="closeForm.status === 'won' ? 'btn--ok' : 'btn--danger'"
+            hover-class="none"
+            :loading="closeBusy"
+            @tap="submitClose"
+          >确认</button>
         </view>
       </view>
     </view>
@@ -481,6 +591,23 @@ onLoad((query) => {
   color: #fff;
 }
 
+.btn--ok {
+  background: #52c41a !important;
+  color: #fff !important;
+}
+
+.btn--danger {
+  background: #fff !important;
+  color: #ff4d4f !important;
+  border: 1px solid #ffccc7 !important;
+}
+
+.btn--warn {
+  background: #fff7e6 !important;
+  color: #d46b08 !important;
+  border: 1px solid #ffd591 !important;
+}
+
 .line {
   padding: 10px 0;
   border-bottom: 1px solid #f1f5f9;
@@ -562,6 +689,9 @@ onLoad((query) => {
 
 .hero-actions {
   margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .sheet {

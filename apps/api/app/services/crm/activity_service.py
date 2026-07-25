@@ -170,6 +170,12 @@ def create_activity(db: Session, ctx: TenantContext, data: ActivityCreate) -> Cr
             status_val = str(data.status).strip()
             if status_val and status_val != (lead.status or ""):
                 assert_can_mutate_lead(ctx, lead)
+                if lead.converted_customer_id or lead.status == "已转化":
+                    if status_val != "已转化":
+                        raise HTTPException(
+                            status_code=409,
+                            detail="线索已转化，不可改回其他状态",
+                        )
                 try:
                     validate_lead_status(status_val)
                 except ValueError as e:

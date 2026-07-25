@@ -18,7 +18,9 @@ const canEdit = () => hasPermission(permissions.value, 'crm.task.edit')
 
 function isTaskAssignee(item) {
   if (!item?.assignee_user_id || !currentUserId.value) return false
-  return String(item.assignee_user_id).toLowerCase() === String(currentUserId.value).toLowerCase()
+  const a = String(item.assignee_user_id).replace(/-/g, '').toLowerCase()
+  const b = String(currentUserId.value).replace(/-/g, '').toLowerCase()
+  return a === b
 }
 
 function canComplete(item) {
