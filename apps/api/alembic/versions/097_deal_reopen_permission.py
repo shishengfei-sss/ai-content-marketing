@@ -8,6 +8,7 @@ Revises: 096
 
 from __future__ import annotations
 
+import uuid
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -19,50 +20,66 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 PERM = "crm.deal.reopen"
+SCOPE_ROLE_CODES = ("admin", "sales_manager")
+
+
+def _role_key(role_id) -> str:
+    return str(role_id).replace("-", "").lower()
+
+
+def _insert_permission(conn, role_id, perm: str, dialect: str) -> None:
+    params = {"id": str(uuid.uuid4()), "rid": str(role_id), "perm": perm}
+    if dialect == "postgresql":
+        conn.execute(
+            sa.text(
+                """
+                INSERT INTO tenant_role_permissions (id, role_id, permission_code)
+                VALUES (:id, :rid, :perm)
+                ON CONFLICT (role_id, permission_code) DO NOTHING
+                """
+            ),
+            params,
+        )
+    else:
+        conn.execute(
+            sa.text(
+                """
+                INSERT OR IGNORE INTO tenant_role_permissions (id, role_id, permission_code)
+                VALUES (:id, :rid, :perm)
+                """
+            ),
+            params,
+        )
 
 
 def upgrade() -> None:
     conn = op.get_bind()
-    conn.execute(sa.text("DROP TABLE IF EXISTS _reopen097_roles"))
-    conn.execute(sa.text("DROP TABLE IF EXISTS _reopen097_have"))
-    conn.execute(
+    dialect = conn.dialect.name
+    roles = conn.execute(
         sa.text(
             """
-            CREATE TEMP TABLE _reopen097_roles AS
-            SELECT id AS role_id,
-                   replace(lower(id), '-', '') AS role_key
-            FROM tenant_roles
+            SELECT id FROM tenant_roles
             WHERE code IN ('admin', 'sales_manager')
             """
         )
-    )
-    conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_reopen097_roles_key ON _reopen097_roles(role_key)"))
-    conn.execute(
+    ).fetchall()
+    have = _existing_role_keys(conn, PERM)
+    for (role_id,) in roles:
+        if _role_key(role_id) not in have:
+            _insert_permission(conn, role_id, PERM, dialect)
+
+
+def _existing_role_keys(conn, perm: str) -> set[str]:
+    rows = conn.execute(
         sa.text(
             """
-            CREATE TEMP TABLE _reopen097_have AS
-            SELECT replace(lower(role_id), '-', '') AS role_key
-            FROM tenant_role_permissions
-            WHERE permission_code = :code
+            SELECT role_id FROM tenant_role_permissions
+            WHERE permission_code = :perm
             """
         ),
-        {"code": PERM},
-    )
-    conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_reopen097_have_key ON _reopen097_have(role_key)"))
-    conn.execute(
-        sa.text(
-            """
-            INSERT INTO tenant_role_permissions (id, role_id, permission_code)
-            SELECT lower(hex(randomblob(16))), r.role_id, :code
-            FROM _reopen097_roles r
-            LEFT JOIN _reopen097_have h ON h.role_key = r.role_key
-            WHERE h.role_key IS NULL
-            """
-        ),
-        {"code": PERM},
-    )
-    conn.execute(sa.text("DROP TABLE IF EXISTS _reopen097_have"))
-    conn.execute(sa.text("DROP TABLE IF EXISTS _reopen097_roles"))
+        {"perm": perm},
+    ).fetchall()
+    return {_role_key(role_id) for (role_id,) in rows}
 
 
 def downgrade() -> None:
