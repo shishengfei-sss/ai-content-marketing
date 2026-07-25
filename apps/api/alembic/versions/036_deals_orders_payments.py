@@ -380,7 +380,7 @@ def _seed_default_pipelines() -> None:
             sa.text(
                 """
                 INSERT INTO sales_pipelines (id, tenant_id, name, is_default, is_active)
-                VALUES (:id, :tid, '标准销售管道', 1, 1)
+                VALUES (:id, :tid, '标准销售管道', true, true)
                 """
             ),
             {"id": pipeline_id, "tid": tid},
@@ -402,7 +402,7 @@ def _seed_default_pipelines() -> None:
                     INSERT INTO sales_pipeline_stages
                     (id, tenant_id, pipeline_id, name, sort_order, probability,
                      is_won_stage, is_lost_stage, is_active)
-                    VALUES (:id, :tid, :pid, :name, :sort, :prob, :won, :lost, 1)
+                    VALUES (:id, :tid, :pid, :name, :sort, :prob, :won, :lost, true)
                     """
                 ),
                 {
@@ -412,8 +412,8 @@ def _seed_default_pipelines() -> None:
                     "name": cn_name,
                     "sort": sort_order,
                     "prob": probability,
-                    "won": 1 if is_won else 0,
-                    "lost": 1 if is_lost else 0,
+                    "won": is_won,
+                    "lost": is_lost,
                 },
             )
 
