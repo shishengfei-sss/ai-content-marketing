@@ -114,17 +114,51 @@ table.meta th{background:#f8fafc}
 </head>
 <body>
 <div class="bar">
-  <div><h1>② 买家端 · 可视化小程序 UI</h1>
-  <a href="index.html">← 索引</a><a href="01-admin-ui.html">运营后台</a><a href="03-data-flows.html">数据流</a><a href="04-data-model.html">字段与表</a></div>
+  <div><h1>② 买家端（小程序）· 可视化 UI</h1>
+  <a href="index.html">← 索引</a>
+  <a href="01-admin-ui.html"><b>商家端</b></a>
+  <a href="03-data-flows.html">数据流</a>
+  <a href="04-data-model.html">字段与表</a></div>
+  <div style="font-size:12px">M01–M15 全页画出</div>
 </div>
-<div class="tabs" id="tabs"><button type="button" data-id="m00" class="on">总览</button><button type="button" data-id="m02" class="">M02 首页</button><button type="button" data-id="m03" class="">M03 详情</button><button type="button" data-id="m04" class="">M04 确认支付</button><button type="button" data-id="m06" class="">M06 已购</button><button type="button" data-id="m08" class="">M08 播放器</button><button type="button" data-id="m10" class="">M10 预约</button><button type="button" data-id="m11" class="">M11 订单中心</button><button type="button" data-id="m13" class="">M13 开票</button><button type="button" data-id="m14" class="">M14 领权</button></div>
+<div class="tabs" id="tabs"><button type="button" data-id="m00" class="on">总览</button><button type="button" data-id="m01" class="">M01 登录</button><button type="button" data-id="m02" class="">M02 首页</button><button type="button" data-id="m03" class="">M03 详情</button><button type="button" data-id="m04" class="">M04 确认支付</button><button type="button" data-id="m05" class="">M05 支付结果</button><button type="button" data-id="m06" class="">M06 已购</button><button type="button" data-id="m07" class="">M07 课时目录</button><button type="button" data-id="m08" class="">M08 播放器</button><button type="button" data-id="m09" class="">M09 资料领取</button><button type="button" data-id="m10" class="">M10 预约</button><button type="button" data-id="m10b" class="">M10b 核销码</button><button type="button" data-id="m11" class="">M11 订单列表</button><button type="button" data-id="m12" class="">M12 订单详情</button><button type="button" data-id="m13" class="">M13 开票</button><button type="button" data-id="m14" class="">M14 领权</button><button type="button" data-id="m15" class="">M15 我的</button></div>
 <div class="wrap"><article class="page on" id="m00">
 <div class="doc">
-  <h2>买家端小程序 · 可视化 UI</h2>
-  <p class="sub">对标小鹅通/千聊学员端。点 Tab 切换页面。</p>
-  <div class="note-b note">登录拦截：购买/已购/订单/领权前须绑手机；试看可匿名。</div>
+  <h2>买家端（微信小程序）· 全页面可视化</h2>
+  <p class="sub">与商家端同级：每页画出手机界面 + 右侧操作说明。底栏：首页 · 已购 · 我的。</p>
+  <div class="note-b note">商家端在「① 商家端 Web」：<a href="01-admin-ui.html">01-admin-ui.html</a>（原称运营后台，即商家管理端）。</div>
 </div>
-</article><article class="page " id="m02">
+</article><article class="page " id="m01">
+<div class="doc">
+  <h2>M01 登录 / 绑定手机</h2>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="ph"><div class="t">登录</div><div class="s">首次购买前须绑定</div></div>
+    <div class="pb">
+<div style="text-align:center;padding:30px 10px">
+  <div style="width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#1677ff,#0d9488);margin:0 auto 12px;color:#fff;line-height:64px;font-weight:800">店</div>
+  <div style="font-weight:800;margin-bottom:6px">欢迎来到内容店</div>
+  <div style="font-size:12px;color:#666;margin-bottom:20px">登录后可购买、学习与售后</div>
+  <div class="btn btn-p" style="width:100%;justify-content:center;margin-bottom:10px;padding:10px">微信一键登录</div>
+  <div class="field" style="text-align:left;margin-bottom:8px"><label>手机号</label><div class="val" style="color:#94a3b8">请输入手机号</div></div>
+  <div class="field" style="text-align:left;margin-bottom:8px"><label>验证码</label><div class="val" style="display:flex;justify-content:space-between"><span style="color:#94a3b8">6 位验证码</span><span style="color:#1677ff">获取验证码</span></div></div>
+  <div class="btn btn-p" style="width:100%;justify-content:center;padding:10px;margin-top:8px">绑定并进入</div>
+</div>
+</div>
+    
+    
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op"><b>微信一键登录</b> → 换 session</div>
+  <div class="op"><b>手机号组件 / 验证码</b>：11 位；60s 重发；日上限</div>
+  <div class="op"><b>确认绑定</b>：创建/合并 shop_buyers</div>
+  <div class="k">校验</div>手机 1 开头 11 位；验证码 6 位。</div>
+  </div>
+</div></article><article class="page " id="m02">
 <div class="doc">
   <h2>M02 首页 · 商品列表</h2>
   <div class="row">
@@ -132,28 +166,27 @@ table.meta th{background:#f8fafc}
 <div class="phone">
   <div class="phone-notch"></div>
   <div class="ps">
-    <div class="ph"><div class="t">内容店</div><div class="s">搜索课程 / 资料 / 服务</div></div>
+    <div class="ph"><div class="t">内容店</div><div class="s">搜索与浏览</div></div>
     <div class="pb">
 <div class="inp" style="width:100%;margin-bottom:10px">🔍 搜索课程 / 资料 / 服务</div>
 <div style="display:flex;gap:6px;margin-bottom:10px;font-size:11px">
   <span class="badge b-b">全部</span><span class="badge b-gy">课程</span><span class="badge b-gy">资料</span><span class="badge b-gy">服务</span>
 </div>
-<div class="goods"><div class="c">专栏封面</div><div class="b"><div class="n">IP 获客实战课 · 12 讲</div><div class="p">¥199 <small style="color:#94a3b8;text-decoration:line-through;font-weight:500">¥399</small></div><div style="font-size:11px;color:#666;margin-top:4px">课程</div></div></div>
-<div class="goods"><div class="c" style="background:linear-gradient(135deg,#fde68a,#fdba74);color:#92400e">资料包</div><div class="b"><div class="n">话术模板资料包</div><div class="p">¥49</div></div></div>
+<div class="goods"><div class="c">专栏封面</div><div class="b"><div class="n">IP 获客实战课 · 12 讲</div><div class="p">¥199 <small style="color:#94a3b8;text-decoration:line-through;font-weight:500">¥399</small></div></div></div>
+<div class="goods"><div class="c" style="background:linear-gradient(135deg,#fde68a,#fdba74);color:#92400e">资料</div><div class="b"><div class="n">话术模板资料包</div><div class="p">¥49</div></div></div>
+<div class="goods"><div class="c" style="background:linear-gradient(135deg,#c4b5fd,#818cf8);color:#4c1d95">服务</div><div class="b"><div class="n">1v1 咨询次数卡</div><div class="p">¥599</div></div></div>
 </div>
     
     <div class="ptab"><div class="on">首页</div><div class="">已购</div><div class="">我的</div></div>
   </div>
 </div>
-    <div class="side-note">
-      <div class="k">操作</div>
-      下拉刷新 / 上拉加载；搜索；类型 Chip；点卡片进详情。
-      <div class="k">空态</div>
-      「暂无在售内容」
-    </div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op"><b>下拉刷新 / 上拉加载</b></div>
+  <div class="op"><b>搜索</b>、<b>类型 Chip</b></div>
+  <div class="op"><b>点商品卡</b> → M03</div>
+  <div class="k">空态</div>暂无在售内容</div>
   </div>
-</div>
-</article><article class="page " id="m03">
+</div></article><article class="page " id="m03">
 <div class="doc">
   <h2>M03 商品详情</h2>
   <div class="row">
@@ -163,10 +196,10 @@ table.meta th{background:#f8fafc}
   <div class="ps">
     <div class="ph"><div class="t">商品详情</div><div class="s">← 返回</div></div>
     <div class="pb">
-<div style="margin:-12px -12px 10px;height:110px;background:linear-gradient(135deg,#99f6e4,#67e8f9);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0f766e">封面图</div>
+<div style="margin:-12px -12px 10px;height:100px;background:linear-gradient(135deg,#99f6e4,#67e8f9);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0f766e">封面</div>
 <div style="font-weight:800;font-size:15px">IP 获客实战课 · 12 讲</div>
 <div style="color:#dc2626;font-weight:800;font-size:20px;margin:6px 0">¥199</div>
-<div style="font-size:12px;color:#64748b;margin-bottom:10px">适合个人 IP 用短视频卖课…</div>
+<div style="font-size:12px;color:#64748b;margin-bottom:8px">系列视频引流后的成交课</div>
 <div style="font-size:12px;font-weight:700;margin-bottom:6px">目录</div>
 <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:6px;font-size:12px">01 定位选题 <span class="badge b-g">试看</span></div>
 <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;font-size:12px;color:#94a3b8">02 脚本结构 🔒</div>
@@ -175,15 +208,13 @@ table.meta th{background:#f8fafc}
     <div class="ptab"><div class="on">首页</div><div class="">已购</div><div class="">我的</div></div>
   </div>
 </div>
-    <div class="side-note">
-      <div class="k">主按钮</div>
-      未购→立即购买/免费领取；已购→去学习/领取/预约；下架→禁用。
-      <div class="k">试看</div>
-      目录标试看可直接播；锁定课时提示购买。
-    </div>
+    <div class="side-note"><div class="k">主按钮状态</div>
+  <div class="op">未购 → 立即购买 / 免费领取</div>
+  <div class="op">已购课/资料/服务 → 去学习/领取/预约</div>
+  <div class="op">下架 → 禁用「已下架」</div>
+  <div class="k">其它</div>点试看进播放器；点锁定提示购买</div>
   </div>
-</div>
-</article><article class="page " id="m04">
+</div></article><article class="page " id="m04">
 <div class="doc">
   <h2>M04 确认订单 / 支付</h2>
   <div class="row">
@@ -193,29 +224,53 @@ table.meta th{background:#f8fafc}
   <div class="ps">
     <div class="ph"><div class="t">确认订单</div><div class="s"></div></div>
     <div class="pb">
-<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;display:flex;gap:8px;align-items:center;margin-bottom:10px">
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;display:flex;gap:8px;margin-bottom:10px">
   <div style="width:48px;height:48px;border-radius:8px;background:linear-gradient(135deg,#99f6e4,#67e8f9)"></div>
-  <div style="flex:1;font-size:12px"><b>IP 获客实战课</b><br><span style="color:#666">课程 · ×1</span></div>
+  <div style="flex:1;font-size:12px"><b>IP 获客实战课</b><br><span style="color:#666">×1</span></div>
   <div style="font-weight:800;color:#dc2626">¥199</div>
 </div>
 <div class="field" style="margin-bottom:8px"><label>手机号</label><div class="val">138****8000</div></div>
-<div style="font-size:12px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px">☐ 同意《购买须知》《退款规则》</div>
+<div style="font-size:12px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px">☐ 同意《购买须知》《退款规则》</div>
 </div>
     <div class="cta"><div style="flex:1;font-weight:800;color:#dc2626">合计 ¥199</div><span class="btn btn-p">微信支付</span></div>
     <div class="ptab"><div class="on">首页</div><div class="">已购</div><div class="">我的</div></div>
   </div>
 </div>
-    <div class="side-note">
-      <div class="k">校验</div>
-      协议必勾；手机 11 位；变价提示刷新；按钮 loading 防重复。
-      <div class="k">成功页</div>
-      主按钮去学习/领取/预约；次按钮查看订单。
-    </div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op"><b>查看协议</b>、<b>微信支付</b>（建单→调起→回查状态）</div>
+  <div class="op"><b>取消支付</b> → 订单待付款可续付</div>
+  <div class="k">校验</div>协议必勾；手机 11 位；防重复 loading</div>
+  </div>
+</div></article><article class="page " id="m05">
+<div class="doc">
+  <h2>M05 支付结果页</h2>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="ph"><div class="t">支付结果</div><div class="s"></div></div>
+    <div class="pb">
+<div style="text-align:center;padding:40px 10px">
+  <div style="width:56px;height:56px;border-radius:50%;background:#dcfce7;color:#16a34a;line-height:56px;margin:0 auto 12px;font-size:28px">✓</div>
+  <div style="font-weight:800;font-size:18px;margin-bottom:6px">支付成功</div>
+  <div style="font-size:12px;color:#666;margin-bottom:24px">权益已开通，可以开始学习</div>
+  <div class="btn btn-p" style="width:100%;justify-content:center;margin-bottom:8px;padding:10px">去学习</div>
+  <div class="btn" style="width:100%;justify-content:center;padding:10px">查看订单</div>
+</div>
+</div>
+    
+    
   </div>
 </div>
-</article><article class="page " id="m06">
+    <div class="side-note"><div class="k">状态</div>
+  <div class="op"><b>成功</b>：主按钮去学习/领取/预约</div>
+  <div class="op"><b>处理中</b>：轮询后提示去订单中心</div>
+  <div class="op"><b>失败</b>：原因 + 重新支付</div></div>
+  </div>
+</div></article><article class="page " id="m06">
 <div class="doc">
-  <h2>M06 已购</h2>
+  <h2>M06 已购（学习中心）</h2>
   <div class="row">
     
 <div class="phone">
@@ -228,39 +283,68 @@ table.meta th{background:#f8fafc}
 </div>
 <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;display:flex;gap:8px;align-items:center;margin-bottom:8px">
   <div style="width:48px;height:48px;border-radius:8px;background:#99f6e4"></div>
-  <div style="flex:1;font-size:12px"><b>IP 获客实战课</b><br><span style="color:#666">学至 02 · 35%</span></div>
+  <div style="flex:1;font-size:12px"><b>IP 获客实战课</b><br><span style="color:#666">35%</span></div>
   <span class="btn btn-p" style="padding:4px 8px">继续学</span>
 </div>
-<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;display:flex;gap:8px;align-items:center">
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;display:flex;gap:8px;align-items:center;margin-bottom:8px">
   <div style="width:48px;height:48px;border-radius:8px;background:#fde68a"></div>
-  <div style="flex:1;font-size:12px"><b>话术资料包</b><br><span style="color:#666">3 个文件</span></div>
+  <div style="flex:1;font-size:12px"><b>话术资料包</b><br><span style="color:#666">3 文件</span></div>
   <span class="btn" style="padding:4px 8px">领取</span>
+</div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;display:flex;gap:8px;align-items:center">
+  <div style="width:48px;height:48px;border-radius:8px;background:#c4b5fd"></div>
+  <div style="flex:1;font-size:12px"><b>咨询次数卡</b><br><span style="color:#666">余 2 次</span></div>
+  <span class="btn" style="padding:4px 8px">预约</span>
 </div>
 </div>
     
     <div class="ptab"><div class="">首页</div><div class="on">已购</div><div class="">我的</div></div>
   </div>
 </div>
-    <div class="side-note"><div class="k">操作</div>Tab 切换；继续学；退款后灰色「权限已关闭」。</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op">Tab 切换；继续学 → 播放器；领取 → M09；预约 → M10</div>
+  <div class="op">退款后灰色「权限已关闭」</div>
+  <div class="k">空态</div>还没有已购 + 去首页</div>
   </div>
-</div>
-</article><article class="page " id="m08">
+</div></article><article class="page " id="m07">
 <div class="doc">
-  <h2>M08 播放器 <span class="tag tag-b">P1-10</span></h2>
+  <h2>M07 课时目录</h2>
   <div class="row">
     
 <div class="phone">
   <div class="phone-notch"></div>
   <div class="ps">
-    <div class="ph"><div class="t">01 定位选题</div><div class="s">IP 获客实战课</div></div>
+    <div class="ph"><div class="t">IP 获客实战课</div><div class="s">专栏目录</div></div>
     <div class="pb">
-<div style="background:#0f172a;border-radius:12px;height:140px;color:#94a3b8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;margin-bottom:10px">
+<div style="font-size:12px;color:#666;margin-bottom:8px">进度 35% · 4/12 讲</div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:6px;font-size:12px;display:flex;justify-content:space-between"><span>✓ 01 定位选题</span><span style="color:#16a34a">已学完</span></div>
+<div style="background:#fff;border:2px solid #1677ff;border-radius:8px;padding:10px;margin-bottom:6px;font-size:12px;display:flex;justify-content:space-between"><span>▶ 02 脚本结构</span><span class="badge b-b">学习中</span></div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px;font-size:12px;color:#94a3b8">03 拍摄节奏</div>
+</div>
+    
+    <div class="ptab"><div class="">首页</div><div class="on">已购</div><div class="">我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op">点课时 → 播放器（有权）</div>
+  <div class="op">完成标记打勾；无权 Toast</div></div>
+  </div>
+</div></article><article class="page " id="m08">
+<div class="doc">
+  <h2>M08 播放器</h2>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="ph"><div class="t">01 定位选题</div><div class="s">IP 获客课</div></div>
+    <div class="pb">
+<div style="background:#0f172a;border-radius:12px;height:130px;color:#94a3b8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;margin-bottom:10px">
   <div style="width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;display:flex;align-items:center;justify-content:center">▶</div>
-  <div style="font-size:11px">视频区域</div>
 </div>
 <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:11px">
   <div>04:12 / 12:30</div>
-  <div style="height:4px;background:#e2e8f0;border-radius:2px;margin:8px 0;position:relative"><i style="position:absolute;left:0;top:0;bottom:0;width:35%;background:#1677ff;border-radius:2px;display:block"></i></div>
+  <div style="height:4px;background:#e2e8f0;border-radius:2px;margin:8px 0"><div style="width:35%;height:100%;background:#1677ff;border-radius:2px"></div></div>
   <div style="display:flex;gap:4px"><span style="padding:2px 6px;background:#e6f4ff;color:#1677ff;border-radius:4px;font-weight:700">1.0x</span><span style="padding:2px 6px;background:#f1f5f9;border-radius:4px">1.25</span><span style="padding:2px 6px;background:#f1f5f9;border-radius:4px">1.5</span><span style="padding:2px 6px;background:#f1f5f9;border-radius:4px">2.0</span></div>
 </div>
 </div>
@@ -268,10 +352,43 @@ table.meta th{background:#f8fafc}
     <div class="ptab"><div class="">首页</div><div class="on">已购</div><div class="">我的</div></div>
   </div>
 </div>
-    <div class="side-note"><div class="k">能力</div>倍速、拖进度、续播、下一讲、试看半屏购买卡。<div class="k">鉴权失败</div>「权益已关闭」→去订单。</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op">播放/暂停、拖进度、倍速、下一讲、续播</div>
+  <div class="op">试看结束 → 半屏购买卡</div>
+  <div class="op">进度每 15s / 暂停上报</div>
+  <div class="k">鉴权失败</div>权益已关闭 → 去订单</div>
+  </div>
+</div></article><article class="page " id="m09">
+<div class="doc">
+  <h2>M09 资料领取 / 下载</h2>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="ph"><div class="t">资料领取</div><div class="s">数字权益</div></div>
+    <div class="pb">
+<div style="font-size:12px;margin-bottom:8px">话术模板资料包 · 可下载 3 个文件</div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;font-size:12px">
+  <div><b>话术库.pdf</b><br><span style="color:#666">2.1MB</span></div>
+  <span class="btn btn-p" style="padding:4px 8px">下载</span>
+</div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;font-size:12px">
+  <div><b>模板.zip</b><br><span style="color:#666">8.4MB</span></div>
+  <span class="btn btn-p" style="padding:4px 8px">下载</span>
+</div>
+<div style="font-size:11px;color:#666">已下载 1 次 · 不限次数</div>
+</div>
+    
+    <div class="ptab"><div class="">首页</div><div class="on">已购</div><div class="">我的</div></div>
   </div>
 </div>
-</article><article class="page " id="m10">
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op">下载 → 短时签名 URL；计数+1</div>
+  <div class="op">达 max_downloads 禁用</div>
+  <div class="op">online_view 可预览</div></div>
+  </div>
+</div></article><article class="page " id="m10">
 <div class="doc">
   <h2>M10 服务预约</h2>
   <div class="row">
@@ -282,103 +399,181 @@ table.meta th{background:#f8fafc}
     <div class="ph"><div class="t">预约咨询</div><div class="s">剩余 2 次</div></div>
     <div class="pb">
 <div style="font-size:12px;font-weight:700;margin-bottom:8px">选择时段 · 剩余 2 次</div>
-<div style="background:#fff;border:1px solid #1677ff;border-radius:10px;padding:10px;margin-bottom:6px;font-size:12px;display:flex;justify-content:space-between"><div>08-06 周三 14:00–15:00<br><span style="color:#666">余 1 位</span></div><span class="badge b-b">选中</span></div>
-<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin-bottom:6px;font-size:12px">08-07 周四 10:00–11:00 · 余 3</div>
+<div style="background:#fff;border:1px solid #1677ff;border-radius:10px;padding:10px;margin-bottom:6px;font-size:12px;display:flex;justify-content:space-between"><div>08-06 14:00–15:00<br><span style="color:#666">余 1</span></div><span class="badge b-b">选中</span></div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin-bottom:6px;font-size:12px">08-07 10:00 · 余 3</div>
 <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px;opacity:.5">08-07 16:00 · 已满</div>
 </div>
     <div class="cta"><span class="btn btn-p" style="flex:1;justify-content:center">确认预约</span></div>
     <div class="ptab"><div class="">首页</div><div class="on">已购</div><div class="">我的</div></div>
   </div>
 </div>
-    <div class="side-note"><div class="k">成功</div>大号核销码页；可取消未开始预约。</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op">选时段 → 确认 → 核销码页</div>
+  <div class="op">我的预约列表；取消（未开始）</div>
+  <div class="k">失败</div>已满 / 无余次 / 已退款</div>
   </div>
-</div>
-</article><article class="page " id="m11">
+</div></article><article class="page " id="m10b">
 <div class="doc">
-  <h2>M11 我的订单 <span class="tag tag-b">P1-18</span></h2>
+  <h2>M10b 预约成功 · 核销码</h2>
   <div class="row">
     
 <div class="phone">
   <div class="phone-notch"></div>
   <div class="ps">
-    <div class="ph"><div class="t">我的订单</div><div class="s">管钱和票 · 与学习分离</div></div>
+    <div class="ph"><div class="t">预约成功</div><div class="s">请妥善保存</div></div>
+    <div class="pb">
+<div style="text-align:center;padding:20px 10px">
+  <div style="font-size:12px;color:#666;margin-bottom:8px">到店出示核销码</div>
+  <div style="font-size:36px;font-weight:800;letter-spacing:8px;margin:16px 0">832914</div>
+  <div style="font-size:12px;color:#666;margin-bottom:16px">08-06 14:00–15:00</div>
+  <div class="btn" style="width:100%;justify-content:center;margin-bottom:8px">复制核销码</div>
+  <div class="btn btn-p" style="width:100%;justify-content:center">我的预约</div>
+</div>
+</div>
+    
+    <div class="ptab"><div class="">首页</div><div class="on">已购</div><div class="">我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>复制码；查看我的预约；取消预约（策略说明是否退次）</div>
+  </div>
+</div></article><article class="page " id="m11">
+<div class="doc">
+  <h2>M11 我的订单（订单中心）</h2>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="ph"><div class="t">我的订单</div><div class="s">管钱和票</div></div>
     <div class="pb">
 <div style="display:flex;gap:6px;font-size:11px;margin-bottom:10px">
   <span class="badge b-b">全部</span><span class="badge b-gy">待付款</span><span class="badge b-gy">已付款</span><span class="badge b-gy">退款</span>
 </div>
 <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:8px">
   <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px"><span style="color:#666">…001</span><span class="badge b-g">已付款</span></div>
-  <div style="font-size:12px;font-weight:700">IP 获客实战课 · ¥199</div>
+  <div style="font-size:12px;font-weight:700">IP 获客课 · ¥199</div>
   <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px">
-    <span class="btn" style="padding:4px 8px">申请开票</span>
-    <span class="btn btn-d" style="padding:4px 8px">申请退款</span>
+    <span class="btn" style="padding:4px 8px">开票</span>
+    <span class="btn btn-d" style="padding:4px 8px">退款</span>
   </div>
-</div>
-<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px;font-size:12px">
-  <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:#666">…002</span><span class="badge b-o">退款中</span></div>
-  预计 1–3 个工作日到账
 </div>
 </div>
     
     <div class="ptab"><div class="">首页</div><div class="">已购</div><div class="on">我的</div></div>
   </div>
 </div>
-    <div class="side-note"><div class="k">操作</div>去支付/取消待付；申请退款（原因必填）；申请开票；复制单号。</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op">Tab 筛选；进详情；待付去支付/取消</div>
+  <div class="op">与「已购」分离：这里管售后</div></div>
   </div>
-</div>
-</article><article class="page " id="m13">
+</div></article><article class="page " id="m12">
 <div class="doc">
-  <h2>M13 申请开票 <span class="tag tag-b">P1-17</span></h2>
+  <h2>M12 订单详情</h2>
   <div class="row">
     
 <div class="phone">
   <div class="phone-notch"></div>
   <div class="ps">
-    <div class="ph"><div class="t">申请开票</div><div class="s">金额 ¥199.00</div></div>
+    <div class="ph"><div class="t">订单详情</div><div class="s">…001</div></div>
+    <div class="pb">
+<div style="font-size:11px;margin-bottom:8px"><span class="badge b-g">已付款</span> · 权益生效中 · 未开票</div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px;margin-bottom:8px">
+  <b>IP 获客实战课</b><br>实付 ¥199<br>单号 20260804001<br>渠道 微信小程序
+</div>
+<div class="btn" style="width:100%;justify-content:center;margin-bottom:6px">去学习</div>
+<div class="btn" style="width:100%;justify-content:center;margin-bottom:6px">申请开票</div>
+<div class="btn btn-d" style="width:100%;justify-content:center">申请退款</div>
+</div>
+    
+    <div class="ptab"><div class="">首页</div><div class="">已购</div><div class="on">我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op"><b>申请退款</b>：金额+原因</div>
+  <div class="op"><b>申请开票</b> → M13</div>
+  <div class="op">去学习 / 复制单号</div></div>
+  </div>
+</div></article><article class="page " id="m13">
+<div class="doc">
+  <h2>M13 申请开票</h2>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="ph"><div class="t">申请开票</div><div class="s"></div></div>
     <div class="pb">
 <div style="display:flex;gap:8px;margin-bottom:12px">
   <span class="btn btn-p" style="flex:1;justify-content:center">个人</span>
   <span class="btn" style="flex:1;justify-content:center">企业</span>
 </div>
-<div class="field" style="margin-bottom:8px"><label>抬头名称 <span class="req">*</span></label><div class="val" style="color:#94a3b8">请输入姓名</div></div>
-<div class="field" style="margin-bottom:8px"><label>接收邮箱 <span class="req">*</span></label><div class="val" style="color:#94a3b8">name@example.com</div></div>
-<div class="field"><label>开票金额</label><div class="val">¥199.00（只读）</div></div>
+<div class="field" style="margin-bottom:8px"><label>抬头 <span class="req">*</span></label><div class="val" style="color:#94a3b8">姓名</div></div>
+<div class="field" style="margin-bottom:8px"><label>邮箱 <span class="req">*</span></label><div class="val" style="color:#94a3b8">email</div></div>
+<div class="field"><label>金额</label><div class="val">¥199.00 只读</div></div>
 </div>
-    <div class="cta"><span class="btn btn-p" style="flex:1;justify-content:center">提交申请</span></div>
+    <div class="cta"><span class="btn btn-p" style="flex:1;justify-content:center">提交</span></div>
     <div class="ptab"><div class="">首页</div><div class="">已购</div><div class="on">我的</div></div>
   </div>
 </div>
-    <div class="side-note"><div class="k">校验</div>企业必填税号 15–20 位；邮箱格式；金额只读。</div>
+    <div class="side-note"><div class="k">校验</div>企业税号 15–20；邮箱格式；金额只读；驳回可重提</div>
   </div>
-</div>
-</article><article class="page " id="m14">
+</div></article><article class="page " id="m14">
 <div class="doc">
-  <h2>M14 短信领权 <span class="tag tag-b">P1-12</span></h2>
+  <h2>M14 短信领权页</h2>
   <div class="row">
     
 <div class="phone">
   <div class="phone-notch"></div>
   <div class="ps">
-    <div class="ph"><div class="t">领取课程</div><div class="s">来自抖店订单</div></div>
+    <div class="ph"><div class="t">领取课程</div><div class="s">来自抖店</div></div>
     <div class="pb">
-<div class="goods"><div class="c">已购权益</div><div class="b"><div class="n">IP 获客实战课</div><div style="font-size:12px;color:#666;margin-top:6px">请用购买手机号登录领取</div></div></div>
-<div class="field" style="margin:12px 0"><label>手机号</label><div class="val">微信授权 / 验证码</div></div>
-<div style="font-size:12px;color:#1e40af;background:#eff6ff;padding:8px;border-radius:8px">链接 7 天内有效</div>
+<div class="goods"><div class="c">抖店权益</div><div class="b"><div class="n">IP 获客实战课</div><div style="font-size:12px;color:#666;margin-top:6px">请用购买手机号领取</div></div></div>
+<div class="field" style="margin:12px 0"><label>手机号</label><div class="val">授权 / 验证码</div></div>
 </div>
     <div class="cta"><span class="btn btn-ok" style="flex:1;justify-content:center">确认领取</span></div>
+    
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>登录绑手机 → 确认领取 → 去已购
+  <div class="k">失败</div>过期 / 已领 / 已退款</div>
+  </div>
+</div></article><article class="page " id="m15">
+<div class="doc">
+  <h2>M15 我的</h2>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="ph"><div class="t">我的</div><div class="s">个人中心</div></div>
+    <div class="pb">
+<div style="display:flex;gap:12px;align-items:center;margin-bottom:16px">
+  <div style="width:52px;height:52px;border-radius:50%;background:#1677ff;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800">明</div>
+  <div><div style="font-weight:800">小明</div><div style="font-size:12px;color:#666">138****8000</div></div>
+</div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;font-size:13px">
+  <div style="padding:12px;border-bottom:1px solid #e5e7eb">我的订单 ›</div>
+  <div style="padding:12px;border-bottom:1px solid #e5e7eb">已购内容 ›</div>
+  <div style="padding:12px;border-bottom:1px solid #e5e7eb">领权兑换 ›</div>
+  <div style="padding:12px;border-bottom:1px solid #e5e7eb">联系客服 ›</div>
+  <div style="padding:12px">用户协议 / 隐私 ›</div>
+</div>
+<div class="btn" style="width:100%;justify-content:center;margin-top:12px">退出登录</div>
+</div>
+    
     <div class="ptab"><div class="">首页</div><div class="">已购</div><div class="on">我的</div></div>
   </div>
 </div>
-    <div class="side-note"><div class="k">失败</div>过期 / 已领 / 已退款 —— 人话文案。</div>
+    <div class="side-note"><div class="k">操作</div>进订单/已购/领权；客服与协议；退出登录（清 session）</div>
   </div>
-</div>
-</article></div>
+</div></article></div>
 <script>
 (function(){
   var tabs=document.querySelectorAll('#tabs button'), pages=document.querySelectorAll('.page');
   tabs.forEach(function(btn){btn.onclick=function(){
     tabs.forEach(function(b){b.classList.remove('on')});pages.forEach(function(p){p.classList.remove('on')});
-    btn.classList.add('on');document.getElementById(btn.getAttribute('data-id')).classList.add('on');window.scrollTo({top:0,behavior:'smooth'});
+    btn.classList.add('on');document.getElementById(btn.getAttribute('data-id')).classList.add('on');
+    window.scrollTo({top:0,behavior:'smooth'});
   }});
 })();
 </script>

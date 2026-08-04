@@ -9,19 +9,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:700px){.grid{grid-template-columns:1fr}}
 .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px}
+.card.hi{border:2px solid #1677ff;box-shadow:0 4px 14px rgba(22,119,255,.15)}
 .card a{display:inline-block;margin-top:10px;padding:8px 12px;background:#1677ff;color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600}
-.card h3{margin:0 0 8px;font-size:1rem}
+.card h3{margin:0 0 8px;font-size:1.05rem}
 .card p{margin:0;font-size:.88rem;color:#475569}
+.tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#e6f4ff;color:#1677ff}
 </style></head><body>
-<div class="bar"><b>内容获客平台 · Phase 1 详细 PRD</b> · v0.4 可视化 UI</div>
+<div class="bar"><b>内容获客平台 · Phase 1 详细 PRD</b> · v0.5 可视化 UI</div>
 <div class="wrap">
-<div class="hero"><h2 style="margin:0 0 8px">能挂、能卖、能履约 · M3 / Mx</h2>
-<p style="margin:0;opacity:.9">本版重点：运营后台与买家端界面已画出（桌面壳 / 手机壳），不再用 ASCII 框。</p></div>
+<div class="hero">
+  <h2 style="margin:0 0 8px">两端 UI 都已画出</h2>
+  <p style="margin:0;opacity:.9">商家端 = Web 管理后台（原「运营后台」）· 买家端 = 微信小程序。点下面两张主卡片即可。</p>
+</div>
 <div class="grid">
-<div class="card"><h3>① 运营后台 UI（已画）</h3><p>A01–A16 可视化线框 + 操作说明</p><a href="01-admin-ui.html">打开 →</a></div>
-<div class="card"><h3>② 买家端 UI（已画）</h3><p>小程序手机线框 + 操作说明</p><a href="02-buyer-ui.html">打开 →</a></div>
-<div class="card"><h3>③ 数据流</h3><p>支付 / 退款 / 抖店领权 / 核销 / 开票</p><a href="03-data-flows.html">打开 →</a></div>
+<div class="card hi">
+  <h3>① 商家端 UI（Web） <span class="tag">必看</span></h3>
+  <p>A01–A16 桌面壳线框：看板、商品、专栏、核销、订单、开票、抖音对接、设置…</p>
+  <a href="01-admin-ui.html">打开商家端 →</a>
+  <p style="margin-top:8px;font-size:12px;color:#94a3b8">文件：01-admin-ui.html（同 01-merchant-ui.html）</p>
+</div>
+<div class="card hi">
+  <h3>② 买家端 UI（小程序） <span class="tag">必看</span></h3>
+  <p>M01–M15 手机壳线框：登录、首页、详情、支付、已购、播放器、预约、订单、开票、领权、我的…</p>
+  <a href="02-buyer-ui.html">打开买家端 →</a>
+</div>
+<div class="card"><h3>③ 数据流</h3><p>支付开权 / 退款关权 / 抖店领权 / 核销 / 开票</p><a href="03-data-flows.html">打开 →</a></div>
 <div class="card"><h3>④ 字段与表</h3><p>shop_* 全表字段 PK/FK</p><a href="04-data-model.html">打开 →</a></div>
 </div>
-<p style="margin-top:16px;font-size:13px;color:#666">兼容旧入口：<a href="content-acquisition-shop-prd-phase1.html">content-acquisition-shop-prd-phase1.html</a></p>
 </div></body></html>
