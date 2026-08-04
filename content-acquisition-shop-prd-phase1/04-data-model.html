@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phase1 · 字段与表</title>
+<style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#f3f4f6;margin:0;color:#111;line-height:1.55}
+.bar{background:#0A1628;color:#94a3b8;padding:10px 16px;border-bottom:2px solid #0d9488}
+.bar h1{font-size:14px;color:#fff;margin:0;display:inline}.bar a{color:#7dd3fc;font-size:12px;margin-left:8px;text-decoration:none}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+.block{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.block h2{font-size:1rem;margin:0 0 8px}.block h2 code{color:#1d4ed8}
+table{width:100%;border-collapse:collapse;font-size:.76rem}
+th,td{border:1px solid #e5e7eb;padding:5px 7px;text-align:left;vertical-align:top}th{background:#f8fafc}
+.pk{color:#b45309;font-weight:700}.fk{color:#7c3aed}.uk{color:#059669;font-weight:600}
+.sub{font-size:.8rem;color:#666;margin-bottom:6px}
+.nav a{display:inline-block;padding:3px 7px;margin:2px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;text-decoration:none;color:#475569}
+</style></head><body>
+<div class="bar"><h1>④ 字段与数据表</h1>
+<a href="index.html">← 索引</a><a href="01-admin-ui.html">运营后台</a><a href="02-buyer-ui.html">买家端</a><a href="03-data-flows.html">数据流</a>
+</div>
+<div class="wrap">
+<p class="sub">约定：UUID PK；全表 tenant_id；金额 NUMERIC(12,2)；TIMESTAMPTZ。买家 ≠ Contact。</p>
+<div class="nav">
+<a href="#p">products</a><a href="#c">columns/lessons</a><a href="#d">digital</a><a href="#s">service</a>
+<a href="#b">buyers</a><a href="#o">orders</a><a href="#pay">pay/refund</a><a href="#e">entitlements</a>
+<a href="#cl">claim</a><a href="#i">invoice</a><a href="#ch">channel</a><a href="#set">settings</a>
+</div>
+
+<div class="block" id="p"><h2><code>shop_products</code></h2>
+<table>
+<tr><th>字段</th><th>类型</th><th>约束</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td>PK</td><td></td></tr>
+<tr><td><span class="fk">tenant_id</span></td><td>UUID</td><td>FK IDX</td><td></td></tr>
+<tr><td>type</td><td>VARCHAR(20)</td><td>N</td><td>course|digital|service</td></tr>
+<tr><td>name</td><td>VARCHAR(200)</td><td>N</td><td></td></tr>
+<tr><td>subtitle / cover_url</td><td>VARCHAR</td><td>Y</td><td></td></tr>
+<tr><td>price / line_price</td><td>NUMERIC(12,2)</td><td>价≥0</td><td></td></tr>
+<tr><td>status</td><td>VARCHAR(20)</td><td></td><td>draft|on_sale|off_sale</td></tr>
+<tr><td>ref_type / ref_id</td><td></td><td></td><td>column|digital_package|service_offer</td></tr>
+<tr><td>refund_policy</td><td>VARCHAR(30)</td><td></td><td>always_allow|before_fulfill|manual_only</td></tr>
+<tr><td>sales_count</td><td>INT</td><td>0</td><td></td></tr>
+<tr><td>extra</td><td>JSONB</td><td>{}</td><td>trial 等</td></tr>
+<tr><td>created_at/updated_at/deleted_at</td><td>TIMESTAMPTZ</td><td></td><td></td></tr>
+</table></div>
+
+<div class="block" id="c"><h2><code>shop_columns</code> / <code>shop_lessons</code></h2>
+<table>
+<tr><th>表.字段</th><th>类型</th><th>说明</th></tr>
+<tr><td>columns: title, status, lesson_count</td><td></td><td>draft|published|archived</td></tr>
+<tr><td>lessons: <span class="fk">column_id</span>, title, sort_order</td><td></td><td></td></tr>
+<tr><td>media_type / media_provider / media_id</td><td></td><td>video|audio|article；云点播</td></tr>
+<tr><td>is_trial / trial_seconds / content_body</td><td></td><td></td></tr>
+<tr><td>status</td><td></td><td>draft|published</td></tr>
+</table></div>
+
+<div class="block" id="d"><h2>数字资料 packages / assets</h2>
+<p class="sub">deliver_mode=download|online_view；max_downloads 可空；assets: file_url, mime, sort_order</p></div>
+
+<div class="block" id="s"><h2>服务 offers / slots / bookings / redemptions</h2>
+<table>
+<tr><th>表</th><th>关键字段</th></tr>
+<tr><td>offers</td><td>mode booking|times_card；total_times；valid_days</td></tr>
+<tr><td>slots</td><td>start_at/end_at；capacity；booked_count（条件更新防超卖）</td></tr>
+<tr><td>bookings</td><td>checkin_code <span class="uk">UK</span>；status booked|checked_in|completed|cancelled</td></tr>
+<tr><td>redemptions</td><td>entitlement_id；booking_id 可空；operator_user_id</td></tr>
+</table></div>
+
+<div class="block" id="b"><h2><code>shop_buyers</code></h2>
+<table>
+<tr><th>字段</th><th>约束</th></tr>
+<tr><td>mobile</td><td><span class="uk">UK(tenant_id, mobile)</span></td></tr>
+<tr><td>wx_openid</td><td>部分唯一</td></tr>
+<tr><td>status</td><td>active|blocked</td></tr>
+</table>
+<p class="sub">禁止 FK 到 contacts</p></div>
+
+<div class="block" id="o"><h2><code>shop_orders</code> / items</h2>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td>order_no <span class="uk">UK</span></td><td>业务单号</td></tr>
+<tr><td>buyer_id 可空</td><td>未领权</td></tr>
+<tr><td>status / pay_status</td><td>pending_pay→paid→…；refunded</td></tr>
+<tr><td>channel</td><td>wx_mp|doudian|dy_knowledge|manual</td></tr>
+<tr><td>external_order_no</td><td><span class="uk">UK(channel, external_order_no)</span> 部分</td></tr>
+<tr><td>client_token</td><td>防重复下单</td></tr>
+<tr><td>items</td><td>title_snapshot, price, qty=1, ref</td></tr>
+</table></div>
+
+<div class="block" id="pay"><h2>payments / refunds</h2>
+<table>
+<tr><th>表</th><th>关键</th></tr>
+<tr><td>payments</td><td>notify_id <span class="uk">UK 幂等</span>；transaction_id；raw_notify</td></tr>
+<tr><td>refunds</td><td>refund_no UK；status；entitlement_revoked_at（验收字段）</td></tr>
+</table></div>
+
+<div class="block" id="e"><h2><code>shop_entitlements</code> + enrollment/progress</h2>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td><span class="uk">UK(order_item_id)</span></td><td>防双开</td></tr>
+<tr><td>status</td><td>pending|active|expired|revoked|consumed</td></tr>
+<tr><td>times_total / times_used</td><td>次数卡</td></tr>
+<tr><td>enrollments</td><td>buyer+column+entitlement</td></tr>
+<tr><td>lesson_progress</td><td>UK(enrollment,lesson)；position_sec</td></tr>
+</table></div>
+
+<div class="block" id="cl"><h2><code>shop_claim_tokens</code></h2>
+<p class="sub">token UK；expires_at；claimed_at；claimed_buyer_id；sms_status</p></div>
+
+<div class="block" id="i"><h2><code>shop_invoice_requests</code></h2>
+<p class="sub">title_type personal|company；tax_no；email；amount；status submitted→issued；needs_red_flush</p></div>
+
+<div class="block" id="ch"><h2><code>shop_channel_listings</code></h2>
+<p class="sub">channel；path_type A|B；external_product_id；UK(tenant,channel,external_product_id)</p></div>
+
+<div class="block" id="set"><h2><code>shop_tenant_settings</code></h2>
+<p class="sub">一租户一行 UK(tenant_id)；wx_mch_id；密钥密文；close_order_minutes；sms；claim_expire_days；channel_config JSONB</p></div>
+</div></body></html>

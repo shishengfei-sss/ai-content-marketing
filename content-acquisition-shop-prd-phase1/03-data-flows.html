@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phase1 · 数据流</title>
+<style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#f3f4f6;margin:0;color:#111;line-height:1.65}
+.bar{background:#0A1628;color:#94a3b8;padding:10px 16px;border-bottom:2px solid #0d9488;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.bar h1{font-size:14px;color:#fff;margin:0}.bar a{color:#7dd3fc;font-size:12px;margin-left:8px;text-decoration:none}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.block{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px}
+.block h2{font-size:1.05rem;margin:0 0 8px}
+.canvas{background:#0f172a;border-radius:10px;padding:16px;overflow-x:auto;margin:8px 0}
+table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:8px}
+th,td{border:1px solid #e5e7eb;padding:6px 8px;text-align:left}th{background:#f8fafc}
+code{font-size:.78rem;background:#f1f5f9;padding:1px 4px;border-radius:3px;color:#1d4ed8}
+.nav a{display:inline-block;padding:4px 8px;margin:2px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;text-decoration:none;color:#334155}
+</style></head><body>
+<div class="bar"><div><h1>③ 数据流程图</h1>
+<a href="index.html">← 索引</a><a href="01-admin-ui.html">运营后台</a><a href="02-buyer-ui.html">买家端</a><a href="04-data-model.html">字段与表</a>
+</div></div>
+<div class="wrap">
+<div class="nav">
+<a href="#f1">F1 支付开权</a><a href="#f2">F2 退款关权</a><a href="#f3">F3 抖店领权</a><a href="#f4">F4 预约核销</a><a href="#f5">F5 开票</a>
+</div>
+
+<div class="block" id="f1">
+<h2>F1 私域下单 → 支付 → 开权益（M3）</h2>
+<div class="canvas">
+<svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="sans-serif">
+<defs><marker id="a" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+<rect x="20" y="20" width="100" height="36" rx="8" fill="#38bdf8"/><text x="70" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">买家</text>
+<rect x="160" y="20" width="100" height="36" rx="8" fill="#818cf8"/><text x="210" y="42" text-anchor="middle" fill="#fff" font-weight="700">Shop API</text>
+<rect x="300" y="20" width="100" height="36" rx="8" fill="#fbbf24"/><text x="350" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">微信支付</text>
+<rect x="440" y="20" width="120" height="36" rx="8" fill="#34d399"/><text x="500" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">DB 写库</text>
+<path d="M120,38 H160" stroke="#94a3b8" marker-end="url(#a)"/>
+<path d="M260,38 H300" stroke="#94a3b8" marker-end="url(#a)"/>
+<path d="M400,38 H440" stroke="#94a3b8" marker-end="url(#a)"/>
+<rect x="40" y="90" width="800" height="180" rx="10" fill="#1e293b" stroke="#334155"/>
+<text x="60" y="120" fill="#7dd3fc" font-weight="700">数据写入顺序</text>
+<text x="60" y="148" fill="#e2e8f0">1. INSERT shop_orders + shop_order_items（pending_pay）</text>
+<text x="60" y="172" fill="#e2e8f0">2. 调起支付 → 回调验签 → shop_payments.notify_id 幂等 UK</text>
+<text x="60" y="196" fill="#e2e8f0">3. 同事务：orders.paid → entitlements.active（UK order_item_id）</text>
+<text x="60" y="220" fill="#86efac">4. 课:+enrollment | 资料:可下载 | 服务:可预约 | sales_count+1</text>
+<text x="60" y="244" fill="#94a3b8">重复回调 10 次也只开 1 次权益</text>
+</svg>
+</div>
+</div>
+
+<div class="block" id="f2">
+<h2>F2 退款 → 关闭权益</h2>
+<div class="canvas">
+<svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="sans-serif">
+<defs><marker id="b" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+<rect x="20" y="40" width="120" height="40" rx="8" fill="#38bdf8"/><text x="80" y="64" text-anchor="middle" fill="#0f172a" font-weight="700">申请/审核</text>
+<rect x="180" y="40" width="120" height="40" rx="8" fill="#fbbf24"/><text x="240" y="64" text-anchor="middle" fill="#0f172a" font-weight="700">微信退款</text>
+<rect x="340" y="40" width="120" height="40" rx="8" fill="#818cf8"/><text x="400" y="64" text-anchor="middle" fill="#fff" font-weight="700">退款回调</text>
+<rect x="500" y="30" width="340" height="60" rx="8" fill="#7f1d1d" stroke="#f87171"/>
+<text x="670" y="55" text-anchor="middle" fill="#fecaca" font-weight="700">关权益 revoked</text>
+<text x="670" y="75" text-anchor="middle" fill="#fee2e2">播放/下载/核销立刻 403</text>
+<path d="M140,60 H180" stroke="#94a3b8" marker-end="url(#b)"/>
+<path d="M300,60 H340" stroke="#94a3b8" marker-end="url(#b)"/>
+<path d="M460,60 H500" stroke="#94a3b8" marker-end="url(#b)"/>
+<text x="440" y="130" text-anchor="middle" fill="#94a3b8">写：refunds.succeeded + entitlement_revoked_at + entitlements.revoked + enrollments.revoked</text>
+<text x="440" y="155" text-anchor="middle" fill="#fbbf24">若已开票 → invoice.needs_red_flush=true（人工红冲）</text>
+</svg>
+</div>
+</div>
+
+<div class="block" id="f3">
+<h2>F3 抖音链路①：抖店 → 短信领权 → 小程序（Mx）</h2>
+<div class="canvas">
+<svg viewBox="0 0 900 220" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="sans-serif">
+<defs><marker id="c" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+<rect x="10" y="20" width="80" height="36" rx="6" fill="#fbbf24"/><text x="50" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">抖店</text>
+<rect x="120" y="20" width="90" height="36" rx="6" fill="#818cf8"/><text x="165" y="42" text-anchor="middle" fill="#fff" font-weight="700">Webhook</text>
+<rect x="240" y="20" width="110" height="36" rx="6" fill="#34d399"/><text x="295" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">建单+开权</text>
+<rect x="380" y="20" width="80" height="36" rx="6" fill="#fbbf24"/><text x="420" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">短信</text>
+<rect x="490" y="20" width="100" height="36" rx="6" fill="#38bdf8"/><text x="540" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">领权页</text>
+<rect x="620" y="20" width="100" height="36" rx="6" fill="#34d399"/><text x="670" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">绑定买家</text>
+<rect x="750" y="20" width="120" height="36" rx="6" fill="#818cf8"/><text x="810" y="42" text-anchor="middle" fill="#fff" font-weight="700">学习/核销</text>
+<path d="M90,38 H120" stroke="#94a3b8" marker-end="url(#c)"/>
+<path d="M210,38 H240" stroke="#94a3b8" marker-end="url(#c)"/>
+<path d="M350,38 H380" stroke="#94a3b8" marker-end="url(#c)"/>
+<path d="M460,38 H490" stroke="#94a3b8" marker-end="url(#c)"/>
+<path d="M590,38 H620" stroke="#94a3b8" marker-end="url(#c)"/>
+<path d="M720,38 H750" stroke="#94a3b8" marker-end="url(#c)"/>
+<text x="450" y="100" text-anchor="middle" fill="#cbd5e1">读 channel_listings 映射 → 写 orders(channel=doudian, buyer_id=NULL) + payments + entitlements + claim_tokens</text>
+<text x="450" y="125" text-anchor="middle" fill="#86efac">幂等：external_order_no；领取后写 claimed_buyer_id / orders.buyer_id / enrollment</text>
+<text x="450" y="160" text-anchor="middle" fill="#94a3b8">链路②：抖音小程序内付+学，可跳过短信</text>
+</svg>
+</div>
+</div>
+
+<div class="block" id="f4">
+<h2>F4 预约 → 核销扣次</h2>
+<table>
+<tr><th>步骤</th><th>读</th><th>写</th></tr>
+<tr><td>选时段确认</td><td>entitlements.active、slots</td><td>条件更新 booked_count；INSERT bookings(checkin_code)</td></tr>
+<tr><td>核销台确认</td><td>booking、entitlement</td><td>redemptions；times_used+1；booking completed</td></tr>
+</table>
+</div>
+
+<div class="block" id="f5">
+<h2>F5 开票工单</h2>
+<table>
+<tr><th>步骤</th><th>写</th></tr>
+<tr><td>买家提交</td><td>invoice_requests.status=submitted</td></tr>
+<tr><td>商家开具</td><td>issued + invoice_no / PDF</td></tr>
+<tr><td>驳回</td><td>rejected + reason</td></tr>
+</table>
+</div>
+</div></body></html>
