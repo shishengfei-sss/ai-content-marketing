@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>【点我看UI】内容获客 Phase1 商家端+买家端</title>
+<style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;margin:0;background:#0f172a;color:#e2e8f0}
+.hero{padding:36px 24px 12px;text-align:center}
+.hero h1{font-size:1.55rem;margin:0 0 10px;color:#fff}
+.hero p{opacity:.85;margin:0 0 22px;line-height:1.6}
+.cards{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;max-width:960px;margin:0 auto}
+.card{background:#1e293b;border:2px solid #38bdf8;border-radius:16px;padding:22px 20px;width:300px;text-align:left}
+.card h2{margin:0 0 8px;font-size:1.15rem;color:#7dd3fc}
+.card p{font-size:.88rem;color:#94a3b8;margin:0 0 14px;line-height:1.5}
+.card a{display:block;text-align:center;padding:12px;background:#1677ff;color:#fff;border-radius:10px;text-decoration:none;font-weight:700}
+.card a.sec{background:#0d9488;margin-top:8px}
+.shots{max-width:1100px;margin:28px auto;padding:0 16px 48px}
+.shots h2{font-size:1.05rem;color:#7dd3fc;margin:0 0 12px}
+.shot{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:12px;margin-bottom:18px}
+.shot img{width:100%;border-radius:8px;display:block;background:#0b1220}
+.shot .cap{font-size:12px;color:#94a3b8;margin-top:8px}
+.tip{max-width:720px;margin:8px auto 0;font-size:13px;color:#94a3b8;line-height:1.7;text-align:left;padding:0 16px 40px}
+code{background:#334155;padding:2px 6px;border-radius:4px;color:#7dd3fc}
+.warn{background:#422006;border:1px solid #f59e0b;color:#fde68a;border-radius:10px;padding:12px 14px;margin:16px auto;max-width:720px;text-align:left;font-size:13px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>【点我看 UI】内容获客 Phase 1</h1>
+  <p>用<strong>浏览器</strong>打开下方链接（不要用 Cursor 文本预览）。默认即见画出的界面线框。</p>
+  <div class="cards">
+    <div class="card">
+      <h2>① 商家端 Web</h2>
+      <p>默认「交易看板」：左侧菜单、指标卡、图表、订单表。</p>
+      <a href="01-admin-ui.html">打开商家端 UI →</a>
+      <a class="sec" href="01-merchant-ui.html">备用同名入口</a>
+    </div>
+    <div class="card">
+      <h2>② 买家端小程序</h2>
+      <p>默认「首页」手机壳：商品列表、底栏；顶部 Tab 可切详情/支付/已购等。</p>
+      <a href="02-buyer-ui.html">打开买家端 UI →</a>
+    </div>
+  </div>
+</div>
+
+<div class="warn">
+  <b>若本地没有 index / 看不到本目录：</b><br>
+  这些文件只在 Git 分支 <code>cursor/shop-phase1-prd-ui-8b7d</code>（不在 master）。请执行：<br>
+  <code>git fetch origin</code><br>
+  <code>git checkout cursor/shop-phase1-prd-ui-8b7d</code><br>
+  然后双击打开：<code>content-acquisition-shop-prd-phase1/index.html</code><br>
+  PR：https://github.com/shishengfei-sss/ai-content-marketing/pull/1
+</div>
+
+<div class="shots">
+  <h2>预览截图（打开上面链接可交互切换页面）</h2>
+  <div class="shot">
+    <img src="screenshots/merchant-a01.png" alt="商家端 A01 交易看板">
+    <div class="cap">商家端 · A01 交易看板</div>
+  </div>
+  <div class="shot">
+    <img src="screenshots/buyer-m02.png" alt="买家端 M02 首页">
+    <div class="cap">买家端 · M02 首页（手机壳）</div>
+  </div>
+</div>
+
+<div class="tip">
+  同目录还有：<code>03-data-flows.html</code>（数据流）、<code>04-data-model.html</code>（表字段）、
+  <code>【点我看UI】商家端与买家端.html</code>（与本 index 相同入口）。
+</div>
+</body>
+</html>

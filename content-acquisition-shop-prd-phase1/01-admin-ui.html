@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>内容获客 Phase1 · 商家端（Web）可视化 UI</title>
+<style>
+:root{--navy:#0A1628;--blue:#1677ff;--teal:#0d9488;--bg:#f0f2f5;--ink:#1f1f1f;--muted:#666;--border:#e8e8e8;--ok:#16a34a;--warn:#d97706;--danger:#dc2626;--font:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:#e8ecf1;color:var(--ink);line-height:1.6}
+.bar{position:sticky;top:0;z-index:200;background:var(--navy);color:#94a3b8;padding:10px 16px;border-bottom:2px solid var(--teal);display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.bar h1{font-size:14px;color:#fff}
+.bar a{color:#7dd3fc;font-size:12px;text-decoration:none;margin-left:8px}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;max-width:1280px;margin:12px auto 0;padding:0 16px}
+.tabs button{padding:6px 10px;border-radius:8px;border:1px solid #d0d5dd;background:#fff;font-size:11px;cursor:pointer;font-family:inherit;color:#475569}
+.tabs button.on{background:#0A1628;color:#fff;border-color:#0A1628}
+.wrap{max-width:1280px;margin:0 auto;padding:14px 16px 80px}
+.page{display:none}
+.page.on{display:block}
+.doc{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:12px}
+.doc h2{font-size:1.15rem;margin-bottom:4px}
+.doc .sub{font-size:.86rem;color:var(--muted);margin-bottom:10px}
+.doc h3{font-size:.92rem;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:700}
+.tag-r{background:#fee2e2;color:#991b1b}.tag-b{background:#e6f4ff;color:#1677ff}.tag-g{background:#dcfce7;color:#166534}
+.op{background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:.84rem}
+.op b{color:var(--blue)}
+table.meta{width:100%;border-collapse:collapse;font-size:.8rem;margin:8px 0}
+table.meta th,table.meta td{border:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
+table.meta th{background:#f8fafc}
+.note{font-size:.82rem;padding:8px 10px;border-radius:0 8px 8px 0;border-left:3px solid #f59e0b;background:#fffbeb;color:#92400e;margin:8px 0}
+.note-b{border-color:var(--blue);background:#eff6ff;color:#1e40af}
+
+/* ===== Desktop app shell ===== */
+.shell{display:flex;border:1px solid #c5cdd8;border-radius:12px;overflow:hidden;background:#fff;min-height:520px;box-shadow:0 8px 28px rgba(15,23,42,.12);margin:10px 0}
+.side{width:168px;background:#0f1a2e;color:#94a3b8;flex-shrink:0;padding:10px 0}
+.side .brand{padding:8px 14px 12px;color:#fff;font-size:12px;font-weight:700;border-bottom:1px solid #1e3a5f;margin-bottom:6px}
+.side .nav{padding:7px 14px;font-size:12px;display:flex;gap:8px;align-items:center}
+.side .nav.on{background:rgba(22,119,255,.22);color:#7dd3fc;border-right:3px solid #38bdf8;font-weight:600}
+.side .nav .d{width:5px;height:5px;border-radius:50%;background:currentColor}
+.main{flex:1;background:var(--bg);display:flex;flex-direction:column;min-width:0}
+.top{height:44px;background:#0A1628;color:#94a3b8;display:flex;align-items:center;justify-content:space-between;padding:0 14px;font-size:12px}
+.top b{color:#fff}
+.hd{padding:12px 14px 8px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.hd h4{font-size:15px}
+.bd{padding:0 14px 14px;flex:1}
+.btn{display:inline-flex;align-items:center;padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:#fff;font-size:12px;font-weight:600;gap:4px}
+.btn-p{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn-d{background:#fee2e2;color:#991b1b;border-color:#fecaca}
+.btn-ok{background:#059669;color:#fff;border-color:#059669}
+.btn-g{background:#fff}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+@media(max-width:800px){.stats{grid-template-columns:1fr 1fr}.shell{flex-direction:column}.side{width:100%;display:flex;flex-wrap:wrap;padding:6px}}
+.stat{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.stat .v{font-size:18px;font-weight:800;color:#0A1628}
+.stat .l{font-size:11px;color:var(--muted);margin-top:2px}
+.stat.click{cursor:default;box-shadow:inset 0 0 0 1px #bfdbfe}
+.stat.warn .v{color:var(--warn)}
+.charts{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;margin-bottom:10px}
+@media(max-width:900px){.charts{grid-template-columns:1fr}}
+.chart{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;min-height:110px}
+.chart .t{font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:600}
+.bars{display:flex;align-items:flex-end;gap:6px;height:70px}
+.bars i{flex:1;background:linear-gradient(180deg,#60a5fa,#2563eb);border-radius:3px 3px 0 0;opacity:.9}
+.pies{display:flex;gap:8px;align-items:center;justify-content:center;height:70px}
+.pie{width:64px;height:64px;border-radius:50%;background:conic-gradient(#1677ff 0 45%,#0d9488 45% 70%,#f59e0b 70% 100%)}
+.pie2{background:conic-gradient(#38bdf8 0 55%,#a78bfa 55% 80%,#94a3b8 80% 100%)}
+.tbl{width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.tbl th{text-align:left;background:#f1f5f9;padding:8px 10px;color:#64748b;font-weight:600;font-size:11px}
+.tbl td{padding:8px 10px;border-top:1px solid var(--border)}
+.badge{display:inline-block;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:700}
+.b-g{background:#dcfce7;color:#166534}.b-b{background:#e6f4ff;color:#1677ff}.b-o{background:#fef3c7;color:#92400e}.b-r{background:#fee2e2;color:#991b1b}.b-gy{background:#e5e7eb;color:#4b5563}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+.inp,.sel{height:28px;border:1px solid var(--border);border-radius:6px;padding:0 8px;font-size:12px;background:#fff;display:inline-flex;align-items:center;color:#64748b;min-width:100px}
+.sel::after{content:'▾';margin-left:6px;color:#94a3b8}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.field{background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+.field.full{grid-column:1/-1}
+.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px}
+.field label .req{color:var(--danger)}
+.field .val{font-size:13px;min-height:20px}
+.type-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.type-card{border:2px solid var(--border);border-radius:10px;padding:12px;text-align:center;background:#fff;font-size:12px}
+.type-card.on{border-color:var(--blue);background:#e6f4ff}
+.type-card .ico{font-size:22px;margin-bottom:4px}
+.cover-up{height:72px;border:1px dashed #94a3b8;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px;background:#f8fafc}
+.timeline{font-size:12px;color:#475569;padding:8px 0}
+.timeline div{padding:4px 0 4px 12px;border-left:2px solid #bfdbfe;margin-left:6px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:900px){.two,.form,.type-cards{grid-template-columns:1fr}}
+.phone{width:280px;background:#0f172a;border-radius:28px;padding:10px;border:2px solid #334155;box-shadow:0 12px 40px rgba(0,0,0,.2)}
+.phone-notch{width:90px;height:8px;background:#1e293b;border-radius:0 0 8px 8px;margin:0 auto 8px}
+.ps{background:#f8fafc;border-radius:20px;overflow:hidden;min-height:460px;display:flex;flex-direction:column}
+.ph{background:#fff;padding:12px 14px 10px;border-bottom:1px solid var(--border)}
+.ph .t{font-size:15px;font-weight:700}
+.ph .s{font-size:11px;color:var(--muted)}
+.pb{flex:1;padding:12px}
+.ptab{display:flex;border-top:1px solid var(--border);background:#fff;padding:8px 0 10px}
+.ptab div{flex:1;text-align:center;font-size:10px;color:#94a3b8}
+.ptab div.on{color:var(--blue);font-weight:700}
+.goods{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:8px}
+.goods .c{height:80px;background:linear-gradient(135deg,#99f6e4,#67e8f9);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0f766e}
+.goods .b{padding:10px}
+.goods .n{font-size:13px;font-weight:700}
+.goods .p{color:#dc2626;font-weight:800;margin-top:4px}
+.cta{margin-top:auto;background:#fff;border-top:1px solid var(--border);padding:10px 12px;display:flex;gap:8px;align-items:center}
+.row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+.side-note{flex:1;min-width:240px;font-size:.84rem;color:#475569}
+.side-note .k{font-weight:700;color:var(--blue);margin:10px 0 4px}
+.steps{display:flex;gap:0;overflow-x:auto;margin:8px 0}
+.step{min-width:100px;flex:1;text-align:center;padding:10px 6px;background:#f8fafc;border:1px solid var(--border);border-right:none;font-size:11px}
+.step:first-child{border-radius:8px 0 0 8px}.step:last-child{border-right:1px solid var(--border);border-radius:0 8px 8px 0}
+.step .n{width:22px;height:22px;line-height:22px;margin:0 auto 4px;border-radius:50%;background:var(--blue);color:#fff;font-weight:700;font-size:11px}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div>
+    <h1>① 商家端（Web）· 可视化 UI 线框</h1>
+    <a href="index.html">← 索引</a>
+    <a href="02-buyer-ui.html">买家端</a>
+    <a href="03-data-flows.html">数据流</a>
+    <a href="04-data-model.html">字段与表</a>
+  </div>
+  <div style="font-size:12px">A01–A16 · 对标小鹅通精简版</div>
+</div>
+<div class="tabs" id="tabs"><button type="button" data-id="a00" class="">总览</button><button type="button" data-id="a01" class="on">A01 交易看板</button><button type="button" data-id="a02" class="">A02 商品列表</button><button type="button" data-id="a03" class="">A03 商品编辑</button><button type="button" data-id="a04" class="">A04 专栏列表</button><button type="button" data-id="a05" class="">A05 专栏与课时</button><button type="button" data-id="a06" class="">A06 数字资料</button><button type="button" data-id="a07" class="">A07 服务与时段</button><button type="button" data-id="a08" class="">A08 核销台</button><button type="button" data-id="a09" class="">A09 订单列表</button><button type="button" data-id="a10" class="">A10 订单详情</button><button type="button" data-id="a11" class="">A11 买家</button><button type="button" data-id="a12" class="">A12 权益</button><button type="button" data-id="a13" class="">A13 开票</button><button type="button" data-id="a14" class="">A14 抖音对接</button><button type="button" data-id="a15" class="">A15 店铺设置</button><button type="button" data-id="a16" class="">A16 其它</button></div>
+<div class="wrap"><article class="page" id="a00">
+<div class="doc">
+  <h2>商家端 Web 管理后台 · 可视化 UI</h2>
+  <p class="sub">每个页面下方是<strong>画出来的界面</strong>（非 ASCII）。对齐智营 Web / Element Plus 风格；对标小鹅通店后台精简版。</p>
+  <div class="note-b note">点顶部 Tab 切换 A01–A16。线框里的按钮/表格即真实布局与操作入口；下方保留操作说明与字段校验。</div>
+</div>
+</article><article class="page on" id="a01">
+<div class="doc">
+  
+<div style="background:#dbeafe;border:1px solid #93c5fd;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:13px;color:#1e40af">
+  <b>这就是商家端 UI 线框</b>（侧栏 + 看板）。顶部 Tab 可切换商品/订单/核销等页面。买家端请打开 <a href="02-buyer-ui.html">02-buyer-ui.html</a>。
+</div>
+<h2>A01 交易看板（概览） <span class="tag tag-r">P1-14</span></h2>
+  <p class="sub">一屏看成交与待办。权限：<code>shop.analytics.read</code></p>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav on"><span class="d"></span>概览</div><div class="nav "><span class="d"></span>商品</div><div class="nav "><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav "><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>交易看板</h4></div>
+    <div class="bd">
+<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+  <span class="btn btn-p">今日</span><span class="btn">近7日</span><span class="btn">近30日</span><span class="btn">自定义 ▾</span>
+  <span style="margin-left:auto" class="btn">刷新</span>
+</div>
+<div class="stats">
+  <div class="stat"><div class="v">¥12,480</div><div class="l">成交额</div></div>
+  <div class="stat"><div class="v">36</div><div class="l">订单数</div></div>
+  <div class="stat"><div class="v">—</div><div class="l">支付转化*（可隐）</div></div>
+  <div class="stat"><div class="v">¥860</div><div class="l">退款额</div></div>
+</div>
+<div class="stats">
+  <div class="stat click warn"><div class="v">5</div><div class="l">待核销 →</div></div>
+  <div class="stat click warn"><div class="v">3</div><div class="l">待开票 →</div></div>
+  <div class="stat click warn"><div class="v">2</div><div class="l">待领权公域单 →</div></div>
+  <div class="stat"><div class="v">1</div><div class="l">下架商品数</div></div>
+</div>
+<div class="charts">
+  <div class="chart"><div class="t">成交额按日</div><div class="bars"><i style="height:40%"></i><i style="height:55%"></i><i style="height:35%"></i><i style="height:70%"></i><i style="height:60%"></i><i style="height:80%"></i><i style="height:50%"></i></div></div>
+  <div class="chart"><div class="t">品类占比</div><div class="pies"><div class="pie"></div><div style="font-size:10px;color:#666">课 45%<br>资料 25%<br>服务 30%</div></div></div>
+  <div class="chart"><div class="t">渠道占比</div><div class="pies"><div class="pie pie2"></div><div style="font-size:10px;color:#666">微信 55%<br>抖店 25%<br>其它 20%</div></div></div>
+</div>
+<table class="tbl">
+  <tr><th>单号</th><th>商品</th><th>买家</th><th>金额</th><th>渠道</th><th>状态</th></tr>
+  <tr><td style="color:#1677ff">20260804001</td><td>IP 获客实战课</td><td>138****8000</td><td>¥199</td><td>微信</td><td><span class="badge b-g">已付款</span></td></tr>
+  <tr><td style="color:#1677ff">20260804002</td><td>咨询次数卡</td><td>139****1234</td><td>¥599</td><td>抖店</td><td><span class="badge b-o">待领权</span></td></tr>
+  <tr><td style="color:#1677ff">20260803008</td><td>话术资料包</td><td>136****6666</td><td>¥49</td><td>微信</td><td><span class="badge b-g">已付款</span></td></tr>
+</table>
+</div>
+  </div>
+</div>
+  <h3>操作功能</h3>
+  <div class="op"><b>切换时间范围</b>：今日/近7/近30/自定义（≤90天），刷新全部指标与图表。</div>
+  <div class="op"><b>点击待核销/待开票/待领权</b>：跳转对应列表并带预设筛选。</div>
+  <div class="op"><b>点击最近订单单号</b>：进入 A10 订单详情。</div>
+  <div class="op"><b>刷新</b>：手动重拉数据。</div>
+</div>
+</article><article class="page " id="a02">
+<div class="doc">
+  <h2>A02 商品列表 <span class="tag tag-r">P1-01</span></h2>
+  <p class="sub">管理可售 SKU。权限：shop.product.read/write</p>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav on"><span class="d"></span>商品</div><div class="nav "><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav "><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>商品列表</h4></div>
+    <div class="bd">
+<div class="toolbar">
+  <span class="btn btn-p">+ 新建商品</span>
+  <span class="btn">批量上架</span>
+  <span class="btn">批量下架</span>
+  <span class="sel">类型：全部</span>
+  <span class="sel">状态：全部</span>
+  <span class="inp">🔍 搜索名称</span>
+</div>
+<table class="tbl">
+  <tr><th><input type="checkbox"></th><th>封面</th><th>名称</th><th>类型</th><th>售价</th><th>销量</th><th>状态</th><th>关联</th><th>公域</th><th>操作</th></tr>
+  <tr><td>☐</td><td><div style="width:36px;height:36px;border-radius:6px;background:linear-gradient(135deg,#99f6e4,#67e8f9)"></div></td><td>IP 获客实战课</td><td><span class="badge b-b">课程</span></td><td>¥199</td><td>128</td><td><span class="badge b-g">上架</span></td><td>专栏·12讲</td><td><span class="badge b-b">抖店</span></td><td><span style="color:#1677ff">编辑</span> · 下架 · 映射</td></tr>
+  <tr><td>☐</td><td><div style="width:36px;height:36px;border-radius:6px;background:linear-gradient(135deg,#fde68a,#fdba74)"></div></td><td>话术模板资料包</td><td><span class="badge b-o">资料</span></td><td>¥49</td><td>56</td><td><span class="badge b-g">上架</span></td><td>资料包</td><td><span class="badge b-gy">未映射</span></td><td><span style="color:#1677ff">编辑</span> · 下架 · 映射</td></tr>
+  <tr><td>☐</td><td><div style="width:36px;height:36px;border-radius:6px;background:#e2e8f0"></div></td><td>1v1 咨询（草稿）</td><td><span class="badge b-g">服务</span></td><td>¥599</td><td>0</td><td><span class="badge b-gy">草稿</span></td><td><span style="color:#dc2626">未关联</span></td><td>—</td><td><span style="color:#1677ff">编辑</span> · 上架 · 删除</td></tr>
+</table>
+</div>
+  </div>
+</div>
+  <h3>操作</h3>
+  <div class="op"><b>新建</b>→A03；<b>编辑</b>→A03；<b>上架/下架</b>（行内/批量）；<b>复制</b>为草稿；<b>公域映射</b>→A14；<b>删除</b>仅草稿/下架且无进行中订单。</div>
+</div>
+</article><article class="page " id="a03">
+<div class="doc">
+  <h2>A03 商品新建 / 编辑</h2>
+  <p class="sub">类型三选一卡片；创建后类型锁定。</p>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav on"><span class="d"></span>商品</div><div class="nav "><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav "><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>编辑商品</h4></div>
+    <div class="bd">
+<div class="type-cards">
+  <div class="type-card on"><div class="ico">📚</div><b>课程</b><div style="color:#666;margin-top:4px">专栏 / 单课</div></div>
+  <div class="type-card"><div class="ico">📦</div><b>数字资料</b><div style="color:#666;margin-top:4px">资料包下载</div></div>
+  <div class="type-card"><div class="ico">🗓️</div><b>服务</b><div style="color:#666;margin-top:4px">预约 / 次数卡</div></div>
+</div>
+<div class="form">
+  <div class="field full"><label>名称 <span class="req">*</span></label><div class="val">IP 获客实战课 · 12 讲</div></div>
+  <div class="field full"><label>副标题</label><div class="val" style="color:#94a3b8">系列视频引流后的成交课</div></div>
+  <div class="field"><label>售价 <span class="req">*</span></label><div class="val">199.00</div></div>
+  <div class="field"><label>划线价</label><div class="val">399.00</div></div>
+  <div class="field"><label>关联专栏 <span class="req">*</span></label><div class="val">IP 获客实战课 ▾</div></div>
+  <div class="field"><label>退款策略 <span class="req">*</span></label><div class="val">履约前可退 ▾</div></div>
+  <div class="field full"><label>封面 <span class="req">*</span>（上架时）</label><div class="cover-up">上传 jpg/png · ≤2MB · 1:1 或 16:9</div></div>
+</div>
+<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+  <span class="btn">取消</span><span class="btn">存草稿</span><span class="btn btn-p">上架</span>
+</div>
+</div>
+  </div>
+</div>
+  <h3>校验</h3>
+  <div class="op">上架：名称、售价、封面、已关联内容齐全；划线价若填 ≥ 售价；价 ≥0 最多 2 位小数。</div>
+</div>
+</article><article class="page " id="a04">
+<div class="doc">
+  <h2>A04 专栏列表 <span class="tag tag-r">P1-02</span></h2>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav "><span class="d"></span>商品</div><div class="nav on"><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav "><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>专栏列表</h4></div>
+    <div class="bd">
+<div class="toolbar"><span class="btn btn-p">+ 新建专栏</span><span class="inp">🔍 搜索</span><span class="sel">状态：全部</span></div>
+<table class="tbl">
+  <tr><th>标题</th><th>课时数</th><th>引用商品</th><th>状态</th><th>操作</th></tr>
+  <tr><td>IP 获客实战课</td><td>12</td><td>1</td><td><span class="badge b-g">已发布</span></td><td><span style="color:#1677ff">管理课时</span> · 归档</td></tr>
+  <tr><td>新人入门（草稿）</td><td>3</td><td>0</td><td><span class="badge b-gy">草稿</span></td><td><span style="color:#1677ff">管理课时</span> · 发布 · 删除</td></tr>
+</table>
+</div>
+  </div>
+</div>
+  <div class="op"><b>新建/管理课时</b>→A05；发布需≥1 已发布课时；删除需无商品引用。</div>
+</div>
+</article><article class="page " id="a05">
+<div class="doc">
+  <h2>A05 专栏编辑 + 课时 <span class="tag tag-r">P1-02/10</span></h2>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav "><span class="d"></span>商品</div><div class="nav on"><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav "><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>专栏与课时</h4></div>
+    <div class="bd">
+<div class="toolbar"><span style="font-weight:700">IP 获客实战课</span><span class="badge b-g">已发布</span><span style="margin-left:auto" class="btn btn-p">+ 课时</span></div>
+<table class="tbl">
+  <tr><th>⋮⋮</th><th>#</th><th>标题</th><th>类型</th><th>时长</th><th>试看</th><th>状态</th><th>操作</th></tr>
+  <tr><td>⋮⋮</td><td>1</td><td>定位你的内容选题</td><td>视频</td><td>12:30</td><td><span class="badge b-g">是</span></td><td>已发布</td><td>编辑 · 取消试看</td></tr>
+  <tr><td>⋮⋮</td><td>2</td><td>系列化脚本结构</td><td>视频</td><td>15:02</td><td>否</td><td>已发布</td><td>编辑 · 设试看</td></tr>
+  <tr><td>⋮⋮</td><td>3</td><td>作业说明</td><td>图文</td><td>—</td><td>否</td><td><span class="badge b-gy">草稿</span></td><td>编辑 · 发布</td></tr>
+</table>
+<p style="font-size:11px;color:#666;margin-top:8px">支持拖拽排序。视频须上传点播媒资成功后才能发布。</p>
+</div>
+  </div>
+</div>
+  <div class="op"><b>添加/编辑课时</b>：标题、media_type、上传媒资、试看；<b>拖拽排序</b>；<b>试播</b>（管理端临时地址）。</div>
+</div>
+</article><article class="page " id="a06">
+<div class="doc">
+  <h2>A06 数字资料包 <span class="tag tag-r">P1-03</span></h2>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav "><span class="d"></span>商品</div><div class="nav "><span class="d"></span>内容</div><div class="nav on"><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav "><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>数字资料包</h4></div>
+    <div class="bd">
+<div class="two">
+  <div>
+    <div class="field" style="margin-bottom:8px"><label>标题 <span class="req">*</span></label><div class="val">话术模板资料包</div></div>
+    <div class="field" style="margin-bottom:8px"><label>交付方式</label><div class="val">○ 下载　○ 在线查看</div></div>
+    <div class="field"><label>最大下载次数</label><div class="val">不限</div></div>
+  </div>
+  <div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px">包内文件</div>
+    <table class="tbl">
+      <tr><th>文件</th><th>大小</th><th></th></tr>
+      <tr><td>话术库.pdf</td><td>2.1MB</td><td>删</td></tr>
+      <tr><td>模板.zip</td><td>8.4MB</td><td>删</td></tr>
+    </table>
+    <div class="cover-up" style="margin-top:8px;height:48px">+ 添加文件（≤200MB）</div>
+  </div>
+</div>
+<div style="margin-top:10px;text-align:right"><span class="btn">存草稿</span> <span class="btn btn-p">发布</span></div>
+</div>
+  </div>
+</div>
+</div>
+</article><article class="page " id="a07">
+<div class="doc">
+  <h2>A07 服务定义与时段 <span class="tag tag-r">P1-04</span></h2>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav "><span class="d"></span>商品</div><div class="nav "><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav on"><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav "><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>服务与时段</h4></div>
+    <div class="bd">
+<div class="form">
+  <div class="field"><label>模式</label><div class="val">○ 预约　● 次数卡</div></div>
+  <div class="field"><label>次数</label><div class="val">3</div></div>
+  <div class="field"><label>有效天数</label><div class="val">90</div></div>
+  <div class="field"><label>单次时长(分)</label><div class="val">60</div></div>
+</div>
+<div style="margin:12px 0 6px;font-weight:700;font-size:13px">可约时段 <span class="btn btn-p" style="float:right">批量生成</span></div>
+<table class="tbl">
+  <tr><th>开始</th><th>结束</th><th>容量</th><th>已约</th><th>状态</th><th></th></tr>
+  <tr><td>08-06 14:00</td><td>15:00</td><td>3</td><td>2</td><td><span class="badge b-g">开放</span></td><td>名单 · 关闭</td></tr>
+  <tr><td>08-07 10:00</td><td>11:00</td><td>3</td><td>0</td><td><span class="badge b-g">开放</span></td><td>名单 · 关闭</td></tr>
+</table>
+</div>
+  </div>
+</div>
+  <div class="op"><b>批量生成时段</b>、<b>关闭时段</b>、<b>查看预约名单</b>。容量更新用条件更新防超卖。</div>
+</div>
+</article><article class="page " id="a08">
+<div class="doc">
+  <h2>A08 核销台 <span class="tag tag-r">P1-04</span></h2>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav "><span class="d"></span>商品</div><div class="nav "><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav on"><span class="d"></span>核销台</div><div class="nav "><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>核销台</h4></div>
+    <div class="bd">
+<div class="two">
+  <div>
+    <div class="field" style="margin-bottom:10px"><label>核销码 <span class="req">*</span></label><div class="val" style="font-size:28px;letter-spacing:6px;font-weight:800">832914</div></div>
+    <span class="btn btn-p">查询</span>
+  </div>
+  <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px">
+    <div style="font-weight:700;margin-bottom:8px">校验结果</div>
+    <div style="font-size:12px;line-height:1.8">买家：138****8000<br>商品：1v1 咨询次数卡<br>预约：08-06 14:00–15:00<br>剩余次数：<b>2 → 核销后 1</b></div>
+    <div style="margin-top:12px"><span class="btn btn-ok">确认核销</span> <span class="btn">取消</span></div>
+  </div>
+</div>
+</div>
+  </div>
+</div>
+  <div class="op">失败文案：码无效 / 已核销 / 已退款 / 权益过期 / 次数用尽。Phase1 不支持撤销核销。</div>
+</div>
+</article><article class="page " id="a09">
+<div class="doc">
+  <h2>A09 订单列表 <span class="tag tag-r">P1-07</span></h2>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav "><span class="d"></span>商品</div><div class="nav "><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav on"><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>订单列表</h4></div>
+    <div class="bd">
+<div class="toolbar">
+  <span class="sel">状态：全部</span><span class="sel">渠道：全部</span>
+  <span class="inp">单号/手机/外部单号</span>
+  <span class="btn">导出 CSV</span>
+</div>
+<table class="tbl">
+  <tr><th>单号</th><th>商品</th><th>买家</th><th>金额</th><th>渠道</th><th>状态</th><th>下单时间</th></tr>
+  <tr><td style="color:#1677ff">…001</td><td>IP 获客课</td><td>138****8000</td><td>¥199</td><td>微信</td><td><span class="badge b-g">已付款</span></td><td>08-04 10:01</td></tr>
+  <tr><td style="color:#1677ff">…002</td><td>咨询次数卡</td><td>139****1234</td><td>¥599</td><td>抖店</td><td><span class="badge b-o">待领权</span></td><td>08-04 09:22</td></tr>
+  <tr><td style="color:#1677ff">…003</td><td>资料包</td><td>—</td><td>¥49</td><td>微信</td><td><span class="badge b-gy">待付款</span></td><td>08-04 08:10</td></tr>
+</table>
+</div>
+  </div>
+</div>
+  <div class="op">点单号→A10；待付款可关闭；支持导出。</div>
+</div>
+</article><article class="page " id="a10">
+<div class="doc">
+  <h2>A10 订单详情 <span class="tag tag-r">P1-07/08/12</span></h2>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav "><span class="d"></span>商品</div><div class="nav "><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav on"><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>订单详情 20260804001</h4><div><span class="btn">重发短信</span> <span class="btn btn-d">退款</span></div></div>
+    <div class="bd">
+<div class="stats">
+  <div class="stat"><div class="v" style="font-size:14px">已付款</div><div class="l">订单</div></div>
+  <div class="stat"><div class="v" style="font-size:14px">生效中</div><div class="l">权益</div></div>
+  <div class="stat"><div class="v" style="font-size:14px">未申请</div><div class="l">开票</div></div>
+  <div class="stat"><div class="v" style="font-size:14px">抖店</div><div class="l">渠道</div></div>
+</div>
+<div style="display:flex;gap:8px;margin-bottom:10px">
+  <span class="btn">重发领权短信</span><span class="btn btn-d">退款</span><span class="btn">查看开票</span>
+</div>
+<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;font-size:12px">
+  <b>商品</b> IP 获客实战课 · ¥199<br>
+  <b>买家</b> 138****8000 · 已领取<br>
+  <b>外部单号</b> Dou987654
+</div>
+<div class="timeline">
+  <div>10:01 创建订单</div>
+  <div>10:01 支付成功（抖店）</div>
+  <div>10:01 权益开通</div>
+  <div>10:02 领权短信已发送</div>
+  <div>10:15 买家已领取</div>
+</div>
+</div>
+  </div>
+</div>
+  <div class="op"><b>发起退款</b>：金额/原因必填，成功关权益；<b>审核买家退款</b>；<b>重发领权短信</b>（10 分钟限 1 次）；高危手动标记领取需审计。</div>
+</div>
+</article><article class="page " id="a11">
+<div class="doc">
+  <h2>A11 买家列表 / 详情 <span class="tag tag-r">P1-05</span></h2>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav "><span class="d"></span>商品</div><div class="nav "><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav "><span class="d"></span>订单</div><div class="nav on"><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>买家</h4></div>
+    <div class="bd">
+<div class="toolbar"><span class="inp">手机 / 昵称</span></div>
+<table class="tbl">
+  <tr><th>手机</th><th>昵称</th><th>订单数</th><th>权益数</th><th>注册</th><th></th></tr>
+  <tr><td>138****8000</td><td>小明</td><td>3</td><td>2</td><td>08-01</td><td><span style="color:#1677ff">详情</span></td></tr>
+  <tr><td>139****1234</td><td>阿强</td><td>1</td><td>1</td><td>08-04</td><td><span style="color:#1677ff">详情</span></td></tr>
+</table>
+<p style="font-size:11px;color:#991b1b;margin-top:8px">禁止「同步到 CRM 联系人」——买家 ≠ Contact</p>
+</div>
+  </div>
+</div>
+  <div class="op">详情 Tab：订单 / 权益 / 预约 / 开票 / 学习进度。</div>
+</div>
+</article><article class="page " id="a12">
+<div class="doc">
+  <h2>A12 权益列表 <span class="tag tag-r">P1-06</span></h2>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav "><span class="d"></span>商品</div><div class="nav "><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav "><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav on"><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>权益</h4></div>
+    <div class="bd">
+<div class="toolbar"><span class="sel">状态：生效中</span><span class="inp">手机 / 订单号</span></div>
+<table class="tbl">
+  <tr><th>买家</th><th>商品</th><th>类型</th><th>状态</th><th>次数</th><th>订单</th></tr>
+  <tr><td>138****8000</td><td>IP 获客课</td><td>课</td><td><span class="badge b-g">active</span></td><td>—</td><td>…001</td></tr>
+  <tr><td>139****1234</td><td>咨询卡</td><td>服务</td><td><span class="badge b-g">active</span></td><td>2/3</td><td>…002</td></tr>
+  <tr><td>136****6666</td><td>资料包</td><td>资料</td><td><span class="badge b-r">revoked</span></td><td>—</td><td>…009</td></tr>
+</table>
+</div>
+  </div>
+</div>
+  <div class="op">一般不手工改状态；退款自动 revoked。可选高危手工撤销需填原因。</div>
+</div>
+</article><article class="page " id="a13">
+<div class="doc">
+  <h2>A13 开票申请处理 <span class="tag tag-r">P1-17</span></h2>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav "><span class="d"></span>商品</div><div class="nav "><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav "><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav on"><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>开票申请</h4></div>
+    <div class="bd">
+<div class="toolbar"><span class="sel">状态：待处理</span></div>
+<table class="tbl">
+  <tr><th>订单</th><th>抬头</th><th>类型</th><th>税号</th><th>邮箱</th><th>金额</th><th>操作</th></tr>
+  <tr><td>…001</td><td>深圳市××科技</td><td>企业</td><td>9144…</td><td>a@b.com</td><td>¥199</td><td><span class="btn btn-p" style="padding:2px 8px">开具</span> <span class="btn" style="padding:2px 8px">驳回</span></td></tr>
+</table>
+<div style="margin-top:12px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;max-width:420px">
+  <div style="font-weight:700;margin-bottom:8px">开具回填</div>
+  <div class="field" style="margin-bottom:6px"><label>发票号码 <span class="req">*</span></label><div class="val" style="color:#94a3b8">请输入</div></div>
+  <div class="cover-up" style="height:48px">上传 PDF（可选 ≤10MB）</div>
+  <div style="margin-top:8px;text-align:right"><span class="btn btn-p">确认已开具</span></div>
+</div>
+</div>
+  </div>
+</div>
+  <div class="op">submitted→processing→issued；驳回必填原因；已开票后退款标记 needs_red_flush。</div>
+</div>
+</article><article class="page " id="a14">
+<div class="doc">
+  <h2>A14 公域对接 · 抖音 <span class="tag tag-r">Mx</span></h2>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav "><span class="d"></span>商品</div><div class="nav "><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav "><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav on"><span class="d"></span>公域对接</div><div class="nav "><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>抖音对接</h4></div>
+    <div class="bd">
+<div class="steps">
+  <div class="step"><div class="n">1</div>选链路<br>①抖店</div>
+  <div class="step"><div class="n">2</div>选路径<br>A 官方</div>
+  <div class="step"><div class="n">3</div>绑定店铺</div>
+  <div class="step"><div class="n">4</div>商品映射</div>
+  <div class="step"><div class="n">5</div>回调验通</div>
+</div>
+<table class="tbl" style="margin-top:10px">
+  <tr><th>本地商品</th><th>外部商品 ID</th><th>路径</th><th>状态</th><th></th></tr>
+  <tr><td>IP 获客实战课</td><td>Dou123456</td><td>A</td><td><span class="badge b-g">同步中</span></td><td>暂停 · 日志</td></tr>
+</table>
+<div style="margin-top:10px;font-size:12px;color:#1e40af;background:#eff6ff;padding:8px;border-radius:8px">Webhook URL：https://api.xxx/shop/callbacks/doudian　[复制]　[发送测试]</div>
+</div>
+  </div>
+</div>
+  <div class="op">默认推荐链路①+路径A；映射可暂停；外部单号可在订单追溯。</div>
+</div>
+</article><article class="page " id="a15">
+<div class="doc">
+  <h2>A15 店铺设置</h2>
+  <div class="shell">
+  <div class="side"><div class="brand">商家端</div><div class="nav "><span class="d"></span>概览</div><div class="nav "><span class="d"></span>商品</div><div class="nav "><span class="d"></span>内容</div><div class="nav "><span class="d"></span>数字资料</div><div class="nav "><span class="d"></span>服务</div><div class="nav "><span class="d"></span>核销台</div><div class="nav "><span class="d"></span>订单</div><div class="nav "><span class="d"></span>买家</div><div class="nav "><span class="d"></span>权益</div><div class="nav "><span class="d"></span>开票</div><div class="nav "><span class="d"></span>公域对接</div><div class="nav on"><span class="d"></span>设置</div></div>
+  <div class="main">
+    <div class="top"><span><b>智营获客</b> · 商家端</span><span>演示商家 · 管理员</span></div>
+    <div class="hd"><h4>店铺设置</h4></div>
+    <div class="bd">
+<div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px;font-size:13px">
+  <div style="padding:8px 14px;border-bottom:2px solid #1677ff;color:#1677ff;font-weight:700">支付</div>
+  <div style="padding:8px 14px;color:#666">短信/领权</div>
+  <div style="padding:8px 14px;color:#666">退款默认</div>
+</div>
+<div class="form">
+  <div class="field"><label>微信商户号</label><div class="val">16********00</div></div>
+  <div class="field"><label>API 证书</label><div class="val" style="color:#16a34a">已配置（不回显）</div></div>
+  <div class="field full"><label>支付回调 URL（只读）</label><div class="val">https://api.xxx/shop/payments/wechat/notify　[复制]</div></div>
+  <div class="field"><label>未支付关单(分钟)</label><div class="val">30</div></div>
+</div>
+<div style="margin-top:10px;text-align:right"><span class="btn">测试 0.01 元</span> <span class="btn btn-p">保存</span></div>
+</div>
+  </div>
+</div>
+  <div class="op">短信 Tab：签名、领权模板、有效天数、测试短信。密钥加密存储。</div>
+</div>
+</article><article class="page " id="a16">
+<div class="doc">
+  <h2>A16 角色与范围</h2>
+  <table class="meta">
+    <tr><th>角色</th><th>权限</th></tr>
+    <tr><td>内容运营</td><td>商品/内容/服务读写；无退款、无设置</td></tr>
+    <tr><td>客服</td><td>订单读、退款审核、开票、重发短信、买家读</td></tr>
+    <tr><td>店员</td><td>仅核销台</td></tr>
+    <tr><td>管理员</td><td>全部</td></tr>
+  </table>
+  <div class="note">Phase1 不做：拖拽装修、优惠券分销、买家转 Contact、电票自动开具、核销撤销。</div>
+</div>
+</article></div>
+<script>
+(function(){
+  var tabs=document.querySelectorAll('#tabs button');
+  var pages=document.querySelectorAll('.page');
+  tabs.forEach(function(btn){
+    btn.addEventListener('click',function(){
+      tabs.forEach(function(b){b.classList.remove('on')});
+      pages.forEach(function(p){p.classList.remove('on')});
+      btn.classList.add('on');
+      document.getElementById(btn.getAttribute('data-id')).classList.add('on');
+      window.scrollTo({top:0,behavior:'smooth'});
+    });
+  });
+})();
+</script>
+</body>
+</html>
