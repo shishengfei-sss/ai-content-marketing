@@ -11,7 +11,7 @@ API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
 from tests.alembic_head import is_at_expected_head
-from tests.http_client import check, req, ensure_fake_platform
+from tests.http_client import check, req, ensure_fake_platform, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -146,8 +146,7 @@ def main() -> int:
     code7, pending_list = req("GET", "/agent/ops/pending", token=token)
     results.append(check("VC3-7 pending 列表", code7 == 200 and isinstance(pending_list, list), str(len(pending_list))))
 
-    proc = subprocess.run([sys.executable, "-B", "tests/verify_c2.py"], cwd=API_ROOT)
-    results.append(check("VC3-8 verify_c2 回归", proc.returncode == 0))
+    results.append(run_nested_script("VC3-8 verify_c2 回归", "verify_c2.py"))
 
     passed = all(results)
     print("\n=== C3", "全部通过" if passed else "存在失败", "===")

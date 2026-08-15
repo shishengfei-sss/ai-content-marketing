@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""串联 v0.6 通用顾问验收脚本（见 docs/v0.6-advisor执行计划.md）。"""
+"""串联 v0.6 通用顾问验收脚本（见 docs/02-执行计划/v0.6-advisor执行计划.md）。"""
 from __future__ import annotations
 
 import argparse

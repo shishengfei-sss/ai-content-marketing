@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>高保真 · A20 开通商城</title>
+  <link rel="stylesheet" href="_shared/hifi.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar" style="background:#fff;color:#1f1f1f;border-bottom:1px solid #e8e8e8">
+      <div class="brand" style="color:#1677ff">智营获客 · 商家工作台</div>
+      <div class="meta">甲公司 UAT · 13900000099</div>
+    </header>
+    <div class="body">
+      <aside class="sidebar">
+        <div class="group">商城</div>
+        <a class="on" href="商家-A20-开通商城.html">开通商城</a>
+        <a href="#">工作台</a>
+        <a href="#">内容</a>
+      </aside>
+      <main class="main">
+        <div class="hifi-nav">
+          <a href="index.html">← UX 枢纽</a>
+          <a href="../01-管理端UI.html#a20">对照线框 A20</a>
+        </div>
+        <h1 class="page-title">开通商城</h1>
+
+        <div class="page-card" style="margin-bottom:12px;background:#e6f4ff;border:1px solid #91caff;box-shadow:none">
+          尚未开通商城能力。请完善主体与资质并提交审核；通过后即可管理店铺与商品。
+        </div>
+
+        <div class="page-card">
+          <div class="section-title" style="margin-top:0">主体类型</div>
+          <div style="display:flex;gap:8px;margin-bottom:16px">
+            <button class="btn btn-p" type="button">个人</button>
+            <button class="btn" type="button">个体工商户</button>
+            <button class="btn" type="button">企业</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px;max-width:720px">
+            <div class="field"><label>商家展示名 <span class="req">*</span></label><div class="val">自申店</div></div>
+            <div class="field"><label>主体名称 <span class="req">*</span></label><div class="val">自申联测</div></div>
+            <div class="field"><label>联系人 <span class="req">*</span></label><div class="val">自申</div></div>
+            <div class="field"><label>手机号 <span class="req">*</span></label><div class="val">13900004444</div></div>
+            <div class="field" style="grid-column:1/-1"><label>身份证号 <span class="req">*</span></label><div class="val">110101199001011234</div></div>
+          </div>
+
+          <div class="section-title">资质材料 <span style="font-weight:400;color:#999;font-size:12px">个人须人像面 + 国徽面，均必传</span></div>
+          <div class="mat-grid" style="max-width:480px">
+            <div class="mat-card">
+              <div class="mat-thumb has-img"></div>
+              <div>身份证人像面 <span class="req">*</span></div>
+              <button class="btn-link" type="button">预览 · 重新上传</button>
+            </div>
+            <div class="mat-card">
+              <div class="mat-thumb has-img"></div>
+              <div>身份证国徽面 <span class="req">*</span></div>
+              <button class="btn-link" type="button">预览 · 重新上传</button>
+            </div>
+          </div>
+
+          <div class="form-actions" style="max-width:720px">
+            <button class="btn btn-p" type="button">提交审核</button>
+          </div>
+        </div>
+
+        <div class="page-card" style="margin-top:16px">
+          <div class="section-title" style="margin-top:0">态别示意 · 审核中</div>
+          <p style="color:#666;margin-bottom:8px">表单只读；展示「审核中」结果区，不可再提交。</p>
+          <span class="badge b-o">审核中</span>
+        </div>
+        <div class="page-card" style="margin-top:16px">
+          <div class="section-title" style="margin-top:0">态别示意 · 已驳回</div>
+          <p style="color:#666;margin-bottom:8px">展示驳回原因；材料可改后重提。</p>
+          <div class="note" style="margin:0;background:#fff1f0;border-color:#ffa39e">证照影像不清：请重新上传清晰版身份证</div>
+          <div class="form-actions" style="border:0;padding-top:8px"><button class="btn btn-p" type="button">修改并重新提交</button></div>
+        </div>
+
+        <div class="note">
+          <b>UX 要点</b><br>
+          ① 跟现网商家壳（浅色顶栏 + 侧栏），不用线框灰底便签风。<br>
+          ② 材料区必须可选文件、可预览；禁止假上传。<br>
+          ③ 个人 / 个体 / 企业栏位显隐与线框一致；自申提交材料须齐。
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

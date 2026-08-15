@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>平台方帮企业卖课 · 模式 / 资质 / 责任 / 收益 脑图</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; background: #f5f7fa; color: #1f2937; }
+  header { padding: 16px 22px 12px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+  header h1 { margin: 0; font-size: 20px; font-weight: 700; }
+  header p { margin: 6px 0 0; font-size: 13px; color: #6b7280; }
+  .toolbar { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .toolbar button { border: 1px solid #d1d5db; background: #fff; color: #374151; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .toolbar button:hover { background: #f3f4f6; }
+  .legend { display: flex; gap: 16px; margin-left: auto; font-size: 12px; color: #6b7280; align-items: center; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .wrap { position: relative; height: calc(100vh - 92px); overflow: hidden; }
+  svg { width: 100%; height: 100%; display: block; cursor: grab; background: #f5f7fa; }
+  svg.grabbing { cursor: grabbing; }
+  .node-box { cursor: pointer; }
+  .node-box:hover rect { filter: brightness(0.97); }
+  .node-text { font-size: 13px; fill: #1f2937; pointer-events: none; }
+  .toggle { cursor: pointer; }
+  .hint { position: absolute; left: 14px; bottom: 12px; font-size: 12px; color: #9ca3af; background: rgba(255,255,255,.8); padding: 4px 8px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>② 平台方帮企业卖课 · 脑图</h1>
+  <p>视角：作为平台 / 服务商（抖音官方服务商、知识付费 SaaS、代运营机构、分销团长），帮其他企业在抖音卖课。含「业务模式 / 资质要求 / 责任义务 / 收益模式」四大维度。</p>
+  <div class="toolbar">
+    <button id="expandAll">全部展开</button>
+    <button id="collapseAll">收起分支</button>
+    <button id="reset">复位视图</button>
+    <div class="legend">
+      <span><i style="background:#7c3aed"></i>业务模式</span>
+      <span><i style="background:#0891b2"></i>资质要求</span>
+      <span><i style="background:#ea580c"></i>责任义务</span>
+      <span><i style="background:#ca8a04"></i>收益模式</span>
+    </div>
+  </div>
+</header>
+<div class="wrap">
+  <svg id="svg"></svg>
+  <div class="hint">提示：点击带 ◢ 的节点可折叠其子项</div>
+</div>
+
+<script>
+const DATA = {
+  t: "平台方帮企业卖课",
+  root: true,
+  children: [
+    { t: "一、业务模式（怎么帮）", children: [
+      { t: "服务对象：企业商家 + 个人讲师", children: [
+        { t: "企业：走营业执照+办学/ICP 全套资质" },
+        { t: "个人讲师：走平台免 ICP，凭身份+讲师证" },
+        { t: "资质审核按主体区分，KYC 责任不变" }
+      ]},
+      { t: "抖音官方服务商 / 招商", children: [
+        { t: "带商家入驻抖店挂课，0 门槛代送审上架" },
+        { t: "免商家自办 ICP / 保证金，缩短合规路径" },
+        { t: "官方服务商身份对接平台资源与流量" }
+      ]},
+      { t: "知识付费 SaaS 平台", children: [
+        { t: "小鹅通、千聊：开课+交易履约+私域沉淀" },
+        { t: "提供 LMS、分销、AI 答疑等工具能力" },
+        { t: "商家入驻即用，平台承担底层资质" }
+      ]},
+      { t: "代运营服务", children: [
+        { t: "账号定位、爆款内容、直播排品" },
+        { t: "投流代投（巨量引擎 / 本地推）" },
+        { t: "按效果或月费收取运营服务费" }
+      ]},
+      { t: "分销团长 / 精选联盟", children: [
+        { t: "组织达人矩阵分销课程，赚佣金差价" },
+        { t: "课程自动进精选联盟获高曝光" },
+        { t: "佣金自动结算到抖音钱包" }
+      ]},
+      { t: "资质 / 报白代办", children: [
+        { t: "帮企业过教培类目报白与准入" },
+        { t: "代办 ICP、办学备案、出版物许可" },
+        { t: "降低商家入驻门槛，加速上线" }
+      ]},
+      { t: "技术代开发", children: [
+        { t: "开放平台 API 对接抖店 / 抖音课堂" },
+        { t: "小程序 / H5 定制开发与嵌入" },
+        { t: "数据看板、分账系统搭建" }
+      ]}
+    ]},
+    { t: "二、资质要求（要什么）", children: [
+      { t: "自身 ICP 许可证 / EDI", children: [
+        { t: "经营性平台必须，注册资本≥100万" },
+        { t: "承载交易结算的合规底座" }
+      ]},
+      { t: "网络文化经营许可证", children: [
+        { t: "涉及音视频 / 直播内容需办理" },
+        { t: "需具备内容审核制度与机制" }
+      ]},
+      { t: "抖音服务商 / ISM 认证", children: [
+        { t: "申请成为官方服务商获取接口与权益" },
+        { t: "需通过平台资质与能力审核" }
+      ]},
+      { t: "等保三级 + 数据安全", children: [
+        { t: "用户规模>1万需等保三级认证" },
+        { t: "符合《个人信息保护法》数据合规" }
+      ]},
+      { t: "资金监管 / 分账能力", children: [
+        { t: "合规结算、资金存管与分账" },
+        { t: "支持预付费资金监管账户" }
+      ]}
+    ]},
+    { t: "三、责任义务（要负责）", children: [
+      { t: "商家 KYC 与资质审核", children: [
+        { t: "不得为无证 / 禁售类商家开课" },
+        { t: "核验营业执照、办学许可、讲师资质" }
+      ]},
+      { t: "课程质检与违规拦截", children: [
+        { t: "防虚假宣传、夸大收益、极限词" },
+        { t: "AI + 人工双审，留存审核记录" }
+      ]},
+      { t: "未成年人保护", children: [
+        { t: "K12 学科类禁售排查与阻断" },
+        { t: "面向未成年人内容专项管控" }
+      ]},
+      { t: "售后履约监管", children: [
+        { t: "452 天售后 / 退款机制保障" },
+        { t: "处理客诉与纠纷，防卷款跑路" }
+      ]},
+      { t: "税务与上报", children: [
+        { t: "依法代扣代缴、营收合规上报" },
+        { t: "配合监管数据核查" }
+      ]}
+    ]},
+    { t: "四、收益模式（怎么赚）", children: [
+      { t: "GMV 抽佣 / 平台服务费", children: [
+        { t: "按交易额分成（常见 5%~20%）" },
+        { t: "抖店平台服务费 + 支付通道费" }
+      ]},
+      { t: "SaaS 订阅费 / 年费", children: [
+        { t: "按席位或功能包收取年费" },
+        { t: "进阶工具（AI、分账）增值收费" }
+      ]},
+      { t: "保证金 / 技术服务费", children: [
+        { t: "类目保证金（可退）沉淀" },
+        { t: "一次性接入 / 技术部署费" }
+      ]},
+      { t: "代运营 / 投流服务费", children: [
+        { t: "月度代运营费 + 效果分成" },
+        { t: "投流代充值服务费" }
+      ]}
+    ]}
+  ]
+};
+
+// ---------- 引擎 ----------
+const svg = document.getElementById('svg');
+const SVGNS = "http://www.w3.org/2000/svg";
+const X_GAP = 250, Y_GAP = 40, NODE_H = 34, PAD_X = 14;
+const FONT = '13px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+const branchColors = ['#7c3aed', '#0891b2', '#ea580c', '#ca8a04'];
+
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d');
+ctx.font = FONT;
+function textW(s){ return ctx.measureText(s).width; }
+
+function assignColor(node, color){
+  node.color = color;
+  (node.children||[]).forEach(c => assignColor(c, color));
+}
+DATA.children.forEach((c, i) => assignColor(c, branchColors[i]));
+
+let leafY = 0;
+function computeLayout(node, depth){
+  node.depth = depth;
+  node.x = depth * X_GAP + 20;
+  node.w = Math.max(textW(node.t) + PAD_X*2, node.root ? 170 : 120);
+  const kids = (node.collapsed || !node.children) ? [] : node.children;
+  if(kids.length === 0){
+    node.y = leafY;
+    leafY += Y_GAP;
+  } else {
+    kids.forEach(k => computeLayout(k, depth+1));
+    node.y = (kids[0].y + kids[kids.length-1].y) / 2;
+  }
+}
+
+function build(){
+  leafY = 0;
+  computeLayout(DATA, 0);
+  const maxX = (function mx(n){ let m=n.x+n.w; (n.children||[]).forEach(c=>{ if(!n.collapsed) m=Math.max(m, mx(c)); }); return m; })(DATA);
+  const totalW = maxX + 40;
+  const totalH = leafY + 40;
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
+  svg.innerHTML = '';
+  const g = document.createElementNS(SVGNS, 'g');
+  g.setAttribute('id', 'viewport');
+  svg.appendChild(g);
+  drawNode(g, DATA);
+}
+
+function drawNode(g, node){
+  if(node.children && node.children.length && !node.collapsed){
+    node.children.forEach(c => {
+      const path = document.createElementNS(SVGNS, 'path');
+      const x1 = node.x + node.w, y1 = node.y + NODE_H/2;
+      const x2 = c.x, y2 = c.y + NODE_H/2;
+      const mx = (x1 + x2)/2;
+      path.setAttribute('d', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', '#cbd5e1');
+      path.setAttribute('stroke-width', '1.5');
+      g.appendChild(path);
+      drawNode(g, c);
+    });
+  }
+  const grp = document.createElementNS(SVGNS, 'g');
+  grp.setAttribute('class', 'node-box');
+  grp.setAttribute('transform', `translate(${node.x},${node.y})`);
+  const rect = document.createElementNS(SVGNS, 'rect');
+  rect.setAttribute('width', node.w);
+  rect.setAttribute('height', NODE_H);
+  rect.setAttribute('rx', 8);
+  rect.setAttribute('fill', node.root ? '#1f2937' : '#ffffff');
+  rect.setAttribute('stroke', node.root ? '#1f2937' : (node.color || '#94a3b8'));
+  rect.setAttribute('stroke-width', node.root ? 0 : 1.5);
+  if(!node.root){
+    const accent = document.createElementNS(SVGNS, 'rect');
+    accent.setAttribute('width', 5);
+    accent.setAttribute('height', NODE_H);
+    accent.setAttribute('rx', 2);
+    accent.setAttribute('fill', node.color || '#94a3b8');
+    grp.appendChild(accent);
+  }
+  grp.appendChild(rect);
+  const txt = document.createElementNS(SVGNS, 'text');
+  txt.setAttribute('class', 'node-text');
+  txt.setAttribute('x', node.root ? node.w/2 : PAD_X + 5);
+  txt.setAttribute('y', NODE_H/2 + 4);
+  if(node.root) {
+    txt.setAttribute('text-anchor', 'middle');
+    txt.setAttribute('fill', '#fff');
+    txt.setAttribute('font-weight', '700');
+    txt.setAttribute('font-size', '14px');
+  }
+  txt.textContent = node.t;
+  grp.appendChild(txt);
+  if(node.children && node.children.length){
+    const tg = document.createElementNS(SVGNS, 'g');
+    tg.setAttribute('class', 'toggle');
+    tg.setAttribute('transform', `translate(${node.w - 2},${NODE_H/2})`);
+    const tr = document.createElementNS(SVGNS, 'rect');
+    tr.setAttribute('x', -9); tr.setAttribute('y', -9);
+    tr.setAttribute('width', 18); tr.setAttribute('height', 18);
+    tr.setAttribute('rx', 9);
+    tr.setAttribute('fill', '#fff');
+    tr.setAttribute('stroke', node.color || '#94a3b8');
+    tr.setAttribute('stroke-width', 1.5);
+    tg.appendChild(tr);
+    const sign = document.createElementNS(SVGNS, 'text');
+    sign.setAttribute('text-anchor', 'middle');
+    sign.setAttribute('y', 4);
+    sign.setAttribute('font-size', '13px');
+    sign.setAttribute('fill', node.color || '#94a3b8');
+    sign.setAttribute('font-weight', '700');
+    sign.textContent = node.collapsed ? '+' : '−';
+    tg.appendChild(sign);
+    tg.addEventListener('click', (e) => { e.stopPropagation(); node.collapsed = !node.collapsed; build(); });
+    grp.appendChild(tg);
+  }
+  grp.addEventListener('click', () => { if(node.children && node.children.length){ node.collapsed = !node.collapsed; build(); } });
+  g.appendChild(grp);
+}
+
+let scale = 1, tx = 0, ty = 0;
+function applyTransform(){
+  const vp = svg.querySelector('#viewport');
+  if(vp) vp.setAttribute('transform', `translate(${tx},${ty}) scale(${scale})`);
+}
+svg.addEventListener('mousedown', e => {
+  if(e.target.closest('.toggle')) return;
+  let sx = e.clientX, sy = e.clientY, stx = tx, sty = ty;
+  svg.classList.add('grabbing');
+  function move(ev){ tx = stx + (ev.clientX - sx); ty = sty + (ev.clientY - sy); applyTransform(); }
+  function up(){ window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); svg.classList.remove('grabbing'); }
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', up);
+});
+svg.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  scale = Math.min(2.5, Math.max(0.4, scale * factor));
+  applyTransform();
+}, { passive: false });
+
+document.getElementById('expandAll').onclick = () => { (function un(n){ n.collapsed=false; (n.children||[]).forEach(un); })(DATA); build(); resetView(); };
+document.getElementById('collapseAll').onclick = () => { DATA.children.forEach(c => c.collapsed = true); build(); resetView(); };
+document.getElementById('reset').onclick = resetView;
+function resetView(){ scale = 1; tx = 0; ty = 0; applyTransform(); }
+
+build();
+resetView();
+</script>
+</body>
+</html>

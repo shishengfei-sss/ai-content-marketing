@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""CRM-2c 验收：保存列表视图（docs/v0.5-crm执行计划.md §8）。"""
+"""CRM-2c 验收：保存列表视图（docs/02-执行计划/v0.5-crm执行计划.md §8）。"""
 
 from __future__ import annotations
 

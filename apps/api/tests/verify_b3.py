@@ -9,7 +9,7 @@ from uuid import uuid4
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import check, req, ensure_fake_platform
+from tests.http_client import check, req, ensure_fake_platform, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -111,8 +111,7 @@ def main() -> int:
     )
     results.append(check("VB3-4 不存在 content 404", code == 404, str(code)))
 
-    proc = subprocess.run([sys.executable, "-B", "tests/verify_b2.py"], cwd=API_ROOT)
-    results.append(check("VB3-5 verify_b2 回归", proc.returncode == 0))
+    results.append(run_nested_script("VB3-5 verify_b2 回归", "verify_b2.py"))
 
     passed = all(results)
     print("\n=== B3", "全部通过" if passed else "存在失败", "===")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""v0.6 Phase A 验收：需求规格 §3.19 / 执行计划落盘（docs/v0.6-advisor执行计划.md）。"""
+"""v0.6 Phase A 验收：需求规格 §3.19 / 执行计划落盘（docs/02-执行计划/v0.6-advisor执行计划.md）。"""
 
 from __future__ import annotations
 

@@ -1,4 +1,7 @@
-"""企业功能权限 Catalog（与 docs/需求规格.md §2.5、§2.8 一致）。"""
+"""企业功能权限 Catalog（与 docs/00-总览/需求规格.md §2.5、§2.8 一致）。
+
+内容获客商城 Phase1 权限见 docs/01-PRD/21-内容获客商城-phase1/05-角色权限.html#catalog
+"""
 
 from __future__ import annotations
 
@@ -146,8 +149,72 @@ CRM_PERMISSIONS: tuple[str, ...] = (
     "crm.payment.delete",
 )
 
-# 全部权限 code
-ALL_PERMISSIONS: tuple[str, ...] = _BASE_PERMISSIONS + CRM_PERMISSIONS
+# 内容获客商城 · 平台运营端（跨租户，不参与 Membership）
+PLATFORM_SHOP_PERMISSIONS: tuple[str, ...] = (
+    "platform.shop.analytics",
+    "platform.shop.approve",
+    "platform.shop.channel",
+    "platform.shop.fee.manage",
+    "platform.shop.merchant.assign",
+    "platform.shop.merchant.list_all",
+    "platform.shop.merchant.list_assigned",
+    "platform.shop.merchant.manage",
+    "platform.shop.merchant.read",
+    "platform.shop.merchant.tag",
+    "platform.shop.merchant.tag.manage",
+    "platform.shop.moderate",
+    "platform.shop.onboarding.initiate",
+    "platform.shop.plan.manage",
+    "platform.shop.product.force_off",
+    "platform.shop.product.review",
+    "platform.shop.settlement",
+    "platform.shop.subscription.manage",
+    "platform.shop.subscription.read",
+)
+
+# 内容获客商城 · 商家端（租户内 shop.*）
+SHOP_MERCHANT_PERMISSIONS: tuple[str, ...] = (
+    "shop.analytics.read",
+    "shop.buyer.list_all",
+    "shop.buyer.view",
+    "shop.channel.map",
+    "shop.channel.read",
+    "shop.channel.write",
+    "shop.content.read",
+    "shop.content.write",
+    "shop.entitlement.list_all",
+    "shop.entitlement.revoke",
+    "shop.entitlement.view",
+    "shop.invoice.list_all",
+    "shop.invoice.process",
+    "shop.invoice.view",
+    "shop.order.close",
+    "shop.order.export",
+    "shop.order.list_all",
+    "shop.order.list_own",
+    "shop.order.refund",
+    "shop.order.resend_notify",
+    "shop.order.view",
+    "shop.product.delete",
+    "shop.product.publish",
+    "shop.product.read",
+    "shop.product.submit_review",
+    "shop.product.write",
+    "shop.redemption.execute",
+    "shop.redemption.list_all",
+    "shop.redemption.list_own",
+    "shop.redemption.read",
+    "shop.role.manage",
+    "shop.settings.read",
+    "shop.settings.write",
+    "shop.store.manage",
+    "shop.store.settings.read",
+    "shop.store.settings.write",
+    "shop.subscription.usage.read",
+)
+
+# 全部权限 code（租户 Membership；不含 platform.shop.*）
+ALL_PERMISSIONS: tuple[str, ...] = _BASE_PERMISSIONS + CRM_PERMISSIONS + SHOP_MERCHANT_PERMISSIONS
 
 # editor 内置角色默认权限（§2.5 带 ✅）
 EDITOR_DEFAULT_PERMISSIONS: frozenset[str] = frozenset(
@@ -314,5 +381,237 @@ SYSTEM_ROLE_EDITOR = "editor"
 SYSTEM_ROLE_SALES = "sales"
 SYSTEM_ROLE_SALES_MANAGER = "sales_manager"
 SYSTEM_ROLE_MARKETING = "marketing"
+
+# 商城商家端内置角色（Phase1 种子化，见 05-角色权限#roles）
+SYSTEM_ROLE_SHOP_ADMIN = "shop_admin"
+SYSTEM_ROLE_SHOP_CONTENT = "shop_content"
+SYSTEM_ROLE_SHOP_SUPPORT = "shop_support"
+SYSTEM_ROLE_SHOP_CLERK = "shop_clerk"
+
+SHOP_BUILTIN_ROLE_CODES: frozenset[str] = frozenset(
+    {
+        SYSTEM_ROLE_SHOP_ADMIN,
+        SYSTEM_ROLE_SHOP_CONTENT,
+        SYSTEM_ROLE_SHOP_SUPPORT,
+        SYSTEM_ROLE_SHOP_CLERK,
+    }
+)
+
+SHOP_ADMIN_DEFAULT_PERMISSIONS: frozenset[str] = frozenset(SHOP_MERCHANT_PERMISSIONS) - frozenset(
+    {
+        "shop.role.manage",
+        "shop.channel.write",  # 租户级公域对接（选链路/路径/回调验通）仅企业管理员
+    }
+)
+
+SHOP_CONTENT_DEFAULT_PERMISSIONS: frozenset[str] = frozenset(
+    {
+        "shop.analytics.read",
+        "shop.content.read",
+        "shop.content.write",
+        "shop.product.delete",
+        "shop.product.publish",
+        "shop.product.read",
+        "shop.product.submit_review",
+        "shop.product.write",
+        "shop.subscription.usage.read",
+    }
+)
+
+SHOP_SUPPORT_DEFAULT_PERMISSIONS: frozenset[str] = frozenset(
+    {
+        "shop.analytics.read",
+        "shop.buyer.list_all",
+        "shop.buyer.view",
+        "shop.content.read",
+        "shop.entitlement.list_all",
+        "shop.entitlement.revoke",
+        "shop.entitlement.view",
+        "shop.invoice.list_all",
+        "shop.invoice.process",
+        "shop.invoice.view",
+        "shop.order.export",
+        "shop.order.list_all",
+        "shop.order.refund",
+        "shop.order.resend_notify",
+        "shop.order.view",
+        "shop.product.read",
+        "shop.redemption.read",
+        "shop.subscription.usage.read",
+    }
+)
+
+SHOP_CLERK_DEFAULT_PERMISSIONS: frozenset[str] = frozenset(
+    {
+        "shop.redemption.execute",
+        "shop.redemption.list_own",
+        "shop.redemption.read",
+    }
+)
+
+
+def membership_is_shop_clerk(membership) -> bool:
+    """对照 #a08-clerk：店员壳判定。"""
+    role = getattr(membership, "role", None) if membership is not None else None
+    return getattr(role, "code", None) == SYSTEM_ROLE_SHOP_CLERK
+
+SHOP_BUILTIN_ROLE_DEFAULT_PERMISSIONS: dict[str, frozenset[str]] = {
+    SYSTEM_ROLE_SHOP_ADMIN: SHOP_ADMIN_DEFAULT_PERMISSIONS,
+    SYSTEM_ROLE_SHOP_CONTENT: SHOP_CONTENT_DEFAULT_PERMISSIONS,
+    SYSTEM_ROLE_SHOP_SUPPORT: SHOP_SUPPORT_DEFAULT_PERMISSIONS,
+    SYSTEM_ROLE_SHOP_CLERK: SHOP_CLERK_DEFAULT_PERMISSIONS,
+}
+
+# 平台商城子角色（挂接 platform_admin 账号，Phase1 可选模板）
+PLATFORM_SHOP_ROLE_OPS = "platform_shop_ops"
+PLATFORM_SHOP_ROLE_CS = "platform_shop_cs"
+PLATFORM_SHOP_ROLE_FINANCE = "platform_shop_finance"
+
+PLATFORM_SHOP_ROLE_CODES: frozenset[str] = frozenset(
+    {
+        PLATFORM_SHOP_ROLE_OPS,
+        PLATFORM_SHOP_ROLE_CS,
+        PLATFORM_SHOP_ROLE_FINANCE,
+    }
+)
+
+PLATFORM_SHOP_OPS_DEFAULT_PERMISSIONS: frozenset[str] = frozenset(
+    {
+        "platform.shop.analytics",
+        "platform.shop.approve",
+        "platform.shop.merchant.assign",
+        "platform.shop.merchant.list_all",
+        "platform.shop.merchant.manage",
+        "platform.shop.merchant.read",
+        "platform.shop.merchant.tag",
+        "platform.shop.merchant.tag.manage",
+        "platform.shop.moderate",
+        "platform.shop.plan.manage",
+        "platform.shop.product.force_off",
+        "platform.shop.product.review",
+        "platform.shop.subscription.manage",
+        "platform.shop.subscription.read",
+    }
+)
+
+PLATFORM_SHOP_CS_DEFAULT_PERMISSIONS: frozenset[str] = frozenset(
+    {
+        "platform.shop.analytics",
+        "platform.shop.merchant.list_assigned",
+        "platform.shop.merchant.read",
+        "platform.shop.merchant.tag",
+        "platform.shop.onboarding.initiate",
+        "platform.shop.subscription.read",
+    }
+)
+
+PLATFORM_SHOP_FINANCE_DEFAULT_PERMISSIONS: frozenset[str] = frozenset(
+    {
+        "platform.shop.analytics",
+        "platform.shop.fee.manage",
+        "platform.shop.settlement",
+        "platform.shop.subscription.read",
+    }
+)
+
+PLATFORM_SHOP_ROLE_DEFAULT_PERMISSIONS: dict[str, frozenset[str]] = {
+    PLATFORM_SHOP_ROLE_OPS: PLATFORM_SHOP_OPS_DEFAULT_PERMISSIONS,
+    PLATFORM_SHOP_ROLE_CS: PLATFORM_SHOP_CS_DEFAULT_PERMISSIONS,
+    PLATFORM_SHOP_ROLE_FINANCE: PLATFORM_SHOP_FINANCE_DEFAULT_PERMISSIONS,
+}
+
+PLATFORM_SHOP_PERMISSION_LABELS: dict[str, str] = {
+    "platform.shop.analytics": "经营看板只读",
+    "platform.shop.approve": "入驻审核",
+    "platform.shop.channel": "公域渠道与支付进件",
+    "platform.shop.fee.manage": "类目与费率",
+    "platform.shop.merchant.assign": "分配管家",
+    "platform.shop.merchant.list_all": "全站商家数据范围",
+    "platform.shop.merchant.list_assigned": "仅看分配给自己的商家",
+    "platform.shop.merchant.manage": "暂停/恢复",
+    "platform.shop.merchant.read": "商家列表/详情 + 跟进写",
+    "platform.shop.merchant.tag": "挂接已有标签",
+    "platform.shop.merchant.tag.manage": "新建标签名",
+    "platform.shop.moderate": "违规稽查",
+    "platform.shop.onboarding.initiate": "帮客户发起入驻",
+    "platform.shop.plan.manage": "套餐配置",
+    "platform.shop.product.force_off": "商品强制下架",
+    "platform.shop.product.review": "商品人审",
+    "platform.shop.settlement": "清结算写",
+    "platform.shop.subscription.manage": "开通/续费",
+    "platform.shop.subscription.read": "查看套餐/到期",
+    "platform.user.manage": "管理其他运营账号",
+}
+
+# P08-A 矩阵展示顺序（含默认未授予项，对照 06#p08a）
+PLATFORM_SHOP_ROLE_MATRIX_CODES: dict[str, tuple[str, ...]] = {
+    PLATFORM_SHOP_ROLE_CS: (
+        "platform.shop.merchant.list_assigned",
+        "platform.shop.merchant.read",
+        "platform.shop.merchant.tag",
+        "platform.shop.merchant.tag.manage",
+        "platform.shop.onboarding.initiate",
+        "platform.shop.subscription.read",
+        "platform.shop.analytics",
+        "platform.shop.approve",
+        "platform.shop.subscription.manage",
+        "platform.shop.merchant.manage",
+        "platform.shop.merchant.assign",
+    ),
+    PLATFORM_SHOP_ROLE_OPS: (
+        "platform.shop.merchant.list_all",
+        "platform.shop.merchant.assign",
+        "platform.shop.merchant.read",
+        "platform.shop.merchant.tag",
+        "platform.shop.merchant.tag.manage",
+        "platform.shop.onboarding.initiate",
+        "platform.shop.approve",
+        "platform.shop.merchant.manage",
+        "platform.shop.plan.manage",
+        "platform.shop.subscription.manage",
+        "platform.shop.product.review",
+        "platform.shop.moderate",
+        "platform.shop.product.force_off",
+        "platform.shop.analytics",
+        "platform.shop.settlement",
+        "platform.user.manage",
+    ),
+    PLATFORM_SHOP_ROLE_FINANCE: (
+        "platform.shop.settlement",
+        "platform.shop.fee.manage",
+        "platform.shop.subscription.read",
+        "platform.shop.analytics",
+        "platform.shop.approve",
+        "platform.shop.subscription.manage",
+        "platform.shop.merchant.manage",
+    ),
+}
+
+PLATFORM_SHOP_ROLE_META: tuple[dict[str, str], ...] = (
+    {
+        "code": "",
+        "name": "平台超管",
+        "code_label": "platform_admin",
+        "summary": "全部 platform.shop.* + 主站租户/账号管理",
+    },
+    {
+        "code": PLATFORM_SHOP_ROLE_OPS,
+        "name": "日常运营",
+        "code_label": PLATFORM_SHOP_ROLE_OPS,
+        "summary": "入驻/审核/暂停恢复、套餐开通、稽查；list_all 全站商家",
+    },
+    {
+        "code": PLATFORM_SHOP_ROLE_CS,
+        "name": "商家管家",
+        "code_label": PLATFORM_SHOP_ROLE_CS,
+        "summary": "仅 list_assigned 所辖客户 · 代建入驻 · 续费跟进 · 无审核/暂停/开通写",
+    },
+    {
+        "code": PLATFORM_SHOP_ROLE_FINANCE,
+        "name": "财务结算",
+        "code_label": PLATFORM_SHOP_ROLE_FINANCE,
+        "summary": "清结算、对账、费率只读、看板只读",
+    },
+)
 
 PLATFORM_ADMIN_ROLE = "platform_admin"

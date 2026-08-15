@@ -17,7 +17,7 @@ sys.path.insert(0, str(API_ROOT))
 from app.database import SessionLocal
 from app.permissions import EDITOR_DEFAULT_PERMISSIONS, SYSTEM_ROLE_ADMIN
 from tests.alembic_head import EXPECTED_HEAD, is_at_expected_head
-from tests.http_client import check, req
+from tests.http_client import admin_users, check, req
 from tests.test_helpers import ensure_multi_tenant_user, restore_single_company_user
 
 WEB_UAT_FILES = [
@@ -159,6 +159,7 @@ def main() -> int:
             "password": "Test123456",
             "tenant_name": unique_name,
             "industry_code": "finance",
+            "display_name": "UAT9A",
         },
     )
     results.append(check("UAT-9 注册带公司名", code == 200, str(code)))
@@ -170,6 +171,7 @@ def main() -> int:
             "password": "Test123456",
             "tenant_name": unique_name,
             "industry_code": "finance",
+            "display_name": "UAT9B",
         },
     )
     results.append(check("UAT-9 重复公司名拒绝", code == 400, str(dup.get("detail", dup))))
@@ -239,7 +241,7 @@ def main() -> int:
                     code == 200 and members and all("phone" in m and "role_code" in m for m in members),
                 )
             )
-        code, users = req("GET", "/admin/users", token=pa_token)
+        code, users = admin_users(pa_token, q="13900008888")
         multi_user = next((u for u in users if u.get("phone") == "13900008888"), None)
         results.append(
             check(

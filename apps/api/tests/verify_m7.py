@@ -10,7 +10,7 @@ WEB_ROOT = API_ROOT.parent / "web" / "src"
 sys.path.insert(0, str(API_ROOT))
 
 from app.permissions import SYSTEM_ROLE_ADMIN
-from tests.http_client import check, req
+from tests.http_client import admin_users, check, req
 
 
 def login(phone, password):
@@ -151,7 +151,7 @@ def main():
                 token=pa_token,
                 body={"new_admin_user_id": admin_a["user_id"]},
             )
-            code, users = req("GET", "/admin/users", token=pa_token)
+            code, users = admin_users(pa_token, q=editor_phone)
             temp_user = next((u for u in users if u.get("phone") == editor_phone), None)
             if temp_user:
                 req("DELETE", f"/admin/users/{temp_user['id']}", token=pa_token)
@@ -191,7 +191,7 @@ def main():
         content_ok = code in (200, 400, 502)
         code, contents_before = req("GET", "/admin/contents", token=pa_token, body=None)
         code, tenant_before = req("GET", f"/admin/tenants/{del_tenant_id}", token=pa_token)
-        code, users = req("GET", "/admin/users", token=pa_token)
+        code, users = admin_users(pa_token, q=phone)
         del_user = next((u for u in users if u.get("phone") == phone), None)
         if del_user:
             code, _ = req("DELETE", f"/admin/users/{del_user['id']}", token=pa_token)

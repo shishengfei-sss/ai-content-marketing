@@ -54,6 +54,7 @@ def main() -> int:
                 """
                 SELECT tenant_id, COUNT(*) AS c FROM tenant_roles
                 WHERE is_system = 1
+                  AND code IN ('admin', 'editor', 'sales', 'sales_manager', 'marketing')
                 GROUP BY tenant_id
                 HAVING c = 5
                 """
@@ -115,21 +116,23 @@ def main() -> int:
             )
         )
 
-        admin_perm_count = conn.execute(
+        admin_rows = conn.execute(
             text(
                 """
-                SELECT COUNT(DISTINCT trp.permission_code) FROM tenant_role_permissions trp
+                SELECT DISTINCT trp.permission_code FROM tenant_role_permissions trp
                 JOIN tenant_roles tr ON tr.id = trp.role_id
                 WHERE tr.code = :code AND tr.is_system = 1
                 """
             ),
             {"code": SYSTEM_ROLE_ADMIN},
-        ).scalar()
+        ).fetchall()
+        admin_codes = {r[0] for r in admin_rows}
+        missing_admin = set(ALL_PERMISSIONS) - admin_codes
         results.append(
             check(
                 "V1-4 admin全部权限",
-                admin_perm_count == len(ALL_PERMISSIONS),
-                f"admin_perms={admin_perm_count} all={len(ALL_PERMISSIONS)}",
+                not missing_admin,
+                f"missing={len(missing_admin)} have={len(admin_codes)} catalog={len(ALL_PERMISSIONS)}",
             )
         )
 

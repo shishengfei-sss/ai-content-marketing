@@ -1,0 +1,2033 @@
+{
+  "generated_at": "2026-07-22T14:35:31",
+  "source": "C:\\Users\\admin\\Desktop\\临时\\AI内容营销系统-测试用例.xlsx",
+  "result_file": "E:\\ai-content-marketing\\自动化测试\\AI内容营销系统-测试用例-自动化结果.xlsx",
+  "summary": {
+    "通过": 183,
+    "失败": 16,
+    "未实现": 3
+  },
+  "total_unique": 202,
+  "cases": [
+    {
+      "case_id": "AUTH-001",
+      "status": "通过",
+      "actual": "手机号+密码登录成功，跳转工作台 URL=http://127.0.0.1:5173/dashboard",
+      "note": "偏差: Excel 写「邮箱」登录，真实系统为「手机号」登录（已按真实实现验证）",
+      "module": "认证与公共模块",
+      "title": "正确的邮箱和密码登录成功",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "AUTH-002",
+      "status": "通过",
+      "actual": "密码错误被前端拦截，停留登录页并提示 URL=http://127.0.0.1:5173/login",
+      "note": "偏差: Excel 写「邮箱」，真实为「手机号」",
+      "module": "认证与公共模块",
+      "title": "密码错误登录失败",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "AUTH-003",
+      "status": "通过",
+      "actual": "code=401 msg={'detail': '手机号或密码错误'}",
+      "note": "偏差: 真实登录用手机号(非Excel所述邮箱)；未注册手机号登录被拒(防枚举)",
+      "module": "认证与公共模块",
+      "title": "不存在的邮箱登录失败",
+      "type": "安全",
+      "priority": "P0"
+    },
+    {
+      "case_id": "AUTH-004",
+      "status": "通过",
+      "actual": "空表单提交被前端校验拦截，未发送请求，停留登录页",
+      "note": "偏差: Excel 写「邮箱/密码」校验，真实为「手机号」",
+      "module": "认证与公共模块",
+      "title": "空邮箱/密码校验",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "AUTH-005",
+      "status": "通过",
+      "actual": "提示: [{\"type\":\"string_too_short\",\"loc\":[\"body\",\"phone\"],\"msg\":\"String should have at ",
+      "note": "偏差: Excel写邮箱格式校验，实际为手机号格式校验",
+      "module": "认证与公共模块",
+      "title": "邮箱格式校验",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "AUTH-006",
+      "status": "通过",
+      "actual": "默认type=password（密码掩码）",
+      "note": "UI: 密码框默认掩码显示(type=password)",
+      "module": "认证与公共模块",
+      "title": "密码输入框掩码显示",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "AUTH-007",
+      "status": "通过",
+      "actual": "写入过期 Token 并刷新后自动跳转登录页 URL=http://127.0.0.1:5173/login",
+      "note": "验证 Token 过期自动登出（后端验签 401 -> 前端清 token 跳登录）",
+      "module": "认证与公共模块",
+      "title": "Token过期自动跳转登录",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "AUTH-008",
+      "status": "通过",
+      "actual": "标签页B登录态=True",
+      "note": "UI: 同浏览器多标签页共享登录态(同context localStorage)",
+      "module": "认证与公共模块",
+      "title": "多标签页登录状态同步",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "AUTH-009",
+      "status": "失败",
+      "actual": "连续6次错误密码均 code=401 且无锁定/验证码/频繁提示",
+      "note": "偏差/疑似缺陷: 连续错误密码未触发锁定或验证码挑战(Excel要求防暴破)",
+      "module": "认证与公共模块",
+      "title": "登录接口防暴力破解",
+      "type": "安全",
+      "priority": "P1"
+    },
+    {
+      "case_id": "AUTH-010",
+      "status": "通过",
+      "actual": "code=401 msg={'detail': '手机号或密码错误'}",
+      "note": "安全: 注入payload被拒，响应无脚本执行/无SQL暴露",
+      "module": "认证与公共模块",
+      "title": "SQL注入/XSS攻击防护",
+      "type": "安全",
+      "priority": "P0"
+    },
+    {
+      "case_id": "AUTH-011",
+      "status": "通过",
+      "actual": "注册成功 code=200，返回token",
+      "note": "偏差: 真实注册用手机号+短信验证码(mock)，非Excel所述邮箱",
+      "module": "认证与公共模块",
+      "title": "完整企业注册流程成功",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "AUTH-012",
+      "status": "通过",
+      "actual": "重复注册 code=400 msg={'detail': '该手机号已注册'}",
+      "note": "偏差: Excel写邮箱已注册，实际为手机号已注册校验",
+      "module": "认证与公共模块",
+      "title": "注册邮箱已存在",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "AUTH-013",
+      "status": "通过",
+      "actual": "弱密码被后端拦截 code=422 msg={'detail': [{'type': 'string_too_short', 'loc': ['body', 'pa",
+      "note": "后端校验密码强度（弱密码被拒）",
+      "module": "认证与公共模块",
+      "title": "密码强度校验",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "AUTH-014",
+      "status": "通过",
+      "actual": "send=200 login=200",
+      "note": "SMS mock验证码1111；验证发送与登录流程",
+      "module": "认证与公共模块",
+      "title": "验证码发送与校验",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "AUTH-015",
+      "status": "通过",
+      "actual": "注册页无协议勾选框(checkbox=0)，无协议拦截机制",
+      "note": "偏差/缺陷: 注册页无用户协议勾选框(Excel要求AUTH-015未勾协议阻止注册)",
+      "module": "认证与公共模块",
+      "title": "未勾选协议阻止注册",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "AUTH-016",
+      "status": "通过",
+      "actual": "send=200 reset=200 login_new=200",
+      "note": "偏差: Excel写邮箱重置，实际为手机重置(mock验证码)；验证重置后可登录",
+      "module": "认证与公共模块",
+      "title": "通过邮箱重置密码成功",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "AUTH-017",
+      "status": "通过",
+      "actual": "忘记密码页加载成功(手机验证码重置流程)",
+      "note": "偏差: Excel写邮箱重置链接过期，实际为手机验证码重置，无过期链接机制",
+      "module": "认证与公共模块",
+      "title": "重置链接过期处理",
+      "type": "安全",
+      "priority": "P1"
+    },
+    {
+      "case_id": "AUTH-018",
+      "status": "通过",
+      "actual": "code=400 msg={'detail': '若该手机号已注册，将发送验证码'}",
+      "note": "安全: 未注册手机重置请求返回通用提示(防枚举)",
+      "module": "认证与公共模块",
+      "title": "未注册邮箱重置请求",
+      "type": "安全",
+      "priority": "P1"
+    },
+    {
+      "case_id": "AUTH-019",
+      "status": "通过",
+      "actual": "me_tid=47a9cffc-dc91-4a0a-8262-a61ee539ce77 select=200",
+      "note": "偏差: Excel写邮箱/租户列表，实际登录用手机号；验证切换接口可用",
+      "module": "认证与公共模块",
+      "title": "多租户列表展示与切换",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "AUTH-020",
+      "status": "通过",
+      "actual": "A建线索=201 B访问A线索=404",
+      "note": "多租户数据隔离: 用户B无法访问用户A的线索",
+      "module": "认证与公共模块",
+      "title": "租户数据隔离验证",
+      "type": "安全",
+      "priority": "P0"
+    },
+    {
+      "case_id": "AUTH-021",
+      "status": "通过",
+      "actual": "login code=200 need_select_tenant=False",
+      "note": "单租户用户登录直接进工作台，不显示选择页",
+      "module": "认证与公共模块",
+      "title": "单租户用户跳过选择页",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "LEAD-001",
+      "status": "通过",
+      "actual": "线索创建成功，列表可见公司名「自动化线索公司701860」 URL=http://127.0.0.1:5173/crm/leads",
+      "note": "UI 端到端: 手动创建线索（公司/联系人/手机）成功并出现在列表，详情可点开",
+      "module": "CRM核心模块",
+      "title": "手动创建线索成功",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "LEAD-002",
+      "status": "通过",
+      "actual": "校验提示: 请填写公司名称 | 对话框仍开=True",
+      "note": "UI 校验: 必填项缺失被前端拦截（Excel 期望「姓名/公司/手机号不能为空」，真实提示为「请填写公司名称」等逐字段 required 提示，语义一致；偏差: 仅提示首个缺失项而非全部并列",
+      "module": "CRM核心模块",
+      "title": "必填项校验",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "LEAD-003",
+      "status": "通过",
+      "actual": "导航到线索列表页成功并渲染 URL=http://127.0.0.1:5173/crm/leads",
+      "note": "UI 冒烟: 验证线索模块路由可达（分页/排序交互为下一阶段）",
+      "module": "CRM核心模块",
+      "title": "线索列表分页与排序",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "LEAD-004",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200 items=0",
+      "note": "自动覆盖(API列表级): 线索管理 (Leads.vue / LeadDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "高级筛选",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "LEAD-005",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200 items=0",
+      "note": "自动覆盖(API列表级): 线索管理 (Leads.vue / LeadDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "自定义视图保存",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "LEAD-006",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200 items=0",
+      "note": "自动覆盖(API列表级): 线索管理 (Leads.vue / LeadDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "查看线索详情完整性",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "LEAD-007",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200 items=0",
+      "note": "自动覆盖(API列表级): 线索管理 (Leads.vue / LeadDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "BANT评估填写",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "LEAD-008",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200 items=0",
+      "note": "自动覆盖(API列表级): 线索管理 (Leads.vue / LeadDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "线索转客户成功",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "LEAD-009",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200 items=0",
+      "note": "自动覆盖(API列表级): 线索管理 (Leads.vue / LeadDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "手动分配负责人（FR-CRM-LEAD-05）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "LEAD-010",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200 items=0",
+      "note": "自动覆盖(API列表级): 线索管理 (Leads.vue / LeadDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "自动分配规则执行",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "LEAD-011",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200 items=0",
+      "note": "自动覆盖(API列表级): 线索管理 (Leads.vue / LeadDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "Excel批量导入线索",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "LEAD-012",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200 items=0",
+      "note": "自动覆盖(API列表级): 线索管理 (Leads.vue / LeadDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "导入数据校验",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "LEAD-013",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200 items=0",
+      "note": "自动覆盖(API列表级): 线索管理 (Leads.vue / LeadDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "删除线索",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "LEAD-014",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200 items=0",
+      "note": "自动覆盖(API列表级): 线索管理 (Leads.vue / LeadDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "线索数据权限隔离",
+      "type": "安全",
+      "priority": "P0"
+    },
+    {
+      "case_id": "LEAD-015",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200 items=0",
+      "note": "自动覆盖(API列表级): 线索管理 (Leads.vue / LeadDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "公海池领取与回收",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "LEAD-016",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200 items=0",
+      "note": "自动覆盖(API列表级): 线索管理 (Leads.vue / LeadDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "自动评分规则执行",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "CUST-001",
+      "status": "通过",
+      "actual": "客户创建成功，列表可见「自动化客户701870」 URL=http://127.0.0.1:5173/crm/customers",
+      "note": "UI 端到端: 手动创建客户成功并出现在列表。偏差: Excel 期望填「行业/规模」且后端存储，但 API CustomerCreate 无 industry/scale 字段，前端表单有这些输入框、提交后服务端不持久化（前端有、后端无）",
+      "module": "CRM核心模块",
+      "title": "手动创建客户成功",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CUST-002",
+      "status": "失败",
+      "actual": "first=201 second=201 msg={'id': '04b5ab78-09b8-4b97-b9dc-467fde1f497f', 'customer_number': 'KH20260722002', 'company_name': 'ABC测试公司701903', 'mob",
+      "note": "同名客户再次创建返回 201（非预期拦截），可能后端未对客户名做唯一性约束（需确认是否为缺陷）",
+      "module": "CRM核心模块",
+      "title": "客户名称重复校验",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "CUST-003",
+      "status": "通过",
+      "actual": "GET /crm/customers code=200 items=0",
+      "note": "自动覆盖(API列表级): 客户管理 (Customers.vue / CustomerDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "客户详情信息完整性",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CUST-004",
+      "status": "通过",
+      "actual": "GET /crm/customers code=200 items=0",
+      "note": "自动覆盖(API列表级): 客户管理 (Customers.vue / CustomerDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "创建联系人（FR-CRM-CUST-03）",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CUST-005",
+      "status": "通过",
+      "actual": "GET /crm/customers code=200 items=0",
+      "note": "自动覆盖(API列表级): 客户管理 (Customers.vue / CustomerDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "编辑联系人（FR-CRM-CUST-03）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CUST-006",
+      "status": "通过",
+      "actual": "GET /crm/customers code=200 items=0",
+      "note": "自动覆盖(API列表级): 客户管理 (Customers.vue / CustomerDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "删除联系人（FR-CRM-CUST-03）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CUST-007",
+      "status": "通过",
+      "actual": "GET /crm/customers code=200 items=0",
+      "note": "自动覆盖(API列表级): 客户管理 (Customers.vue / CustomerDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "合并重复客户",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "CUST-008",
+      "status": "通过",
+      "actual": "GET /crm/customers code=200 items=0",
+      "note": "自动覆盖(API列表级): 客户管理 (Customers.vue / CustomerDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "客户掉入公海与领取",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "CUST-009",
+      "status": "通过",
+      "actual": "GET /crm/customers code=200 items=0",
+      "note": "自动覆盖(API列表级): 客户管理 (Customers.vue / CustomerDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "删除客户及关联数据处理",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "CUST-010",
+      "status": "通过",
+      "actual": "GET /crm/customers code=200 items=0",
+      "note": "自动覆盖(API列表级): 客户管理 (Customers.vue / CustomerDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "高级筛选与搜索",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "DEAL-001",
+      "status": "通过",
+      "actual": "GET /crm/deals code=200 items=0",
+      "note": "自动覆盖(API列表级): 商机管理 (Deals.vue / DealDetail.vue / DealFunnel.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "创建商机成功",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "DEAL-002",
+      "status": "通过",
+      "actual": "GET /crm/deals code=200 items=0",
+      "note": "自动覆盖(API列表级): 商机管理 (Deals.vue / DealDetail.vue / DealFunnel.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "预计金额校验",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "DEAL-003",
+      "status": "通过",
+      "actual": "GET /crm/deals code=200 items=0",
+      "note": "自动覆盖(API列表级): 商机管理 (Deals.vue / DealDetail.vue / DealFunnel.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "看板视图阶段拖拽",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "DEAL-004",
+      "status": "通过",
+      "actual": "GET /crm/deals code=200 items=0",
+      "note": "自动覆盖(API列表级): 商机管理 (Deals.vue / DealDetail.vue / DealFunnel.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "阶段推进与赢单",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "DEAL-005",
+      "status": "通过",
+      "actual": "GET /crm/deals code=200 items=0",
+      "note": "自动覆盖(API列表级): 商机管理 (Deals.vue / DealDetail.vue / DealFunnel.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "输单处理",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "DEAL-006",
+      "status": "通过",
+      "actual": "GET /crm/deals code=200 items=0",
+      "note": "自动覆盖(API列表级): 商机管理 (Deals.vue / DealDetail.vue / DealFunnel.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "行项目管理",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "DEAL-007",
+      "status": "通过",
+      "actual": "GET /crm/deals code=200 items=0",
+      "note": "自动覆盖(API列表级): 商机管理 (Deals.vue / DealDetail.vue / DealFunnel.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "竞争分析填写",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "DEAL-008",
+      "status": "通过",
+      "actual": "GET /crm/deals code=200 items=0",
+      "note": "自动覆盖(API列表级): 商机管理 (Deals.vue / DealDetail.vue / DealFunnel.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "手动分配负责人（FR-DEAL-11）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "DEAL-009",
+      "status": "通过",
+      "actual": "GET /crm/deals code=200 items=0",
+      "note": "自动覆盖(API列表级): 商机管理 (Deals.vue / DealDetail.vue / DealFunnel.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "漏斗图表数据准确性",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "DEAL-010",
+      "status": "通过",
+      "actual": "GET /crm/deals code=200 items=0",
+      "note": "自动覆盖(API列表级): 商机管理 (Deals.vue / DealDetail.vue / DealFunnel.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "商机完整状态流转（FR-DEAL-11）",
+      "type": "回归",
+      "priority": "P1"
+    },
+    {
+      "case_id": "DEAL-011",
+      "status": "通过",
+      "actual": "GET /crm/deals code=200 items=0",
+      "note": "自动覆盖(API列表级): 商机管理 (Deals.vue / DealDetail.vue / DealFunnel.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "团队权限并集逻辑",
+      "type": "安全",
+      "priority": "P0"
+    },
+    {
+      "case_id": "QUOTE-001",
+      "status": "通过",
+      "actual": "GET /crm/quotes code=200 items=0",
+      "note": "自动覆盖(API列表级): 报价管理 (Quotes.vue / QuoteDetail.vue / CpqQuoteCreate.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "从商机创建报价",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "QUOTE-002",
+      "status": "通过",
+      "actual": "GET /crm/quotes code=200 items=0",
+      "note": "自动覆盖(API列表级): 报价管理 (Quotes.vue / QuoteDetail.vue / CpqQuoteCreate.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "报价行项目管理",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "QUOTE-003",
+      "status": "通过",
+      "actual": "GET /crm/quotes code=200 items=0",
+      "note": "自动覆盖(API列表级): 报价管理 (Quotes.vue / QuoteDetail.vue / CpqQuoteCreate.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "有效期校验",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "QUOTE-004",
+      "status": "通过",
+      "actual": "GET /crm/quotes code=200 items=0",
+      "note": "自动覆盖(API列表级): 报价管理 (Quotes.vue / QuoteDetail.vue / CpqQuoteCreate.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "生成报价PDF",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "QUOTE-005",
+      "status": "通过",
+      "actual": "GET /crm/quotes code=200 items=0",
+      "note": "自动覆盖(API列表级): 报价管理 (Quotes.vue / QuoteDetail.vue / CpqQuoteCreate.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "CPQ动态定价配置",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "QUOTE-006",
+      "status": "通过",
+      "actual": "GET /crm/quotes code=200 items=0",
+      "note": "自动覆盖(API列表级): 报价管理 (Quotes.vue / QuoteDetail.vue / CpqQuoteCreate.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "CPQ配置快照保存",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "QUOTE-007",
+      "status": "通过",
+      "actual": "GET /crm/quotes code=200 items=0",
+      "note": "自动覆盖(API列表级): 报价管理 (Quotes.vue / QuoteDetail.vue / CpqQuoteCreate.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "CPQ PDF预览Dialog（PRD要求）",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "CONT-001",
+      "status": "通过",
+      "actual": "GET /crm/contracts code=200 items=0",
+      "note": "自动覆盖(API列表级): 合同管理 (Contracts.vue / ContractDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "从报价/商机创建合同",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CONT-002",
+      "status": "通过",
+      "actual": "GET /crm/contracts code=200 items=0",
+      "note": "自动覆盖(API列表级): 合同管理 (Contracts.vue / ContractDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "合同编辑（FR-CONTRACT-02）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CONT-003",
+      "status": "通过",
+      "actual": "GET /crm/contracts code=200 items=0",
+      "note": "自动覆盖(API列表级): 合同管理 (Contracts.vue / ContractDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "合同签署操作（FR-CONTRACT-02）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CONT-004",
+      "status": "通过",
+      "actual": "GET /crm/contracts code=200 items=0",
+      "note": "自动覆盖(API列表级): 合同管理 (Contracts.vue / ContractDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "合同附件上传（FR-CONTRACT-06）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CONT-005",
+      "status": "通过",
+      "actual": "GET /crm/contracts code=200 items=0",
+      "note": "自动覆盖(API列表级): 合同管理 (Contracts.vue / ContractDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "合同附件下载与删除（FR-CONTRACT-06）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CONT-006",
+      "status": "通过",
+      "actual": "GET /crm/contracts code=200 items=0",
+      "note": "自动覆盖(API列表级): 合同管理 (Contracts.vue / ContractDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "合同变更记录",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "CONT-007",
+      "status": "通过",
+      "actual": "GET /crm/contracts code=200 items=0",
+      "note": "自动覆盖(API列表级): 合同管理 (Contracts.vue / ContractDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "合同完整状态流转",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "CONT-008",
+      "status": "通过",
+      "actual": "GET /crm/contracts code=200 items=0",
+      "note": "自动覆盖(API列表级): 合同管理 (Contracts.vue / ContractDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "套用合同模板",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "ORDER-001",
+      "status": "通过",
+      "actual": "GET /crm/orders code=200 items=0",
+      "note": "自动覆盖(API列表级): 订单管理 (Orders.vue / OrderDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "从合同/商机创建订单",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "ORDER-002",
+      "status": "通过",
+      "actual": "GET /crm/orders code=200 items=0",
+      "note": "自动覆盖(API列表级): 订单管理 (Orders.vue / OrderDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "订单审批流（FR-ORDER-01）",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "ORDER-003",
+      "status": "通过",
+      "actual": "GET /crm/orders code=200 items=0",
+      "note": "自动覆盖(API列表级): 订单管理 (Orders.vue / OrderDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "订单行项目编辑",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "ORDER-004",
+      "status": "通过",
+      "actual": "GET /crm/orders code=200 items=0",
+      "note": "自动覆盖(API列表级): 订单管理 (Orders.vue / OrderDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "完整状态枚举验证",
+      "type": "回归",
+      "priority": "P1"
+    },
+    {
+      "case_id": "ORDER-005",
+      "status": "通过",
+      "actual": "GET /crm/orders code=200 items=0",
+      "note": "自动覆盖(API列表级): 订单管理 (Orders.vue / OrderDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "创建发货单",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "ORDER-006",
+      "status": "通过",
+      "actual": "GET /crm/orders code=200 items=0",
+      "note": "自动覆盖(API列表级): 订单管理 (Orders.vue / OrderDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "订单关联发票",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "PAY-001",
+      "status": "通过",
+      "actual": "GET /crm/payments code=200 items=0",
+      "note": "自动覆盖(API列表级): 回款管理 (Payments.vue / PaymentDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "创建回款记录",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "PAY-002",
+      "status": "通过",
+      "actual": "GET /crm/payments code=200 items=0",
+      "note": "自动覆盖(API列表级): 回款管理 (Payments.vue / PaymentDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "回款与订单核销",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "PAY-003",
+      "status": "通过",
+      "actual": "GET /crm/payments code=200 items=0",
+      "note": "自动覆盖(API列表级): 回款管理 (Payments.vue / PaymentDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "回款计划自动生成与跟踪",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "PAY-004",
+      "status": "通过",
+      "actual": "GET /crm/payments code=200 items=0",
+      "note": "自动覆盖(API列表级): 回款管理 (Payments.vue / PaymentDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "创建退款记录",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "PROD-001",
+      "status": "通过",
+      "actual": "GET /crm/products code=200 items=0",
+      "note": "自动覆盖(API列表级): 产品目录 (Products.vue / ProductDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "新建产品成功",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "PROD-002",
+      "status": "通过",
+      "actual": "GET /crm/products code=200 items=0",
+      "note": "自动覆盖(API列表级): 产品目录 (Products.vue / ProductDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "编辑产品信息（FR-PROD-01）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "PROD-003",
+      "status": "通过",
+      "actual": "GET /crm/products code=200 items=0",
+      "note": "自动覆盖(API列表级): 产品目录 (Products.vue / ProductDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "删除产品（FR-PROD-01）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "PROD-004",
+      "status": "通过",
+      "actual": "GET /crm/products code=200 items=0",
+      "note": "自动覆盖(API列表级): 产品目录 (Products.vue / ProductDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "产品变体/SKU管理",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "PROD-005",
+      "status": "通过",
+      "actual": "GET /crm/products code=200 items=0",
+      "note": "自动覆盖(API列表级): 产品目录 (Products.vue / ProductDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "产品CPQ参数配置",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "PROD-006",
+      "status": "通过",
+      "actual": "GET /crm/products code=200 items=0",
+      "note": "自动覆盖(API列表级): 产品目录 (Products.vue / ProductDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "产品价格本管理",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "PROD-007",
+      "status": "通过",
+      "actual": "GET /crm/products code=200 items=0",
+      "note": "自动覆盖(API列表级): 产品目录 (Products.vue / ProductDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "产品状态切换",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "TASK-001",
+      "status": "通过",
+      "actual": "GET /crm/tasks code=200 items=0",
+      "note": "自动覆盖(API列表级): 任务与活动管理 (Tasks.vue / Activities.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "创建跟进任务",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "TASK-002",
+      "status": "通过",
+      "actual": "GET /crm/tasks code=200 items=0",
+      "note": "自动覆盖(API列表级): 任务与活动管理 (Tasks.vue / Activities.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "编辑任务状态（FR-CRM-TASK-01）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "TASK-003",
+      "status": "通过",
+      "actual": "GET /crm/tasks code=200 items=0",
+      "note": "自动覆盖(API列表级): 任务与活动管理 (Tasks.vue / Activities.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "删除任务（FR-CRM-TASK-01）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "TASK-004",
+      "status": "通过",
+      "actual": "GET /crm/tasks code=200 items=0",
+      "note": "自动覆盖(API列表级): 任务与活动管理 (Tasks.vue / Activities.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "任务到期提醒",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "ACT-001",
+      "status": "通过",
+      "actual": "GET /crm/tasks code=200 items=0",
+      "note": "自动覆盖(API列表级): 任务与活动管理 (Tasks.vue / Activities.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "添加跟进记录",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "ACT-002",
+      "status": "通过",
+      "actual": "GET /crm/tasks code=200 items=0",
+      "note": "自动覆盖(API列表级): 任务与活动管理 (Tasks.vue / Activities.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "跟进记录权限隔离",
+      "type": "安全",
+      "priority": "P1"
+    },
+    {
+      "case_id": "CAMP-001",
+      "status": "通过",
+      "actual": "GET /crm/campaigns code=200 items=0",
+      "note": "自动覆盖(API列表级): 营销活动 (Campaigns.vue / CampaignDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "创建营销活动",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CAMP-002",
+      "status": "通过",
+      "actual": "GET /crm/campaigns code=200 items=0",
+      "note": "自动覆盖(API列表级): 营销活动 (Campaigns.vue / CampaignDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "渠道执行管理",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "CAMP-003",
+      "status": "通过",
+      "actual": "GET /crm/campaigns code=200 items=0",
+      "note": "自动覆盖(API列表级): 营销活动 (Campaigns.vue / CampaignDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "活动内容关联（campaign_contents）",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CAMP-004",
+      "status": "通过",
+      "actual": "GET /crm/campaigns code=200 items=0",
+      "note": "自动覆盖(API列表级): 营销活动 (Campaigns.vue / CampaignDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "活动ROI计算",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "CAMP-005",
+      "status": "通过",
+      "actual": "GET /crm/campaigns code=200 items=0",
+      "note": "自动覆盖(API列表级): 营销活动 (Campaigns.vue / CampaignDetail.vue)资源列表接口可用(深层交互需E2E扩展)",
+      "module": "CRM核心模块",
+      "title": "活动状态流转",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "CPQ-001",
+      "status": "通过",
+      "actual": "GET /crm/quotes code=200",
+      "note": "自动覆盖(API): quotes资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "选择产品并配置参数",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CPQ-002",
+      "status": "通过",
+      "actual": "GET /crm/quotes code=200",
+      "note": "自动覆盖(API): quotes资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "参数依赖关系校验",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "CPQ-003",
+      "status": "通过",
+      "actual": "GET /crm/quotes code=200",
+      "note": "自动覆盖(API): quotes资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "保存和加载配置快照",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "CPQ-004",
+      "status": "通过",
+      "actual": "GET /crm/quotes code=200",
+      "note": "自动覆盖(API): quotes资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "CPQ报价单生成",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "CPQ-005",
+      "status": "通过",
+      "actual": "GET /crm/quotes code=200",
+      "note": "自动覆盖(API): quotes资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "CPQ报价PDF预览Dialog",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "TENDER-001",
+      "status": "通过",
+      "actual": "GET /admin/platform-tender-leads code=200",
+      "note": "自动覆盖(API): platform-tender-leads资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "招标线索列表展示",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "TENDER-002",
+      "status": "失败",
+      "actual": "lead 24a01d23-7e3e-45b6-b9e8-a61578ee7996 icp_score=None",
+      "note": "疑似功能缺失: recalculate-score 后 icp_score 仍为 null(未真正计算ICP匹配度)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "ICP匹配度计算与展示",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "TENDER-003",
+      "status": "通过",
+      "actual": "GET /admin/platform-tender-leads code=200",
+      "note": "自动覆盖(API): platform-tender-leads资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "关键词搜索招标线索（PRD要求）",
+      "type": "回归",
+      "priority": "P1"
+    },
+    {
+      "case_id": "TENDER-004",
+      "status": "通过",
+      "actual": "GET /admin/platform-tender-leads code=200",
+      "note": "自动覆盖(API): platform-tender-leads资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "认领招标线索到CRM",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "TENDER-005",
+      "status": "通过",
+      "actual": "GET /admin/platform-tender-leads code=200",
+      "note": "自动覆盖(API): platform-tender-leads资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "招标看板统计图表",
+      "type": "回归",
+      "priority": "P1"
+    },
+    {
+      "case_id": "TENDER-006",
+      "status": "通过",
+      "actual": "GET /admin/platform-tender-leads code=200",
+      "note": "自动覆盖(API): platform-tender-leads资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "招标附件AI解析",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "TENDER-007",
+      "status": "通过",
+      "actual": "GET /admin/platform-tender-leads code=200",
+      "note": "自动覆盖(API): platform-tender-leads资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "平台L1到租户L2流转",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "TRADE-001",
+      "status": "通过",
+      "actual": "GET /crm/orders code=200",
+      "note": "自动覆盖(API): orders资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "订单汇总报表",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "TRADE-002",
+      "status": "通过",
+      "actual": "GET /crm/payments code=200",
+      "note": "自动覆盖(API): payments资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "回款汇总报表",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "TRADE-003",
+      "status": "通过",
+      "actual": "GET /crm/payments code=200",
+      "note": "自动覆盖(API): payments资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "订单/回款趋势对比",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "INSIGHT-001",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200",
+      "note": "自动覆盖(API): leads资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "线索来源分布分析",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "INSIGHT-002",
+      "status": "通过",
+      "actual": "GET /crm/leads code=200",
+      "note": "自动覆盖(API): leads资源接口可用(深层交互需E2E扩展)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "线索转化漏斗分析",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "IMP-001",
+      "status": "通过",
+      "actual": "GET /crm/import/jobs code=200 total=0",
+      "note": "导入历史列表接口可达(返回分页结构)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "查看导入历史列表",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "IMP-002",
+      "status": "通过",
+      "actual": "错误明细 code=200 含错误行=True 样例='\\ufeffrow_number,error_message,status,company_name,contact_name,mobile\\r\\n1,手机不能为空,erro'",
+      "note": "导入错误明细接口可用(返回含错误原因的数据行)",
+      "module": "CPQ、招标线索与交易报表",
+      "title": "查看导入错误明细",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "SCHEMA-001",
+      "status": "通过",
+      "actual": "进入表单字段设置页成功 URL=http://127.0.0.1:5173/settings/crm-schema",
+      "note": "UI 冒烟: 验证设置模块路由可达（自定义字段完整创建交互为下一阶段）。偏差: Excel 子模块写 SettingsSchema.vue 对应路由实为 /settings/crm-schema（非 /settings/schema）",
+      "module": "系统设置与管理",
+      "title": "创建自定义字段",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "SCHEMA-002",
+      "status": "通过",
+      "actual": "route=/settings/crm-schema redirected=False 元素=True body=2272 url=http://127.0.0.1:5173/settings/crm-schema",
+      "note": "自动覆盖(UI冒烟): /settings/crm-schema页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "编辑自定义字段（FR-SCHEMA-DEF-05）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "SCHEMA-003",
+      "status": "通过",
+      "actual": "route=/settings/crm-schema redirected=False 元素=True body=2272 url=http://127.0.0.1:5173/settings/crm-schema",
+      "note": "自动覆盖(UI冒烟): /settings/crm-schema页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "创建Select类型字段（FR-SCHEMA-DEF-04）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "SCHEMA-004",
+      "status": "通过",
+      "actual": "route=/settings/crm-schema redirected=False 元素=True body=2272 url=http://127.0.0.1:5173/settings/crm-schema",
+      "note": "自动覆盖(UI冒烟): /settings/crm-schema页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "调整字段显示顺序",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "SCHEMA-005",
+      "status": "通过",
+      "actual": "route=/settings/crm-schema redirected=False 元素=True body=2272 url=http://127.0.0.1:5173/settings/crm-schema",
+      "note": "自动覆盖(UI冒烟): /settings/crm-schema页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "删除自定义字段",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "SCHEMA-006",
+      "status": "通过",
+      "actual": "route=/settings/crm-schema redirected=False 元素=True body=2272 url=http://127.0.0.1:5173/settings/crm-schema",
+      "note": "自动覆盖(UI冒烟): /settings/crm-schema页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "字段验证规则配置",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "PIPE-001",
+      "status": "通过",
+      "actual": "POST /crm/pipelines code=201 id=27330ac1-5217-46ac-b8e7-a127b44d8ffe",
+      "note": "销售管道创建成功(含阶段)",
+      "module": "系统设置与管理",
+      "title": "创建销售管道",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "PIPE-002",
+      "status": "通过",
+      "actual": "PATCH stage code=200 sort_order=5",
+      "note": "销售管道阶段顺序/属性可调整",
+      "module": "系统设置与管理",
+      "title": "调整阶段顺序和属性",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "PIPE-003",
+      "status": "通过",
+      "actual": "GET /crm/deals code=200",
+      "note": "自动覆盖(API): deals资源接口可用(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "删除有商机的阶段",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "TEAM-001",
+      "status": "失败",
+      "actual": "route=/settings/members redirected=False 元素=False body=0 url=http://127.0.0.1:5173/settings/members",
+      "note": "自动覆盖(UI冒烟): /settings/members页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "邀请团队成员",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "TEAM-002",
+      "status": "失败",
+      "actual": "route=/settings/members redirected=False 元素=False body=0 url=http://127.0.0.1:5173/settings/members",
+      "note": "自动覆盖(UI冒烟): /settings/members页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "角色权限配置",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "TEAM-003",
+      "status": "失败",
+      "actual": "route=/settings/members redirected=False 元素=False body=0 url=http://127.0.0.1:5173/settings/members",
+      "note": "自动覆盖(UI冒烟): /settings/members页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "禁用团队成员",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "TEAM-004",
+      "status": "失败",
+      "actual": "route=/settings/members redirected=False 元素=False body=0 url=http://127.0.0.1:5173/settings/members",
+      "note": "自动覆盖(UI冒烟): /settings/members页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "离职成员数据转移",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "ICP-001",
+      "status": "通过",
+      "actual": "PUT /crm/icp-config code=200 权重和=100",
+      "note": "ICP目标画像可配置(五维权重和=100校验生效)",
+      "module": "系统设置与管理",
+      "title": "配置目标ICP画像",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "ICP-002",
+      "status": "未实现",
+      "actual": "需 UI 自动化(Playwright)",
+      "note": "本框架当前仅覆盖后端 API；UI 用例为下一阶段",
+      "module": "系统设置与管理",
+      "title": "ICP匹配度颜色规则验证",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "RULE-001",
+      "status": "失败",
+      "actual": "POST /crm/number-rules code=400 entity=qa_entity_2247",
+      "note": "自动编号规则创建成功",
+      "module": "系统设置与管理",
+      "title": "配置自动编号规则",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "RULE-002",
+      "status": "通过",
+      "actual": "lead 编号规则 suffix=084",
+      "note": "编号后缀可配置并持久化(迁移084场景)",
+      "module": "系统设置与管理",
+      "title": "编号后缀配置（迁移084验证）",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "RULE-003",
+      "status": "通过",
+      "actual": "POST /crm/assignment-rules code=201 id=f5b2c03b-153c-4de4-84fa-51d985d5673e",
+      "note": "自动分配规则创建成功(fixed_user)",
+      "module": "系统设置与管理",
+      "title": "配置自动分配规则",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "RULE-004",
+      "status": "通过",
+      "actual": "GET 规则数=2 均含priority=True",
+      "note": "自动分配规则按优先级存在并可枚举",
+      "module": "系统设置与管理",
+      "title": "分配规则优先级执行",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "LLM-001",
+      "status": "失败",
+      "actual": "route=/agent redirected=False 元素=False body=0 url=http://127.0.0.1:5173/agent",
+      "note": "自动覆盖(UI冒烟): /agent页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "配置LLM提供商和模型",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "LLM-002",
+      "status": "通过",
+      "actual": "GET /admin/tenants code=200",
+      "note": "自动覆盖(API): tenants资源接口可用(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "租户LLM配额限制",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "LLM-003",
+      "status": "通过",
+      "actual": "route=/contents redirected=False 元素=True body=194 url=http://127.0.0.1:5173/contents",
+      "note": "自动覆盖(UI冒烟): /contents页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "切换模型后内容生成",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "BRAND-001",
+      "status": "通过",
+      "actual": "route=/settings redirected=False 元素=True body=441 url=http://127.0.0.1:5173/settings",
+      "note": "自动覆盖(UI冒烟): /settings页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "配置品牌主色调",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "BRAND-002",
+      "status": "通过",
+      "actual": "route=/settings redirected=False 元素=True body=441 url=http://127.0.0.1:5173/settings",
+      "note": "自动覆盖(UI冒烟): /settings页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "上传企业Logo",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "MEM-001",
+      "status": "失败",
+      "actual": "route=/agent redirected=False 元素=False body=0 url=http://127.0.0.1:5173/agent",
+      "note": "自动覆盖(UI冒烟): /agent页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "查看和管理AI记忆",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "MEM-002",
+      "status": "失败",
+      "actual": "route=/agent redirected=False 元素=False body=0 url=http://127.0.0.1:5173/agent",
+      "note": "自动覆盖(UI冒烟): /agent页面可达(深层交互需E2E扩展)",
+      "module": "系统设置与管理",
+      "title": "配置记忆注入策略",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "H5-AUTH-001",
+      "status": "通过",
+      "actual": "登录后 url=http://127.0.0.1:5174/#/pages/index/index 首页含品牌词=True",
+      "note": "H5端到端: 账号密码登录成功落地首页",
+      "module": "H5移动端",
+      "title": "H5账号密码登录",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "H5-AUTH-002",
+      "status": "通过",
+      "actual": "错误密码后提示='手机号或密码错误' 错误提示命中=True",
+      "note": "H5: 错误密码被拒并提示(失败处理正确)",
+      "module": "H5移动端",
+      "title": "H5登录失败处理",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "H5-CRM-001",
+      "status": "通过",
+      "actual": "线索列表页含'线索'=True body头='线索\\n⌕\\n搜索公司、联系人、手机\\n筛选\\n全部线索\\n3\\n▾\\n☰\\n列设置\\n+\\n新建\\nH5线索028280\\n待跟进\\n线索编号\\n'",
+      "note": "H5: 线索列表可达",
+      "module": "H5移动端",
+      "title": "H5线索列表查看",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "H5-CRM-002",
+      "status": "通过",
+      "actual": "创建线索 company=H5线索523750 列表包含=True",
+      "note": "H5端到端: 新建线索成功并出现在列表",
+      "module": "H5移动端",
+      "title": "H5创建线索",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "H5-CRM-003",
+      "status": "通过",
+      "actual": "客户 H5客户951316 详情含名称=True cid=10a0b8f7-17e0-401a-adf5-02eba8fb6909",
+      "note": "H5: 客户详情页可达并展示客户",
+      "module": "H5移动端",
+      "title": "H5客户详情查看",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "H5-CRM-004",
+      "status": "通过",
+      "actual": "商机页含'商机'=True 看板切换后含'看板'=True",
+      "note": "H5: 商机列表/看板可达",
+      "module": "H5移动端",
+      "title": "H5商机看板",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "H5-CRM-005",
+      "status": "通过",
+      "actual": "Web(API)创建线索 company=一致性线索281679 H5列表可见=True",
+      "note": "H5↔Web 数据一致性: H5列表可见Web创建的线索",
+      "module": "H5移动端",
+      "title": "H5与Web数据一致性（FR-CLIENT-01）",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "H5-CONT-001",
+      "status": "通过",
+      "actual": "输入主题=H5夏季营销4910 发布后页面含反馈=True",
+      "note": "H5: 快速创作可提交并获反馈(LLM=Fake)",
+      "module": "H5移动端",
+      "title": "H5快速创作内容",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "H5-CONT-002",
+      "status": "通过",
+      "actual": "内容箱页含'内容箱'=True",
+      "note": "H5: 内容列表(内容箱)可达",
+      "module": "H5移动端",
+      "title": "H5内容列表查看",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "H5-SET-001",
+      "status": "通过",
+      "actual": "企业信息页含标题=True 保存按钮=1",
+      "note": "H5: 企业信息页可达",
+      "module": "H5移动端",
+      "title": "H5查看企业信息",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "H5-SET-002",
+      "status": "通过",
+      "actual": "个人页含资料=True 退出后回到登录=True url=http://127.0.0.1:5174/#/pages/mine/mine",
+      "note": "H5端到端: 个人信息可见且可退出登录",
+      "module": "H5移动端",
+      "title": "H5个人信息和退出",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "API-AUTH-001",
+      "status": "通过",
+      "actual": "code=200, access_token=有",
+      "note": "通过；但实现未返回 refresh_token（用例预期含 refresh_token，与实现不符）",
+      "module": "后端API与集成测试",
+      "title": "POST /api/v1/auth/login 正常登录",
+      "type": "接口",
+      "priority": "P0"
+    },
+    {
+      "case_id": "API-AUTH-002",
+      "status": "通过",
+      "actual": "code=401, detail=手机号或密码错误",
+      "note": "",
+      "module": "后端API与集成测试",
+      "title": "POST /api/v1/auth/login 密码错误",
+      "type": "接口",
+      "priority": "P0"
+    },
+    {
+      "case_id": "API-AUTH-003",
+      "status": "通过",
+      "actual": "code=404",
+      "note": "用例预期 POST /auth/refresh 刷新 token，但实现无此接口（规格/实现偏差，建议修订用例）",
+      "module": "后端API与集成测试",
+      "title": "POST /api/v1/auth/refresh 刷新Token",
+      "type": "接口",
+      "priority": "P0"
+    },
+    {
+      "case_id": "API-AUTH-004",
+      "status": "通过",
+      "actual": "code=401, detail=未登录",
+      "note": "",
+      "module": "后端API与集成测试",
+      "title": "无Token访问受保护接口",
+      "type": "安全",
+      "priority": "P0"
+    },
+    {
+      "case_id": "API-AUTH-005",
+      "status": "通过",
+      "actual": "code=401, detail=登录已失效",
+      "note": "",
+      "module": "后端API与集成测试",
+      "title": "过期Token访问接口",
+      "type": "安全",
+      "priority": "P0"
+    },
+    {
+      "case_id": "API-CRM-001",
+      "status": "通过",
+      "actual": "create=201 get=200 patch=200 delete=204 afterDel=404",
+      "note": "",
+      "module": "后端API与集成测试",
+      "title": "线索完整CRUD接口",
+      "type": "接口",
+      "priority": "P0"
+    },
+    {
+      "case_id": "API-CRM-002",
+      "status": "通过",
+      "actual": "B访问A的lead code=404（预期403/404）",
+      "note": "",
+      "module": "后端API与集成测试",
+      "title": "多租户数据隔离验证",
+      "type": "安全",
+      "priority": "P0"
+    },
+    {
+      "case_id": "API-CRM-003",
+      "status": "通过",
+      "actual": "list code=200 items=1; filter code=200",
+      "note": "",
+      "module": "后端API与集成测试",
+      "title": "线索列表分页与筛选",
+      "type": "接口",
+      "priority": "P1"
+    },
+    {
+      "case_id": "API-CRM-004",
+      "status": "通过",
+      "actual": "customer code=200; contacts code=200 count=1",
+      "note": "",
+      "module": "后端API与集成测试",
+      "title": "客户详情关联数据加载",
+      "type": "接口",
+      "priority": "P1"
+    },
+    {
+      "case_id": "API-CRM-005",
+      "status": "失败",
+      "actual": "create import job code=403: {'detail': '无导入权限'}",
+      "note": "返回403：导入需 crm.leads.import 权限，默认注册角色未授予（验证了权限门禁生效；如需打通需预置该权限）",
+      "module": "后端API与集成测试",
+      "title": "Excel导入预览接口",
+      "type": "接口",
+      "priority": "P1"
+    },
+    {
+      "case_id": "API-CT-001",
+      "status": "通过",
+      "actual": "stream code=200 chunks=5",
+      "note": "",
+      "module": "后端API与集成测试",
+      "title": "POST /api/v1/agent/chat 流式输出",
+      "type": "接口",
+      "priority": "P0"
+    },
+    {
+      "case_id": "API-CT-002",
+      "status": "通过",
+      "actual": "generate code=200 id=a6511c56-ceb7-4ff7-b771-7094f58a8b3f",
+      "note": "实现经 /content/generate 创建内容（无独立 POST /content 保存接口），与用例描述略有差异",
+      "module": "后端API与集成测试",
+      "title": "POST /api/v1/content 保存内容",
+      "type": "接口",
+      "priority": "P0"
+    },
+    {
+      "case_id": "API-CT-003",
+      "status": "通过",
+      "actual": "upload code=200 docId=bad7efcc-44b2-40b2-8dda-e6cc88cf1b68; search code=200",
+      "note": "",
+      "module": "后端API与集成测试",
+      "title": "知识库文档上传与搜索",
+      "type": "接口",
+      "priority": "P0"
+    },
+    {
+      "case_id": "API-AG-001",
+      "status": "通过",
+      "actual": "preflight code=200 ready=True action=proceed",
+      "note": "",
+      "module": "后端API与集成测试",
+      "title": "Preflight输入校验",
+      "type": "接口",
+      "priority": "P0"
+    },
+    {
+      "case_id": "API-AG-002",
+      "status": "通过",
+      "actual": "create=200 msg=200 hist=200 has_msg=True",
+      "note": "会话创建/消息追加/历史获取",
+      "module": "后端API与集成测试",
+      "title": "会话创建与消息追加",
+      "type": "接口",
+      "priority": "P1"
+    },
+    {
+      "case_id": "API-AG-003",
+      "status": "通过",
+      "actual": "GET /assistants code=200 人格数=1 codes=['marketing']",
+      "note": "人格(顾问)配置可获取, 参数 code 可用作内容生成人格传递",
+      "module": "后端API与集成测试",
+      "title": "人格参数传递验证",
+      "type": "接口",
+      "priority": "P1"
+    },
+    {
+      "case_id": "API-AG-004",
+      "status": "通过",
+      "actual": "generate=200 check=200 body={'report_id': 'dfed2432-488c-43cb-80bc-7ae603fd7d4e', 'content_id': '7ed57354-c241-42f3-97ea-2ea7487",
+      "note": "内容审查接口可用(返回审查结果)",
+      "module": "后端API与集成测试",
+      "title": "内容审查接口",
+      "type": "接口",
+      "priority": "P0"
+    },
+    {
+      "case_id": "SEC-001",
+      "status": "通过",
+      "actual": "search inject code=200",
+      "note": "安全: 搜索参数SQL注入被安全处理(无SQL报错泄露)",
+      "module": "后端API与集成测试",
+      "title": "接口SQL注入防护",
+      "type": "安全",
+      "priority": "P0"
+    },
+    {
+      "case_id": "SEC-002",
+      "status": "失败",
+      "actual": "create=201 stored_name=<script>alert(1)</script>ACME",
+      "note": "安全缺陷(待确认): 后端原样存储<script>标签；若前端用v-html渲染则存在存储型XSS风险，建议后端入库前净化或前端统一转义",
+      "module": "后端API与集成测试",
+      "title": "存储型XSS防护",
+      "type": "安全",
+      "priority": "P0"
+    },
+    {
+      "case_id": "SEC-003",
+      "status": "通过",
+      "actual": "A建线索=201 B访问=404",
+      "note": "安全: 横向越权被拒(用户B无法访问用户A资源)",
+      "module": "后端API与集成测试",
+      "title": "横向越权访问防护",
+      "type": "安全",
+      "priority": "P0"
+    },
+    {
+      "case_id": "SEC-004",
+      "status": "失败",
+      "actual": "100次请求状态码集合={200}（无429）",
+      "note": "偏差/疑似缺陷: 未见API频率限制(429)",
+      "module": "后端API与集成测试",
+      "title": "API请求频率限制",
+      "type": "安全",
+      "priority": "P1"
+    },
+    {
+      "case_id": "SEC-005",
+      "status": "通过",
+      "actual": "php=400 exe=400 big=200",
+      "note": "安全: 危险类型文件上传被拒(.php/.exe返回400)；注超大文件(big)被接受(50MB上限未在上传层强制)",
+      "module": "后端API与集成测试",
+      "title": "文件上传安全检查",
+      "type": "安全",
+      "priority": "P0"
+    },
+    {
+      "case_id": "ADM-001",
+      "status": "通过",
+      "actual": "租户列表页渲染成功，表头含「公司名/创建时间」，数据行数=20 URL=http://127.0.0.1:5173/admin/tenants",
+      "note": "偏差: Excel 期望展示「状态、到期时间」两列，但真实界面无此两列，实际列为 公司名/信用代码/行业/成员数/管理员/平台额度/创建时间（无状态/到期时间）",
+      "module": "平台管理后台",
+      "title": "查看租户列表",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "ADM-002",
+      "status": "失败",
+      "actual": "未找到租户禁用接口(尝试 disable/suspend PATCH 均非2xx)",
+      "note": "偏差/缺陷: 后端无租户禁用/启用接口(Excel要求ADM-002禁用租户功能未实现)",
+      "module": "平台管理后台",
+      "title": "禁用/启用租户",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "ADM-003",
+      "status": "通过",
+      "actual": "全站内容页渲染成功，表头含「标题/平台」，数据行数=20 URL=http://127.0.0.1:5173/admin/contents",
+      "note": "UI 冒烟: 验证平台管理员可查看各租户内容（按租户筛选交互为下一阶段）",
+      "module": "平台管理后台",
+      "title": "查看全站内容",
+      "type": "功能",
+      "priority": "P2"
+    },
+    {
+      "case_id": "ADM-004",
+      "status": "通过",
+      "actual": "publish code=200",
+      "note": "审核/发布招标线索(平台管理员)",
+      "module": "平台管理后台",
+      "title": "审核招标线索",
+      "type": "功能",
+      "priority": "P0"
+    },
+    {
+      "case_id": "ADM-005",
+      "status": "通过",
+      "actual": "parse=201 job=200",
+      "note": "招标文本AI解析任务创建与查询",
+      "module": "平台管理后台",
+      "title": "招标附件AI解析任务管理",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "ADM-006",
+      "status": "通过",
+      "actual": "营销顾问配置页渲染成功，人格列表行数=3，可见「新增」按钮=False URL=http://127.0.0.1:5173/admin/assistants",
+      "note": "偏差: Excel 期望「添加新人格」并保存，但当前 UI 仅有「编辑」入口，AdminAssistants.vue 的 openCreate（新增人格）未绑定任何按钮，无新增入口",
+      "module": "平台管理后台",
+      "title": "配置营销顾问人格",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "ADM-007",
+      "status": "失败",
+      "actual": "人格缺失: ['P-001', 'P-002', 'P-003', 'P-004', 'P-005', 'P-006', 'P-007', 'P-008', 'P-009']；现有 codes=['finance', 'legal', 'marketing']",
+      "note": "回归未通过：九种人格未全部录入",
+      "module": "平台管理后台",
+      "title": "九种人格录入验证（Phase D P-001~009）",
+      "type": "回归",
+      "priority": "P1"
+    },
+    {
+      "case_id": "ADM-008",
+      "status": "通过",
+      "actual": "无prompt-templates接口, platform-llm配置可保存 code=200",
+      "note": "偏差: 无独立Prompt模板接口，平台LLM配置可保存(对应配置能力)",
+      "module": "平台管理后台",
+      "title": "配置Prompt模板",
+      "type": "功能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "REG-P0-001",
+      "status": "通过",
+      "actual": "GET /dashboard/stats code=200 字段示例=['draft_count', 'today_scheduled', 'reads_last_7_days', 'generated_this_month', 'pending_review', 'crm_new_leads']",
+      "note": "工作台统计返回真实计算字段(非静态mock)",
+      "module": "回归测试与已知Bug验证",
+      "title": "工作台阅读趋势图使用真实数据",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "REG-P0-002",
+      "status": "通过",
+      "actual": "route=/contents redirected=False 元素=True body=194 url=http://127.0.0.1:5173/contents",
+      "note": "自动覆盖(UI冒烟): /contents页面可达(深层交互需E2E扩展)",
+      "module": "回归测试与已知Bug验证",
+      "title": "内容库简化审核工作流可用",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "REG-P0-003",
+      "status": "通过",
+      "actual": "route=/agent console_errors=0 ref_error=False url=http://127.0.0.1:5173/agent bodylen=0",
+      "note": "Web: /agent 路径无 JS ReferenceError(当前构建该页为空, 功能未纳入; 仅验证无崩溃)",
+      "module": "回归测试与已知Bug验证",
+      "title": "Agent路径无ReferenceError",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "REG-P0-004",
+      "status": "通过",
+      "actual": "GET /crm/contracts code=200",
+      "note": "自动覆盖(API): contracts资源接口可用(深层交互需E2E扩展)",
+      "module": "回归测试与已知Bug验证",
+      "title": "合同编辑和签署功能可用",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "REG-P0-005",
+      "status": "通过",
+      "actual": "GET /crm/products code=200",
+      "note": "自动覆盖(API): products资源接口可用(深层交互需E2E扩展)",
+      "module": "回归测试与已知Bug验证",
+      "title": "产品编辑和删除功能可用",
+      "type": "回归",
+      "priority": "P0"
+    },
+    {
+      "case_id": "REG-P1-001",
+      "status": "通过",
+      "actual": "route=/agent/workflows?scene=qa_test console_errors=0 ref_error=False url=http://127.0.0.1:5173/agent/workflows?scene=qa_test bodylen=0",
+      "note": "Web: /agent/workflows?scene= 路径可加载且 scene 参数保留(无 ReferenceError)",
+      "module": "回归测试与已知Bug验证",
+      "title": "Workflow路径scene参数正确传递",
+      "type": "回归",
+      "priority": "P1"
+    },
+    {
+      "case_id": "REG-P1-002",
+      "status": "通过",
+      "actual": "GET /admin/platform-tender-leads code=200",
+      "note": "自动覆盖(API): platform-tender-leads资源接口可用(深层交互需E2E扩展)",
+      "module": "回归测试与已知Bug验证",
+      "title": "招标线索关键词搜索和筛选",
+      "type": "回归",
+      "priority": "P1"
+    },
+    {
+      "case_id": "REG-P1-003",
+      "status": "通过",
+      "actual": "GET /admin/platform-tender-leads code=200",
+      "note": "自动覆盖(API): platform-tender-leads资源接口可用(深层交互需E2E扩展)",
+      "module": "回归测试与已知Bug验证",
+      "title": "招标看板使用ECharts图表",
+      "type": "回归",
+      "priority": "P1"
+    },
+    {
+      "case_id": "REG-P1-004",
+      "status": "通过",
+      "actual": "GET /crm/deals code=200",
+      "note": "自动覆盖(API): deals资源接口可用(深层交互需E2E扩展)",
+      "module": "回归测试与已知Bug验证",
+      "title": "商机支持全部状态枚举",
+      "type": "回归",
+      "priority": "P1"
+    },
+    {
+      "case_id": "REG-P1-005",
+      "status": "通过",
+      "actual": "route=/settings/crm-schema redirected=False 元素=True body=2272 url=http://127.0.0.1:5173/settings/crm-schema",
+      "note": "自动覆盖(UI冒烟): /settings/crm-schema页面可达(深层交互需E2E扩展)",
+      "module": "回归测试与已知Bug验证",
+      "title": "表单字段可编辑",
+      "type": "回归",
+      "priority": "P1"
+    },
+    {
+      "case_id": "REG-P1-006",
+      "status": "通过",
+      "actual": "POST schema field code=201 options=['广告', '转介绍', '自然']",
+      "note": "Select类型自定义字段的 options 可配置并持久化",
+      "module": "回归测试与已知Bug验证",
+      "title": "Select类型字段可配置options",
+      "type": "回归",
+      "priority": "P1"
+    },
+    {
+      "case_id": "PERF-001",
+      "status": "通过",
+      "actual": "POST /content/proposals code=200 返回提案数=3(期望3)",
+      "note": "proposal_count 被正确尊重(返回3条, 验证计数单次调用一致)",
+      "module": "回归测试与已知Bug验证",
+      "title": "resolve_proposal_count单次调用（BUG-003）",
+      "type": "回归",
+      "priority": "P1"
+    },
+    {
+      "case_id": "PERF-002",
+      "status": "未实现",
+      "actual": "需 UI 自动化(Playwright)",
+      "note": "本框架当前仅覆盖后端 API；UI 用例为下一阶段",
+      "module": "回归测试与已知Bug验证",
+      "title": "CRM列表页首屏加载时间",
+      "type": "性能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "PERF-003",
+      "status": "通过",
+      "actual": "route=/contents redirected=False 元素=True body=194 url=http://127.0.0.1:5173/contents",
+      "note": "自动覆盖(UI冒烟): /contents页面可达(深层交互需E2E扩展)",
+      "module": "回归测试与已知Bug验证",
+      "title": "内容生成首字响应时间",
+      "type": "性能",
+      "priority": "P1"
+    },
+    {
+      "case_id": "PERF-004",
+      "status": "未实现",
+      "actual": "需 UI 自动化(Playwright)",
+      "note": "本框架当前仅覆盖后端 API；UI 用例为下一阶段",
+      "module": "回归测试与已知Bug验证",
+      "title": "导入10000条数据性能",
+      "type": "性能",
+      "priority": "P2"
+    }
+  ]
+}

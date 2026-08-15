@@ -54,6 +54,13 @@ def main() -> int:
     reset_all_tenant_quotas()
     clear_sms_rate_limits()
     failed = []
+
+    print(f"\n{'=' * 40}\n>>> M0-M8 (once)\n{'=' * 40}")
+    r0 = subprocess.run([PY, "-B", str(ROOT / "run_m0_m8.py")], cwd=API_ROOT)
+    if r0.returncode != 0:
+        failed.append("M0-M8")
+    os.environ["VERIFY_SKIP_NESTED_M0_M8"] = "1"
+
     for name, script in STEPS:
         print(f"\n{'=' * 40}\n>>> {name}\n{'=' * 40}")
         r = subprocess.run([PY, "-B", str(ROOT / script)], cwd=API_ROOT)

@@ -8,7 +8,7 @@ from pathlib import Path
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import check, req, reset_all_tenant_quotas, ensure_fake_platform
+from tests.http_client import check, req, reset_all_tenant_quotas, ensure_fake_platform, run_nested_m0_m8
 
 
 def login(phone: str, password: str) -> str:
@@ -21,8 +21,7 @@ def main() -> int:
     reset_all_tenant_quotas()
     results: list[bool] = []
 
-    proc_m = subprocess.run([sys.executable, "-B", "tests/run_m0_m8.py"], cwd=API_ROOT)
-    results.append(check("VAG8-2 run_m0_m8 全 PASS", proc_m.returncode == 0))
+    results.append(run_nested_m0_m8("VAG8-2 run_m0_m8 全 PASS"))
 
     pa_token = login("13800000000", "admin123456")
     ensure_fake_platform(pa_token)

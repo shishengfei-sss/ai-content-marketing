@@ -14,7 +14,7 @@ from app.models import TenantMembership, TenantRole, User
 from app.permissions import SYSTEM_ROLE_EDITOR
 from app.services.auth_service import hash_password
 from tests.alembic_head import is_at_expected_head
-from tests.http_client import check, req
+from tests.http_client import check, req, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -184,8 +184,7 @@ def main() -> int:
     code2, _ = req("GET", f"/agent/memories/{user_mem_id}", token=admin_token)
     results.append(check("VLM1-9 DELETE", code == 200 and code2 == 404, f"del={code} get={code2}"))
 
-    proc = subprocess.run([sys.executable, "-B", "tests/verify_b4.py"], cwd=API_ROOT)
-    results.append(check("VLM1-10 verify_b4 回归", proc.returncode == 0))
+    results.append(run_nested_script("VLM1-10 verify_b4 回归", "verify_b4.py"))
 
     passed = all(results)
     print("\n=== LM1", "全部通过" if passed else "存在失败", "===")

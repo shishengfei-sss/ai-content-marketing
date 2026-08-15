@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>高保真 · P02 商家租户</title>
+  <link rel="stylesheet" href="_shared/hifi.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">管理后台</div>
+      <div class="meta">platform_admin · 13800000000</div>
+    </header>
+    <div class="body">
+      <aside class="sidebar">
+        <div class="group">内容获客</div>
+        <a class="on" href="平台-P02-商家租户.html">商家租户</a>
+        <a href="平台-P03-入驻审核.html">入驻审核</a>
+        <div class="group">系统</div>
+        <a href="#">全站内容</a>
+        <a href="#">企业管理</a>
+      </aside>
+      <main class="main">
+        <div class="hifi-nav">
+          <a href="index.html">← UX 枢纽</a>
+          <a href="../06-平台端UI.html#p02">对照线框 P02</a>
+        </div>
+        <h1 class="page-title">商家租户</h1>
+        <div class="page-card">
+          <div class="tabs">
+            <a class="on">全部商家</a>
+            <a>我的客户 <span class="count">12</span></a>
+            <a>待审入驻 <span class="count">3</span></a>
+            <a>即将到期 <span class="count">8</span></a>
+            <a>已到期 <span class="count">5</span></a>
+            <a>已暂停</a>
+          </div>
+
+          <div class="toolbar">
+            <span class="inp" style="min-width:200px">商家名 / 商家编码</span>
+            <span class="sel">标签 ▾</span>
+            <button class="btn" type="button">高级筛选 ▴</button>
+            <span class="spacer"></span>
+            <button class="btn" type="button">导出</button>
+            <button class="btn" type="button">列设置</button>
+            <a class="btn btn-p" href="平台-P02A-发起入驻.html">+ 帮客户开通商城</a>
+          </div>
+          <!-- UX：入驻审核仅侧栏入口，工具栏不再重复「入驻审核」按钮 -->
+
+          <div class="adv">
+            <div class="adv-title">高级筛选</div>
+            <div class="adv-row">
+              <span class="sel">主体类型 ▾</span>
+              <span class="sel">入驻状态 ▾</span>
+              <span class="sel">套餐状态 ▾</span>
+              <span class="sel">当前套餐 ▾</span>
+              <span class="sel">商家管家 ▾</span>
+            </div>
+            <div class="adv-row">
+              <span class="inp">权益起</span><span style="color:#999">—</span><span class="inp">权益止</span>
+              <span class="inp">店铺数起</span><span style="color:#999">—</span><span class="inp">止</span>
+              <span class="inp">创建起</span><span style="color:#999">—</span><span class="inp">止</span>
+            </div>
+            <div class="adv-row">
+              <button class="btn btn-p" type="button">查询</button>
+              <button class="btn" type="button">重置</button>
+            </div>
+          </div>
+
+          <div style="overflow-x:auto">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>商家</th>
+                  <th>商家编码</th>
+                  <th>主体</th>
+                  <th>当前套餐</th>
+                  <th>套餐状态</th>
+                  <th>权益至</th>
+                  <th>店铺</th>
+                  <th>商家管家</th>
+                  <th>标签</th>
+                  <th>创建时间</th>
+                  <th>入驻状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>广州某某培训<span class="sub">展示名 · 某某教育</span></td>
+                  <td>SH20260301001</td>
+                  <td>企业</td>
+                  <td>专业版</td>
+                  <td><span class="badge b-g">生效中</span></td>
+                  <td>2027-03-01</td>
+                  <td>2 / 5</td>
+                  <td>王管家</td>
+                  <td><span class="tag">高价值</span></td>
+                  <td>2026-03-01</td>
+                  <td><span class="badge b-g">正常</span></td>
+                  <td class="ops"><a href="#">详情</a><a href="#">当前权益</a><a href="#">暂停</a></td>
+                </tr>
+                <tr class="warn">
+                  <td>杭州某某教育<span class="sub">展示名 · 某某网校</span></td>
+                  <td>SH20260215008</td>
+                  <td>企业</td>
+                  <td>基础版</td>
+                  <td><span class="badge b-o">即将到期</span></td>
+                  <td><span class="danger-text">剩 5 天 · 2026-08-11</span></td>
+                  <td>1 / 1</td>
+                  <td>王管家</td>
+                  <td><span class="tag">续费意向</span><span class="tag">高价值</span></td>
+                  <td>2026-02-15</td>
+                  <td><span class="badge b-g">正常</span></td>
+                  <td class="ops"><a href="#">详情</a><a href="#">当前权益</a><a href="#">续费申请中</a><a href="#">暂停</a></td>
+                </tr>
+                <tr class="muted">
+                  <td>深圳某某工作室<span class="sub">展示名 · 新申请 C</span></td>
+                  <td>—</td>
+                  <td>个体</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>李管家</td>
+                  <td>—</td>
+                  <td>2026-08-04</td>
+                  <td><span class="badge b-o">已暂停</span></td>
+                  <td class="ops"><a href="#">详情</a><a class="btn btn-p" style="height:24px;padding:0 8px;font-size:12px" href="#">恢复</a></td>
+                </tr>
+                <tr>
+                  <td>王老师<span class="sub">个人主体</span></td>
+                  <td>—</td>
+                  <td>个人</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>2026-08-05</td>
+                  <td><span class="badge b-b">审核中</span></td>
+                  <td class="ops"><a href="#">详情</a><a href="平台-P03-入驻审核.html">查看入驻</a></td>
+                </tr>
+                <tr>
+                  <td>未入驻租户样例<span class="sub">甲公司 UAT</span></td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>王管家</td>
+                  <td>—</td>
+                  <td>2026-07-01</td>
+                  <td><span class="badge b-gray">未入驻</span></td>
+                  <td class="ops"><a href="#">详情</a><a href="平台-P02A-发起入驻.html">发起入驻</a></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager"><span>共 128 条</span><span>每页 20 · ‹ 1 ›</span></div>
+        </div>
+
+        <div class="note">
+          <b>UX 要点（相对当前实现）</b><br>
+          ① 默认列含商家编码、主体、套餐状态、权益至、店铺、管家、标签；入驻状态与套餐状态分列。<br>
+          ② 即将到期行浅黄底；权益 ≤7 天红色「剩 N 天」。<br>
+          ③ 行操作按状态矩阵：正常=详情·当前权益·暂停；暂停=恢复；审核中=详情·查看入驻；未入驻=发起入驻。<br>
+          ④ 主 CTA 文案「帮客户开通商城」；<b>入驻审核只在侧栏</b>，列表工具栏不重复。<br>
+          ⑤ 管家默认进「我的客户」Tab（产品逻辑）。
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

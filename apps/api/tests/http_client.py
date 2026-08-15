@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -101,6 +102,42 @@ def req(method: str, path: str, token: str | None = None, body: dict | None = No
         return _parse_body(e.code, e.read())
 
 
+def req_upload(
+    path: str,
+    token: str,
+    fields: dict,
+    *,
+    filename: str = "upload.png",
+    content: bytes = b"\x89PNG\r\n\x1a\nfake",
+    content_type: str = "image/png",
+    file_field: str = "file",
+):
+    """multipart 上传（入驻材料等）。"""
+    full_path = path if path.startswith(PREFIX) else PREFIX + path
+    headers = {"Authorization": f"Bearer {token}"}
+    files = {file_field: (filename, content, content_type)}
+    if not USE_LIVE:
+        client = _get_test_client()
+        r = client.post(full_path, headers=headers, data=fields, files=files)
+        try:
+            data = r.json()
+        except Exception:
+            data = r.text if (r.text or "").strip() else {}
+        return r.status_code, data
+
+    import httpx
+
+    url = BASE + (path if path.startswith("/") else "/" + path)
+    if path.startswith(PREFIX):
+        url = BASE.removesuffix("/api/v1").rstrip("/") + path
+    r = httpx.post(url, headers=headers, data=fields, files=files, timeout=120)
+    try:
+        data = r.json()
+    except Exception:
+        data = r.text if (r.text or "").strip() else {}
+    return r.status_code, data
+
+
 def check(name: str, ok: bool, detail: str = "") -> bool:
     status = "PASS" if ok else "FAIL"
     print(f"[{status}] {name}" + (f" — {detail}" if detail else ""))
@@ -185,3 +222,48 @@ def restore_platform_deepseek(admin_token: str, *, force: bool = False) -> None:
     if settings.DEEPSEEK_API_KEY:
         body["api_key"] = settings.DEEPSEEK_API_KEY
     req("PATCH", "/admin/platform-llm", token=admin_token, body=body)
+
+
+def captured_run(args: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess:
+    """Windows 控制台默认 GBK，pytest/alembic 输出含 UTF-8 时 text=True 会崩。"""
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    return subprocess.run(
+        args,
+        cwd=cwd or API_ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+    )
+
+
+def admin_users(token: str, q: str | None = None, page_size: int = 100) -> tuple[int, list]:
+    """平台账号列表已分页；按手机号/关键词查 items。"""
+    qs = f"page=1&page_size={page_size}"
+    if q:
+        qs += f"&q={quote(q)}"
+    code, data = req("GET", f"/admin/users?{qs}", token=token)
+    if isinstance(data, list):
+        return code, data
+    if isinstance(data, dict):
+        return code, list(data.get("items") or [])
+    return code, []
+
+
+def run_nested_script(label: str, script: str) -> bool:
+    """套件已按序跑过前序脚本时跳过链式回归（与 SKIP_NESTED_M0_M8 同开关）。"""
+    if os.environ.get("VERIFY_SKIP_NESTED_M0_M8") == "1":
+        return check(label, True, "skipped nested")
+    proc = subprocess.run([sys.executable, "-B", str(API_ROOT / "tests" / script)], cwd=API_ROOT)
+    return check(label, proc.returncode == 0, f"exit={proc.returncode}")
+
+
+def run_nested_m0_m8(label: str) -> bool:
+    """子脚本内的 M0～M8 回归。套件入口已跑过时设 VERIFY_SKIP_NESTED_M0_M8=1。"""
+    if os.environ.get("VERIFY_SKIP_NESTED_M0_M8") == "1":
+        return check(label, True, "skipped nested")
+    proc = subprocess.run([sys.executable, "-B", str(API_ROOT / "tests" / "run_m0_m8.py")], cwd=API_ROOT)
+    return check(label, proc.returncode == 0, f"exit={proc.returncode}")

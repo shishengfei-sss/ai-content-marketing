@@ -10,7 +10,7 @@ WEB_CREATE = API_ROOT.parent / "web" / "src" / "views" / "Create.vue"
 MP_CREATE = API_ROOT.parent / "mp" / "src" / "pages" / "create" / "create.vue"
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import check, req, ensure_fake_platform
+from tests.http_client import check, req, ensure_fake_platform, run_nested_m0_m8
 
 
 def login(phone: str, password: str) -> str:
@@ -104,8 +104,7 @@ def main() -> int:
             found = any(str(item.get("id")) == str(content_id) for item in (items or []))
             results.append(check("VA3-3 内容库可见", code == 200 and found, str(content_id)[:8]))
 
-    proc = subprocess.run([sys.executable, "-B", "tests/run_m0_m8.py"], cwd=API_ROOT)
-    results.append(check("VA3-6 run_m0_m8", proc.returncode == 0))
+    results.append(run_nested_m0_m8("VA3-6 run_m0_m8"))
 
     passed = all(results)
     print("\n=== A3", "全部通过" if passed else "存在失败", "===")

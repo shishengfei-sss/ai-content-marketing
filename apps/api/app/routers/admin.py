@@ -32,6 +32,7 @@ from app.schemas import (
     PlatformLLMSettingsUpdate,
     PlatformLLMTestRequest,
 )
+from app.schemas.shop_platform import ShopPermissionAuditListResponse
 from app.services.auth_service import delete_user_account, reset_user_password
 from app.services.admin_tenant_service import (
     get_tenant_admin,
@@ -108,6 +109,8 @@ def _user_out(user: User) -> AdminUserOut:
     primary_tenant = user.tenant.name if user.tenant else ""
     if not primary_tenant and memberships:
         primary_tenant = memberships[0].tenant_name
+    from app.services.platform_shop_service import get_platform_shop_permissions, get_platform_shop_role
+
     return AdminUserOut(
         id=user.id,
         phone=user.phone,
@@ -117,6 +120,8 @@ def _user_out(user: User) -> AdminUserOut:
         tenant_name=primary_tenant,
         memberships=memberships,
         created_at=user.created_at,
+        platform_shop_role=get_platform_shop_role(user),
+        platform_shop_permissions=get_platform_shop_permissions(user),
     )
 
 
@@ -240,6 +245,7 @@ def list_users(
     q: str | None = Query(default=None),
     role: str | None = Query(default=None),
     is_active: bool | None = Query(default=None),
+    platform_shop_role: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     _: User = Depends(require_platform_admin),
@@ -270,6 +276,14 @@ def list_users(
         query = query.filter(User.role == role)
     if is_active is not None:
         query = query.filter(User.is_active.is_(is_active))
+    if platform_shop_role:
+        if platform_shop_role in ("superadmin", "__empty__"):
+            query = query.filter(
+                User.role == "platform_admin",
+                or_(User.platform_shop_role.is_(None), User.platform_shop_role == ""),
+            )
+        else:
+            query = query.filter(User.platform_shop_role == platform_shop_role)
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
     return AdminUserListResponse(
@@ -303,15 +317,84 @@ def update_user(
         raise HTTPException(status_code=404, detail="用户不存在")
     if user.id == admin.id and body.is_active is False:
         raise HTTPException(status_code=400, detail="不能禁用当前登录账号")
+    shop_fields = {"platform_shop_role", "platform_shop_permissions", "role"}
+    shop_touched = bool(body.model_fields_set & shop_fields)
+    from_role = user.platform_shop_role
+    from_perms: list[str] = []
+    if shop_touched:
+        from app.services.platform_shop_service import (
+            assert_can_manage_shop_accounts,
+            get_platform_shop_permissions,
+        )
+
+        assert_can_manage_shop_accounts(admin)
+        from_perms = list(get_platform_shop_permissions(user))
     if body.role is not None:
         user.role = body.role
+        if body.role != "platform_admin":
+            user.platform_shop_role = None
+            user.platform_shop_permissions = None
     if body.is_active is not None:
         user.is_active = body.is_active
     if body.display_name is not None:
         user.display_name = body.display_name
+    if "platform_shop_role" in body.model_fields_set:
+        from app.permissions import PLATFORM_SHOP_ROLE_CODES
+
+        if user.role != "platform_admin" and body.platform_shop_role:
+            raise HTTPException(status_code=400, detail="仅平台管理员可绑定商城角色")
+        raw = body.platform_shop_role or None
+        if raw and raw not in PLATFORM_SHOP_ROLE_CODES:
+            raise HTTPException(status_code=422, detail="无效的获客商城角色")
+        user.platform_shop_role = raw
+        if raw is None:
+            user.platform_shop_permissions = None
+    if "platform_shop_permissions" in body.model_fields_set:
+        from app.services.platform_shop_service import apply_shop_permission_override
+
+        apply_shop_permission_override(user, body.platform_shop_permissions)
+    if shop_touched:
+        from app.services.platform_shop_service import (
+            get_platform_shop_permissions,
+            record_shop_permission_audit,
+        )
+
+        operator_id = admin.id
+        target_id = user.id
+        record_shop_permission_audit(
+            db,
+            target_user_id=target_id,
+            operator_user_id=operator_id,
+            role_from=from_role,
+            role_to=user.platform_shop_role,
+            permissions_from=from_perms,
+            permissions_to=list(get_platform_shop_permissions(user)),
+        )
     db.commit()
     db.refresh(user)
     return _user_out(user)
+
+
+@router.get("/users/{user_id}/shop-permission-audits", response_model=ShopPermissionAuditListResponse)
+def list_user_shop_permission_audits(
+    user_id: UUID,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    admin: User = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+):
+    """P08-B 变更记录。对照 #p08b 保存写审计日志。仅平台超管可查。"""
+    from app.services.platform_shop_service import (
+        assert_can_manage_shop_accounts,
+        list_shop_permission_audits,
+    )
+
+    assert_can_manage_shop_accounts(admin)
+    user = db.query(User).filter(uuid_eq(User.id, user_id)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    payload = list_shop_permission_audits(db, user_id, page=page, page_size=page_size)
+    return ShopPermissionAuditListResponse(**payload)
 
 
 @router.post("/users/{user_id}/reset-password", response_model=AdminUserOut)

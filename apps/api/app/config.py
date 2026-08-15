@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     CRM_RECLAIM_POLL_SEC: int = 300
     CRM_CONTRACT_EXPIRY_POLL_SEC: int = 3600
     CRM_QUOTE_EXPIRY_POLL_SEC: int = 3600
+    SHOP_BOOKING_EXPIRE_POLL_SEC: int = 900
 
     CORS_ORIGINS: str = (
         "http://127.0.0.1:5173,http://localhost:5173,"
@@ -44,6 +45,14 @@ class Settings(BaseSettings):
     SMS_MOCK_CODE: str = "1111"
     SMS_CODE_EXPIRE_SEC: int = 300
     SMS_SEND_INTERVAL_SEC: int = 60
+
+    # 微信支付：stub | production（真机依赖 B-M3）
+    WECHAT_PAY_MODE: str = "stub"
+    WECHAT_PAY_MOCK: str = "1"
+    WECHAT_PAY_MOCK_BASE_URL: str = "http://mock.wechat-pay.local"
+    WECHAT_PAY_APPID: str = ""
+    WECHAT_PAY_MCHID: str = ""
+    WECHAT_PAY_API_KEY: str = ""
 
     @property
     def storage_published_dir(self) -> Path:

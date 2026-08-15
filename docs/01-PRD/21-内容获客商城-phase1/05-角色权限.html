@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase1 · 角色与权限</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#f5f5f5;margin:0;color:#1f1f1f;font-size:14px;line-height:1.6}
+.bar{background:#1677ff;color:#fff;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.bar h1{font-size:16px;font-weight:600;margin:0}
+.bar a{color:rgba(255,255,255,.92);font-size:13px;margin-left:8px;text-decoration:none;padding:4px 8px;border-radius:4px}
+.bar a:hover{background:rgba(255,255,255,.15)}
+.wrap{max-width:1100px;margin:0 auto;padding:20px}
+.block{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:20px;margin-bottom:16px}
+.block h2{font-size:16px;font-weight:600;margin:0 0 8px}
+.block h3{font-size:14px;font-weight:600;margin:16px 0 8px;color:#1f1f1f}
+.sub{font-size:13px;color:#666;margin-bottom:12px}
+.note{font-size:13px;padding:10px 12px;border-radius:6px;border:1px solid #91caff;background:#e6f4ff;color:#0958d9;margin:10px 0}
+.warn{font-size:13px;padding:10px 12px;border-radius:6px;border:1px solid #ffe58f;background:#fffbe6;color:#ad6800;margin:10px 0}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+th,td{border:1px solid #e8e8e8;padding:8px 10px;text-align:left;vertical-align:top}
+th{background:#fafafa;font-weight:500;color:#5c6678}
+.matrix th,.matrix td{text-align:center;vertical-align:middle}
+.matrix th:first-child,.matrix td:first-child{text-align:left;min-width:160px}
+.matrix .grp td{background:#f5f5f5;font-weight:600;color:#666;font-size:11px}
+.yes{color:#389e0d;font-weight:700}
+.no{color:#bfbfbf}
+.r{color:#1677ff;font-weight:600}
+.nav a{display:inline-block;padding:4px 10px;margin:2px;background:#fff;border:1px solid #e8e8e8;border-radius:6px;font-size:12px;text-decoration:none;color:#666}
+.nav a:hover{color:#1677ff;border-color:#91caff}
+code{font-size:11px;background:#f5f5f5;padding:2px 6px;border-radius:4px;color:#1677ff;font-family:Consolas,monospace}
+.tag{display:inline-block;padding:0 6px;height:20px;line-height:20px;border-radius:4px;font-size:11px;font-weight:500;margin-right:4px}
+.tag-sys{background:#f9f0ff;color:#722ed1;border:1px solid #d3adf7}
+.tag-shop{background:#e6f4ff;color:#1677ff;border:1px solid #91caff}
+.legend{font-size:12px;color:#666;margin-bottom:8px}
+.legend b{color:#389e0d}.legend i{color:#1677ff;font-style:normal}
+
+a.perm-link{text-decoration:none}
+a.perm-link code{cursor:pointer}
+a.perm-link:hover code{text-decoration:underline;color:#0958d9}
+tr.perm-row:target{background:#e6f4ff}
+tr.perm-row:target td{border-color:#91caff}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div><h1>⑤ 角色与权限</h1>
+    <a href="index.html">索引</a>
+    <a href="06-平台端UI.html#p08">平台 P08</a>
+    <a href="01-管理端UI.html#a16">商家端 A16</a>
+    <a href="04-数据模型.html">表字段</a>
+  </div>
+</div>
+<div class="wrap">
+<div class="nav">
+  <a href="#platform">平台运营角色</a>
+  <a href="#roles">商家默认角色</a>
+  <a href="#matrix">功能权限矩阵</a>
+  <a href="#catalog">权限码清单</a>
+  <a href="#scope">数据维度权限</a>
+</div>
+
+<div class="block" id="platform">
+  <h2>平台运营端角色（跨租户）</h2>
+  <p class="sub">挂接智营 <code>platform_admin</code>，入口 <code>/admin</code>。权限前缀 <code>platform.shop.*</code>，<strong>不参与</strong>企业 Membership，无 <code>tenant_id</code> 上下文。</p>
+  <table>
+    <tr><th>角色</th><th>权限范围</th><th>页面</th><th>典型使用者</th></tr>
+    <tr>
+      <td><code>platform_admin</code></td>
+      <td>全部 <code>platform.shop.*</code> + 主站租户/账号管理</td>
+      <td>P01–P12</td><td>平台运营负责人</td>
+    </tr>
+    <tr>
+      <td><code>platform_shop_ops</code>（子角色，Phase 1 可选）</td>
+      <td>入驻审核（P08 可拆分绑定）、暂停恢复、商品审核、稽查；无清结算写权限；<strong>不含</strong>发起入驻（归商家管家）、套餐模板 P10、订阅开通 P11</td>
+      <td>P02–P03、P07、P09</td><td>日常运营</td>
+    </tr>
+    <tr>
+      <td><code>platform_shop_cs</code>（商家管家）</td>
+      <td>所辖客户入驻协助、续费跟进、服务记录；含 <code>platform.shop.merchant.read</code>（查看与跟进写）；<code>list_assigned</code> 数据范围；无审核/暂停/P11 写</td>
+      <td>P02（我的客户）· P02-A · P02-B 只读</td><td>客户成功 / BD</td>
+    </tr>
+    <tr>
+      <td><code>platform_shop_finance</code>（子角色，Phase 1 可选）</td>
+      <td>清结算、对账；类目费率<strong>只读</strong>（无 <code>fee.manage</code> 写权限）</td>
+      <td>P04（只读）· P05</td><td>财务</td>
+    </tr>
+  </table>
+  <div class="note">Phase 1 可先用单一 <code>platform_admin</code> 验收。运营账号与商城角色在智营主站 <code>/admin/users</code> 统一维护（<a href="06-平台端UI.html#p08-admin-users">P08-AU</a>）；内置四角色说明见 <a href="06-平台端UI.html#p08a">P08-A</a>。<strong>商家管家</strong>通过 <code>account_manager_user_id</code> 绑定所辖商家，P02 默认「我的客户」视图。</div>
+</div>
+
+<div class="block" id="roles">
+  <h2>商家端默认角色（租户内）</h2>
+  <p class="sub">挂接智营现有「角色与成员」体系（<code>roles</code> / <code>role_permissions</code>）。买家端无商家角色。新建租户时种子化 4 个店铺内置角色；<strong>企业管理员（admin）</strong>为系统内置，自动拥有全部 <code>shop.*</code>。</p>
+  <div class="note"><b>与 CRM 隔离：</b>店铺角色只控制商家端 Web（A01–A23）；不授予 CRM Contact/商机权限。买家（<code>shop_buyers</code>）≠ Contact。</div>
+  <div class="note">UI 入口：侧栏「设置」→ <a href="01-管理端UI.html#a-settings">A-SET 设置中心</a> →「角色与成员」，见 <a href="01-管理端UI.html#a16">A16</a>。</div>
+  <table>
+    <tr><th>角色 code</th><th>显示名</th><th>类型</th><th>默认说明</th><th>典型使用者</th></tr>
+    <tr>
+      <td><code>admin</code></td><td>企业管理员</td><td><span class="tag tag-sys">系统</span></td>
+      <td>权限全开且不可削弱；含全部 <code>shop.*</code> + <a href="#perm-shop-role-manage" class="perm-link" title="查看权限说明"><code>shop.role.manage</code></a></td><td>老板 / IT</td>
+    </tr>
+    <tr>
+      <td><code>shop_admin</code></td><td>店铺管理员</td><td><span class="tag tag-shop">店铺内置</span></td>
+      <td>店铺模块全功能（除改企业角色体系、租户级公域对接）；默认给运营负责人</td><td>店长</td>
+    </tr>
+    <tr>
+      <td><code>shop_content</code></td><td>内容运营</td><td><span class="tag tag-shop">店铺内置</span></td>
+      <td>商品/专栏/资料/服务定义与提交审核、上架；可看交易看板只读；不可退款/设置/公域配置写</td><td>课程运营</td>
+    </tr>
+    <tr>
+      <td><code>shop_support</code></td><td>客服</td><td><span class="tag tag-shop">店铺内置</span></td>
+      <td>订单/买家/权益/开票处理；退款审核、重发短信；不可改商品与店铺设置</td><td>售后客服</td>
+    </tr>
+    <tr>
+      <td><code>shop_clerk</code></td><td>店员</td><td><span class="tag tag-shop">店铺内置</span></td>
+      <td>仅核销台（A08）；可执行核销、查码；不可浏览订单列表与财务</td><td>门店店员</td>
+    </tr>
+  </table>
+  <div class="warn">Phase 1 不支持自定义角色增删（仅启用/禁用内置角色、改成员绑定）。自定义角色矩阵放 Phase 2。</div>
+</div>
+
+<div class="block" id="matrix">
+  <h2>功能权限矩阵</h2>
+  <p class="legend"><b>✓</b> 完整权限 &nbsp; <i>R</i> 只读 &nbsp; <span style="color:#bfbfbf">—</span> 无权限</p>
+  <table class="matrix">
+    <tr>
+      <th>模块 / 权限码</th>
+      <th>企业管理员</th><th>店铺管理员</th><th>内容运营</th><th>客服</th><th>店员</th>
+    </tr>
+    <tr class="grp"><td colspan="6">看板 A01</td></tr>
+    <tr><td><a href="#perm-shop-analytics-read" class="perm-link" title="查看权限说明"><code>shop.analytics.read</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="r">R</td><td class="r">R</td><td class="no">—</td></tr>
+    <tr class="grp"><td colspan="6">商品 A02–A03</td></tr>
+    <tr><td><a href="#perm-shop-product-read" class="perm-link" title="查看权限说明"><code>shop.product.read</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="r">R</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-product-write" class="perm-link" title="查看权限说明"><code>shop.product.write</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-product-submit_review" class="perm-link" title="查看权限说明"><code>shop.product.submit_review</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-product-publish" class="perm-link" title="查看权限说明"><code>shop.product.publish</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-product-delete" class="perm-link" title="查看权限说明"><code>shop.product.delete</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr class="grp"><td colspan="6">内容 A04–A07（专栏/课时/资料/服务）</td></tr>
+    <tr><td><a href="#perm-shop-content-read" class="perm-link" title="查看权限说明"><code>shop.content.read</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="r">R</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-content-write" class="perm-link" title="查看权限说明"><code>shop.content.write</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr class="grp"><td colspan="6">核销 A08</td></tr>
+    <tr><td><a href="#perm-shop-redemption-read" class="perm-link" title="查看权限说明"><code>shop.redemption.read</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="r">R</td><td class="yes">✓</td></tr>
+    <tr><td><a href="#perm-shop-redemption-execute" class="perm-link" title="查看权限说明"><code>shop.redemption.execute</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td></tr>
+    <tr class="grp"><td colspan="6">订单 A09–A10</td></tr>
+    <tr><td><a href="#perm-shop-order-view" class="perm-link" title="查看权限说明"><code>shop.order.view</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-order-export" class="perm-link" title="查看权限说明"><code>shop.order.export</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-order-close" class="perm-link" title="查看权限说明"><code>shop.order.close</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-order-refund" class="perm-link" title="查看权限说明"><code>shop.order.refund</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-order-resend_notify" class="perm-link" title="查看权限说明"><code>shop.order.resend_notify</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+    <tr class="grp"><td colspan="6">买家 / 权益 A11–A12</td></tr>
+    <tr><td><a href="#perm-shop-buyer-view" class="perm-link" title="查看权限说明"><code>shop.buyer.view</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-entitlement-view" class="perm-link" title="查看权限说明"><code>shop.entitlement.view</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="r">R</td><td class="yes">✓</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-entitlement-revoke" class="perm-link" title="查看权限说明"><code>shop.entitlement.revoke</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+    <tr class="grp"><td colspan="6">开票 A13</td></tr>
+    <tr><td><a href="#perm-shop-invoice-view" class="perm-link" title="查看权限说明"><code>shop.invoice.view</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-invoice-process" class="perm-link" title="查看权限说明"><code>shop.invoice.process</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+    <tr class="grp"><td colspan="6">公域对接 A14</td></tr>
+    <tr><td><a href="#perm-shop-channel-read" class="perm-link" title="查看权限说明"><code>shop.channel.read</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="r">R</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-channel-write" class="perm-link" title="查看权限说明"><code>shop.channel.write</code></a></td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-channel-map" class="perm-link" title="查看权限说明"><code>shop.channel.map</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr class="grp"><td colspan="6">支付与进件 A15</td></tr>
+    <tr><td><a href="#perm-shop-settings-read" class="perm-link" title="查看权限说明"><code>shop.settings.read</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="r">R</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-settings-write" class="perm-link" title="查看权限说明"><code>shop.settings.write</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr class="grp"><td colspan="6">套餐信息 A18</td></tr>
+    <tr><td><a href="#perm-shop-subscription-usage-read" class="perm-link" title="查看权限说明"><code>shop.subscription.usage.read</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="r">R</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr class="grp"><td colspan="6">店铺 A17</td></tr>
+    <tr><td><a href="#perm-shop-store-manage" class="perm-link" title="查看权限说明"><code>shop.store.manage</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr class="grp"><td colspan="6">单店设置 A19</td></tr>
+    <tr><td><a href="#perm-shop-store-settings-read" class="perm-link" title="查看权限说明"><code>shop.store.settings.read</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="r">R</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr><td><a href="#perm-shop-store-settings-write" class="perm-link" title="查看权限说明"><code>shop.store.settings.write</code></a></td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+    <tr class="grp"><td colspan="6">角色 A16</td></tr>
+    <tr><td><a href="#perm-shop-role-manage" class="perm-link" title="查看权限说明"><code>shop.role.manage</code></a></td><td class="yes">✓</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+  </table>
+  <p class="sub" style="margin-top:10px">菜单可见性：无对应 <code>*.read</code> / <code>*.view</code> 权限时侧栏入口隐藏（与 CRM 一致）。按钮级：写操作需 <code>*.write</code> / <code>*.execute</code> / <code>*.refund</code> 等。</p>
+</div>
+
+<div class="block" id="scope">
+  <h2>数据维度权限</h2>
+  <p class="sub">商家端：对齐 CRM 的 <code>list_own / list_team / list_all</code> 并集模型。平台端：商家列表按 <code>list_all</code> 或 <code>list_assigned</code> 过滤；<strong>未入驻</strong> tenant 通过 <code>shop_tenant_prospect_assignments</code> 预分配管家（P02-E），P02-A 租户搜索与「我的客户」同源。</p>
+  <h3 style="font-size:14px;margin:12px 0 8px">平台端 · 商家数据范围</h3>
+  <table>
+    <tr><th>数据实体</th><th>范围权限码</th><th>过滤规则</th><th>默认授予角色</th></tr>
+    <tr>
+      <td><code>shop_tenant_prospect_assignments</code></td>
+      <td><a href="#perm-platform-shop-merchant-list_assigned" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.list_assigned</code></a>（读）· <a href="#perm-platform-shop-merchant-assign" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.assign</code></a>（写）</td>
+      <td>未入驻 tenant：<code>account_manager_user_id = 当前平台用户</code>；供 P02-A <code>tenant-options</code></td>
+      <td>platform_shop_cs（读）；platform_admin、platform_shop_ops（写）</td>
+    </tr>
+    <tr>
+      <td><code>shop_merchant_accounts</code></td>
+      <td><a href="#perm-platform-shop-merchant-list_all" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.list_all</code></a></td>
+      <td>全站全部商家（跨 tenant）</td>
+      <td>platform_admin、platform_shop_ops</td>
+    </tr>
+    <tr>
+      <td><code>shop_merchant_accounts</code></td>
+      <td><a href="#perm-platform-shop-merchant-list_assigned" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.list_assigned</code></a></td>
+      <td><code>account_manager_user_id = 当前平台用户</code></td>
+      <td>platform_shop_cs（商家管家）</td>
+    </tr>
+    <tr>
+      <td><code>shop_merchant_subscriptions</code></td>
+      <td><a href="#perm-platform-shop-subscription-read" class="perm-link"><code>platform.shop.subscription.read</code></a> / <a href="#perm-platform-shop-subscription-manage" class="perm-link"><code>platform.shop.subscription.manage</code></a>（功能）· 范围同 <code>shop_merchant_accounts</code></td>
+      <td>JOIN <code>shop_merchants</code> ON <code>tenant_id</code>；<code>list_assigned</code> → <code>account_manager_user_id = 当前用户</code></td>
+      <td>P11 列表/详情：运营/超管；管家默认无菜单（无 manage）</td>
+    </tr>
+    <tr>
+      <td><code>shop_merchant_tag_links</code></td>
+      <td><a href="#perm-platform-shop-merchant-tag" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.tag</code></a>（写）· <a href="#perm-platform-shop-merchant-tag-manage" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.tag.manage</code></a>（新建字典项）· <a href="#perm-platform-shop-merchant-read" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.read</code></a>（查看+跟进写）</td>
+      <td>打标写 <code>tag</code>；<strong>新建标签名</strong>另须 <code>tag.manage</code>（管家无）；查看与跟进写（服务记录/续费申请）须 <code>merchant.read</code> + 数据范围</td>
+      <td>管家：tag only；运营/超管：tag + tag.manage</td>
+    </tr>
+  </table>
+  <h3 style="font-size:14px;margin:16px 0 8px">商家端 · 店铺数据范围</h3>
+  <table>
+    <tr><th>数据实体</th><th>范围权限码</th><th>过滤规则</th><th>默认授予角色</th></tr>
+    <tr>
+      <td><code>shop_orders</code></td>
+      <td><a href="#perm-shop-order-list_all" class="perm-link" title="查看权限说明"><code>shop.order.list_all</code></a></td>
+      <td>租户内全部订单</td>
+      <td>admin、shop_admin、shop_support</td>
+    </tr>
+    <tr>
+      <td><code>shop_orders</code></td>
+      <td><a href="#perm-shop-order-list_own" class="perm-link" title="查看权限说明"><code>shop.order.list_own</code></a></td>
+      <td><code>last_operator_user_id = 当前用户</code>（退款/关单等经手）</td>
+      <td>—（Phase1 客服用 list_all）</td>
+    </tr>
+    <tr>
+      <td><code>shop_buyers</code></td>
+      <td><a href="#perm-shop-buyer-list_all" class="perm-link" title="查看权限说明"><code>shop.buyer.list_all</code></a></td>
+      <td>租户内全部买家</td>
+      <td>admin、shop_admin、shop_support</td>
+    </tr>
+    <tr>
+      <td><code>shop_entitlements</code></td>
+      <td><a href="#perm-shop-entitlement-list_all" class="perm-link" title="查看权限说明"><code>shop.entitlement.list_all</code></a></td>
+      <td>租户内全部权益</td>
+      <td>admin、shop_admin、shop_support；content 只读</td>
+    </tr>
+    <tr>
+      <td><code>shop_redemptions</code></td>
+      <td><a href="#perm-shop-redemption-list_all" class="perm-link" title="查看权限说明"><code>shop.redemption.list_all</code></a></td>
+      <td>全部核销记录</td>
+      <td>admin、shop_admin、shop_support</td>
+    </tr>
+    <tr>
+      <td><code>shop_redemptions</code></td>
+      <td><a href="#perm-shop-redemption-list_own" class="perm-link" title="查看权限说明"><code>shop.redemption.list_own</code></a></td>
+      <td><code>operator_user_id = 当前用户</code></td>
+      <td>shop_clerk（店员仅看本人核销）</td>
+    </tr>
+    <tr>
+      <td><code>shop_invoice_requests</code></td>
+      <td><a href="#perm-shop-invoice-list_all" class="perm-link" title="查看权限说明"><code>shop.invoice.list_all</code></a></td>
+      <td>全部开票申请</td>
+      <td>admin、shop_admin、shop_support</td>
+    </tr>
+    <tr>
+      <td><code>shop_products</code> 等主数据</td>
+      <td>—（仅功能权限）</td>
+      <td>租户内共享；无行级负责人字段</td>
+      <td>有 <a href="#perm-shop-product-read" class="perm-link" title="查看权限说明"><code>shop.product.read</code></a> 即可见全量</td>
+    </tr>
+  </table>
+  <h3>校验顺序（API）</h3>
+  <ol class="sub" style="padding-left:20px">
+    <li>租户上下文 <code>tenant_id</code></li>
+    <li>功能权限（如 <a href="#perm-shop-order-refund" class="perm-link" title="查看权限说明"><code>shop.order.refund</code></a>）</li>
+    <li>数据范围并集（<code>list_all</code> ∪ <code>list_own</code> 条件）</li>
+    <li>敏感字段脱敏（买家手机号默认中间四位 *；平台端商家 <code>contact_mobile</code> / 个人 <code>id_no</code> 默认脱敏，👁 揭露走 <code>reveal-sensitive</code> + 审计）</li>
+  </ol>
+  <div class="note">店员角色：侧栏仅「核销台」；调用核销 API 需 <a href="#perm-shop-redemption-execute" class="perm-link" title="查看权限说明"><code>shop.redemption.execute</code></a>；列表 API 仅返回 <code>list_own</code> 核销记录（若开放历史页）。</div>
+</div>
+
+<div class="block" id="catalog">
+  <h2>权限码 Catalog（Phase 1）</h2>
+  <p class="sub">本表为<strong>权威清单</strong>：各页面中出现的 <code>platform.shop.*</code> / <code>shop.*</code> 权限码均可点击跳转到对应行查看含义与落点页面。Phase 1 共 <b>37</b> 条商家端 + <b>19</b> 条平台端 = <b>56</b> 条（含 <code>platform.shop.merchant.tag.manage</code>）。实现时写入 <code>permissions</code> 表并挂到 <code>SHOP_DEFAULT_PERMISSIONS</code> 种子；与 <code>app/permissions.py</code> 扩展对齐。</p>
+  <table>
+    <tr><th>权限码</th><th>说明</th><th>页面</th></tr>
+    <tr class="perm-row" id="perm-platform-shop-analytics"><td><a href="#perm-platform-shop-analytics" class="perm-link" title="查看权限说明"><code>platform.shop.analytics</code></a></td><td>平台总览指标、下钻与导出</td><td>P01</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-approve"><td><a href="#perm-platform-shop-approve" class="perm-link" title="查看权限说明"><code>platform.shop.approve</code></a></td><td>入驻审核（通过 / 驳回）</td><td>P03</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-channel"><td><a href="#perm-platform-shop-channel" class="perm-link" title="查看权限说明"><code>platform.shop.channel</code></a></td><td>抖店应用、微信支付服务商、全局回调；短信见 <a href="06-平台端UI.html#p12">P12</a></td><td><a href="06-平台端UI.html#p06">P06</a> · <a href="06-平台端UI.html#p12">P12</a></td></tr>
+    <tr class="perm-row" id="perm-platform-shop-fee-manage"><td><a href="#perm-platform-shop-fee-manage" class="perm-link" title="查看权限说明"><code>platform.shop.fee.manage</code></a></td><td>平台类目树、默认费率与分账规则；类目编码预览（规则编辑见 P08-F + <code>platform.user.manage</code>）</td><td>P04</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-merchant-assign"><td><a href="#perm-platform-shop-merchant-assign" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.assign</code></a></td><td>分配 / 改派商家管家</td><td>P02-B · P03</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-merchant-list_all"><td><a href="#perm-platform-shop-merchant-list_all" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.list_all</code></a></td><td>全站商家列表数据范围</td><td>P02</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-merchant-list_assigned"><td><a href="#perm-platform-shop-merchant-list_assigned" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.list_assigned</code></a></td><td>仅所辖商家（account_manager_user_id=本人）</td><td>P02 我的客户</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-merchant-manage"><td><a href="#perm-platform-shop-merchant-manage" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.manage</code></a></td><td>暂停 / 恢复 / <b>清退</b>商家</td><td>P02-C · P02-D · <a href="06-平台端UI.html#p02f">P02-F</a></td></tr>
+    <tr class="perm-row" id="perm-platform-shop-merchant-read"><td><a href="#perm-platform-shop-merchant-read" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.read</code></a></td><td>商家列表、详情与旗下店铺<strong>查看</strong>；<strong>含跟进写</strong>：P02-B-N 写服务记录、P02-B-R 提交续费/加购申请（待办，<strong>不</strong>直接开通订阅）。<strong>不含</strong> P11 开通/续费（<code>subscription.manage</code>）、暂停/恢复/清退（<code>merchant.manage</code>）</td><td>P02 · P02-B</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-merchant-tag"><td><a href="#perm-platform-shop-merchant-tag" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.tag</code></a></td><td>为<strong>数据范围内</strong>商家挂接/移除<strong>已有</strong>标签（不可新建标签名）</td><td>P02 · P02-B-T</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-merchant-tag-manage"><td><a href="#perm-platform-shop-merchant-tag-manage" class="perm-link" title="查看权限说明"><code>platform.shop.merchant.tag.manage</code></a></td><td>新建标签名字典项（Phase 1）；重命名/归档/常用推荐（Phase 2 标签库）</td><td>P02-B-T · 标签库（P2）</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-moderate"><td><a href="#perm-platform-shop-moderate" class="perm-link" title="查看权限说明"><code>platform.shop.moderate</code></a></td><td>违规稽查工单处理与结案</td><td>P07</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-onboarding-initiate"><td><a href="#perm-platform-shop-onboarding-initiate" class="perm-link" title="查看权限说明"><code>platform.shop.onboarding.initiate</code></a></td><td>管家代建 · 发起入驻申请（<strong>仅</strong> <code>platform_shop_cs</code> 或平台超管）</td><td>P02-A</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-plan-manage"><td><a href="#perm-platform-shop-plan-manage" class="perm-link" title="查看权限说明"><code>platform.shop.plan.manage</code></a></td><td>套餐模板与功能字典配置</td><td>P10</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-product-force_off"><td><a href="#perm-platform-shop-product-force_off" class="perm-link" title="查看权限说明"><code>platform.shop.product.force_off</code></a></td><td>平台强制下架商品</td><td>P07、P09</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-product-review"><td><a href="#perm-platform-shop-product-review" class="perm-link" title="查看权限说明"><code>platform.shop.product.review</code></a></td><td>平台商品人审队列</td><td>P09</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-settlement"><td><a href="#perm-platform-shop-settlement" class="perm-link" title="查看权限说明"><code>platform.shop.settlement</code></a></td><td>清结算批次、确认打款与重试</td><td>P05</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-subscription-manage"><td><a href="#perm-platform-shop-subscription-manage" class="perm-link" title="查看权限说明"><code>platform.shop.subscription.manage</code></a></td><td>开通/续费/升级/调整生效期</td><td>P11</td></tr>
+    <tr class="perm-row" id="perm-platform-shop-subscription-read"><td><a href="#perm-platform-shop-subscription-read" class="perm-link" title="查看权限说明"><code>platform.shop.subscription.read</code></a></td><td>查看商家订阅、权益与周期用量</td><td>P02、P11</td></tr>
+    <tr class="perm-row" id="perm-shop-analytics-read"><td><a href="#perm-shop-analytics-read" class="perm-link" title="查看权限说明"><code>shop.analytics.read</code></a></td><td>交易看板与指标</td><td>A01</td></tr>
+    <tr class="perm-row" id="perm-shop-buyer-list_all"><td><a href="#perm-shop-buyer-list_all" class="perm-link" title="查看权限说明"><code>shop.buyer.list_all</code></a></td><td>买家列表数据范围</td><td>A11</td></tr>
+    <tr class="perm-row" id="perm-shop-buyer-view"><td><a href="#perm-shop-buyer-view" class="perm-link" title="查看权限说明"><code>shop.buyer.view</code></a></td><td>买家列表与详情</td><td>A11</td></tr>
+    <tr class="perm-row" id="perm-shop-channel-map"><td><a href="#perm-shop-channel-map" class="perm-link" title="查看权限说明"><code>shop.channel.map</code></a></td><td>公域商品映射：新建/暂停/恢复、同步日志（A14 日常维护）</td><td>A14 · A14-A</td></tr>
+    <tr class="perm-row" id="perm-shop-channel-read"><td><a href="#perm-shop-channel-read" class="perm-link" title="查看权限说明"><code>shop.channel.read</code></a></td><td>查看对接配置摘要、映射列表与日志（无写）</td><td>A14 · A23</td></tr>
+    <tr class="perm-row" id="perm-shop-channel-write"><td><a href="#perm-shop-channel-write" class="perm-link" title="查看权限说明"><code>shop.channel.write</code></a></td><td>租户级公域对接：选链路/路径、绑店、Webhook 验通（A23 设置）</td><td>A23</td></tr>
+    <tr class="perm-row" id="perm-shop-content-read"><td><a href="#perm-shop-content-read" class="perm-link" title="查看权限说明"><code>shop.content.read</code></a></td><td>内容列表「<b>查看</b>」及编辑页 <code>mode=view</code>（专栏/资料包/服务只读）</td><td>A04–A07</td></tr>
+    <tr class="perm-row" id="perm-shop-content-write"><td><a href="#perm-shop-content-write" class="perm-link" title="查看权限说明"><code>shop.content.write</code></a></td><td>内容列表「<b>编辑</b>」、发布/下架/删除及编辑页 <code>mode=edit</code></td><td>A04–A07</td></tr>
+    <tr class="perm-row" id="perm-shop-entitlement-list_all"><td><a href="#perm-shop-entitlement-list_all" class="perm-link" title="查看权限说明"><code>shop.entitlement.list_all</code></a></td><td>权益列表数据范围</td><td>A12</td></tr>
+    <tr class="perm-row" id="perm-shop-entitlement-revoke"><td><a href="#perm-shop-entitlement-revoke" class="perm-link" title="查看权限说明"><code>shop.entitlement.revoke</code></a></td><td>权益人工关闭</td><td>A12</td></tr>
+    <tr class="perm-row" id="perm-shop-entitlement-view"><td><a href="#perm-shop-entitlement-view" class="perm-link" title="查看权限说明"><code>shop.entitlement.view</code></a></td><td>权益查询</td><td>A12</td></tr>
+    <tr class="perm-row" id="perm-shop-invoice-list_all"><td><a href="#perm-shop-invoice-list_all" class="perm-link" title="查看权限说明"><code>shop.invoice.list_all</code></a></td><td>开票列表数据范围</td><td>A13</td></tr>
+    <tr class="perm-row" id="perm-shop-invoice-process"><td><a href="#perm-shop-invoice-process" class="perm-link" title="查看权限说明"><code>shop.invoice.process</code></a></td><td>开票审核处理</td><td>A13</td></tr>
+    <tr class="perm-row" id="perm-shop-invoice-view"><td><a href="#perm-shop-invoice-view" class="perm-link" title="查看权限说明"><code>shop.invoice.view</code></a></td><td>开票查看</td><td>A13</td></tr>
+    <tr class="perm-row" id="perm-shop-order-close"><td><a href="#perm-shop-order-close" class="perm-link" title="查看权限说明"><code>shop.order.close</code></a></td><td>关闭待付款订单</td><td>A10</td></tr>
+    <tr class="perm-row" id="perm-shop-order-export"><td><a href="#perm-shop-order-export" class="perm-link" title="查看权限说明"><code>shop.order.export</code></a></td><td>订单导出</td><td>A10</td></tr>
+    <tr class="perm-row" id="perm-shop-order-list_all"><td><a href="#perm-shop-order-list_all" class="perm-link" title="查看权限说明"><code>shop.order.list_all</code></a></td><td>订单列表数据范围（全部）</td><td>A09</td></tr>
+    <tr class="perm-row" id="perm-shop-order-list_own"><td><a href="#perm-shop-order-list_own" class="perm-link" title="查看权限说明"><code>shop.order.list_own</code></a></td><td>订单列表数据范围（本人经手）</td><td>A09</td></tr>
+    <tr class="perm-row" id="perm-shop-order-refund"><td><a href="#perm-shop-order-refund" class="perm-link" title="查看权限说明"><code>shop.order.refund</code></a></td><td>订单退款</td><td>A10</td></tr>
+    <tr class="perm-row" id="perm-shop-order-resend_notify"><td><a href="#perm-shop-order-resend_notify" class="perm-link" title="查看权限说明"><code>shop.order.resend_notify</code></a></td><td>重发领权/通知短信</td><td>A10</td></tr>
+    <tr class="perm-row" id="perm-shop-order-view"><td><a href="#perm-shop-order-view" class="perm-link" title="查看权限说明"><code>shop.order.view</code></a></td><td>订单详情查看</td><td>A10</td></tr>
+    <tr class="perm-row" id="perm-shop-product-delete"><td><a href="#perm-shop-product-delete" class="perm-link" title="查看权限说明"><code>shop.product.delete</code></a></td><td>商品 SKU 删除</td><td>A02–A03</td></tr>
+    <tr class="perm-row" id="perm-shop-product-publish"><td><a href="#perm-shop-product-publish" class="perm-link" title="查看权限说明"><code>shop.product.publish</code></a></td><td>审核通过后上架/下架（approved ↔ on_sale）</td><td>A02–A03</td></tr>
+    <tr class="perm-row" id="perm-shop-product-read"><td><a href="#perm-shop-product-read" class="perm-link" title="查看权限说明"><code>shop.product.read</code></a></td><td>商品 SKU 查看</td><td>A02–A03</td></tr>
+    <tr class="perm-row" id="perm-shop-product-submit_review"><td><a href="#perm-shop-product-submit_review" class="perm-link" title="查看权限说明"><code>shop.product.submit_review</code></a></td><td>提交商品合规审核（draft/rejected → pending_review）</td><td>A03</td></tr>
+    <tr class="perm-row" id="perm-shop-product-write"><td><a href="#perm-shop-product-write" class="perm-link" title="查看权限说明"><code>shop.product.write</code></a></td><td>商品 SKU 编辑</td><td>A02–A03</td></tr>
+    <tr class="perm-row" id="perm-shop-redemption-read"><td><a href="#perm-shop-redemption-read" class="perm-link" title="查看权限说明"><code>shop.redemption.read</code></a></td><td>核销台「<b>查询</b>」校验码（只读结果卡，无确认核销）</td><td>A08</td></tr>
+    <tr class="perm-row" id="perm-shop-redemption-execute"><td><a href="#perm-shop-redemption-execute" class="perm-link" title="查看权限说明"><code>shop.redemption.execute</code></a></td><td>核销台「<b>确认核销</b>」扣次</td><td>A08</td></tr>
+    <tr class="perm-row" id="perm-shop-redemption-list_all"><td><a href="#perm-shop-redemption-list_all" class="perm-link" title="查看权限说明"><code>shop.redemption.list_all</code></a></td><td>核销记录列表「<b>查看</b>」全店数据</td><td><a href="01-管理端UI.html#a08-log">A08 核销记录</a></td></tr>
+    <tr class="perm-row" id="perm-shop-redemption-list_own"><td><a href="#perm-shop-redemption-list_own" class="perm-link" title="查看权限说明"><code>shop.redemption.list_own</code></a></td><td>核销记录「<b>查看</b>」仅本人经手</td><td><a href="01-管理端UI.html#a08-log">A08 核销记录</a> · A08-C 店员</td></tr>
+    <tr class="perm-row" id="perm-shop-role-manage"><td><a href="#perm-shop-role-manage" class="perm-link" title="查看权限说明"><code>shop.role.manage</code></a></td><td>查看内置角色矩阵与成员绑定（仅 admin）</td><td>A16</td></tr>
+    <tr class="perm-row" id="perm-shop-settings-read"><td><a href="#perm-shop-settings-read" class="perm-link" title="查看权限说明"><code>shop.settings.read</code></a></td><td>微信支付/短信进件查看（商家级）</td><td>A15</td></tr>
+    <tr class="perm-row" id="perm-shop-settings-write"><td><a href="#perm-shop-settings-write" class="perm-link" title="查看权限说明"><code>shop.settings.write</code></a></td><td>微信支付/短信进件编辑（商家级）</td><td>A15</td></tr>
+    <tr class="perm-row" id="perm-shop-store-manage"><td><a href="#perm-shop-store-manage" class="perm-link" title="查看权限说明"><code>shop.store.manage</code></a></td><td>创建/暂停店铺、切换当前店</td><td>A17</td></tr>
+    <tr class="perm-row" id="perm-shop-store-settings-read"><td><a href="#perm-shop-store-settings-read" class="perm-link" title="查看权限说明"><code>shop.store.settings.read</code></a></td><td>单店展示、退款默认查看</td><td>A19</td></tr>
+    <tr class="perm-row" id="perm-shop-store-settings-write"><td><a href="#perm-shop-store-settings-write" class="perm-link" title="查看权限说明"><code>shop.store.settings.write</code></a></td><td>单店展示、退款默认编辑</td><td>A19</td></tr>
+    <tr class="perm-row" id="perm-shop-subscription-usage-read"><td><a href="#perm-shop-subscription-usage-read" class="perm-link" title="查看权限说明"><code>shop.subscription.usage.read</code></a></td><td>合并套餐权益与周期用量只读</td><td>A18、提审/短信预检</td></tr>
+  </table>
+</div>
+
+</div>
+</body>
+</html>

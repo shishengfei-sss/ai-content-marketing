@@ -1,0 +1,1939 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>内容获客 Phase1 · 买家端可视化 UI</title>
+<style>
+:root{
+  --color-primary:#1677ff;--blue:#1677ff;--blue-dark:#0958d9;
+  --bg:#f0f2f5;--ink:#1a1a2e;--muted:#64748b;--border:#e8ecf1;
+  --ok:#10b981;--warn:#f59e0b;--danger:#ef4444;
+  --mp-bg:#f5f6fa;--mp-card:#fff;--mp-radius:16px;
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  --header-height:56px;
+  --shadow-sm:0 1px 3px rgba(15,23,42,.06);
+  --shadow-md:0 4px 20px rgba(15,23,42,.08);
+  --shadow-lg:0 12px 40px rgba(15,23,42,.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);font-size:14px;background:var(--bg);color:var(--ink);line-height:1.6;-webkit-font-smoothing:antialiased}
+.bar{position:sticky;top:0;z-index:200;height:var(--header-height);background:linear-gradient(135deg,#1677ff 0%,#0958d9 100%);color:#fff;padding:0 20px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(22,119,255,.25)}
+.bar-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bar-logo{width:32px;height:32px;background:rgba(255,255,255,.22);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;backdrop-filter:blur(4px)}
+.bar h1{font-size:16px;font-weight:600;color:#fff;letter-spacing:.02em}
+.bar-nav{display:flex;align-items:center;gap:4px;font-size:13px}
+.bar a{color:rgba(255,255,255,.92);text-decoration:none;padding:5px 10px;border-radius:6px;transition:background .15s}
+.bar a:hover{background:rgba(255,255,255,.18)}
+.bar-meta{font-size:12px;opacity:.88;background:rgba(255,255,255,.12);padding:4px 10px;border-radius:999px}
+.pdoc-tabs{display:flex;flex-wrap:wrap;gap:6px;max-width:1280px;margin:12px auto 0;padding:0 20px}
+.pdoc-tabs button{padding:6px 14px;border-radius:999px;border:1px solid var(--border);background:#fff;font-size:12px;cursor:pointer;font-family:inherit;color:var(--muted);transition:all .15s;box-shadow:var(--shadow-sm)}
+.pdoc-tabs button:hover{color:var(--color-primary);border-color:#91caff;transform:translateY(-1px)}
+.pdoc-tabs button.on{background:linear-gradient(135deg,#e6f4ff,#dbeafe);color:var(--blue-dark);border-color:#91caff;font-weight:600;box-shadow:0 2px 8px rgba(22,119,255,.15)}
+.wrap{max-width:1280px;margin:0 auto;padding:16px 20px 80px}
+.pdoc-panel{display:none}
+.pdoc-panel.on{display:block}
+.doc{background:#fff;border-radius:12px;box-shadow:var(--shadow-sm);padding:22px 24px;margin-bottom:14px;border:1px solid rgba(0,0,0,.04)}
+.doc h2{font-size:1.2rem;font-weight:700;margin-bottom:6px;color:#0f172a}
+.doc .sub{font-size:.86rem;color:var(--muted);margin-bottom:12px;line-height:1.55}
+.doc h3{font-size:.95rem;font-weight:600;margin:16px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);color:#334155}
+.tag{display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600}
+.tag-r{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
+.tag-b{background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe}
+.tag-g{background:#ecfdf5;color:#059669;border:1px solid #a7f3d0}
+a.perm-link{text-decoration:none}
+a.perm-link code{cursor:pointer}
+a.perm-link:hover code{text-decoration:underline;color:#0958d9}
+.op{background:linear-gradient(180deg,#f8fafc,#f1f5f9);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:6px 0;font-size:.84rem}
+.op b{color:var(--blue)}
+table.meta{width:100%;border-collapse:collapse;font-size:.8rem;margin:8px 0;border-radius:8px;overflow:hidden}
+table.meta th,table.meta td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+table.meta th{background:linear-gradient(180deg,#f8fafc,#f1f5f9);font-weight:600;color:#475569}
+.note{font-size:.82rem;padding:10px 14px;border-radius:10px;border:1px solid #fde68a;background:linear-gradient(135deg,#fffbeb,#fef3c7);color:#92400e;margin:10px 0}
+.note-b{border-color:#93c5fd;background:linear-gradient(135deg,#eff6ff,#dbeafe);color:#1e40af}
+.mp-banner{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:1px solid #6ee7b7;border-radius:12px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#065f46;line-height:1.55}
+.mp-banner a{color:#047857;font-weight:600}
+
+/* ===== 手机线框壳 ===== */
+.row{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
+.side-note{flex:1;min-width:260px;font-size:.84rem;color:#475569}
+.side-note .k{font-weight:700;color:var(--blue);margin:12px 0 6px;font-size:.88rem}
+.phone{width:320px;background:linear-gradient(160deg,#2d3748 0%,#1a202c 50%,#0f1419 100%);border-radius:40px;padding:12px;border:3px solid #4a5568;box-shadow:var(--shadow-lg),0 0 0 1px rgba(255,255,255,.08) inset,0 30px 60px rgba(15,23,42,.35);position:relative}
+.phone::before{content:'';position:absolute;right:-3px;top:100px;width:3px;height:56px;background:#4a5568;border-radius:0 2px 2px 0}
+.phone-notch{width:100px;height:26px;background:#0f1419;border-radius:0 0 16px 16px;margin:0 auto 0;position:relative;z-index:2}
+.phone-notch::after{content:'';position:absolute;top:10px;left:50%;transform:translateX(-50%);width:8px;height:8px;border-radius:50%;background:#2d3748;box-shadow:0 0 0 2px #1a202c}
+.ps{background:var(--mp-bg);border-radius:28px;overflow:hidden;min-height:520px;display:flex;flex-direction:column;position:relative}
+.mp-status{height:28px;padding:6px 20px 0;display:flex;justify-content:space-between;align-items:center;font-size:10px;font-weight:600;color:#1e293b;background:transparent;position:relative;z-index:1}
+.mp-status .time{font-weight:700;letter-spacing:.02em}
+.mp-status .icons{display:flex;gap:4px;font-size:9px;opacity:.7}
+.ph{background:#fff;padding:12px 16px 10px;border-bottom:1px solid rgba(0,0,0,.04);position:relative}
+.ph-nav{display:flex;align-items:center;gap:8px}
+.ph-back{width:28px;height:28px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:14px;color:#64748b;flex-shrink:0}
+.ph .t{font-size:16px;font-weight:700;color:#0f172a;letter-spacing:-.01em}
+.ph .s{font-size:11px;color:var(--muted);margin-top:1px}
+.ph-store{background:linear-gradient(145deg,#0ea5e9 0%,#1677ff 48%,#6366f1 100%);padding:0 0 16px;border-bottom:none;color:#fff;position:relative;overflow:hidden}
+.ph-store::before{content:'';position:absolute;top:-40px;right:-30px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.08)}
+.ph-store::after{content:'';position:absolute;bottom:-20px;left:-20px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.05)}
+.ph-store .mp-status{color:rgba(255,255,255,.9)}
+.ph-store .ph-nav{padding:0 16px;margin-top:2px;position:relative;z-index:1}
+.ph-store .t{font-size:20px;font-weight:800;color:#fff;letter-spacing:.01em;text-shadow:0 1px 2px rgba(0,0,0,.1)}
+.ph-store .s{font-size:12px;color:rgba(255,255,255,.85);margin-top:2px}
+.pb{flex:1;padding:12px 14px;overflow-y:auto}
+.ptab{display:flex;border-top:1px solid rgba(0,0,0,.05);background:rgba(255,255,255,.96);padding:8px 12px 14px;backdrop-filter:blur(12px);box-shadow:0 -4px 24px rgba(15,23,42,.06)}
+.ptab div{flex:1;text-align:center;font-size:10px;color:#94a3b8;padding:4px 0;transition:color .15s}
+.ptab div .ico{display:block;font-size:20px;line-height:1;margin-bottom:4px;opacity:.5;filter:grayscale(.3)}
+.ptab div.on{color:var(--blue);font-weight:700}
+.ptab div.on .ico{opacity:1;filter:none;transform:scale(1.05)}
+.ptab div.on::after{content:'';display:block;width:18px;height:3px;border-radius:999px;background:linear-gradient(90deg,#1677ff,#0ea5e9);margin:5px auto 0}
+.cta{margin-top:auto;background:rgba(255,255,255,.98);border-top:1px solid rgba(0,0,0,.05);padding:12px 14px;display:flex;gap:10px;align-items:center;backdrop-filter:blur(8px)}
+.cta .price{flex:1;font-weight:800;color:#ef4444;font-size:18px;letter-spacing:-.02em}
+.cta .price small{font-size:11px;color:#94a3b8;font-weight:500;margin-right:2px}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:8px 16px;border-radius:999px;border:1px solid var(--border);background:#fff;font-size:12px;font-weight:600;gap:4px;transition:all .15s;box-shadow:var(--shadow-sm);cursor:default;white-space:nowrap}
+.btn-p{background:linear-gradient(135deg,#1677ff,#0ea5e9);color:#fff;border-color:transparent;box-shadow:0 4px 14px rgba(22,119,255,.35)}
+.btn-d{background:linear-gradient(135deg,#fef2f2,#fee2e2);color:#dc2626;border-color:#fecaca}
+.btn-ok{background:linear-gradient(135deg,#10b981,#059669);color:#fff;border-color:transparent;box-shadow:0 4px 14px rgba(16,185,129,.3)}
+.btn-sm{padding:5px 12px;font-size:11px;border-radius:999px}
+.btn-block{width:100%}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.01em}
+.b-g{background:#dcfce7;color:#166534}.b-b{background:#dbeafe;color:#1d4ed8}.b-o{background:#fef3c7;color:#b45309}.b-r{background:#fee2e2;color:#dc2626}.b-gy{background:#f1f5f9;color:#64748b}
+.chip-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.chip{font-size:11px;font-weight:600;padding:6px 14px;border-radius:999px;background:#fff;color:#64748b;border:1px solid #e2e8f0;box-shadow:var(--shadow-sm);transition:all .15s}
+.chip.on{background:linear-gradient(135deg,#1677ff,#0ea5e9);color:#fff;border-color:transparent;box-shadow:0 3px 12px rgba(22,119,255,.35)}
+.m-filter{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;padding:0;font-size:12px}
+.m-filter-in-header{margin:12px 16px 0;position:relative;z-index:1}
+.m-filter .inp{flex:1;min-width:0;height:36px;border:none;border-radius:999px;padding:0 14px;background:rgba(255,255,255,.96);color:#64748b;font-size:12px;box-shadow:0 4px 16px rgba(15,23,42,.12);display:flex;align-items:center;gap:6px}
+.m-filter .sort{margin-left:0;color:#fff;font-weight:700;font-size:11px;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);white-space:nowrap;backdrop-filter:blur(4px)}
+.mp-tabs{display:flex;gap:4px;margin-bottom:12px;padding:4px;background:#e8ecf1;border-radius:999px}
+.mp-tabs span{flex:1;text-align:center;padding:7px 4px;font-size:11px;font-weight:600;color:#64748b;border-radius:999px;transition:all .15s}
+.mp-tabs span.on{background:#fff;color:var(--blue);box-shadow:var(--shadow-sm)}
+.goods{background:var(--mp-card);border:none;border-radius:var(--mp-radius);overflow:hidden;margin-bottom:12px;box-shadow:var(--shadow-md);transition:transform .15s,box-shadow .15s}
+.goods .c{height:108px;background:linear-gradient(135deg,#5eead4 0%,#38bdf8 50%,#818cf8 100%);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:rgba(255,255,255,.95);position:relative}
+.goods .c::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 50%,rgba(15,23,42,.15) 100%);pointer-events:none}
+.goods .c .type-tag{position:absolute;top:10px;left:10px;font-size:10px;font-weight:700;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.95);color:#0f766e;box-shadow:0 2px 8px rgba(0,0,0,.1);z-index:1;backdrop-filter:blur(4px)}
+.goods .c.type-course{background:linear-gradient(135deg,#2dd4bf 0%,#0ea5e9 100%)}
+.goods .c.type-material{background:linear-gradient(135deg,#fbbf24 0%,#f97316 100%)}
+.goods .c.type-material .type-tag{color:#92400e}
+.goods .c.type-service{background:linear-gradient(135deg,#a78bfa 0%,#6366f1 100%)}
+.goods .c.type-service .type-tag{color:#4c1d95}
+.goods .b{padding:12px 14px 14px}
+.goods .n{font-size:14px;font-weight:700;line-height:1.45;color:#0f172a}
+.goods .meta{font-size:11px;color:#64748b;margin-top:4px}
+.goods .p-row{display:flex;align-items:baseline;gap:8px;margin-top:10px}
+.goods .p{color:#ef4444;font-weight:800;font-size:18px;letter-spacing:-.02em}
+.goods .p-old{color:#94a3b8;text-decoration:line-through;font-weight:500;font-size:12px}
+.goods .p-tag{font-size:10px;font-weight:700;color:#ef4444;background:#fef2f2;padding:2px 8px;border-radius:6px;border:1px solid #fecaca}
+.mp-card{background:var(--mp-card);border-radius:14px;padding:14px;box-shadow:var(--shadow-sm);border:1px solid rgba(0,0,0,.04);margin-bottom:10px}
+.mp-card-row{display:flex;gap:12px;align-items:center}
+.mp-thumb{width:52px;height:52px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:rgba(255,255,255,.9)}
+.mp-thumb.course{background:linear-gradient(135deg,#2dd4bf,#0ea5e9)}
+.mp-thumb.material{background:linear-gradient(135deg,#fbbf24,#f97316)}
+.mp-thumb.service{background:linear-gradient(135deg,#a78bfa,#6366f1)}
+.mp-thumb.gray{background:linear-gradient(135deg,#e2e8f0,#cbd5e1);color:#64748b}
+.mp-card-body{flex:1;min-width:0}
+.mp-card-title{font-size:13px;font-weight:700;color:#0f172a;line-height:1.4}
+.mp-card-sub{font-size:11px;color:#64748b;margin-top:3px}
+.mp-card.disabled{opacity:.55;filter:grayscale(.15)}
+.mp-order{background:var(--mp-card);border-radius:16px;padding:14px;margin-bottom:10px;box-shadow:var(--shadow-sm);border:1px solid rgba(0,0,0,.04)}
+.mp-order-head{display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:10px}
+.mp-order-no{color:#94a3b8}
+.mp-order-title{font-size:13px;font-weight:700;color:#0f172a}
+.mp-order-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.mp-hero{margin:-12px -14px 12px;height:160px;background:linear-gradient(135deg,#99f6e4 0%,#67e8f9 50%,#38bdf8 100%);display:flex;align-items:flex-end;padding:14px;position:relative}
+.mp-hero::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(15,23,42,.25) 100%)}
+.mp-hero-tag{position:relative;z-index:1;font-size:10px;font-weight:700;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.9);color:#0f766e}
+.mp-detail-title{font-size:17px;font-weight:800;color:#0f172a;line-height:1.35;margin-bottom:4px}
+.mp-detail-price{color:#ef4444;font-weight:800;font-size:22px;margin:8px 0;letter-spacing:-.02em}
+.mp-detail-desc{font-size:12px;color:#64748b;margin-bottom:12px;line-height:1.5}
+.mp-section-title{font-size:13px;font-weight:700;color:#334155;margin:14px 0 8px}
+.mp-lesson{background:#fff;border-radius:12px;padding:11px 12px;margin-bottom:6px;font-size:12px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow-sm);border:1px solid rgba(0,0,0,.03)}
+.mp-lesson.locked{color:#94a3b8}
+.mp-lesson .lock{font-size:11px;opacity:.6}
+.mp-progress{height:4px;background:#e2e8f0;border-radius:999px;margin-top:6px;overflow:hidden}
+.mp-progress i{display:block;height:100%;background:linear-gradient(90deg,#1677ff,#0ea5e9);border-radius:999px}
+.mp-check{text-align:center;padding:28px 16px}
+.mp-check-icon{width:64px;height:64px;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:28px}
+.mp-check-icon.ok{background:linear-gradient(135deg,#d1fae5,#a7f3d0);color:#059669}
+.mp-check-icon.fail{background:linear-gradient(135deg,#fee2e2,#fecaca);color:#dc2626}
+.mp-check-code{font-size:32px;font-weight:800;letter-spacing:6px;color:#0f172a;margin:12px 0;font-variant-numeric:tabular-nums}
+.mp-check-sub{font-size:12px;color:#64748b;margin-bottom:16px}
+.mp-code-box{background:#fff;border-radius:16px;padding:20px;margin:12px 0;box-shadow:var(--shadow-md);border:2px dashed #e2e8f0}
+.mp-profile-header{background:linear-gradient(135deg,#1677ff 0%,#6366f1 100%);margin:-12px -14px 16px;padding:24px 16px 20px;display:flex;gap:14px;align-items:center;color:#fff}
+.mp-avatar{width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.25);border:2px solid rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;backdrop-filter:blur(4px)}
+.mp-profile-name{font-weight:800;font-size:16px}
+.mp-profile-phone{font-size:12px;opacity:.85;margin-top:2px}
+.mp-menu{background:#fff;border-radius:16px;overflow:hidden;box-shadow:var(--shadow-sm);border:1px solid rgba(0,0,0,.04)}
+.mp-menu-item{padding:14px 16px;font-size:13px;color:#334155;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center}
+.mp-menu-item:last-child{border-bottom:none}
+.mp-menu-item::after{content:'›';color:#cbd5e1;font-size:16px;font-weight:300}
+.mp-login{padding:32px 8px;text-align:center}
+.mp-login-logo{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#1677ff 0%,#0ea5e9 50%,#10b981 100%);margin:0 auto 16px;color:#fff;line-height:72px;font-weight:800;font-size:24px;box-shadow:0 8px 24px rgba(22,119,255,.35)}
+.mp-login-title{font-weight:800;font-size:18px;margin-bottom:6px;color:#0f172a}
+.mp-login-sub{font-size:12px;color:#64748b;margin-bottom:24px}
+.mp-form-field{background:#fff;border-radius:12px;padding:12px 14px;margin-bottom:10px;text-align:left;box-shadow:var(--shadow-sm);border:1px solid rgba(0,0,0,.04)}
+.mp-form-field label{display:block;font-size:11px;color:#64748b;margin-bottom:4px;font-weight:500}
+.mp-form-field .val{font-size:14px;color:#0f172a;min-height:22px}
+.mp-form-field .val.placeholder{color:#cbd5e1}
+.mp-agree{background:#fff;border-radius:12px;padding:12px 14px;font-size:12px;color:#64748b;box-shadow:var(--shadow-sm);border:1px solid rgba(0,0,0,.04);display:flex;gap:8px;align-items:flex-start}
+.mp-empty{text-align:center;padding:36px 16px;color:#94a3b8}
+.mp-empty .ico{font-size:40px;margin-bottom:12px;opacity:.8}
+.mp-empty .title{font-weight:800;color:#475569;font-size:14px;margin-bottom:6px}
+.mp-empty .sub{font-size:11px;margin-bottom:16px;line-height:1.5}
+.matrix{margin-top:12px}
+.matrix th{background:linear-gradient(180deg,#eff6ff,#dbeafe);color:#1d4ed8}
+.wf{border:1px solid var(--border);border-radius:12px;padding:14px;margin:10px 0 12px;background:linear-gradient(180deg,#fafbfc,#f8fafc)}
+.wf h4{font-size:13px;font-weight:700;margin-bottom:8px;color:#334155}
+.btn-row{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0}
+.btn-mini{background:#fff;border:1px solid var(--border);border-radius:12px;padding:10px 12px;font-size:11px;text-align:center;min-width:96px;box-shadow:var(--shadow-sm)}
+.btn-mini .lbl{color:var(--muted);font-size:10px;margin-bottom:6px}
+.mini-phones{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0}
+.mini-phone{width:210px;border:1px solid var(--border);border-radius:14px;padding:12px;background:#fff;font-size:11px;box-shadow:var(--shadow-sm)}
+.mini-phone .st{font-weight:700;margin-bottom:8px;font-size:12px;color:#334155}
+.wf-form{font-size:13px}
+.wf-form .field{margin-bottom:10px;background:transparent;border:0;padding:0;border-radius:0}
+.wf-form .field label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:500}
+.wf-form .field label .req{color:var(--danger);margin-left:2px}
+.wf-form .field .val,.wf-form .field .inp-line{min-height:28px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;font-size:13px}
+.wf-form .field .hint{font-size:11px;color:#999;margin-top:3px}
+.wf-form .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.steps{display:flex;gap:0;overflow-x:auto;margin:8px 0}
+.step{min-width:100px;flex:1;text-align:center;padding:10px 6px;background:#f8fafc;border:1px solid var(--border);border-right:none;font-size:11px}
+.step:first-child{border-radius:8px 0 0 8px}.step:last-child{border-right:1px solid var(--border);border-radius:0 8px 8px 0}
+.step .n{width:22px;height:22px;line-height:22px;margin:0 auto 4px;border-radius:50%;background:var(--blue);color:#fff;font-weight:700;font-size:11px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:900px){.two,.wf-form .field-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="bar-left">
+    <span class="bar-logo">AI</span>
+    <h1>买家端 · PRD 线框</h1>
+    <nav class="bar-nav">
+      <a href="index.html">索引</a>
+      <a href="06-平台端UI.html">平台运营端</a>
+      <a href="01-管理端UI.html"><b>商家端</b></a>
+      <a href="03-数据流.html">数据流</a>
+      <a href="04-数据模型.html">字段与表</a>
+      <a href="05-角色权限.html">角色权限</a>
+    </nav>
+  </div>
+  <div class="bar-meta">M01–M15 全页画出</div>
+</div>
+<div class="pdoc-tabs" id="tabs" role="tablist"><button type="button" data-pdoc="m00" class="">总览</button><button type="button" data-pdoc="m01" class="">M01 登录</button><button type="button" data-pdoc="m02" class="on">M02 首页</button><button type="button" data-pdoc="m03" class="">M03 详情</button><button type="button" data-pdoc="m04" class="">M04 确认支付</button><button type="button" data-pdoc="m05" class="">M05 支付结果</button><button type="button" data-pdoc="m06" class="">M06 已购</button><button type="button" data-pdoc="m07" class="">M07 课时目录</button><button type="button" data-pdoc="m08" class="">M08 播放器</button><button type="button" data-pdoc="m09" class="">M09 资料领取</button><button type="button" data-pdoc="m10" class="">M10 预约</button><button type="button" data-pdoc="m10b" class="">M10b 核销码</button><button type="button" data-pdoc="m11" class="">M11 订单列表</button><button type="button" data-pdoc="m12" class="">M12 订单详情</button><button type="button" data-pdoc="m13" class="">M13 开票</button><button type="button" data-pdoc="m14" class="">M14 领权</button><button type="button" data-pdoc="m15" class="">M15 我的</button></div>
+<div class="wrap"><article class="pdoc-panel" id="m00">
+<div class="doc">
+  <h2>买家端（微信小程序）· 全页面可视化</h2>
+  <p class="sub">与商家端同级：每页画出手机界面 + 右侧操作说明。底栏：首页 · 已购 · 我的。</p>
+  <div class="note-b note">三端分工：<a href="06-平台端UI.html">平台运营端</a>（跨租户）· <a href="01-管理端UI.html">商家端 Web</a>（租户内店铺管理）· 本文件为买家小程序。</div>
+  <h3>买家端列表规范（小程序简化版）</h3>
+  <p class="sub" style="margin-bottom:8px">买家端为<strong>手机卡片列表</strong>，不复用 Web 的「列设置 / 高级筛选弹层」，但须统一：</p>
+  <table class="meta">
+    <tr><th>能力</th><th>买家端做法</th><th>示例页</th></tr>
+    <tr><td>筛选</td><td>顶部 <strong>Tab / Chip</strong>（类型、订单状态）</td><td>M02 / M06 / M11</td></tr>
+    <tr><td>搜索</td><td>顶部搜索框（店铺首页）</td><td>M02</td></tr>
+    <tr><td>排序</td><td>轻量下拉或 Chip（综合/价格/销量；订单默认时间倒序）</td><td>M02</td></tr>
+    <tr><td>分页</td><td>下拉刷新 + 上拉加载更多</td><td>全部列表</td></tr>
+    <tr><td>状态×操作</td><td>卡片右下角按钮 / 详情页主按钮按状态显隐</td><td>M06 / M11 / M12 / M03</td></tr>
+  </table>
+  <p class="sub">完整矩阵见各页下方表格 · PRD <a href="PRD-内容获客商城-phase1.md#73-买家端列表小程序简化版">§7.3</a></p>
+  <div class="note note-b" style="margin-top:8px"><b>原型走查</b>：金标准样例为平台端 <a href="06-平台端UI.html#p02">P02 商家租户</a>。本文件每页须<strong>对照 P02</strong>含状态×操作矩阵 + 点击校验 + UI 线框覆盖 + 下拉/选择规格。规范：<a href="../../00-总览/PRD写作规范.md#25-操作页原型走查规范p02-金标准">PRD写作规范 §2.5</a>。</div>
+</div>
+
+
+  <div class="op" style="font-size:12px;margin-top:12px" id="m00-select-spec"><b>下拉/选择规格</b>：本页无下拉/单选控件；无级联（§2.5.9）。</div>
+</article><article class="pdoc-panel" id="m00e">
+<div class="doc">
+  <h2>M00-E · 店铺入口错误 <span class="tag tag-b">兜底</span></h2>
+  <p class="sub">鉴权：无 <code>shop_id</code> 或非法时统一落点（§8.12 I4）。</p>
+  <div class="phone" style="margin:12px auto">
+    <div class="phone-notch"></div>
+    <div class="ps" style="min-height:400px;display:flex;flex-direction:column">
+      <div class="mp-status"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+      <div class="pb" style="flex:1;display:flex;align-items:center;justify-content:center">
+        <div class="mp-empty">
+          <div class="ico">🏪</div>
+          <div class="title">请从店铺入口进入</div>
+          <div class="sub">缺少店铺参数或链接已失效<br>请通过商家分享的二维码重新打开</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <table class="meta matrix" style="margin-top:12px">
+    <tr><th>场景</th><th>HTTP</th><th>文案</th></tr>
+    <tr><td>无 shop_id</td><td>400</td><td>请从店铺入口进入</td></tr>
+    <tr><td>shop 不存在</td><td>404</td><td>店铺不存在</td></tr>
+  </table>
+  <div class="note" style="margin-top:8px;font-size:12px"><b>暂停营业</b>不在本页：店铺 <code>paused</code> 时 M02–M04 展示「暂停营业」文案拦截（§8.12），已购权益仍走 M06+。</div>
+</div>
+</article><article class="pdoc-panel" id="m01">
+<div class="doc">
+  <h2>M01 登录 / 绑定手机 <span class="tag tag-r">P1-基础</span></h2>
+  <p class="sub">鉴权：<code>POST /mp/shop/auth/wx-login</code> 换取 session；买家无商家角色 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="mp-status"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+    <div class="ph"><div class="ph-nav"><span class="ph-back">‹</span><div><div class="t">登录</div><div class="s">首次购买前须绑定手机</div></div></div></div>
+    <div class="pb">
+<div class="mp-login">
+  <div class="mp-login-logo">店</div>
+  <div class="mp-login-title">欢迎来到内容店</div>
+  <div class="mp-login-sub">登录后可购买、学习与售后</div>
+  <div class="btn btn-p btn-block" style="margin-bottom:12px;padding:12px">微信一键登录</div>
+  <div class="mp-form-field"><label>手机号</label><div class="val placeholder">请输入手机号</div></div>
+  <div class="mp-form-field"><label>验证码</label><div class="val" style="display:flex;justify-content:space-between"><span class="placeholder">6 位验证码</span><span style="color:#1677ff;font-weight:600">获取验证码</span></div></div>
+  <div class="btn btn-p btn-block" style="margin-top:12px;padding:12px">绑定并进入</div>
+</div>
+</div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op"><b>微信一键登录</b> → 换 session</div>
+  <div class="op"><b>手机号组件 / 验证码</b>：11 位；60s 重发；日上限</div>
+  <div class="op"><b>确认绑定</b>：创建/合并 shop_buyers</div>
+  <div class="k">校验</div>手机 1 开头 11 位；验证码 6 位。</div>
+  </div>
+  <h3>点击校验</h3>
+  <div class="note">未登录访问需登录页时拦截；绑定成功按来源回跳。</div>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>微信一键登录</b></td>
+      <td>① 用户授权 <code>getUserProfile</code> / 静默 <code>login</code><br>② 店铺有效且营业中</td>
+      <td>「授权已取消」·「微信登录失败，请重试」·「店铺暂停营业」</td>
+      <td>已绑手机 → 回跳来源页；未绑 → 停留本页绑手机</td>
+    </tr>
+    <tr>
+      <td><b>绑定并进入</b></td>
+      <td>① 手机 11 位 · 验证码 6 位<br>② 验证码未过期 · 日发送未超限</td>
+      <td>「手机号格式错误」·「验证码错误」·「验证码已失效」</td>
+      <td>写 <code>shop_buyers</code> → 回跳 <b>M03/M04/M06</b> 等来源（<code>redirect</code> 参数）</td>
+    </tr>
+    <tr>
+      <td><b>未登录拦截</b></td>
+      <td>购买/已购/订单等需 session 的路由</td>
+      <td>—（自动跳转，无 toast）</td>
+      <td>→ <b>M01</b>，带 <code>redirect</code>；登录绑手机后回到原页</td>
+    </tr>
+  </table>
+</div>
+
+
+  <div class="op" style="font-size:12px;margin-top:12px" id="m01-select-spec"><b>下拉/选择规格</b>：本页无下拉/单选控件；无级联（§2.5.9）。</div>
+</article><article class="pdoc-panel on" id="m02">
+<div class="doc">
+<div class="mp-banner"><b>这就是买家端手机 UI</b> — 左侧为小程序线框，右侧为操作说明。商家端对照：<a href="01-管理端UI.html">01-管理端UI.html</a></div>
+  <h2>M02 首页 · 商品列表 <span class="tag tag-r">P1-07</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="note note-b" style="margin-bottom:10px"><b>先记住两句话</b>：① 买家只见<strong>在售</strong>商品；已下架默认不展示。② 点卡进 M03，购买主干 M04→M05→M06。</div>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="ph ph-store">
+      <div class="mp-status"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+      <div class="ph-nav"><div><div class="t">智学课堂</div><div class="s">精选课程 · 资料 · 服务</div></div></div>
+      <div class="m-filter m-filter-in-header">
+        <span class="inp">🔍 搜索课程 / 资料 / 服务</span>
+        <span class="sort">综合 ▾</span>
+      </div>
+    </div>
+    <div class="pb">
+<div class="chip-row">
+  <span class="chip on">全部</span><span class="chip">课程</span><span class="chip">资料</span><span class="chip">服务</span>
+</div>
+<div class="goods">
+  <div class="c type-course"><span class="type-tag">课程</span>专栏封面</div>
+  <div class="b">
+    <div class="n">IP 获客实战课 · 12 讲</div>
+    <div class="meta">12 课时 · 已售 326</div>
+    <div class="p-row"><span class="p">¥199</span><span class="p-old">¥399</span><span class="p-tag">限时</span></div>
+  </div>
+</div>
+<div class="goods">
+  <div class="c type-material"><span class="type-tag">资料</span>PDF 模板包</div>
+  <div class="b">
+    <div class="n">话术模板资料包</div>
+    <div class="meta">可下载 · 已售 89</div>
+    <div class="p-row"><span class="p">¥49</span></div>
+  </div>
+</div>
+<div class="goods">
+  <div class="c type-service"><span class="type-tag">服务</span>1v1 咨询</div>
+  <div class="b">
+    <div class="n">1v1 咨询次数卡</div>
+    <div class="meta">3 次 · 90 天有效</div>
+    <div class="p-row"><span class="p">¥599</span></div>
+  </div>
+</div>
+</div>
+    <div class="ptab">
+      <div class="on"><span class="ico">🏠</span>首页</div>
+      <div><span class="ico">📚</span>已购</div>
+      <div><span class="ico">👤</span>我的</div>
+    </div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op"><b>下拉刷新 / 上拉加载</b></div>
+  <div class="op"><b>搜索</b>、<b>类型 Chip</b>、<b>排序</b>（综合/价格升序/价格降序/销量）</div>
+  <div class="op"><b>点商品卡</b> → M03</div>
+  <div class="k">空态</div>暂无在售内容
+  <table class="meta matrix" style="margin-top:10px">
+    <tr><th>状态</th><th>行内操作</th><th>落点页面</th></tr>
+    <tr><td>在售 <code>on_sale</code></td><td>点卡 · 立即购买</td><td><b>M03</b> → M04</td></tr>
+    <tr><td>已下架</td><td>灰显不可点</td><td>—</td></tr>
+  </table></div>
+  </div>
+  <h3>边缘态线框</h3>
+  <div class="mini-phones">
+    <div class="mini-phone" id="m02a">
+      <div class="st">M02-A · 空态</div>
+      <div class="mp-empty" style="background:linear-gradient(180deg,#f8fafc,#fff);border-radius:12px;border:1px dashed #e2e8f0;padding:24px 12px">
+        <div class="ico">📭</div>
+        <div class="title">暂无在售内容</div>
+        <div class="sub">店铺正在筹备，稍后再来看看</div>
+        <span class="btn btn-p btn-block" style="padding:8px">刷新看看</span>
+      </div>
+    </div>
+    <div class="mini-phone" id="m02b">
+      <div class="st">M02-B · 已下架灰卡</div>
+      <div class="goods" style="opacity:.45;margin:0;pointer-events:none;filter:grayscale(.85)">
+        <div class="c" style="background:linear-gradient(135deg,#e2e8f0,#cbd5e1);color:#94a3b8;height:72px"><span class="type-tag" style="color:#64748b">已下架</span>—</div>
+        <div class="b"><div class="n" style="color:#94a3b8">旧版引流课</div><div class="meta">已下架</div></div>
+      </div>
+      <div class="note" style="margin-top:8px;font-size:10px"><b>说明</b>：默认不展示；商家配置「展示已下架」时灰显不可点。</div>
+    </div>
+  </div>
+  <h3>点击校验</h3>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>点商品卡</b></td>
+      <td>① 商品 <code>on_sale</code><br>② 店铺营业中</td>
+      <td>已下架灰卡：不可点 / Toast「商品已下架」</td>
+      <td>→ <b>M03</b> 详情</td>
+    </tr>
+    <tr>
+      <td><b>搜索</b></td>
+      <td>关键词 ≥1 字（去首尾空格）</td>
+      <td>空关键词不发起请求</td>
+      <td>列表刷新 · 无结果展示空态文案</td>
+    </tr>
+    <tr>
+      <td><b>排序</b></td>
+      <td>综合 / 价格升序 / 价格降序 / 销量</td>
+      <td>—</td>
+      <td>列表重排 · 保持当前 Chip 筛选</td>
+    </tr>
+    <tr>
+      <td><b>Chip 筛选</b></td>
+      <td>类型 ∈ {全部, 课程, 资料, 服务}</td>
+      <td>—</td>
+      <td>列表过滤 · 重置分页</td>
+    </tr>
+    <tr>
+      <td><b>下拉刷新</b></td>
+      <td>网络可用</td>
+      <td>「刷新失败，请重试」</td>
+      <td>回到第 1 页 · 更新列表与空态</td>
+    </tr>
+    <tr>
+      <td><b>上拉加载</b></td>
+      <td>还有更多 <code>has_more</code></td>
+      <td>无更多：静默结束</td>
+      <td>追加下一页商品卡</td>
+    </tr>
+  </table>
+</div>
+
+
+
+
+  <h4 style="font-size:13px;margin:16px 0 8px">操作按钮 · UI 线框覆盖（M02 本页）</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>操作</th><th>触发位置</th><th>UI 线框</th><th>点击校验</th></tr>
+    <tr><td><b>点商品卡</b></td><td>商品卡</td><td>M03 线框</td><td>点击校验表</td></tr>
+    <tr><td><b>排序/Chip</b></td><td>筛选条</td><td>本页</td><td>点击校验表</td></tr>
+  </table>
+  <div class="op" style="margin-top:8px"><b>操作链路小结</b>：M02 浏览 → M03 详情 → M04 下单 → M05 支付 → M06 已购 → M07/M09/M10 履约。</div>
+  <h4 id="m02-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+  <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
+  <tr><td>M02 · 排序 ▾</td><td>单选</td><td>综合/价格/销量</td><td>—</td><td>否：与 Chip AND</td><td>sort</td></tr>
+  <tr><td>M02 · 类型 Chip</td><td>单选</td><td>全部/课/资料/服务</td><td>—</td><td>—</td><td>query <code>type</code></td></tr>
+  <tr><td>M02 · 底栏 Tab</td><td>单选</td><td>首页/已购/我的</td><td>—</td><td>—</td><td>—</td></tr>
+  </table>
+  <div class="op" style="font-size:12px;margin-top:8px">通用枚举 <a href="04-数据模型.html#select-common">04 §通用</a> · 级联 <a href="04-数据模型.html#select-cascade">04 §级联</a> · <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">§2.5.9</a></div>
+</article><article class="pdoc-panel" id="m03">
+<div class="doc">
+  <h2>M03 商品详情 <span class="tag tag-r">P1-07</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="note note-b" style="margin-bottom:10px"><b>先记住两句话</b>：① 底栏主按钮随<strong>购买/权益状态</strong>五态切换。② 试看仅标记课时，进 M08 试看模式。</div>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="mp-status" style="position:absolute;top:0;left:0;right:0;z-index:3;padding:8px 16px 0"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+    <div class="pb" style="padding:0">
+<div class="mp-hero"><span class="mp-hero-tag">课程</span></div>
+<div style="padding:0 14px 12px">
+<div class="mp-detail-title">IP 获客实战课 · 12 讲</div>
+<div class="mp-detail-price">¥199</div>
+<div class="mp-detail-desc">系列视频引流后的成交课，系统学习 IP 定位与获客方法论</div>
+<div class="mp-section-title">课程目录</div>
+<div class="mp-lesson">01 定位选题 <span class="badge b-g">试看</span></div>
+<div class="mp-lesson locked">02 脚本结构 <span class="lock">🔒 购买后解锁</span></div>
+<div class="mp-lesson locked">03 拍摄剪辑 <span class="lock">🔒</span></div>
+</div>
+</div>
+    <div class="cta"><div class="price"><small>¥</small>199</div><span class="btn btn-p">立即购买</span></div>
+    <div class="ptab"><div class="on"><span class="ico">🏠</span>首页</div><div><span class="ico">📚</span>已购</div><div><span class="ico">👤</span>我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">主按钮状态</div>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>购买/权益状态</th><th>底部主按钮</th></tr>
+    <tr><td>未购 · 在售</td><td><b>立即购买</b> / 免费领取</td></tr>
+    <tr><td>已购 · 课程</td><td><b>去学习</b> → M07</td></tr>
+    <tr><td>已购 · 资料</td><td><b>去领取</b> → M09</td></tr>
+    <tr><td>已购 · 服务</td><td><b>去预约</b> → M10</td></tr>
+    <tr><td>已下架</td><td>禁用「已下架」</td></tr>
+  </table>
+  <div class="k">其它</div>点试看进播放器；点锁定提示购买</div>
+  </div>
+  <h3>主按钮五态样例</h3>
+  <div class="btn-row">
+    <div class="btn-mini"><div class="lbl">未购·在售</div><span class="btn btn-p" style="width:100%;justify-content:center;padding:6px">立即购买</span></div>
+    <div class="btn-mini"><div class="lbl">已购·课程</div><span class="btn btn-p" style="width:100%;justify-content:center;padding:6px">去学习</span></div>
+    <div class="btn-mini"><div class="lbl">已购·资料</div><span class="btn btn-p" style="width:100%;justify-content:center;padding:6px">去领取</span></div>
+    <div class="btn-mini"><div class="lbl">已购·服务</div><span class="btn btn-p" style="width:100%;justify-content:center;padding:6px">去预约</span></div>
+    <div class="btn-mini"><div class="lbl">免费</div><span class="btn btn-ok" style="width:100%;justify-content:center;padding:6px">免费领取</span></div>
+    <div class="btn-mini"><div class="lbl">已下架</div><span class="btn" style="width:100%;justify-content:center;padding:6px;opacity:.45;cursor:not-allowed">已下架</span></div>
+  </div>
+  <h3>点击校验</h3>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>立即购买</b> / 免费领取</td>
+      <td>① 已登录（否则 →M01）<br>② 商品 <code>on_sale</code> · 未持有生效权益<br>③ 免费品价格=0</td>
+      <td>「请先登录」·「商品已下架」·「您已购买」</td>
+      <td>付费 → <b>M04</b>；免费 → 0 元单 → <b>M05</b></td>
+    </tr>
+    <tr>
+      <td><b>去学习</b> / 去领取 / 去预约</td>
+      <td>① 已登录<br>② 权益 <code>active</code> 且类型匹配</td>
+      <td>「权益已关闭」·「类型不匹配」</td>
+      <td>课程 → <b>M07</b>；资料 → <b>M09</b>；服务 → <b>M10</b></td>
+    </tr>
+    <tr>
+      <td><b>试看</b>（目录行）</td>
+      <td>① 课时标记 <code>is_trial</code><br>② 未购</td>
+      <td>播至 <code>trial_seconds</code>（含整节）→ 半屏购买卡</td>
+      <td>→ <b>M08</b> 试看模式</td>
+    </tr>
+    <tr>
+      <td><b>锁定课时</b> 🔒</td>
+      <td>无购买权益</td>
+      <td>Toast「购买后可学习」</td>
+      <td>停留 M03；可点主按钮进 M04</td>
+    </tr>
+  </table>
+</div>
+
+
+
+
+  <h4 style="font-size:13px;margin:16px 0 8px">操作按钮 · UI 线框覆盖（M03 本页）</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>操作</th><th>触发位置</th><th>UI 线框</th><th>点击校验</th></tr>
+    <tr><td><b>立即购买/去学习</b></td><td>底栏主按钮</td><td>M04/M07/M09/M10</td><td>点击校验表</td></tr>
+    <tr><td><b>试看</b></td><td>目录行</td><td>M08</td><td>试看行</td></tr>
+  </table>
+  <div class="op" style="margin-top:8px"><b>操作链路小结</b>：M02 → M03 →（未购）M04 → M05；（已购）M07 / M09 / M10；（试看）M08。</div>
+  <h4 id="m03-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+  <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
+  <tr><td>M03 · 底栏 Tab</td><td>单选</td><td>底栏</td><td>—</td><td>—</td><td>—</td></tr>
+  </table>
+  <div class="op" style="font-size:12px;margin-top:8px">通用枚举 <a href="04-数据模型.html#select-common">04 §通用</a> · 级联 <a href="04-数据模型.html#select-cascade">04 §级联</a> · <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">§2.5.9</a></div>
+</article><article class="pdoc-panel" id="m04">
+<div class="doc">
+  <h2>M04 确认订单 / 支付 <span class="tag tag-r">P1-07</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="note note-b" style="margin-bottom:10px"><b>先记住两句话</b>：① 须微信登录且店铺<strong>营业中</strong>才可下单。② 0 元商品走免费领取直达 M05。</div>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="mp-status"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+    <div class="ph"><div class="ph-nav"><span class="ph-back">‹</span><div><div class="t">确认订单</div><div class="s">请核对商品与金额</div></div></div></div>
+    <div class="pb">
+<div class="mp-card mp-card-row">
+  <div class="mp-thumb course"></div>
+  <div class="mp-card-body"><div class="mp-card-title">IP 获客实战课</div><div class="mp-card-sub">×1</div></div>
+  <div style="font-weight:800;color:#ef4444;font-size:15px">¥199</div>
+</div>
+<div class="mp-form-field"><label>手机号</label><div class="val">138****8000</div></div>
+<div class="mp-agree"><span style="font-size:14px">☐</span><span>我已阅读并同意《购买须知》《退款规则》</span></div>
+</div>
+    <div class="cta"><div class="price"><small>合计 ¥</small>199</div><span class="btn btn-p">微信支付</span></div>
+    <div class="ptab"><div class="on"><span class="ico">🏠</span>首页</div><div><span class="ico">📚</span>已购</div><div><span class="ico">👤</span>我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op"><b>查看协议</b>、<b>微信支付</b>（建单→调起→回查状态）</div>
+  <div class="op"><b>取消支付</b> → 订单待付款可续付</div>
+  <div class="k">校验</div>协议必勾；手机 11 位；防重复 loading</div>
+  </div>
+  <h3>点击校验</h3>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>查看协议</b></td>
+      <td>协议 URL 可访问</td>
+      <td>「协议加载失败」</td>
+      <td>打开 <b>M04-A</b> 弹窗（只读）</td>
+    </tr>
+    <tr>
+      <td><b>协议勾选</b></td>
+      <td>—</td>
+      <td>未勾选点支付：「请先阅读并同意购买须知」</td>
+      <td>勾选后可点微信支付</td>
+    </tr>
+    <tr>
+      <td><b>微信支付</b></td>
+      <td>① 协议已勾 · 手机有效<br>② 商品仍 <code>on_sale</code> · 无重复待付单<br>③ 建单成功 → 调起 <code>requestPayment</code></td>
+      <td>建单失败：「下单失败，请重试」<br>用户取消：「支付已取消」<br>超时/未知：「支付结果确认中」→ M05 处理中</td>
+      <td>支付成功 / 0 元 → <b>M05</b> 成功态</td>
+    </tr>
+  </table>
+  <h3 id="m04a">M04-A · 查看协议（弹窗）</h3>
+  <div class="wf" style="max-width:360px">
+    <h4>购买须知 / 退款规则</h4>
+    <div style="height:120px;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;color:#64748b;overflow:hidden;margin-bottom:10px">协议正文滚动区…<br>退款时效、数字商品说明…</div>
+    <p><span class="btn btn-p">我已阅读</span> <span class="btn">关闭</span></p>
+    <div class="note" style="margin-top:8px"><b>校验</b>：只读展示；点「我已阅读」自动勾选协议并关闭。</div>
+  </div>
+</div>
+
+
+
+
+  <h4 style="font-size:13px;margin:16px 0 8px">操作按钮 · UI 线框覆盖（M04 本页）</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>操作</th><th>触发位置</th><th>UI 线框</th><th>点击校验</th></tr>
+    <tr><td><b>确认支付</b></td><td>底栏</td><td>M05</td><td>点击校验表</td></tr>
+  </table>
+  <div class="op" style="margin-top:8px"><b>操作链路小结</b>：M03 → M04 确认 → 微信支付 → M05 结果。</div>
+  <h4 id="m04-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+  <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
+  <tr><td>M04 · 协议勾选</td><td>单选布尔</td><td>同意/未同意</td><td>未勾禁付</td><td>—</td><td>—</td></tr>
+  <tr><td>M04 · 底栏 Tab</td><td>单选</td><td>底栏</td><td>—</td><td>—</td><td>—</td></tr>
+  </table>
+  <div class="op" style="font-size:12px;margin-top:8px">通用枚举 <a href="04-数据模型.html#select-common">04 §通用</a> · 级联 <a href="04-数据模型.html#select-cascade">04 §级联</a> · <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">§2.5.9</a></div>
+</article><article class="pdoc-panel" id="m05">
+<div class="doc">
+  <h2>M05 支付结果页 <span class="tag tag-r">P1-07</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="note note-b" style="margin-bottom:10px"><b>先记住两句话</b>：① 支付结果页须轮询直到 paid/fail/timeout。② 成功按商品类型分流履约页。</div>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="mp-status"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+    <div class="ph"><div class="ph-nav"><div><div class="t">支付结果</div></div></div></div>
+    <div class="pb">
+<div class="mp-check">
+  <div class="mp-check-icon ok">✓</div>
+  <div style="font-weight:800;font-size:18px;margin-bottom:6px;color:#0f172a">支付成功</div>
+  <div class="mp-check-sub">权益已开通，可以开始学习</div>
+  <div class="btn btn-p btn-block" style="margin-bottom:8px;padding:12px">去学习</div>
+  <div class="btn btn-block" style="padding:12px">查看订单</div>
+</div>
+</div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">状态</div>
+  <div class="op"><b>成功</b>：主按钮去学习/领取/预约</div>
+  <div class="op"><b>处理中</b>：轮询后提示去订单中心</div>
+  <div class="op"><b>失败</b>：原因 + 重新支付</div></div>
+  </div>
+  <h3>三态线框样例</h3>
+  <div class="mini-phones">
+    <div class="mini-phone">
+      <div class="st"><span class="badge b-g">成功</span></div>
+      <div style="text-align:center;padding:12px 4px">
+        <div style="width:40px;height:40px;border-radius:50%;background:#dcfce7;color:#16a34a;line-height:40px;margin:0 auto 8px">✓</div>
+        <div style="font-weight:700">支付成功</div>
+        <div style="font-size:10px;color:#666;margin:8px 0">权益已开通</div>
+        <span class="btn btn-p" style="width:100%;justify-content:center;padding:6px">去学习</span>
+      </div>
+    </div>
+    <div class="mini-phone">
+      <div class="st"><span class="badge b-o">处理中</span></div>
+      <div style="text-align:center;padding:12px 4px">
+        <div style="width:40px;height:40px;border-radius:50%;background:#fef3c7;color:#d97706;line-height:40px;margin:0 auto 8px">…</div>
+        <div style="font-weight:700">支付确认中</div>
+        <div style="font-size:10px;color:#666;margin:8px 0">请稍候，正在查询结果</div>
+        <span class="btn" style="width:100%;justify-content:center;padding:6px">查看订单</span>
+      </div>
+    </div>
+    <div class="mini-phone">
+      <div class="st"><span class="badge b-r">失败</span></div>
+      <div style="text-align:center;padding:12px 4px">
+        <div style="width:40px;height:40px;border-radius:50%;background:#fee2e2;color:#dc2626;line-height:40px;margin:0 auto 8px">✕</div>
+        <div style="font-weight:700">支付失败</div>
+        <div style="font-size:10px;color:#991b1b;margin:8px 0">用户取消 / 余额不足</div>
+        <span class="btn btn-p" style="width:100%;justify-content:center;padding:6px">重新支付</span>
+      </div>
+    </div>
+  </div>
+  <h3>点击校验</h3>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>去学习/领取/预约</b></td>
+      <td>订单已付 · 权益已开通</td>
+      <td>「权益开通中，请稍后」</td>
+      <td>按商品类型 → M07 / M09 / M10</td>
+    </tr>
+    <tr>
+      <td><b>查看订单</b></td>
+      <td>—</td>
+      <td>—</td>
+      <td>→ <b>M12</b> 或 M11</td>
+    </tr>
+    <tr>
+      <td><b>重新支付</b></td>
+      <td>① 原订单 <code>pending_payment</code><br>② 未超时关闭</td>
+      <td>「订单已关闭，请重新下单」</td>
+      <td>→ <b>M04</b> 续付同单</td>
+    </tr>
+    <tr>
+      <td><b>轮询超时</b></td>
+      <td>处理中态 ≥15s 仍未知</td>
+      <td>文案引导「请到订单中心查看」</td>
+      <td>停留处理中 · 按钮 → M11</td>
+    </tr>
+  </table>
+</div>
+
+
+
+
+  <h4 style="font-size:13px;margin:16px 0 8px">操作按钮 · UI 线框覆盖（M05 本页）</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>操作</th><th>触发位置</th><th>UI 线框</th><th>点击校验</th></tr>
+    <tr><td><b>查看已购/去学习</b></td><td>结果页按钮</td><td>M06/M07等</td><td>点击校验表</td></tr>
+  </table>
+  <div class="op" style="margin-top:8px"><b>操作链路小结</b>：M04 → M05 轮询 → M06 / M07 / M09 / M10 按类型分流。</div>
+  <h4 id="m05-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+  <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
+  <tr><td>M05 · 底栏 Tab</td><td>单选</td><td>底栏</td><td>—</td><td>—</td><td>—</td></tr>
+  </table>
+  <div class="op" style="font-size:12px;margin-top:8px">通用枚举 <a href="04-数据模型.html#select-common">04 §通用</a> · 级联 <a href="04-数据模型.html#select-cascade">04 §级联</a> · <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">§2.5.9</a></div>
+</article><article class="pdoc-panel" id="m06">
+<div class="doc">
+  <h2>M06 已购（学习中心） <span class="tag tag-r">P1-09</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="note note-b" style="margin-bottom:10px"><b>先记住两句话</b>：① 已购列表按<strong>商品类型</strong>进不同履约页。② 权益 revoked 灰显不可点。</div>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="mp-status"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+    <div class="ph"><div class="ph-nav"><div><div class="t">已购</div><div class="s">课程 · 资料 · 服务</div></div></div></div>
+    <div class="pb">
+<div class="chip-row" style="margin-bottom:12px">
+  <span class="chip on">全部</span><span class="chip">课程</span><span class="chip">资料</span><span class="chip">服务</span>
+</div>
+<div class="mp-card mp-card-row">
+  <div class="mp-thumb course"></div>
+  <div class="mp-card-body">
+    <div class="mp-card-title">IP 获客实战课</div>
+    <div class="mp-card-sub">学习进度 35%</div>
+    <div class="mp-progress"><i style="width:35%"></i></div>
+  </div>
+  <span class="btn btn-p btn-sm">继续学</span>
+</div>
+<div class="mp-card mp-card-row">
+  <div class="mp-thumb material"></div>
+  <div class="mp-card-body"><div class="mp-card-title">话术资料包</div><div class="mp-card-sub">3 个文件可下载</div></div>
+  <span class="btn btn-sm">领取</span>
+</div>
+<div class="mp-card mp-card-row">
+  <div class="mp-thumb service"></div>
+  <div class="mp-card-body"><div class="mp-card-title">咨询次数卡</div><div class="mp-card-sub">剩余 2 次 · 90 天有效</div></div>
+  <span class="btn btn-sm">预约</span>
+</div>
+<div class="mp-card mp-card-row disabled">
+  <div class="mp-thumb gray"></div>
+  <div class="mp-card-body"><div class="mp-card-title">引流课（已退款）</div><div class="mp-card-sub" style="color:#dc2626">权限已关闭</div></div>
+  <span class="btn btn-sm" style="opacity:.5">已关闭</span>
+</div>
+<div class="mp-card mp-card-row disabled">
+  <div class="mp-thumb gray"></div>
+  <div class="mp-card-body"><div class="mp-card-title">限时体验课</div><div class="mp-card-sub" style="color:#b45309">权益已过期</div></div>
+  <span class="btn btn-sm" style="opacity:.5">已过期</span>
+</div>
+</div>
+    <div class="ptab"><div><span class="ico">🏠</span>首页</div><div class="on"><span class="ico">📚</span>已购</div><div><span class="ico">👤</span>我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op">Tab 切换；继续学 → 播放器；领取 → M09；预约 → M10</div>
+  <div class="op">退款后灰色「权限已关闭」</div>
+  <div class="k">空态</div>还没有已购 + 去首页
+  <table class="meta matrix" style="margin-top:10px">
+    <tr><th>权益状态</th><th>卡片操作</th></tr>
+    <tr><td><span class="badge b-g">生效中</span> · 课程</td><td><b>继续学</b></td></tr>
+    <tr><td>生效中 · 资料</td><td><b>领取</b> / 下载</td></tr>
+    <tr><td>生效中 · 服务</td><td><b>预约</b></td></tr>
+    <tr><td><span class="badge b-r">已撤销/关闭</span></td><td>按钮禁用 · 文案「权限已关闭」</td></tr>
+    <tr><td><span class="badge b-o">已过期</span> <code>expired</code></td><td>按钮禁用 · 文案「权益已过期」（与 revoked 区分）</td></tr>
+  </table></div>
+  </div>
+  <h3>边缘态线框</h3>
+  <div class="mini-phones">
+    <div class="mini-phone" id="m06a">
+      <div class="st">M06-A · 空态</div>
+      <div style="text-align:center;padding:28px 8px;color:#94a3b8">
+        <div style="font-size:28px;margin-bottom:8px">📚</div>
+        <div style="font-weight:700;color:#64748b;margin-bottom:4px">还没有已购内容</div>
+        <div style="font-size:10px;margin-bottom:12px">购买后即可在此学习</div>
+        <span class="btn btn-p" style="width:100%;justify-content:center;padding:6px">去首页逛逛</span>
+      </div>
+    </div>
+    <div class="mini-phone">
+      <div class="st"><span class="badge b-r">revoked</span> vs <span class="badge b-o">expired</span></div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:6px;font-size:10px;opacity:.55">
+        <b>引流课</b><br><span style="color:#991b1b">权限已关闭</span> · 退款撤销
+      </div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:10px;opacity:.55">
+        <b>限时体验课</b><br><span style="color:#92400e">权益已过期</span> · 到期未续
+      </div>
+    </div>
+  </div>
+  <h3>点击校验</h3>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>继续学</b></td>
+      <td>① 已登录<br>② 权益 <code>active</code> · 类型=课程</td>
+      <td>「权益已关闭」·「权益已过期」</td>
+      <td>→ <b>M07</b> 目录 · 续播最近课时</td>
+    </tr>
+    <tr>
+      <td><b>领取</b></td>
+      <td>① 已登录<br>② 权益 <code>active</code> · 类型=资料</td>
+      <td>「权益已关闭」·「权益已过期」</td>
+      <td>→ <b>M09</b> 资料领取</td>
+    </tr>
+    <tr>
+      <td><b>预约</b></td>
+      <td>① 已登录<br>② 权益 <code>active</code> · 类型=服务 · 余次 &gt;0</td>
+      <td>「权益已关闭」·「剩余次数不足」</td>
+      <td>→ <b>M10</b> 预约</td>
+    </tr>
+    <tr>
+      <td><b>权限关闭卡</b> <code>revoked</code></td>
+      <td>权益已撤销（退款等）</td>
+      <td>Toast「权限已关闭，如有疑问联系客服」</td>
+      <td>停留 M06 · 按钮禁用</td>
+    </tr>
+    <tr>
+      <td><b>过期卡</b> <code>expired</code></td>
+      <td>权益到期未续</td>
+      <td>Toast「权益已过期」· 可引导续费（若商家开启）</td>
+      <td>停留 M06 · 按钮禁用</td>
+    </tr>
+    <tr>
+      <td><b>Tab / 下拉刷新</b></td>
+      <td>网络可用</td>
+      <td>「加载失败」</td>
+      <td>按类型筛选 · 刷新进度与余次</td>
+    </tr>
+  </table>
+</div>
+
+
+
+
+  <h4 style="font-size:13px;margin:16px 0 8px">操作按钮 · UI 线框覆盖（M06 本页）</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>操作</th><th>触发位置</th><th>UI 线框</th><th>点击校验</th></tr>
+    <tr><td><b>进履约</b></td><td>已购卡</td><td>M07/M09/M10</td><td>点击校验表</td></tr>
+  </table>
+  <div class="op" style="margin-top:8px"><b>操作链路小结</b>：M05 成功 → M06 → M07 学课 / M09 资料 / M10 预约。</div>
+  <h4 id="m06-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+  <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
+  <tr><td>M06 · 类型 Chip</td><td>单选</td><td>课/资料/服务</td><td>—</td><td>—</td><td>type</td></tr>
+  <tr><td>M06 · 底栏 Tab</td><td>单选</td><td>底栏</td><td>—</td><td>—</td><td>—</td></tr>
+  </table>
+  <div class="op" style="font-size:12px;margin-top:8px">通用枚举 <a href="04-数据模型.html#select-common">04 §通用</a> · 级联 <a href="04-数据模型.html#select-cascade">04 §级联</a> · <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">§2.5.9</a></div>
+</article><article class="pdoc-panel" id="m07">
+<div class="doc">
+  <h2>M07 课时目录 <span class="tag tag-r">P1-10</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="note note-b" style="margin-bottom:10px"><b>先记住两句话</b>：① 课时目录依赖<strong>课程权益 active</strong>。② 试看节进 M08 试看，锁定节提示购买。</div>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="mp-status"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+    <div class="ph"><div class="ph-nav"><span class="ph-back">‹</span><div><div class="t">IP 获客实战课</div><div class="s">专栏目录</div></div></div></div>
+    <div class="pb">
+<div style="font-size:12px;color:#64748b;margin-bottom:10px">学习进度 <b style="color:#1677ff">35%</b> · 4/12 讲</div>
+<div class="mp-progress" style="margin-bottom:14px"><i style="width:35%"></i></div>
+<div class="mp-lesson" style="border-left:3px solid #10b981"><span>✓ 01 定位选题</span><span class="badge b-g">已学完</span></div>
+<div class="mp-lesson" style="border:2px solid #1677ff;background:#eff6ff"><span>▶ 02 脚本结构</span><span class="badge b-b">学习中</span></div>
+<div class="mp-lesson locked">03 拍摄节奏</div>
+<div class="mp-lesson"><span>04 剪辑节奏</span><span class="badge b-b">试看</span></div>
+<div class="mp-lesson locked"><span>05 投放复盘</span><span class="lock">🔒 锁定</span></div>
+</div>
+    <div class="ptab"><div><span class="ico">🏠</span>首页</div><div class="on"><span class="ico">📚</span>已购</div><div><span class="ico">👤</span>我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op">点课时 → 播放器（有权）</div>
+  <div class="op">完成标记打勾；无权 Toast</div>
+  <table class="meta matrix" style="margin-top:10px">
+    <tr><th>课时状态</th><th>行操作</th></tr>
+    <tr><td>已学完</td><td>点击复习</td></tr>
+    <tr><td>学习中</td><td>点击继续播放</td></tr>
+    <tr><td>未学 · 有权</td><td>点击播放</td></tr>
+    <tr><td>未学 · 试看</td><td>试看播放</td></tr>
+    <tr><td>锁定</td><td>Toast 提示购买</td></tr>
+  </table></div>
+  </div>
+  <h3>目录行样例</h3>
+  <div class="btn-row">
+    <div class="btn-mini"><div class="lbl">试看课时</div><div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:10px">04 剪辑 <span class="badge b-b">试看</span></div></div>
+    <div class="btn-mini"><div class="lbl">锁定课时</div><div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:10px;color:#94a3b8">05 投放 🔒</div></div>
+  </div>
+  <h3>点击校验</h3>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>复习</b>（已学完）</td>
+      <td>① 已登录 · 权益 <code>active</code><br>② 课时已标记完成</td>
+      <td>「权益已关闭」</td>
+      <td>→ <b>M08</b> 从头或记忆进度播放</td>
+    </tr>
+    <tr>
+      <td><b>继续</b>（学习中）</td>
+      <td>① 权益有效<br>② 存在断点进度</td>
+      <td>「权益已关闭」·「权益已过期」</td>
+      <td>→ <b>M08</b> 续播断点</td>
+    </tr>
+    <tr>
+      <td><b>播放</b>（未学·有权）</td>
+      <td>① 权益 <code>active</code><br>② 课时未锁定</td>
+      <td>「权益已关闭」</td>
+      <td>→ <b>M08</b> 从 0 开始</td>
+    </tr>
+    <tr>
+      <td><b>试看</b></td>
+      <td>① 课时 <code>is_trial</code><br>② 未购</td>
+      <td>播至 <code>trial_seconds</code>（含整节）→ 半屏购买卡</td>
+      <td>→ <b>M08</b> 试看模式</td>
+    </tr>
+    <tr>
+      <td><b>锁定行</b> 🔒</td>
+      <td>无购买权益或课时未开放</td>
+      <td>Toast「购买后可学习」</td>
+      <td>停留 M07 · 可回 M03 购买</td>
+    </tr>
+    <tr>
+      <td><b>无权拦截</b></td>
+      <td>权益 revoked / expired</td>
+      <td>全页 Toast「暂无学习权限」</td>
+      <td>→ <b>M06</b> 或 <b>M11</b></td>
+    </tr>
+  </table>
+</div>
+
+
+
+
+  <h4 style="font-size:13px;margin:16px 0 8px">操作按钮 · UI 线框覆盖（M07 本页）</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>操作</th><th>触发位置</th><th>UI 线框</th><th>点击校验</th></tr>
+    <tr><td><b>播放课时</b></td><td>目录行</td><td>M08</td><td>点击校验表</td></tr>
+  </table>
+  <div class="op" style="margin-top:8px"><b>操作链路小结</b>：M06 → M07 目录 → M08 播放（全片/试看）。</div>
+  <h4 id="m07-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+  <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
+  <tr><td>M07 · 课时行</td><td>单选</td><td>目录项</td><td>进播放器</td><td>—</td><td>lesson_id</td></tr>
+  </table>
+  <div class="op" style="font-size:12px;margin-top:8px">通用枚举 <a href="04-数据模型.html#select-common">04 §通用</a> · 级联 <a href="04-数据模型.html#select-cascade">04 §级联</a> · <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">§2.5.9</a></div>
+</article><article class="pdoc-panel" id="m08">
+<div class="doc">
+  <h2>M08 播放器 <span class="tag tag-r">P1-10</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="note note-b" style="margin-bottom:10px"><b>先记住两句话</b>：① 播放凭证由 API 下发，试看与全片权限不同。② 试看结束卡引导回 M03/M04；试看时长按节配置（默认 3 分钟或整节）。</div>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="mp-status" style="color:#fff;position:relative;z-index:2"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+    <div class="ph" style="background:#0f172a;color:#fff;border:none"><div class="ph-nav"><span class="ph-back" style="background:rgba(255,255,255,.15);color:#fff">‹</span><div><div class="t" style="color:#fff">01 定位选题</div><div class="s" style="color:rgba(255,255,255,.7)">IP 获客课 · 试看</div></div></div></div>
+    <div class="pb" style="padding:0">
+<div style="background:linear-gradient(180deg,#0f172a,#1e293b);height:180px;display:flex;align-items:center;justify-content:center">
+  <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;backdrop-filter:blur(4px)">▶</div>
+</div>
+<div style="padding:12px 14px">
+<div class="mp-card" style="margin-bottom:0">
+  <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-bottom:8px"><span>04:12 / 12:30</span><span class="badge b-b">试看</span></div>
+  <div class="mp-progress"><i style="width:35%"></i></div>
+  <div style="display:flex;gap:6px;margin-top:10px">
+    <span class="chip on" style="padding:4px 10px;font-size:10px">1.0x</span>
+    <span class="chip" style="padding:4px 10px;font-size:10px">1.25x</span>
+    <span class="chip" style="padding:4px 10px;font-size:10px">1.5x</span>
+    <span class="chip" style="padding:4px 10px;font-size:10px">2.0x</span>
+  </div>
+</div>
+</div>
+</div>
+    <div class="ptab"><div><span class="ico">🏠</span>首页</div><div class="on"><span class="ico">📚</span>已购</div><div><span class="ico">👤</span>我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op">播放/暂停、拖进度、倍速、下一讲、续播</div>
+  <div class="op">试看结束 → 半屏购买卡</div>
+  <div class="op">进度每 15s / 暂停上报</div>
+  <div class="k">鉴权失败</div>权益已关闭 → 去订单</div>
+  </div>
+  <h3 id="m08-end">M08 · 试看结束半屏购买卡</h3>
+  <div class="wf" style="max-width:300px">
+    <h4>试看已结束 · 购买后继续学习</h4>
+    <div style="background:#0f172a;border-radius:8px;height:60px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;color:#64748b;font-size:10px">播放器区域（暂停）</div>
+    <div style="background:#fff;border:1px solid var(--border);border-radius:10px 10px 0 0;padding:12px;box-shadow:0 -4px 12px rgba(0,0,0,.08)">
+      <div style="font-weight:700;font-size:12px;margin-bottom:4px">IP 获客实战课</div>
+      <div style="color:#dc2626;font-weight:800;margin-bottom:10px">¥199</div>
+      <span class="btn btn-p" style="width:100%;justify-content:center;padding:8px">立即购买</span>
+      <div style="text-align:center;font-size:10px;color:#94a3b8;margin-top:6px">重播试看 · 返回目录</div>
+    </div>
+    <div class="note" style="margin-top:8px"><b>校验</b>：播放到 API 下发的 <code>trial_seconds</code>（部分试看如 180s，整节试看 = 该节全长）触发结束卡；点购买 → M04（未登录先 M01）。</div>
+  </div>
+</div>
+
+
+
+
+  <h4 style="font-size:13px;margin:16px 0 8px">操作按钮 · UI 线框覆盖（M08 本页）</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>操作</th><th>触发位置</th><th>UI 线框</th><th>点击校验</th></tr>
+    <tr><td><b>试看结束购买</b></td><td>结束卡</td><td>M03/M04</td><td>点击校验表</td></tr>
+  </table>
+  <div class="op" style="margin-top:8px"><b>操作链路小结</b>：M07 点课时 → M08 播放；试看结束 → M03 购买卡。</div>
+  <h4 id="m08-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+  <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
+  <tr><td>M08 · 倍速</td><td>单选</td><td>1.0x～2.0x</td><td>本地</td><td>—</td><td>playback_rate</td></tr>
+  </table>
+  <div class="op" style="font-size:12px;margin-top:8px">通用枚举 <a href="04-数据模型.html#select-common">04 §通用</a> · 级联 <a href="04-数据模型.html#select-cascade">04 §级联</a> · <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">§2.5.9</a></div>
+</article><article class="pdoc-panel" id="m09">
+<div class="doc">
+  <h2>M09 资料领取 / 下载 <span class="tag tag-r">P1-03</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="note note-b" style="margin-bottom:10px"><b>先记住两句话</b>：① 资料权益 active 才可下载/预览。② <code>online_view</code>：pdf/doc 可预览，zip 仅下载（见 <a href="01-管理端UI.html#a06-deliver-mode">A06 格式规格</a>）。</div>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="ph"><div class="t">资料领取</div><div class="s">数字权益</div></div>
+    <div class="pb">
+<div style="font-size:12px;margin-bottom:8px">话术模板资料包 · 在线查看 · 2 个文件</div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;font-size:12px">
+  <div><b>话术库.pdf</b><br><span style="color:#666">2.1MB</span></div>
+  <span style="display:flex;gap:6px"><span class="btn" style="padding:4px 8px">预览</span><span class="btn btn-p" style="padding:4px 8px">下载</span></span>
+</div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;font-size:12px">
+  <div><b>模板.zip</b><br><span style="color:#666">8.4MB · 仅下载</span></div>
+  <span class="btn btn-p" style="padding:4px 8px">下载</span>
+</div>
+<div style="font-size:11px;color:#666">已下载 1 次 · 不限次数</div>
+</div>
+    
+    <div class="ptab"><div class="on"><span class="ico">🏠</span>首页</div><div><span class="ico">📚</span>已购</div><div><span class="ico">👤</span>我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op">下载 → 短时签名 URL；计数+1</div>
+  <div class="op">达 max_downloads 禁用</div>
+  <div class="op">download：全部仅下载 · online_view：pdf/doc 预览+下载 · zip 仅下载</div>
+  <table class="meta matrix" style="margin-top:10px">
+    <tr><th>文件/权益状态</th><th>操作（online_view）</th></tr>
+    <tr><td>pdf / doc / docx</td><td><b>预览</b> + <b>下载</b></td></tr>
+    <tr><td>zip</td><td><b>下载</b>（无预览）</td></tr>
+    <tr><td>达上限</td><td>下载禁用 + 说明（预览不计次）</td></tr>
+    <tr><td>权益 revoked</td><td>全部禁用</td></tr>
+  </table></div>
+  </div>
+  <h3>边缘态线框</h3>
+  <div class="mini-phones">
+    <div class="mini-phone" id="m09a">
+      <div class="st">M09-A · 预览页</div>
+      <div style="font-size:10px;margin-bottom:6px">话术库.pdf · 在线预览</div>
+      <div style="height:80px;border:1px solid var(--border);border-radius:6px;background:#f8fafc;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:10px;margin-bottom:8px">PDF 预览区</div>
+      <span class="btn" style="width:100%;justify-content:center;padding:5px">关闭预览</span>
+    </div>
+    <div class="mini-phone" id="m09b">
+      <div class="st">M09-B · 达下载上限</div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:6px;font-size:10px;display:flex;justify-content:space-between;align-items:center">
+        <div><b>模板.zip</b><br><span style="color:#991b1b">已达 3 次上限</span></div>
+        <span class="btn" style="padding:3px 6px;opacity:.45">下载</span>
+      </div>
+      <div class="note" style="font-size:10px"><b>校验</b>：按钮禁用 · 文案说明剩余 0 次。</div>
+    </div>
+    <div class="mini-phone" id="m09c">
+      <div class="st">M09-C · 权益 revoked</div>
+      <div style="text-align:center;padding:20px 6px;opacity:.6">
+        <div style="font-weight:700;color:#991b1b;margin-bottom:6px">权限已关闭</div>
+        <div style="font-size:10px;color:#666;margin-bottom:10px">退款后资料不可再下载</div>
+        <span class="btn" style="width:100%;justify-content:center;padding:5px;opacity:.45">全部禁用</span>
+      </div>
+    </div>
+  </div>
+  <h3>点击校验</h3>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>下载</b></td>
+      <td>① 权益 <code>active</code><br>② 未达 <code>max_downloads</code><br>③ 签名 URL 生成成功</td>
+      <td>「已达下载上限」·「权限已关闭」·「下载失败，请重试」</td>
+      <td>唤起保存 · 计数 +1 · 更新剩余次数文案</td>
+    </tr>
+    <tr>
+      <td><b>预览</b> <code>online_view</code></td>
+      <td>① 权益有效<br>② <code>deliver_mode=online_view</code><br>③ 文件为 pdf/doc/docx（zip 不可预览）</td>
+      <td>「该文件不支持预览」·「权限已关闭」</td>
+      <td>→ <b>M09-A</b> 预览页（只读）</td>
+    </tr>
+    <tr>
+      <td><b>次数 +1</b></td>
+      <td>下载成功回调</td>
+      <td>—</td>
+      <td>刷新「已下载 N 次」· 达上限禁用按钮</td>
+    </tr>
+    <tr>
+      <td><b>签名 URL 失败</b></td>
+      <td>存储服务异常 / 权益校验失败</td>
+      <td>「链接获取失败，请稍后重试」</td>
+      <td>停留 M09 · 可重试</td>
+    </tr>
+    <tr>
+      <td><b>整页禁用</b> revoked</td>
+      <td>权益已撤销</td>
+      <td>进入即 Toast「权限已关闭」</td>
+      <td>→ <b>M09-C</b> 态 · 按钮全灰</td>
+    </tr>
+  </table>
+</div>
+
+  <h4 style="font-size:13px;margin:16px 0 8px">操作按钮 · UI 线框覆盖（M09 本页）</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>操作</th><th>触发位置</th><th>UI 线框</th><th>点击校验</th></tr>
+    <tr><td><b>下载/预览</b></td><td>文件行</td><td>本页</td><td>点击校验表</td></tr>
+    <tr><td><b>整页禁用</b></td><td>revoked 态</td><td>M09-C</td><td>点击校验表</td></tr>
+  </table>
+  <div class="op" style="margin-top:8px"><b>操作链路小结</b>：M06 → M09 资料列表 → 下载/预览。</div>
+  <div class="op" style="font-size:12px;margin-top:12px" id="m09-select-spec"><b>下拉/选择规格</b>：本页无下拉/单选控件；无级联（§2.5.9）。</div>
+</article><article class="pdoc-panel" id="m10">
+<div class="doc">
+  <h2>M10 服务预约 <span class="tag tag-r">P1-04</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="note note-b" style="margin-bottom:10px"><b>先记住三句话</b>：① <code>booking</code> 预约模式须<strong>选时段</strong>；<code>times_card</code> 次数卡<strong>不选时段</strong>，直接领核销码。② 两种模式进 M10b 出示码 · A08 核销扣次。③ <strong>取消由买家在 M10c 自助操作</strong>；过期未核销系统自动取消（见 <a href="#m10-cancel-policy">取消规则</a>）。</div>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="ph"><div class="t">预约咨询</div><div class="s">剩余 2 次</div></div>
+    <div class="pb">
+<div style="font-size:12px;font-weight:700;margin-bottom:8px">选择时段 · 剩余 2 次</div>
+<div style="background:#fff;border:1px solid #1677ff;border-radius:10px;padding:10px;margin-bottom:6px;font-size:12px;display:flex;justify-content:space-between"><div>08-12 14:00–15:00<br><span style="color:#666">余 1</span></div><span class="badge b-b">选中</span></div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin-bottom:6px;font-size:12px">08-13 10:00 · 余 3</div>
+<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-size:12px;opacity:.5">08-13 16:00 · 已满</div>
+</div>
+    <div class="cta"><span class="btn btn-p" style="flex:1;justify-content:center">确认预约</span></div>
+    <div class="ptab"><div class="on"><span class="ico">🏠</span>首页</div><div><span class="ico">📚</span>已购</div><div><span class="ico">👤</span>我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op"><b>booking</b>：选时段 → 确认 → M10b</div>
+  <div class="op"><b>times_card</b>：见 <a href="#m10-times-card">次数卡样例</a> · 直接「获取核销码」</div>
+  <div class="op">我的预约 M10c；取消 M10-D</div>
+  <div class="k">失败</div>已满 / 无余次 / 已退款 / 已过期
+  <table class="meta matrix" style="margin-top:10px">
+    <tr><th>服务模式</th><th>M10 主界面</th><th>主按钮</th></tr>
+    <tr><td><code>booking</code> 预约</td><td>时段列表</td><td>确认预约</td></tr>
+    <tr><td><code>times_card</code> 次数卡</td><td>余次 + 有效期说明 · <strong>无时段列表</strong></td><td><b>获取核销码</b></td></tr>
+  </table>
+  <table class="meta matrix" style="margin-top:8px">
+    <tr><th>时段状态</th><th>行操作（仅 booking）</th></tr>
+    <tr><td><span class="badge b-g">可选</span></td><td>选中 · 确认预约</td></tr>
+    <tr><td><span class="badge b-gy">已满</span></td><td>不可选（灰显）</td></tr>
+    <tr><td>无余次/已退款/已过期</td><td>整页禁用 + 说明</td></tr>
+  </table></div>
+  </div>
+  <h3>点击校验</h3>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>确认预约</b> <code>booking</code></td>
+      <td>① 已选可选时段<br>② 剩余次数 &gt;0 · 权益 active<br>③ 时段未满 · 未开始</td>
+      <td>「请选择时段」·「预约已满」·「剩余次数不足」·「权益已关闭」</td>
+      <td>→ <b>M10b</b> 核销码页</td>
+    </tr>
+    <tr>
+      <td><b>获取核销码</b> <code>times_card</code></td>
+      <td>① 权益 <code>active</code> · 余次 &gt;0<br>② 未过 <code>valid_days</code> 有效期<br>③ 无进行中的待核销预约（可选：同卡仅 1 个有效码）</td>
+      <td>「剩余次数不足」·「权益已过期」·「权益已关闭」·「已有未使用核销码」</td>
+      <td>→ <b>M10b</b>（<code>slot_id=null</code>）</td>
+    </tr>
+    <tr>
+      <td><b>取消预约</b></td>
+      <td>① 预约 <code>status=booked</code> · 未核销 · 归属当前买家<br>② <code>booking</code>：距时段开始 ≥ <b>2 小时</b>（Phase 1 默认）<br>③ <code>times_card</code>：领码后未核销即可取消</td>
+      <td>「已开始不可取消」·「距开始不足 2 小时」·「已核销不可取消」</td>
+      <td><b>M10-D</b> 确认 → <code>POST …/bookings/{id}/cancel</code> · 回 M10c · 释放容量 · 码失效 · <strong>不扣次</strong></td>
+    </tr>
+    <tr>
+      <td><b>复制核销码</b></td>
+      <td>预约有效 · 未核销</td>
+      <td>「预约已取消/已核销」</td>
+      <td>剪贴板 Toast「已复制」</td>
+    </tr>
+  </table>
+  <h3 id="m10-times-card">M10 · 次数卡样例 <span class="badge b-gy" style="font-size:11px">mode=times_card</span></h3>
+  <div class="row">
+<div class="phone" style="max-width:280px">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="ph"><div class="t">1v1 咨询次数卡</div><div class="s">剩余 2 次</div></div>
+    <div class="pb">
+<div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;line-height:1.6">
+  <div><b>权益说明</b></div>
+  <div style="color:#64748b;margin-top:4px">共 3 次 · 单次约 60 分钟<br>有效期至 2026-11-04<br>到店出示核销码，店员核销后扣 1 次</div>
+</div>
+<div style="font-size:11px;color:#64748b;margin-bottom:8px">无需选择时段 · 获取码后到店核销</div>
+</div>
+    <div class="cta"><span class="btn btn-p" style="flex:1;justify-content:center">获取核销码</span></div>
+    <div class="ptab"><div class="on"><span class="ico">🏠</span>首页</div><div><span class="ico">📚</span>已购</div><div><span class="ico">👤</span>我的</div></div>
+  </div>
+</div>
+    <div class="side-note" style="flex:1"><div class="k">与预约模式差异</div>
+  <table class="meta matrix">
+    <tr><th>项</th><th>预约 <code>booking</code></th><th>次数卡 <code>times_card</code></th></tr>
+    <tr><td>M10 界面</td><td>时段列表</td><td>权益说明卡 · 无时段</td></tr>
+    <tr><td>主按钮</td><td>确认预约</td><td><b>获取核销码</b></td></tr>
+    <tr><td>API</td><td><code>POST /bookings</code> + <code>slot_id</code></td><td>同接口 · <code>slot_id=null</code></td></tr>
+    <tr><td>M10b</td><td>码 + 预约时段</td><td>码 + 「到店核销」· 无时段</td></tr>
+    <tr><td>A08 结果卡</td><td>展示预约时段</td><td>预约时段显示 <code>—</code> 或「次数卡」</td></tr>
+    <tr><td>扣次时机</td><td colspan="2">均在 <strong>A08 确认核销</strong> 时扣（非领码时）</td></tr>
+  </table></div>
+  </div>
+
+  <h3 id="m10c">M10c · 我的预约列表</h3>
+  <div class="wf" style="max-width:320px">
+    <h4>我的预约</h4>
+    <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px;font-size:11px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><b>咨询 08-12 14:00</b><span class="badge b-b">待服务</span></div>
+      <div style="color:#666">核销码 832914 · <span style="color:#1677ff">查看码</span> · <span class="badge b-gy" style="font-size:9px">预约</span></div>
+      <div style="text-align:right;margin-top:6px"><span class="btn" style="padding:3px 8px;font-size:10px">取消预约</span></div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px;font-size:11px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><b>1v1 咨询次数卡</b><span class="badge b-b">待核销</span></div>
+      <div style="color:#666">核销码 719204 · <span style="color:#1677ff">查看码</span> · <span class="badge b-o" style="font-size:9px">次数卡</span></div>
+      <div style="text-align:right;margin-top:6px"><span class="btn" style="padding:3px 8px;font-size:10px">取消</span></div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;opacity:.65">
+      <div style="display:flex;justify-content:space-between"><b>咨询 07-20 10:00</b><span class="badge b-gy">已取消</span></div>
+      <div style="color:#94a3b8;margin-top:4px;font-size:10px">过期未核销 · 系统自动释放</div>
+    </div>
+  </div>
+  <h3 id="m10d">M10-D · 取消预约确认</h3>
+  <div class="wf" style="max-width:300px;border-color:#fecaca;background:#fff5f5">
+    <h4>确认取消本次预约？</h4>
+    <div class="op">取消后核销码失效，<strong>不扣减次数</strong>，名额将释放给其他买家。</div>
+    <div class="op" style="font-size:11px;color:#64748b;margin-top:6px">预约模式：开始前 2 小时内不可取消，请按时到店或提前取消。</div>
+    <p style="margin-top:8px"><span class="btn btn-d" style="padding:6px 12px">确认取消</span> <span class="btn">返回</span></p>
+  </div>
+
+  <h3 id="m10-cancel-policy">M10 · 预约取消规则（Phase 1）</h3>
+  <table class="meta matrix" style="margin-top:8px;font-size:12px">
+    <tr><th>方式</th><th>触发</th><th>条件</th><th>结果</th></tr>
+    <tr><td><b>买家自助取消</b></td><td>M10c → M10-D</td><td><code>booked</code> 未核销；booking 须距开始 ≥2h</td><td><code>cancel_reason=buyer_cancel</code> · 释放容量 · 不扣次</td></tr>
+    <tr><td><b>过期未核销</b></td><td>系统定时任务（约每 15min）</td><td><code>booking</code>：已过 <code>slot.end_at</code>+15min 仍未核销<br><code>times_card</code>：领码后 48h 未核销</td><td><code>cancel_reason=expired_unredeemed</code> · 释放容量 · 通知买家</td></tr>
+    <tr><td><b>商家关闭时段</b></td><td>A07-B 副作用</td><td>该时段下待服务预约</td><td><code>cancel_reason=slot_closed</code></td></tr>
+    <tr><td>商家行内代取消</td><td colspan="3"><strong>Phase 1 不提供</strong> — 商家 A07-A 仅查看名单</td></tr>
+  </table>
+  <div class="note" style="margin-top:8px;font-size:12px"><b>买家感知</b>：M10c 待服务卡片显示「取消预约」；过期后列表显示「已取消 · 过期未核销」。M10b 码页底部链到 M10c。</div>
+</div>
+
+
+
+
+  <h4 style="font-size:13px;margin:16px 0 8px">操作按钮 · UI 线框覆盖（M10 本页）</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>操作</th><th>触发位置</th><th>UI 线框</th><th>点击校验</th></tr>
+    <tr><td><b>确认预约</b> / <b>获取核销码</b></td><td>底栏</td><td>M10b</td><td>点击校验表</td></tr>
+  </table>
+  <div class="op" style="margin-top:8px"><b>操作链路小结</b>：<b>预约</b> M06 → M10 选时段 → M10b → A08；<b>次数卡</b> M06 → <a href="#m10-times-card">M10 领码</a> → M10b → A08。</div>
+  <h4 id="m10-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+  <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
+  <tr><td>M10 · 时段卡片</td><td>单选</td><td>开放时段</td><td>已满灰显 · <strong>仅 <code>booking</code></strong></td><td>—</td><td>slot_id</td></tr>
+  <tr><td>M10 · 次数卡</td><td>—</td><td>—</td><td><code>times_card</code> 隐藏时段区</td><td>—</td><td>slot_id=null</td></tr>
+  <tr><td>M10c · 预约 Tab</td><td>单选</td><td>待服务/已完成</td><td>—</td><td>—</td><td>status</td></tr>
+  </table>
+  <div class="op" style="font-size:12px;margin-top:8px">通用枚举 <a href="04-数据模型.html#select-common">04 §通用</a> · 级联 <a href="04-数据模型.html#select-cascade">04 §级联</a> · <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">§2.5.9</a></div>
+</article><article class="pdoc-panel" id="m10b">
+<div class="doc">
+  <h2>M10b 预约成功 · 核销码 <span class="tag tag-r">P1-04</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="mp-status"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+    <div class="ph"><div class="ph-nav"><span class="ph-back">‹</span><div><div class="t">预约成功</div><div class="s">请妥善保存核销码</div></div></div></div>
+    <div class="pb">
+<div class="mp-check">
+  <div class="mp-check-icon ok">✓</div>
+  <div style="font-size:13px;color:#64748b;margin-bottom:12px">到店出示以下核销码</div>
+  <div class="mp-code-box">
+    <div class="mp-check-code">832914</div>
+    <div class="mp-check-sub">08-12 14:00–15:00 · 预约模式</div>
+  </div>
+  <div class="btn btn-block" style="margin-bottom:8px">复制核销码</div>
+  <div class="btn btn-p btn-block">我的预约</div>
+</div>
+</div>
+    <div class="ptab"><div><span class="ico">🏠</span>首页</div><div class="on"><span class="ico">📚</span>已购</div><div><span class="ico">👤</span>我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>复制码；查看我的预约；取消预约（策略说明是否退次）<br><span style="font-size:11px;color:#64748b"><b>次数卡</b>：副标题改为「核销码已生成」· 时间行显示「到店核销」无具体时段</span></div>
+  </div>
+  <div class="op" style="margin-top:8px"><b>链路</b>：M10 确认 → 本页核销码 → <a href="#m10c">M10c</a> 列表 · 取消 → <a href="#m10d">M10-D</a></div>
+</div>
+
+
+  <div class="op" style="font-size:12px;margin-top:12px" id="m10b-select-spec"><b>下拉/选择规格</b>：本页无下拉/单选控件；无级联（§2.5.9）。</div>
+</article><article class="pdoc-panel" id="m11">
+<div class="doc">
+  <h2>M11 我的订单（订单中心） <span class="tag tag-r">P1-18</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="note note-b" style="margin-bottom:10px"><b>先记住两句话</b>：① 订单中心与「已购」分离 — 查售后/退款进度。② 待付款可取消，已付款走退款申请。</div>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="mp-status"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+    <div class="ph"><div class="ph-nav"><span class="ph-back">‹</span><div><div class="t">我的订单</div><div class="s">查售后 · 退款 · 开票</div></div></div></div>
+    <div class="pb">
+<div class="mp-tabs">
+  <span class="on">全部</span><span>待付款</span><span>已付款</span><span>退款</span>
+</div>
+<div class="mp-order">
+  <div class="mp-order-head"><span class="mp-order-no">订单 …001</span><span class="badge b-g">已付款</span></div>
+  <div class="mp-order-title">IP 获客课 · ¥199</div>
+  <div class="mp-order-actions"><span class="btn btn-sm">开票</span><span class="btn btn-d btn-sm">退款</span></div>
+</div>
+<div class="mp-order">
+  <div class="mp-order-head"><span class="mp-order-no">订单 …003</span><span class="badge b-o">待付款</span></div>
+  <div class="mp-order-title">资料包 · ¥49</div>
+  <div class="mp-order-actions"><span class="btn btn-sm">取消</span><span class="btn btn-p btn-sm">去支付</span></div>
+</div>
+<div class="mp-order" style="opacity:.75">
+  <div class="mp-order-head"><span class="mp-order-no">订单 …009</span><span class="badge b-gy">退款中</span></div>
+  <div class="mp-order-title">引流课 · ¥9.9</div>
+  <div class="mp-order-actions"><span class="btn btn-sm">查看进度</span></div>
+</div>
+</div>
+    <div class="ptab"><div><span class="ico">🏠</span>首页</div><div><span class="ico">📚</span>已购</div><div class="on"><span class="ico">👤</span>我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op">Tab 筛选；进详情；待付去支付/取消</div>
+  <div class="op">与「已购」分离：这里管售后</div>
+  <div class="op">下拉刷新 + 上拉加载；默认按下单时间倒序</div>
+  <table class="meta matrix" style="margin-top:10px">
+    <tr><th>订单状态</th><th>卡片操作</th></tr>
+    <tr><td><span class="badge b-o">待付款</span></td><td>进详情 · <b>去支付</b> · <b>取消</b></td></tr>
+    <tr><td><span class="badge b-g">已付款</span></td><td>进详情 · <b>开票</b> · <b>退款</b></td></tr>
+    <tr><td><span class="badge b-gy">退款中</span></td><td>进详情 · 查看进度</td></tr>
+    <tr><td><span class="badge b-gy">已关闭</span></td><td>进详情（只读）</td></tr>
+  </table></div>
+  </div>
+  <h3>已关闭样例卡</h3>
+  <div style="max-width:320px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;opacity:.65;margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px"><span style="color:#666">…012</span><span class="badge b-gy">已关闭</span></div>
+    <div style="font-size:12px;font-weight:700">体验课 · ¥0 · 已领取</div>
+    <div style="font-size:10px;color:#94a3b8;margin-top:8px">仅可查看详情，无操作按钮</div>
+  </div>
+  <h3>点击校验</h3>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>去支付</b></td>
+      <td>订单 <code>pending_payment</code> · 未超时</td>
+      <td>「订单已关闭」·「商品已下架」</td>
+      <td>→ <b>M04</b> 续付</td>
+    </tr>
+    <tr>
+      <td><b>取消</b></td>
+      <td>状态 = 待付款</td>
+      <td>「当前状态不可取消」</td>
+      <td>→ <b>M12-B</b> 确认 → 列表刷新已关闭</td>
+    </tr>
+    <tr>
+      <td><b>开票</b></td>
+      <td>已付款 · 未开票 · 可开票金额 &gt;0</td>
+      <td>「已开票」·「该订单不可开票」</td>
+      <td>→ <b>M13</b></td>
+    </tr>
+    <tr>
+      <td><b>退款</b></td>
+      <td>已付款 · 未在退款中 · 在退款期内<br>已开票：弹窗展示红冲说明（不拦退）</td>
+      <td>「已申请退款」·「超过退款期限」</td>
+      <td>→ <b>M12-A</b>（<a href="#m12a-invoiced">已开票样例</a>）</td>
+    </tr>
+    <tr>
+      <td><b>查看进度</b></td>
+      <td>退款状态 ∈ {退款中, 已退款, 驳回}</td>
+      <td>「暂无退款记录」</td>
+      <td>→ <b>M12-C</b> 退款进度页</td>
+    </tr>
+  </table>
+  <div class="op"><b>操作落点</b>：退款 <a href="#m12a">M12-A</a> · 取消 <a href="#m12b">M12-B</a> · 进度 <a href="#m12c">M12-C</a></div>
+</div>
+
+
+
+
+  <h4 style="font-size:13px;margin:16px 0 8px">操作按钮 · UI 线框覆盖（M11 本页）</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>操作</th><th>触发位置</th><th>UI 线框</th><th>点击校验</th></tr>
+    <tr><td><b>进详情</b></td><td>订单行</td><td>M12</td><td>点击校验表</td></tr>
+  </table>
+  <div class="op" style="margin-top:8px"><b>操作链路小结</b>：M11 列表 → M12 详情 → M12-A 退款 / M13 开票。</div>
+  <h4 id="m11-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+  <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
+  <tr><td>M11 · 状态 Tab</td><td>单选</td><td>订单状态 Tab</td><td>—</td><td>—</td><td>shop_orders.status</td></tr>
+  </table>
+  <div class="op" style="font-size:12px;margin-top:8px">通用枚举 <a href="04-数据模型.html#select-common">04 §通用</a> · 级联 <a href="04-数据模型.html#select-cascade">04 §级联</a> · <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">§2.5.9</a></div>
+</article><article class="pdoc-panel" id="m12">
+<div class="doc">
+  <h2>M12 订单详情 <span class="tag tag-r">P1-18</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="note note-b" style="margin-bottom:10px"><b>先记住两句话</b>：① 详情页聚合退款/开票/领权状态。② 抖店单可能显示待领权引导 M14。</div>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="mp-status"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+    <div class="ph"><div class="ph-nav"><span class="ph-back">‹</span><div><div class="t">订单详情</div><div class="s">订单 …001</div></div></div></div>
+    <div class="pb">
+<div style="margin-bottom:12px"><span class="badge b-g">已付款</span> <span class="badge b-b" style="margin-left:4px">权益生效</span></div>
+<div class="mp-card">
+  <div class="mp-card-title">IP 获客实战课</div>
+  <div class="mp-card-sub" style="margin-top:8px">实付 <b style="color:#ef4444;font-size:16px">¥199</b></div>
+  <div class="mp-card-sub">单号 20260804001 · 微信小程序</div>
+</div>
+<div class="btn btn-p btn-block" style="margin-bottom:8px;padding:12px">去学习</div>
+<div class="btn btn-block" style="margin-bottom:8px;padding:12px">申请开票</div>
+<div class="btn btn-d btn-block" style="padding:12px">申请退款</div>
+</div>
+    <div class="ptab"><div><span class="ico">🏠</span>首页</div><div><span class="ico">📚</span>已购</div><div class="on"><span class="ico">👤</span>我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>
+  <div class="op"><b>申请退款</b>：金额+原因</div>
+  <div class="op"><b>申请开票</b> → M13</div>
+  <div class="op">去学习 / 复制单号</div>
+  <table class="meta matrix" style="margin-top:10px">
+    <tr><th>订单状态</th><th>详情页按钮</th></tr>
+    <tr><td><span class="badge b-o">待付款</span></td><td><b>去支付</b> · 取消订单</td></tr>
+    <tr><td><span class="badge b-g">已付款</span></td><td>去学习/领取/预约 · <b>申请开票</b> · <b>申请退款</b></td></tr>
+    <tr><td><span class="badge b-gy">退款中</span></td><td>查看进度（只读）</td></tr>
+    <tr><td>已开票</td><td>查看发票 · 退款（标记红冲）</td></tr>
+  </table></div>
+  </div>
+  <h3>四态样例（详情主区）</h3>
+  <div class="mini-phones">
+    <div class="mini-phone">
+      <div class="st"><span class="badge b-o">待付款</span></div>
+      <div style="font-size:10px;margin-bottom:6px">资料包 · ¥49</div>
+      <span class="btn btn-p" style="width:100%;justify-content:center;padding:5px;margin-bottom:4px">去支付</span>
+      <span class="btn" style="width:100%;justify-content:center;padding:5px">取消订单</span>
+    </div>
+    <div class="mini-phone">
+      <div class="st"><span class="badge b-g">已付款</span></div>
+      <div style="font-size:10px;margin-bottom:6px">权益生效 · 未开票</div>
+      <span class="btn" style="width:100%;justify-content:center;padding:5px;margin-bottom:4px">去学习</span>
+      <span class="btn btn-d" style="width:100%;justify-content:center;padding:5px">申请退款</span>
+    </div>
+    <div class="mini-phone">
+      <div class="st"><span class="badge b-gy">退款中</span></div>
+      <div style="font-size:10px;margin-bottom:6px">商家审核中</div>
+      <span class="btn" style="width:100%;justify-content:center;padding:5px">查看进度</span>
+    </div>
+    <div class="mini-phone">
+      <div class="st"><span class="badge b-b">已开票</span></div>
+      <div style="font-size:10px;margin-bottom:6px">发票号 0440…</div>
+      <span class="btn" style="width:100%;justify-content:center;padding:5px;margin-bottom:4px">查看发票</span>
+      <span class="btn btn-d" style="width:100%;justify-content:center;padding:5px">申请退款</span>
+    </div>
+  </div>
+  <h3>点击校验（完整）</h3>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>去支付</b></td>
+      <td><code>pending_payment</code> · 商品在售</td>
+      <td>「订单已关闭」</td>
+      <td>→ <b>M04</b></td>
+    </tr>
+    <tr>
+      <td><b>取消订单</b></td>
+      <td>待付款</td>
+      <td>「仅待付款可取消」</td>
+      <td><b>M12-B</b> 确认 → 状态已关闭</td>
+    </tr>
+    <tr>
+      <td><b>去学习/领取/预约</b></td>
+      <td>已付款 · 权益 active</td>
+      <td>「权益已关闭」</td>
+      <td>M07 / M09 / M10</td>
+    </tr>
+    <tr>
+      <td><b>申请开票</b></td>
+      <td>已付款 · 未开票</td>
+      <td>「已开票」·「金额不可开票」</td>
+      <td>→ <b>M13</b></td>
+    </tr>
+    <tr>
+      <td><b>申请退款</b></td>
+      <td>已付款 · 无进行中退款 · 在期内<br>已开票：弹窗展示红冲说明（不拦退）</td>
+      <td>「已有退款单」·「不可退款」</td>
+      <td><b>M12-A</b>（<a href="#m12a-invoiced">已开票样例</a>）→ M12-C</td>
+    </tr>
+    <tr>
+      <td><b>查看进度</b></td>
+      <td>存在退款单</td>
+      <td>「暂无退款」</td>
+      <td><b>M12-C</b> 时间线</td>
+    </tr>
+    <tr>
+      <td><b>查看发票</b></td>
+      <td>已开票</td>
+      <td>「待商家开具」</td>
+      <td><b>M13b</b></td>
+    </tr>
+    <tr>
+      <td><b>复制单号</b></td>
+      <td>—</td>
+      <td>—</td>
+      <td>剪贴板 Toast</td>
+    </tr>
+  </table>
+  <h3 id="m12a">M12-A · 申请退款（弹窗）</h3>
+  <p class="sub" style="margin-bottom:8px">全链路 <a href="03-数据流.html#f2-invoice-flow">F2′ 退款×发票</a></p>
+  <h4 style="font-size:13px;margin:12px 0 6px">样例 A · 未开票</h4>
+  <div class="wf" style="max-width:340px">
+    <h4>申请退款</h4>
+    <div class="field" style="margin-bottom:8px"><label>退款金额 <span class="req">*</span></label><div class="val">¥199.00（全额，Phase 1 不可改 · §4.1.2）</div></div>
+    <div class="field" style="margin-bottom:8px"><label>退款原因 <span class="req">*</span></label><div class="val" style="color:#94a3b8">买家申请 / 质量问题 / 错拍 / 其他 ▾</div></div>
+    <p style="margin-top:8px"><span class="btn btn-d">提交申请</span> <span class="btn">取消</span></p>
+    <div class="note" style="margin-top:8px"><b>校验</b>：Phase 1 仅全额退（=实付）；<code>before_fulfill</code> 有学习/下载/核销记录 → 禁用自助；<code>reason_code</code> 必选。</div>
+  </div>
+  <h4 id="m12a-invoiced" style="font-size:13px;margin:16px 0 6px">样例 B · 已开票（红冲提示）</h4>
+  <div class="wf" style="max-width:340px;border-color:#ffe58f;background:#fffbe6">
+    <h4>申请退款 <span class="badge b-g">已开票</span></h4>
+    <div style="border:1px solid #ffe58f;border-radius:8px;padding:10px;margin-bottom:10px;background:#fff;font-size:12px;line-height:1.5">
+      <div style="font-weight:600;color:#d48806;margin-bottom:4px">该订单已开具发票</div>
+      <div>发票号 0440…001 · ¥199.00</div>
+      <div style="margin-top:6px;color:#8c8c8c">退款成功后，商家须在税务系统办理发票红冲（约 1–3 个工作日）。款项仍按实付全额原路退回，权益将关闭。</div>
+    </div>
+    <div class="field" style="margin-bottom:8px"><label>退款金额 <span class="req">*</span></label><div class="val">¥199.00（全额，Phase 1 不可改）</div></div>
+    <div class="field" style="margin-bottom:8px"><label>退款原因 <span class="req">*</span></label><div class="val" style="color:#94a3b8">买家申请 / 质量问题 / 错拍 / 其他 ▾</div></div>
+    <p style="margin-top:8px"><span class="btn btn-d">提交申请</span> <span class="btn">取消</span></p>
+    <div class="note" style="margin-top:8px"><b>显隐</b>：<code>invoice_request.status=issued</code> 时展示警告条；<strong>不拦退</strong>。成功 → M12-C；商家侧 F2 标记待冲红。</div>
+  </div>
+  <h3 id="m12b">M12-B · 取消订单确认</h3>
+  <div class="wf" style="max-width:300px;border-color:#fecaca;background:#fff5f5">
+    <h4>确认取消订单？</h4>
+    <div class="wf-form">
+      <div class="field"><label>取消影响（只读）</label><div class="val" style="background:#fff5f5">取消后订单关闭，需重新下单购买</div></div>
+    </div>
+    <p style="margin-top:8px"><span class="btn btn-d">确认取消</span> <span class="btn">返回</span></p>
+  </div>
+  <h3 id="m12c">M12-C · 退款进度（只读）</h3>
+  <div class="wf" style="max-width:360px">
+    <h4>退款进度 · 单号 RF20260804001</h4>
+    <div class="timeline">
+      <div><b>08-06 10:20</b> 买家提交退款申请</div>
+      <div><b>08-06 14:00</b> 商家审核通过</div>
+      <div style="color:#94a3b8"><b>待处理</b> 微信原路退回（1–3 工作日）</div>
+    </div>
+    <div class="note" style="margin-top:8px"><b>只读</b>：无写操作；驳回态展示原因 +「重新申请」→ M12-A。</div>
+  </div>
+</div>
+
+
+
+
+  <h4 style="font-size:13px;margin:16px 0 8px">操作按钮 · UI 线框覆盖（M12 本页）</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>操作</th><th>触发位置</th><th>UI 线框</th><th>点击校验</th></tr>
+    <tr><td><b>申请退款</b></td><td>顶栏/底栏</td><td>M12-A · <a href="#m12a-invoiced">已开票</a></td><td>点击校验表</td></tr>
+    <tr><td><b>申请开票</b></td><td>顶栏</td><td>M13</td><td>点击校验表</td></tr>
+  </table>
+  <div class="op" style="margin-top:8px"><b>操作链路小结</b>：M11 → M12 详情 → M12-A 退款（已开票见 <a href="03-数据流.html#f2-invoice-flow">F2′</a>）/ M13 开票 / 链 M14 领权。</div>
+  <h4 id="m12-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+  <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
+  <tr><td>M12-A · 退款原因</td><td>单选</td><td>reason_code 枚举</td><td>—</td><td>—</td><td>reason_code</td></tr>
+  </table>
+  <div class="op" style="font-size:12px;margin-top:8px">通用枚举 <a href="04-数据模型.html#select-common">04 §通用</a> · 级联 <a href="04-数据模型.html#select-cascade">04 §级联</a> · <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">§2.5.9</a></div>
+</article><article class="pdoc-panel" id="m13">
+<div class="doc">
+  <h2>M13 申请开票 <span class="tag tag-r">P1-17</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="note note-b" style="margin-bottom:10px"><b>先记住两句话</b>：① 仅<strong>已付款</strong>订单可申请开票。② 提交后商家在 A13 处理。</div>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="ph"><div class="t">申请开票</div><div class="s"></div></div>
+    <div class="pb">
+<div style="display:flex;gap:8px;margin-bottom:12px">
+  <span class="btn btn-p" style="flex:1;justify-content:center">个人</span>
+  <span class="btn" style="flex:1;justify-content:center">企业</span>
+</div>
+<div class="field" style="margin-bottom:8px"><label>抬头 <span class="req">*</span></label><div class="val" style="color:#94a3b8">姓名</div></div>
+<div class="field" style="margin-bottom:8px"><label>邮箱 <span class="req">*</span></label><div class="val" style="color:#94a3b8">email</div></div>
+<div class="field"><label>金额（只读）</label><div class="val">¥199.00</div></div>
+</div>
+    <div class="cta"><span class="btn btn-p" style="flex:1;justify-content:center">提交</span></div>
+    <div class="ptab"><div><span class="ico">🏠</span>首页</div><div><span class="ico">📚</span>已购</div><div class="on"><span class="ico">👤</span>我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">校验</div>企业税号 15–20；邮箱格式；金额只读；驳回可重提</div>
+  </div>
+  <h3>企业态字段展示</h3>
+  <div class="wf" style="max-width:320px">
+    <div style="display:flex;gap:8px;margin-bottom:10px"><span class="btn" style="flex:1;justify-content:center">个人</span><span class="btn btn-p" style="flex:1;justify-content:center">企业</span></div>
+    <div class="field" style="margin-bottom:6px"><label>抬头 <span class="req">*</span></label><div class="val">广州某某科技有限公司</div></div>
+    <div class="field" style="margin-bottom:6px"><label>税号 <span class="req">*</span></label><div class="val">91440101MA5XXXXXX</div></div>
+    <div class="field" style="margin-bottom:6px"><label>邮箱 <span class="req">*</span></label><div class="val">finance@example.com</div></div>
+    <div class="field"><label>金额（只读）</label><div class="val">¥199.00</div></div>
+  </div>
+  <h3>点击校验</h3>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>提交</b></td>
+      <td>① 抬头 / 邮箱必填<br>② 企业：税号 15–20 位<br>③ 订单可开票 · 金额只读</td>
+      <td>「请填写税号」·「邮箱格式错误」·「该订单不可开票」</td>
+      <td>提交成功 → 详情「待商家开具」；驳回可重提</td>
+    </tr>
+    <tr>
+      <td><b>查看发票</b></td>
+      <td>开票状态 = 已开票 · 有发票号/链接</td>
+      <td>「待商家开具」·「暂无发票」</td>
+      <td>→ <b>M13b</b></td>
+    </tr>
+  </table>
+  <h3 id="m13b">M13b · 查看发票</h3>
+  <div class="wf" style="max-width:340px">
+    <h4>电子发票</h4>
+    <div class="op"><b>发票号</b>：044032000011-20260806001</div>
+    <div class="op"><b>抬头</b>：广州某某科技有限公司</div>
+    <div class="op"><b>金额</b>：¥199.00 · 2026-08-06 开具</div>
+    <p style="margin-top:10px"><span class="btn btn-p">打开 PDF / 链接</span> <span class="btn">复制发票号</span></p>
+    <div class="note" style="margin-top:8px"><b>校验</b>：链接短时有效；复制 Toast；退款须走红冲说明。</div>
+  </div>
+</div>
+
+
+
+
+  <h4 style="font-size:13px;margin:16px 0 8px">操作按钮 · UI 线框覆盖（M13 本页）</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>操作</th><th>触发位置</th><th>UI 线框</th><th>点击校验</th></tr>
+    <tr><td><b>提交申请</b></td><td>底栏</td><td>—</td><td>点击校验表</td></tr>
+  </table>
+  <div class="op" style="margin-top:8px"><b>操作链路小结</b>：M12 → M13 填抬头 → 商家 A13 开具 → M13b 查看。</div>
+  <h4 id="m13-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+  <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
+  <tr><td>M13 · 抬头类型</td><td>单选</td><td>个人/企业</td><td>—</td><td>是：→税号栏</td><td>title_type</td></tr>
+  </table>
+  <div class="op" style="font-size:12px;margin-top:8px">通用枚举 <a href="04-数据模型.html#select-common">04 §通用</a> · 级联 <a href="04-数据模型.html#select-cascade">04 §级联</a> · <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">§2.5.9</a></div>
+</article><article class="pdoc-panel" id="m14">
+<div class="doc">
+  <h2>M14 短信领权页 <span class="tag tag-r">P1-12</span></h2>
+  <p class="sub">鉴权：领权 token + <code>mp session</code>；公域订单与买家身份绑定 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="note note-b" style="margin-bottom:10px"><b>先记住两句话</b>：① 抖店链路①<strong>领权短信</strong>落地本页。② 绑定手机后写 buyer_id 并开通权益。</div>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="mp-status"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+    <div class="ph"><div class="ph-nav"><span class="ph-back">‹</span><div><div class="t">领取课程</div><div class="s">来自抖店 · 短信领权</div></div></div></div>
+    <div class="pb">
+<div class="goods" style="margin-bottom:14px">
+  <div class="c type-course"><span class="type-tag">抖店</span>权益封面</div>
+  <div class="b"><div class="n">IP 获客实战课</div><div class="meta">请用购买手机号领取权益</div></div>
+</div>
+<div class="mp-form-field"><label>手机号 <span class="req" style="color:#ef4444">*</span></label><div class="val" style="display:flex;justify-content:space-between"><span>138****8000</span><span style="color:#1677ff;font-weight:600">授权</span></div></div>
+</div>
+    <div class="cta"><span class="btn btn-ok btn-block" style="padding:12px">确认领取</span></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>登录绑手机 → 确认领取 → 去已购
+  <div class="k">校验</div>手机号须与购买手机号一致
+  <div class="k">失败</div>过期 / 已领 / 已退款</div>
+  </div>
+  <h3>三态线框样例</h3>
+  <div class="mini-phones">
+    <div class="mini-phone">
+      <div class="st"><span class="badge b-g">正常领取</span></div>
+      <div class="goods" style="margin-bottom:8px"><div class="c" style="height:48px;font-size:10px">权益</div><div class="b"><div class="n" style="font-size:11px">IP 获客实战课</div></div></div>
+      <div class="field" style="margin-bottom:8px;font-size:10px"><label>手机号 <span class="req">*</span></label><div class="val">138****8000</div></div>
+      <span class="btn btn-ok" style="width:100%;justify-content:center;padding:6px">确认领取</span>
+    </div>
+    <div class="mini-phone">
+      <div class="st"><span class="badge b-r">token 过期</span></div>
+      <div style="text-align:center;padding:20px 6px">
+        <div style="width:40px;height:40px;border-radius:50%;background:#fee2e2;color:#dc2626;line-height:40px;margin:0 auto 8px">✕</div>
+        <div style="font-weight:700;font-size:11px">链接已失效</div>
+        <div style="font-size:10px;color:#991b1b;margin:8px 0">领取码已过期，请联系商家</div>
+        <span class="btn" style="width:100%;justify-content:center;padding:5px">联系客服</span>
+      </div>
+    </div>
+    <div class="mini-phone">
+      <div class="st"><span class="badge b-b">已领取成功</span></div>
+      <div style="text-align:center;padding:20px 6px">
+        <div style="width:40px;height:40px;border-radius:50%;background:#dcfce7;color:#16a34a;line-height:40px;margin:0 auto 8px">✓</div>
+        <div style="font-weight:700;font-size:11px">领取成功</div>
+        <div style="font-size:10px;color:#666;margin:8px 0">权益已开通，可开始学习</div>
+        <span class="btn btn-p" style="width:100%;justify-content:center;padding:5px">去已购</span>
+      </div>
+    </div>
+  </div>
+  <h3>点击校验</h3>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>确认领取</b></td>
+      <td>① token 有效未过期<br>② 未领取 · 订单未退款<br>③ 手机与购买号一致或已授权</td>
+      <td>「链接已失效」·「该权益已领取」·「订单已退款」</td>
+      <td>开通权益 → 成功态 · <b>M06</b></td>
+    </tr>
+    <tr>
+      <td><b>手机号授权</b></td>
+      <td>微信手机号组件或验证码</td>
+      <td>「手机号与购买号不一致」·「验证码错误」</td>
+      <td>回填手机 · 可点确认领取</td>
+    </tr>
+    <tr>
+      <td><b>已退款</b></td>
+      <td>源订单状态 = 已退款</td>
+      <td>「订单已退款，无法领取」</td>
+      <td>停留失败态 · 引导客服</td>
+    </tr>
+    <tr>
+      <td><b>重复领取</b></td>
+      <td>同一 token / 权益已绑定当前买家</td>
+      <td>「您已领取过该权益」</td>
+      <td>→ 已领取成功态 · <b>M06</b></td>
+    </tr>
+    <tr>
+      <td><b>成功落点</b></td>
+      <td>领取写库成功</td>
+      <td>—</td>
+      <td>主按钮 → <b>M06</b>；次按钮 → <b>M07/M09</b>（按类型）</td>
+    </tr>
+  </table>
+</div>
+
+  <h4 style="font-size:13px;margin:16px 0 8px">操作按钮 · UI 线框覆盖（M14 本页）</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+    <tr><th>操作</th><th>触发位置</th><th>UI 线框</th><th>点击校验</th></tr>
+    <tr><td><b>绑定领权</b></td><td>底栏</td><td>M06</td><td>点击校验表</td></tr>
+  </table>
+  <div class="op" style="margin-top:8px"><b>操作链路小结</b>：抖店 Webhook → 短信 → M14 领权 → M06 已购。</div>
+  <div class="op" style="font-size:12px;margin-top:12px" id="m14-select-spec"><b>下拉/选择规格</b>：本页无下拉/单选控件；无级联（§2.5.9）。</div>
+</article><article class="pdoc-panel" id="m15">
+<div class="doc">
+  <h2>M15 我的 <span class="tag tag-r">P1-基础</span></h2>
+  <p class="sub">鉴权：买家 <code>mp session</code>（微信 openid）；与商家 <code>shop.*</code> 权限隔离 · <a href="05-角色权限.html#catalog" class="perm-link" title="查看权限说明">§六 权限说明</a></p>
+  <div class="row">
+    
+<div class="phone">
+  <div class="phone-notch"></div>
+  <div class="ps">
+    <div class="mp-status" style="color:#fff;position:relative;z-index:2"><span class="time">9:41</span><span class="icons">▮▮▮ WiFi 🔋</span></div>
+    <div class="pb" style="padding:0">
+<div class="mp-profile-header">
+  <div class="mp-avatar">明</div>
+  <div><div class="mp-profile-name">小明</div><div class="mp-profile-phone">138****8000</div></div>
+</div>
+<div style="padding:0 14px 14px">
+<div class="mp-menu">
+  <div class="mp-menu-item">我的订单</div>
+  <div class="mp-menu-item">已购内容</div>
+  <div class="mp-menu-item">领权兑换</div>
+  <div class="mp-menu-item">联系客服</div>
+  <div class="mp-menu-item">用户协议 / 隐私</div>
+</div>
+<div class="btn btn-block" style="margin-top:14px;padding:12px;color:#64748b">退出登录</div>
+</div>
+</div>
+    <div class="ptab"><div><span class="ico">🏠</span>首页</div><div><span class="ico">📚</span>已购</div><div class="on"><span class="ico">👤</span>我的</div></div>
+  </div>
+</div>
+    <div class="side-note"><div class="k">操作</div>进订单/已购/领权；客服与协议；退出登录（清 session）</div>
+  </div>
+  <h3>操作页线框</h3>
+  <div class="two">
+    <div class="wf" id="m15a">
+      <h4>M15-A · 联系客服</h4>
+      <div class="wf-form">
+        <div class="field"><label>在线客服</label><div class="val">唤起小程序客服会话（若商家配置）</div></div>
+        <div class="field"><label>客服电话（只读）</label><div class="val">400-xxx-xxxx（点击拨号）</div></div>
+        <div class="field"><label>工作时间（只读）</label><div class="val">工作日 9:00–18:00</div></div>
+      </div>
+      <p style="margin-top:8px"><span class="btn btn-p">打开客服</span> <span class="btn">返回</span></p>
+    </div>
+    <div class="wf" id="m15b">
+      <h4>M15-B · 用户协议 / 隐私</h4>
+      <div style="height:100px;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;color:#64748b;overflow:hidden;margin-bottom:8px">《用户服务协议》<br>《隐私政策》<br>正文滚动只读…</div>
+      <p><span class="btn">关闭</span></p>
+    </div>
+  </div>
+  <div class="wf" id="m15c" style="max-width:320px;border-color:#fecaca;background:#fff5f5">
+    <h4>M15-C · 退出登录确认</h4>
+    <div class="wf-form">
+      <div class="field"><label>退出影响（只读）</label><div class="val" style="background:#fff5f5">退出后需重新登录才能购买与学习</div></div>
+    </div>
+    <p style="margin-top:8px"><span class="btn btn-d">确认退出</span> <span class="btn">取消</span></p>
+  </div>
+  <h3>点击校验</h3>
+  <table class="meta matrix">
+    <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
+    <tr>
+      <td><b>我的订单</b></td>
+      <td>已登录</td>
+      <td>→ <b>M01</b>（未登录引导）</td>
+      <td>→ <b>M11</b></td>
+    </tr>
+    <tr>
+      <td><b>已购内容</b></td>
+      <td>已登录</td>
+      <td>→ <b>M01</b></td>
+      <td>→ <b>M06</b></td>
+    </tr>
+    <tr>
+      <td><b>领权兑换</b></td>
+      <td>—</td>
+      <td>—</td>
+      <td>→ <b>M14</b>（带 token 参数）或扫码页</td>
+    </tr>
+    <tr>
+      <td><b>联系客服</b></td>
+      <td>—</td>
+      <td>未配置：「暂无客服入口」</td>
+      <td>→ <b>M15-A</b> 或唤起客服会话</td>
+    </tr>
+    <tr>
+      <td><b>用户协议</b></td>
+      <td>协议 URL 可访问</td>
+      <td>「加载失败」</td>
+      <td>→ <b>M15-B</b> 只读页</td>
+    </tr>
+    <tr>
+      <td><b>未登录引导</b></td>
+      <td>需 session 的菜单项</td>
+      <td>—（自动跳转）</td>
+      <td>→ <b>M01</b> · 带 <code>redirect</code></td>
+    </tr>
+    <tr>
+      <td><b>退出登录</b></td>
+      <td>已登录</td>
+      <td>—</td>
+      <td><b>M15-C</b> 确认 → 清 session / 本地缓存 → <b>M02</b> 或 M01</td>
+    </tr>
+  </table>
+</div>
+
+
+
+  <h4 id="m15-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格</h4>
+  <table class="meta matrix" style="margin-bottom:8px">
+  <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
+  <tr><td>M15 · 底栏 Tab</td><td>单选</td><td>底栏</td><td>—</td><td>—</td><td>—</td></tr>
+  </table>
+  <div class="op" style="font-size:12px;margin-top:8px">通用枚举 <a href="04-数据模型.html#select-common">04 §通用</a> · 级联 <a href="04-数据模型.html#select-cascade">04 §级联</a> · <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">§2.5.9</a></div>
+</article></div>
+<script>
+(function(){
+  var tabsEl=document.getElementById('tabs');
+  var tabs=tabsEl?tabsEl.querySelectorAll('button'):[];
+  var pages=document.querySelectorAll('.pdoc-panel');
+  function activate(target){
+    if(!target)return false;
+    var btn=tabsEl&&tabsEl.querySelector('button[data-pdoc="'+target+'"]');
+    var page=document.getElementById(target);
+    if(!btn||!page)return false;
+    tabs.forEach(function(b){b.classList.toggle('on',b===btn);});
+    pages.forEach(function(p){p.classList.toggle('on',p.id===target);});
+    requestAnimationFrame(function(){
+      var el=document.getElementById(target);
+      if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+      else window.scrollTo({top:0,behavior:'smooth'});
+    });
+    return true;
+  }
+  if(tabsEl){
+    tabsEl.addEventListener('click',function(e){
+      var btn=e.target.closest('button[data-pdoc]');
+      if(!btn)return;
+      var id=btn.getAttribute('data-pdoc');
+      activate(id);
+      if(location.hash!=='#'+id) history.replaceState(null,'','#'+id);
+    });
+  }
+  function fromHash(){
+    var h=(location.hash||'').replace(/^#/,'');
+    if(h&&activate(h)) return;
+  }
+  window.addEventListener('hashchange',fromHash);
+  fromHash();
+})();
+</script>
+</body></html>

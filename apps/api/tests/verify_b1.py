@@ -9,7 +9,7 @@ from uuid import uuid4
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import check, req
+from tests.http_client import check, req, run_nested_m0_m8
 
 
 def login(phone: str, password: str) -> str:
@@ -105,8 +105,7 @@ def main() -> int:
     proc = subprocess.run([sys.executable, "-m", "pytest", "tests/unit/test_agent_tools.py", "-q"], cwd=API_ROOT)
     results.append(check("VB1-4 unit test_agent_tools", proc.returncode == 0))
 
-    proc2 = subprocess.run([sys.executable, "-B", "tests/run_m0_m8.py"], cwd=API_ROOT)
-    results.append(check("VB1-5 run_m0_m8", proc2.returncode == 0))
+    results.append(run_nested_m0_m8("VB1-5 run_m0_m8"))
 
     passed = all(results)
     print("\n=== B1", "全部通过" if passed else "存在失败", "===")

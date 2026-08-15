@@ -1,10 +1,11 @@
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { authApi } from '../api/client'
-import { useAuthStore } from '../stores/auth'
+import { useAuthStore, WORKSPACE_MERCHANT, WORKSPACE_PLATFORM } from '../stores/auth'
 
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const loginMode = ref('password')
@@ -19,15 +20,33 @@ let countdownTimer = null
 
 const phonePattern = /^1\d{10}$/
 
+const isPlatformLogin = computed(() => route.meta.workspaceMode === WORKSPACE_PLATFORM)
+const workspaceMode = computed(() =>
+  isPlatformLogin.value ? WORKSPACE_PLATFORM : WORKSPACE_MERCHANT,
+)
+
+const brandTitle = computed(() =>
+  isPlatformLogin.value ? '平台运营登录' : '智营获客',
+)
+const brandSubtitle = computed(() =>
+  isPlatformLogin.value ? '内容获客 · 平台管理后台' : 'AI 内容营销工作台',
+)
+
+function homePath() {
+  if (auth.isPlatformWorkspace) return '/admin'
+  if (auth.needSelectTenant || auth.user?.need_select_tenant) return '/select-tenant'
+  if (auth.isShopClerk) return '/shop/verifications'
+  return '/dashboard'
+}
+
 function afterLoginSuccess() {
   ElMessage.success('登录成功')
-  if (auth.user?.role === 'platform_admin') {
-    router.push('/admin')
-  } else if (auth.needSelectTenant || auth.user?.need_select_tenant) {
-    router.push('/select-tenant')
-  } else {
-    router.push('/dashboard')
+  const redirect = route.query.redirect
+  if (redirect && typeof redirect === 'string') {
+    router.push(redirect)
+    return
   }
+  router.push(homePath())
 }
 
 async function handlePasswordLogin() {
@@ -37,7 +56,7 @@ async function handlePasswordLogin() {
   }
   loading.value = true
   try {
-    await auth.login(phone.value.trim(), password.value)
+    await auth.login(phone.value.trim(), password.value, workspaceMode.value)
     afterLoginSuccess()
   } catch (e) {
     ElMessage.error(e.message || '登录失败')
@@ -85,7 +104,7 @@ async function handleSmsLogin() {
   }
   loading.value = true
   try {
-    await auth.loginBySms(phone.value.trim(), smsCode.value.trim())
+    await auth.loginBySms(phone.value.trim(), smsCode.value.trim(), workspaceMode.value)
     afterLoginSuccess()
   } catch (e) {
     ElMessage.error(e.message || '登录失败')
@@ -104,12 +123,12 @@ function handleSubmit() {
 </script>
 
 <template>
-  <div class="auth-page">
+  <div class="auth-page" :class="{ 'auth-page--platform': isPlatformLogin }">
     <div class="auth-card">
       <div class="auth-card__brand">
         <span class="auth-card__logo">AI</span>
-        <h1>智营获客</h1>
-        <p>AI 内容营销工作台</p>
+        <h1>{{ brandTitle }}</h1>
+        <p>{{ brandSubtitle }}</p>
       </div>
 
       <el-segmented v-model="loginMode" :options="[
@@ -170,9 +189,21 @@ function handleSubmit() {
 
       <div class="auth-card__footer">
         <router-link to="/forgot-password">忘记密码</router-link>
-        <span style="margin: 0 8px">·</span>
-        还没有账号？
-        <router-link to="/register">立即注册</router-link>
+        <template v-if="!isPlatformLogin">
+          <span style="margin: 0 8px">·</span>
+          还没有账号？
+          <router-link to="/register">立即注册</router-link>
+        </template>
+      </div>
+
+      <div v-if="isPlatformLogin" class="auth-card__hint">
+        商家 / 企业用户请使用
+        <router-link to="/login">商家登录</router-link>
+      </div>
+      <div v-else class="auth-card__hint">
+        平台运营人员请使用
+        <router-link to="/admin/login">平台运营登录</router-link>
+        <span class="auth-card__hint-sub">（注册智营 ≠ 商城入驻，开店须单独申请）</span>
       </div>
     </div>
   </div>
@@ -185,6 +216,10 @@ function handleSubmit() {
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #1677ff 0%, #0958d9 100%);
+}
+
+.auth-page--platform {
+  background: linear-gradient(135deg, #001529 0%, #003a8c 100%);
 }
 
 .auth-card {
@@ -212,6 +247,10 @@ function handleSubmit() {
   font-weight: 700;
   font-size: 18px;
   margin-bottom: 12px;
+}
+
+.auth-page--platform .auth-card__logo {
+  background: #001529;
 }
 
 .auth-card__brand h1 {
@@ -247,7 +286,26 @@ function handleSubmit() {
   color: var(--color-text-secondary);
 }
 
-.auth-card__footer a {
+.auth-card__footer a,
+.auth-card__hint a {
   color: var(--color-primary);
+}
+
+.auth-card__hint {
+  margin-top: 16px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  border-radius: 6px;
+  background: #f5f5f5;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.auth-card__hint-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--color-text-muted);
 }
 </style>

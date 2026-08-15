@@ -9,7 +9,7 @@ from pathlib import Path
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import _get_test_client, check, req, ensure_fake_platform
+from tests.http_client import _get_test_client, check, req, ensure_fake_platform, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -107,8 +107,7 @@ def main() -> int:
     )
     results.append(check("VB4-5 非流式 chat 仍可用", code3 == 200 and data.get("action") == "clarify", str(data.get("action"))))
 
-    proc = subprocess.run([sys.executable, "-B", "tests/verify_b3.py"], cwd=API_ROOT)
-    results.append(check("VB4-6 verify_b3 回归", proc.returncode == 0))
+    results.append(run_nested_script("VB4-6 verify_b3 回归", "verify_b3.py"))
 
     passed = all(results)
     print("\n=== B4", "全部通过" if passed else "存在失败", "===")

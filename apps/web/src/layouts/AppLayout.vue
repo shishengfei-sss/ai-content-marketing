@@ -1,12 +1,14 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { NAV_MENUS, hasAnyPermission, hasPermission } from '../config/permissions'
-import { useAuthStore } from '../stores/auth'
+import { useAuthStore, WORKSPACE_PLATFORM } from '../stores/auth'
 import { usePinnedViews } from '../composables/usePinnedViews'
 import { unpinSavedView } from '../composables/useCrmSavedViews'
+import { clearCurrentShopId, useCurrentShop } from '../composables/useCurrentShop'
 import CrmNotificationBell from '../components/crm/CrmNotificationBell.vue'
+import { shopApi } from '../api/client'
 
 const route = useRoute()
 const router = useRouter()
@@ -14,15 +16,104 @@ const auth = useAuthStore()
 const { loadPinnedViews, pinnedForPath, viewRoute, viewIndex } = usePinnedViews()
 
 const unpinningId = ref(null)
+const shopOnboardingState = ref(null)
+const {
+  stores: shopStores,
+  currentId: currentShopId,
+  currentStore,
+  planLabel: shopPlanLabel,
+  roleLabel: shopRoleLabel,
+  loadStores: loadShopStores,
+  setCurrent: setCurrentShop,
+} = useCurrentShop()
 
-onMounted(() => {
-  if (auth.isLoggedIn && !auth.user) auth.fetchMe()
-  if (auth.isLoggedIn) loadPinnedViews()
+/** 对照 PRD 01-管理端UI.html #a01-select-spec · C13：顶栏「当前店铺」单选，级联 shop_id */
+
+const showShopSwitcher = computed(
+  () =>
+    shopOnboardingState.value === 'onboarded' &&
+    route.path.startsWith('/shop') &&
+    !route.path.startsWith('/shop/onboarding') &&
+    shopStores.value.length > 0,
+)
+const currentShopName = computed(() => currentStore.value?.name || '请选择店铺')
+const shopSwitcherMeta = computed(() => {
+  const parts = [shopPlanLabel.value, shopRoleLabel.value].filter(Boolean)
+  return parts.join(' · ')
+})
+
+function onSwitchShop(id) {
+  if (!id || String(id) === String(currentShopId.value)) return
+  const s = shopStores.value.find((x) => String(x.id) === String(id))
+  setCurrentShop(id)
+  ElMessage.success(`已切换当前店：${s?.name || ''}`)
+}
+
+onMounted(async () => {
+  if (auth.isLoggedIn && !auth.user) {
+    try {
+      await auth.fetchMe()
+    } catch {
+      /* logout handled in store */
+    }
+  }
+  if (auth.isLoggedIn) {
+    loadPinnedViews()
+    await loadShopOnboardingBanner()
+  }
   window.addEventListener('crm:pinned-views-changed', onPinnedChanged)
 })
 
 onUnmounted(() => {
   window.removeEventListener('crm:pinned-views-changed', onPinnedChanged)
+})
+
+watch(
+  () => [auth.isLoggedIn, auth.user?.active_tenant?.id],
+  (now, prev) => {
+    const prevTid = prev?.[1]
+    const nowTid = now?.[1]
+    if (prevTid && nowTid && prevTid !== nowTid) clearCurrentShopId()
+    if (auth.isLoggedIn) loadShopOnboardingBanner()
+    else shopOnboardingState.value = null
+  },
+)
+
+async function loadShopOnboardingBanner() {
+  if (!auth.isLoggedIn) {
+    shopOnboardingState.value = null
+    return
+  }
+  // 尚未拉到 me：先按未入驻展示，避免首屏空白
+  if (!auth.user?.active_tenant) {
+    shopOnboardingState.value = 'not_onboarded'
+    return
+  }
+  try {
+    const { data } = await shopApi.getOnboardingStatus()
+    shopOnboardingState.value = data.state || 'not_onboarded'
+    if (shopOnboardingState.value === 'onboarded') await loadShopStores()
+  } catch (e) {
+    // 接口未就绪/代理错误时仍引导开通，避免「看不见入口」
+    console.warn('[shop] onboarding status failed', e?.message || e)
+    shopOnboardingState.value = 'not_onboarded'
+  }
+}
+
+const showShopBanner = computed(() => {
+  if (auth.isShopClerk) return false
+  // 开通商城页本身不再叠横幅（避免与表单重复）
+  if (route.path.startsWith('/shop/onboarding')) return false
+  return (
+    shopOnboardingState.value === 'not_onboarded' ||
+    shopOnboardingState.value === 'rejected' ||
+    shopOnboardingState.value === 'reviewing'
+  )
+})
+const shopBannerText = computed(() => {
+  if (shopOnboardingState.value === 'rejected') return '入驻申请已驳回，请修改资料后重提'
+  if (shopOnboardingState.value === 'reviewing') return '内容获客商城入驻审核中'
+  return '开通内容获客商城，提交主体资质由平台审核（注册 ≠ 入驻）'
 })
 
 function onPinnedChanged() {
@@ -50,7 +141,18 @@ function itemVisible(item, permissions) {
 
 const menuItems = computed(() => {
   const p = auth.permissions
+  if (auth.isShopClerk) {
+    return NAV_MENUS.filter((menu) => menu.key === 'shop-verifications')
+  }
   return NAV_MENUS.map((menu) => {
+    if (menu.shopOnboardingEntry) {
+      if (shopOnboardingState.value === 'onboarded') return null
+      return menu
+    }
+    if (menu.shopEntitlementsEntry) {
+      if (shopOnboardingState.value !== 'onboarded') return null
+      return menu
+    }
     if (!menu.children) {
       return itemVisible(menu, p) ? menu : null
     }
@@ -72,6 +174,7 @@ function pathMatchesItem(itemPath) {
 
 const activeMenu = computed(() => {
   if (route.path.startsWith('/settings')) return '/settings'
+  if (route.meta?.shopSettingsHub) return '/shop/settings'
   const viewId = route.query.view_id
   if (viewId && (route.path === '/crm/leads' || route.path === '/crm/customers')) {
     return viewIndex(route.path, String(viewId))
@@ -107,7 +210,7 @@ async function switchCompany(tenantId) {
   try {
     await auth.switchTenant(tenantId)
     ElMessage.success('已切换公司')
-    router.replace('/dashboard')
+    router.replace(auth.isShopClerk ? '/shop/verifications' : '/dashboard')
   } catch (e) {
     ElMessage.error(e.message)
   }
@@ -118,6 +221,16 @@ function handleLogout() {
   router.push('/login')
 }
 
+async function switchToPlatform() {
+  try {
+    await auth.switchWorkspace(WORKSPACE_PLATFORM)
+    ElMessage.success('已切换到平台运营后台')
+    router.push('/admin')
+  } catch (e) {
+    ElMessage.error(e.message || '切换失败')
+  }
+}
+
 const displayName = computed(
   () => auth.user?.display_name || auth.user?.phone || '用户',
 )
@@ -125,7 +238,7 @@ const avatarChar = computed(() => displayName.value.charAt(0))
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :data-testid="auth.isShopClerk ? 'shop-clerk-shell' : undefined">
     <header class="app-header">
       <div class="app-header__left">
         <div class="app-logo">
@@ -152,7 +265,7 @@ const avatarChar = computed(() => displayName.value.charAt(0))
         </el-dropdown>
         <span v-else class="app-header__subtitle">{{ currentTenantLabel }}</span>
       </div>
-      <div class="app-header__center">
+      <div v-if="!auth.isShopClerk" class="app-header__center">
         <el-input
           placeholder="搜索内容、选题..."
           prefix-icon="Search"
@@ -161,7 +274,32 @@ const avatarChar = computed(() => displayName.value.charAt(0))
         />
       </div>
       <div class="app-header__right">
-        <CrmNotificationBell v-if="auth.isLoggedIn" />
+        <span
+          v-if="showShopSwitcher"
+          class="shop-switch"
+          data-testid="shop-current-store"
+        >
+          <el-dropdown trigger="click" @command="onSwitchShop">
+            <span class="shop-switch__trigger">
+              当前店铺：<b>{{ currentShopName }}</b>
+              <el-icon><ArrowDown /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  v-for="s in shopStores"
+                  :key="s.id"
+                  :command="s.id"
+                  :disabled="String(s.id) === String(currentShopId)"
+                >
+                  {{ s.name }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <span v-if="shopSwitcherMeta" class="shop-switch__meta"> · {{ shopSwitcherMeta }}</span>
+        </span>
+        <CrmNotificationBell v-if="auth.isLoggedIn && !auth.isShopClerk" />
         <el-dropdown trigger="click">
           <div class="app-header__user">
             <el-avatar :size="32" style="background: #4096ff">{{ avatarChar }}</el-avatar>
@@ -170,8 +308,8 @@ const avatarChar = computed(() => displayName.value.charAt(0))
           </div>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item v-if="auth.user?.role === 'platform_admin'" @click="router.push('/admin')">
-                管理后台
+              <el-dropdown-item v-if="auth.canSwitchWorkspace" @click="switchToPlatform">
+                平台运营后台
               </el-dropdown-item>
               <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
@@ -248,6 +386,28 @@ const avatarChar = computed(() => displayName.value.charAt(0))
       </aside>
 
       <main class="app-main">
+        <div
+          v-if="showShopBanner"
+          class="shop-onboarding-banner"
+          :class="{ 'is-reviewing': shopOnboardingState === 'reviewing' }"
+        >
+          <span>{{ shopBannerText }}</span>
+          <el-button
+            v-if="shopOnboardingState !== 'reviewing'"
+            size="small"
+            type="primary"
+            @click="router.push('/shop/onboarding')"
+          >
+            {{ shopOnboardingState === 'rejected' ? '修改重提' : '立即申请' }}
+          </el-button>
+          <el-button
+            v-else
+            size="small"
+            @click="router.push('/shop/onboarding')"
+          >
+            查看进度
+          </el-button>
+        </div>
         <div class="app-main__breadcrumb">
           <span class="app-main__title">{{ pageTitle }}</span>
           <el-tag v-if="auth.user?.active_tenant" type="info" size="small">{{ currentTenantLabel }}</el-tag>
@@ -340,6 +500,28 @@ const avatarChar = computed(() => displayName.value.charAt(0))
   gap: 16px;
 }
 
+.shop-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #fff;
+  opacity: 0.95;
+  white-space: nowrap;
+}
+
+.shop-switch__trigger {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #fff;
+}
+
+.shop-switch__meta {
+  opacity: 0.85;
+}
+
 .app-header__user {
   display: flex;
   align-items: center;
@@ -429,6 +611,26 @@ const avatarChar = computed(() => displayName.value.charAt(0))
   padding: 20px;
   overflow: auto;
   background: var(--color-bg-page);
+}
+
+.shop-onboarding-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #e8f3ff 0%, #f0f9ff 100%);
+  border: 1px solid #b3d8ff;
+  color: #1d39c4;
+  font-size: 14px;
+}
+
+.shop-onboarding-banner.is-reviewing {
+  background: #fff7e6;
+  border-color: #ffd591;
+  color: #ad6800;
 }
 
 .app-main__breadcrumb {

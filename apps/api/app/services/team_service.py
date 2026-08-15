@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import uuid_eq
 from app.models import TenantMembership, TenantRole, TenantRolePermission, User
-from app.permissions import ALL_PERMISSIONS, SYSTEM_ROLE_ADMIN, SYSTEM_ROLE_EDITOR
+from app.permissions import ALL_PERMISSIONS, SHOP_BUILTIN_ROLE_CODES, SYSTEM_ROLE_ADMIN, SYSTEM_ROLE_EDITOR
 from app.services.auth_service import hash_password, reset_user_password
 from app.services.membership_service import get_membership, seed_tenant_roles
 
@@ -98,6 +98,8 @@ def update_role_permissions(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="不能修改系统内置角色")
     if role.is_system and role.code == SYSTEM_ROLE_ADMIN:
         raise HTTPException(status_code=400, detail="不能修改管理员角色权限")
+    if role.is_system and role.code in SHOP_BUILTIN_ROLE_CODES and permissions is not None:
+        raise HTTPException(status_code=400, detail="商城内置角色权限不可修改")
     if name is not None:
         role.name = name
     if permissions is not None:

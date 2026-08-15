@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>【点我看 UI】内容获客 Phase1 商家端+买家端</title>
+<style>
+:root{
+  --color-primary:#1677ff;
+  --color-primary-light:#4096ff;
+  --color-primary-dark:#0958d9;
+  --color-bg-page:#f5f5f5;
+  --color-bg-card:#ffffff;
+  --color-text-primary:#1f1f1f;
+  --color-text-secondary:#666666;
+  --color-text-muted:#999999;
+  --color-border:#e8e8e8;
+  --radius-card:8px;
+  --shadow-card:0 1px 4px rgba(0,0,0,.08);
+  --header-height:56px;
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);font-size:14px;color:var(--color-text-primary);background:var(--color-bg-page);line-height:1.6;min-height:100vh}
+
+.app-header{
+  height:var(--header-height);background:var(--color-primary);color:#fff;
+  display:flex;align-items:center;justify-content:space-between;padding:0 20px;flex-shrink:0;
+}
+.app-header__left{display:flex;align-items:center;gap:12px}
+.app-logo{display:flex;align-items:center;gap:8px;font-weight:600;font-size:18px}
+.app-logo__icon{
+  width:32px;height:32px;background:rgba(255,255,255,.2);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;
+}
+.app-header__sub{font-size:13px;opacity:.9;padding-left:12px;border-left:1px solid rgba(255,255,255,.3)}
+.app-header__right{font-size:12px;opacity:.9;text-align:right;line-height:1.4}
+
+.app-main{max-width:1080px;margin:0 auto;padding:20px}
+
+.page-card{
+  background:var(--color-bg-card);border-radius:var(--radius-card);
+  box-shadow:var(--shadow-card);padding:20px;margin-bottom:16px;
+}
+.page-title{font-size:20px;font-weight:600;margin-bottom:8px;color:var(--color-text-primary)}
+.page-sub{font-size:13px;color:var(--color-text-secondary);margin-bottom:14px;line-height:1.65}
+.page-hint{
+  display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
+  background:#e6f4ff;border:1px solid #91caff;border-radius:6px;
+  font-size:12px;color:var(--color-primary-dark);margin-bottom:18px;
+}
+
+.section-title{font-size:16px;font-weight:600;margin:20px 0 6px;color:var(--color-text-primary)}
+.section-title:first-of-type{margin-top:4px}
+.section-sub{font-size:13px;color:var(--color-text-secondary);margin-bottom:12px;line-height:1.65}
+.section-sub a{color:var(--color-primary)}
+
+/* 阅读路径 */
+.path-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+@media(max-width:860px){.path-row{grid-template-columns:1fr}}
+.path-card{
+  border:1px solid var(--color-border);border-radius:8px;padding:12px 14px;background:#fafafa;
+}
+.path-card__role{font-size:12px;font-weight:600;color:var(--color-primary-dark);margin-bottom:4px}
+.path-card__text{font-size:12px;color:var(--color-text-secondary);line-height:1.55}
+.path-card__text a{color:var(--color-primary);text-decoration:none}
+.path-card__text a:hover{text-decoration:underline}
+
+/* 入口卡片 */
+.entry-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:8px}
+@media(max-width:860px){.entry-grid{grid-template-columns:1fr}}
+.entry-card{
+  border:1px solid var(--color-border);border-radius:var(--radius-card);
+  padding:18px 16px;background:#fff;transition:box-shadow .2s,border-color .2s;
+  display:flex;flex-direction:column;
+}
+.entry-card:hover{box-shadow:0 2px 12px rgba(0,0,0,.06);border-color:#d0d5dd}
+.entry-card--span{grid-column:1 / -1}
+.entry-card__head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px}
+.entry-card__title{font-size:15px;font-weight:600}
+.entry-card__meta{font-size:12px;color:var(--color-text-muted);margin-bottom:10px}
+.el-tag{
+  display:inline-block;padding:0 8px;height:22px;line-height:22px;
+  border-radius:4px;font-size:12px;font-weight:500;flex-shrink:0;
+}
+.el-tag--primary{background:#e6f4ff;color:var(--color-primary);border:1px solid #91caff}
+.el-tag--success{background:#f6ffed;color:#52c41a;border:1px solid #b7eb8f}
+.el-tag--purple{background:#f9f0ff;color:#722ed1;border:1px solid #d3adf7}
+.el-tag--warning{background:#fff7e6;color:#d46b08;border:1px solid #ffd591}
+.el-tag--tech{background:#f5f5f5;color:#595959;border:1px solid #d9d9d9}
+
+.entry-card__desc{font-size:13px;color:var(--color-text-secondary);line-height:1.55;margin-bottom:12px;flex:1}
+.entry-card__desc strong{color:var(--color-text-primary);font-weight:600}
+.entry-card__bullets{
+  list-style:none;margin:0 0 14px;padding:0;
+  display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;
+}
+.entry-card__bullets--4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:900px){.entry-card__bullets--4{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){
+  .entry-card__bullets,.entry-card__bullets--4{grid-template-columns:1fr}
+}
+.entry-card__bullets li{
+  font-size:12px;color:var(--color-text-secondary);line-height:1.45;
+  padding-left:10px;position:relative;
+}
+.entry-card__bullets li::before{
+  content:"";position:absolute;left:0;top:7px;width:4px;height:4px;border-radius:50%;background:#91caff;
+}
+.entry-card__actions{display:flex;flex-direction:column;gap:8px;margin-top:auto}
+.entry-card__actions--row{flex-direction:row;flex-wrap:wrap}
+.entry-card__actions--row .el-button{flex:1;min-width:140px}
+
+.el-button{
+  display:flex;align-items:center;justify-content:center;gap:4px;
+  height:32px;padding:0 15px;border-radius:6px;font-size:14px;font-weight:500;
+  text-decoration:none;cursor:pointer;border:1px solid var(--color-border);
+  background:#fff;color:var(--color-text-primary);font-family:inherit;transition:all .15s;
+}
+.el-button:hover{border-color:var(--color-primary);color:var(--color-primary)}
+.el-button--primary{background:var(--color-primary);border-color:var(--color-primary);color:#fff}
+.el-button--primary:hover{background:var(--color-primary-light);border-color:var(--color-primary-light);color:#fff}
+.el-button--sm{height:28px;font-size:12px;padding:0 10px}
+
+.compare-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+.compare-table th,.compare-table td{border:1px solid var(--color-border);padding:8px 10px;text-align:left;vertical-align:top}
+.compare-table th{background:#fafafa;font-weight:500;color:#5c6678}
+.compare-table .yes{color:#389e0d;font-weight:600}
+.compare-table .no{color:#bfbfbf}
+.compare-table .partial{color:#d46b08}
+.compare-table a{color:var(--color-primary)}
+
+.decision-box{padding:12px 14px;border-radius:8px;border:1px solid #b7eb8f;background:#f6ffed;font-size:13px;color:#135200;margin-top:12px;line-height:1.6}
+
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0 4px}
+@media(max-width:640px){.stat-row{grid-template-columns:repeat(2,1fr)}}
+.stat-card{
+  background:#fafafa;border:1px solid var(--color-border);border-radius:var(--radius-card);
+  padding:14px;text-align:center;
+}
+.stat-card__value{font-size:22px;font-weight:600;color:var(--color-primary);line-height:1.2}
+.stat-card__label{font-size:12px;color:var(--color-text-secondary);margin-top:4px}
+
+.chip-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px}
+details.fold{
+  margin:12px 0 0;border:1px solid var(--color-border);border-radius:8px;background:#fff;overflow:hidden;
+}
+details.fold > summary{
+  cursor:pointer;list-style:none;padding:10px 14px;font-size:13px;font-weight:500;
+  color:var(--color-text-primary);background:#fafafa;user-select:none;
+}
+details.fold > summary::-webkit-details-marker{display:none}
+details.fold > summary::after{content:"展开";float:right;font-weight:400;color:var(--color-text-muted);font-size:12px}
+details.fold[open] > summary::after{content:"收起"}
+.fold-body{padding:12px 14px;border-top:1px solid var(--color-border)}
+.fold-body .section-sub{margin-bottom:10px}
+
+.preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:8px}
+@media(max-width:720px){.preview-grid{grid-template-columns:1fr}}
+.preview-card{border:1px solid #e8ebf0;border-radius:10px;overflow:hidden;background:#fff}
+.preview-card__head{
+  padding:10px 14px;border-bottom:1px solid #eef0f4;background:linear-gradient(180deg,#fbfcfe,#f2f5fa);
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+}
+.preview-card__head h4{font-size:13px;font-weight:500;color:#5c6678}
+.preview-card__head span{font-size:12px;color:var(--color-text-muted)}
+.preview-card__cap{padding:8px 14px;font-size:12px;color:var(--color-text-secondary);border-top:1px solid #eef0f4}
+.preview-link{
+  display:block;padding:24px;text-align:center;background:#f1f5f9;color:#475569;
+  text-decoration:none;
+}
+.preview-link:hover{background:#e8eef5;color:var(--color-primary)}
+
+.footer-note{text-align:center;font-size:12px;color:var(--color-text-muted);padding:8px 0 24px;line-height:1.6}
+.footer-note code{font-size:11px;background:#f5f5f5;padding:2px 6px;border-radius:4px}
+.footer-note a{color:var(--color-primary)}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-header__left">
+    <div class="app-logo">
+      <span class="app-logo__icon">AI</span>
+      <span>智营获客</span>
+    </div>
+    <span class="app-header__sub">内容获客 · Phase 1 PRD（交易层）</span>
+  </div>
+  <div class="app-header__right">平台 P01–P12 · 商家 A01–A23 · 买家 M01–M15</div>
+</header>
+
+<main class="app-main">
+  <div class="page-card">
+    <h1 class="page-title">内容获客 Phase 1 · 产品原型索引</h1>
+    <p class="page-sub">定位：<strong>AI 内容工厂 + 交易闭环 + CRM</strong>。本页是四端线框与技术文档的统一入口——先选角色路径，再进对应原型；细节表与演示脚本折叠在下方。</p>
+    <div class="page-hint">请用 Chrome / Edge 打开本目录下的 HTML，勿用 IDE 文本预览</div>
+
+    <h2 class="section-title">按角色怎么读</h2>
+    <p class="section-sub">同一套文档，三条最短路径。避免在编码号里迷路。</p>
+    <div class="path-row">
+      <div class="path-card">
+        <div class="path-card__role">产品 / 业务</div>
+        <div class="path-card__text">先看<a href="../../00-总览/内容获客平台方案摘要.md">方案摘要</a> → 再走平台/商家/买家线框 → 资金口径看<a href="07-支付与结算说明.html">支付与结算说明</a>。</div>
+      </div>
+      <div class="path-card">
+        <div class="path-card__role">研发 / 测试</div>
+        <div class="path-card__text"><a href="03-数据流.html">数据流</a> + <a href="04-数据模型.html">表字段</a> + <a href="05-角色权限.html#catalog">权限码</a> → 对照 PRD §8 API；验收脚本见下方 P1-16。</div>
+      </div>
+      <div class="path-card">
+        <div class="path-card__role">运营 / 入驻</div>
+        <div class="path-card__text">先看下方<a href="#onboarding">商家入驻</a>卡片（F0 流程图）→ <a href="06-平台端UI.html#p03">P03 审核</a> / <a href="01-管理端UI.html#a20">A20 自申</a>；续费走 <a href="06-平台端UI.html#p11-todo">P11</a>。</div>
+      </div>
+    </div>
+
+    <h2 class="section-title">文档入口</h2>
+    <p class="section-sub">点击主按钮进入对应文档；页内顶部 Tab 可切换全部页面。</p>
+
+    <div class="entry-grid">
+      <article class="entry-card">
+        <div class="entry-card__head">
+          <span class="entry-card__title">方案与汇报</span>
+          <span class="el-tag el-tag--warning">总览</span>
+        </div>
+        <p class="entry-card__desc">三层架构、智能体分期、素材合规与商城 Phase1 边界。给决策层与对齐会用。</p>
+        <div class="entry-card__actions">
+          <a class="el-button el-button--primary" href="../../00-总览/内容获客平台方案摘要.md">方案摘要</a>
+          <a class="el-button" href="PRD-内容获客商城-phase1.md">PRD 总述（Markdown）</a>
+          <a class="el-button" href="../../02-执行计划/内容获客平台-执行计划.md">执行计划</a>
+          <div class="chip-row" style="margin-top:4px">
+            <a class="el-button el-button--sm" href="../../07-对外资料/03-汇报材料/内容获客平台_全域四平台实施方案_20260804.pptx">决策层 PPT</a>
+            <a class="el-button el-button--sm" href="内容获客平台_功能实施清单.xlsx">功能实施清单</a>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry-card">
+        <div class="entry-card__head">
+          <span class="entry-card__title">平台运营端</span>
+          <span class="el-tag el-tag--purple">Web · P01–P12</span>
+        </div>
+        <p class="entry-card__meta">12 个主页面（含总览 Tab 共 13）</p>
+        <p class="entry-card__desc">商家租户、入驻审核、套餐/订阅、清结算、渠道、短信、商品审核与稽查。</p>
+        <ul class="entry-card__bullets">
+          <li>P02 / P03 商家与入驻</li>
+          <li>P10 / P11 套餐与权益</li>
+          <li>P05 清结算 · P09 商品审</li>
+          <li>P12 短信 · P07 稽查</li>
+        </ul>
+        <div class="entry-card__actions entry-card__actions--row">
+          <a class="el-button el-button--primary" href="06-平台端UI.html">打开平台端 UI</a>
+          <a class="el-button" href="06-平台端UI.html#p11-todo">P11 续费待办</a>
+        </div>
+      </article>
+
+      <article class="entry-card">
+        <div class="entry-card__head">
+          <span class="entry-card__title">商家端</span>
+          <span class="el-tag el-tag--primary">Web · A01–A23</span>
+        </div>
+        <p class="entry-card__meta">主 Tab 约 24 个（另含编辑态 / 核销记录等）</p>
+        <p class="entry-card__desc">交易经营 + 设置中心。开店前置（入驻 / 登录注册）见右侧「商家入驻」卡片，不在本卡重复。</p>
+        <ul class="entry-card__bullets">
+          <li>A15 支付 · A15-S 短信领权</li>
+          <li>A18 套餐 · A19 单店 · A16 角色</li>
+          <li>A02–A09 商品与订单</li>
+          <li>A14 / A23 公域对接</li>
+        </ul>
+        <div class="entry-card__actions">
+          <a class="el-button el-button--primary" href="01-管理端UI.html">打开商家端 UI</a>
+        </div>
+      </article>
+
+      <article class="entry-card" id="onboarding">
+        <div class="entry-card__head">
+          <span class="entry-card__title">商家入驻</span>
+          <span class="el-tag el-tag--warning">开店前置</span>
+        </div>
+        <p class="entry-card__meta">F0 流程 + 三类主体线框 + 审核</p>
+        <p class="entry-card__desc">智营<strong>租户</strong> ≠ 商城<strong>入驻</strong>。双通道（管家代建 / 商家自申）→ P03 审核 → 开权。从「全部数据流」里单独拎出，避免和交易/清结算图混着找。</p>
+        <ul class="entry-card__bullets">
+          <li>F0 双通道流程图</li>
+          <li>P02-A 个人 / 个体 / 企业</li>
+          <li>P03 入驻审核 · A20 自申</li>
+          <li>入驻字段与 OCR</li>
+        </ul>
+        <div class="entry-card__actions entry-card__actions--row">
+          <a class="el-button el-button--primary" href="03-数据流.html#f0">F0 入驻流程图</a>
+          <a class="el-button" href="06-平台端UI.html#p03">P03 审核</a>
+          <a class="el-button" href="01-管理端UI.html#a20">A20 自申</a>
+          <a class="el-button" href="04-数据模型.html#ob">字段表</a>
+        </div>
+        <details class="fold" style="margin-top:12px;border:none;background:transparent">
+          <summary style="background:#fafafa;border:1px solid var(--color-border);border-radius:6px">更多锚点（主体类型 · 详情 Tab · 续费）</summary>
+          <div class="fold-body" style="border:1px solid var(--color-border);border-top:none;border-radius:0 0 6px 6px;padding-top:10px">
+            <p class="section-sub" style="margin-bottom:8px">说明见 <a href="PRD-内容获客商城-phase1.md#210a-登录注册与页面动线智营工作台-vs-商城商家后台">PRD §2.1.0a</a>。租户开通走主站 <code>/admin</code>。</p>
+            <div class="chip-row">
+              <a class="el-button el-button--sm" href="06-平台端UI.html#p02a">P02-A 个人</a>
+              <a class="el-button el-button--sm" href="06-平台端UI.html#p02a-ib">P02-A 个体</a>
+              <a class="el-button el-button--sm" href="06-平台端UI.html#p02a-ent">P02-A 企业</a>
+              <a class="el-button el-button--sm" href="06-平台端UI.html#p02b-overview">P02-B 详情</a>
+              <a class="el-button el-button--sm" href="06-平台端UI.html#p02b-materials">入驻材料</a>
+              <a class="el-button el-button--sm" href="06-平台端UI.html#p02b-service">服务记录</a>
+              <a class="el-button el-button--sm" href="06-平台端UI.html#p02b-renewal">申请续费</a>
+              <a class="el-button el-button--sm" href="06-平台端UI.html#renewal-payment-flow">续费付费说明</a>
+              <a class="el-button el-button--sm" href="01-管理端UI.html#a21">A21 登录</a>
+              <a class="el-button el-button--sm" href="01-管理端UI.html#a22">A22 注册</a>
+            </div>
+          </div>
+        </details>
+      </article>
+
+      <article class="entry-card">
+        <div class="entry-card__head">
+          <span class="entry-card__title">买家端</span>
+          <span class="el-tag el-tag--success">微信小程序 · M01–M15</span>
+        </div>
+        <p class="entry-card__meta">15 主页面 + M10b 核销码</p>
+        <p class="entry-card__desc">默认手机壳「首页」：逛店 → 支付 → 已购学习；公域另有短信领权页。</p>
+        <ul class="entry-card__bullets">
+          <li>M02–M05 浏览与支付</li>
+          <li>M06–M08 已购与学课</li>
+          <li>M11–M13 订单与开票</li>
+          <li>M14 公域领权</li>
+        </ul>
+        <div class="entry-card__actions">
+          <a class="el-button el-button--primary" href="02-买家端UI.html">打开买家端 UI</a>
+        </div>
+      </article>
+
+      <article class="entry-card entry-card--span">
+        <div class="entry-card__head">
+          <span class="entry-card__title">数据 · 模型 · 权限 · 资金口径</span>
+          <span class="el-tag el-tag--tech">规则与实现</span>
+        </div>
+        <p class="entry-card__desc">
+          给研发与测试的「怎么算、怎么落库、谁能做」。<strong>流程图</strong>覆盖订单状态机、支付开权/退款关权、公域成交、套餐与清结算等（<strong>入驻 F0 已单独成卡</strong>，仍收录在全部流程图中）；
+          <strong>表字段</strong>定义 <code>shop_*</code>；<strong>权限</strong>给默认角色与权限码；
+          <strong>支付与结算</strong>用白话讲清进件、代收/分账与 P05。
+        </p>
+        <ul class="entry-card__bullets entry-card__bullets--4">
+          <li>O1 订单状态机</li>
+          <li>F1 / F2 开权 · 关权</li>
+          <li>F3 / F3b 公域成交</li>
+          <li>F6–F7 / F12 合规闸</li>
+          <li>F8 / F9 套餐 · 用量</li>
+          <li>F10 清结算 · F11 演示</li>
+          <li>A14 抖音对接总览</li>
+          <li>入驻 → <a href="#onboarding">商家入驻</a></li>
+        </ul>
+        <div class="entry-card__actions entry-card__actions--row">
+          <a class="el-button el-button--primary" href="03-数据流.html">全部数据流程图</a>
+          <a class="el-button" href="07-支付与结算说明.html">支付与结算说明</a>
+          <a class="el-button" href="04-数据模型.html">表字段说明</a>
+          <a class="el-button" href="05-角色权限.html#catalog">角色与权限码</a>
+        </div>
+      </article>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card"><div class="stat-card__value">12</div><div class="stat-card__label">平台主页面 P01–P12</div></div>
+      <div class="stat-card"><div class="stat-card__value">24+</div><div class="stat-card__label">商家端主 Tab</div></div>
+      <div class="stat-card"><div class="stat-card__value">16</div><div class="stat-card__label">买家端页（含 M10b）</div></div>
+      <div class="stat-card"><div class="stat-card__value">16</div><div class="stat-card__label">核心流程图（O1+F+A14）</div></div>
+    </div>
+
+    <h2 class="section-title">对象模型一览 · 商家 · 店铺 · 套餐 · 订阅</h2>
+    <p class="section-sub">商家主体分<strong>个人 / 个体工商户 / 企业</strong>。平台用 <strong>P10</strong> 配套餐模板、<strong>P11</strong> 开通多条订阅并合并权益。</p>
+    <table class="compare-table">
+      <tr><th>层级</th><th>说明</th><th>平台</th><th>商家</th></tr>
+      <tr><td>商家主体</td><td>个人 / 个体 / 企业；<a href="04-数据模型.html#ob">入驻字段与 OCR</a></td><td>P02-A / P03</td><td><b>A20</b> 自申</td></tr>
+      <tr><td>套餐模板</td><td>主套餐 + 加购包；配额可 max / sum</td><td><b>P10</b></td><td>—</td></tr>
+      <tr><td>已购权益</td><td>多条叠加，合并后生效</td><td><b>P11</b> · P02 下钻</td><td><b>A18</b></td></tr>
+      <tr><td>支付进件</td><td>商家级微信子商户；<a href="07-支付与结算说明.html">代收 vs 分账</a></td><td>P03 · P04 · P05</td><td><b>A15</b></td></tr>
+      <tr><td>短信领权</td><td>域名/过期天数；签名模板由平台分配</td><td><b>P12</b></td><td><b>A15-S</b></td></tr>
+      <tr><td>单店展示</td><td>Logo / 简介 / 退款默认</td><td>—</td><td><b>A19</b></td></tr>
+      <tr><td>角色权限</td><td>内置角色 · 成员绑定</td><td><b>P08</b>；账号 <code>/admin/users</code></td><td><b>A16</b></td></tr>
+      <tr><td>店铺 / 商品</td><td>受合并配额限制；商品挂店铺</td><td>P02 / P09</td><td>A17 / A02–A03</td></tr>
+    </table>
+
+    <details class="fold">
+      <summary>平台怎么配 · 商家怎么用（页面对照）</summary>
+      <div class="fold-body">
+        <table class="compare-table">
+          <tr><th>角色</th><th>页面</th><th>做什么</th><th>文档</th></tr>
+          <tr><td>平台</td><td><b>P08</b></td><td>主站绑商城角色；侧栏角色说明</td><td><a href="06-平台端UI.html#p08-admin-users">P08-AU</a> · <a href="05-角色权限.html#catalog">权限码</a></td></tr>
+          <tr><td>平台</td><td><b>P10</b></td><td>功能字典 → 套餐模板 → 交 P11 开通</td><td><a href="06-平台端UI.html#p10">P10</a> · <a href="PRD-内容获客商城-phase1.md#23-套餐灵活配置p10">PRD §2.3</a></td></tr>
+          <tr><td>平台</td><td><b>P11</b></td><td>stack 加购 / replace 换档 / 生效期</td><td><a href="06-平台端UI.html#p11">P11</a> · <a href="PRD-内容获客商城-phase1.md#83-平台--订阅开通p11">PRD §8.3</a></td></tr>
+          <tr><td>商家</td><td><b>A15</b></td><td>微信进件材料 · 子商户状态</td><td><a href="01-管理端UI.html#a15">A15</a> · <a href="07-支付与结算说明.html">支付说明</a></td></tr>
+          <tr><td>商家</td><td><b>A15-S</b></td><td>领权域名/过期（签名模板只读）</td><td><a href="01-管理端UI.html#a15-sms">A15-S</a></td></tr>
+          <tr><td>平台</td><td><b>P12</b></td><td>短信签名 / 模板 / 分配 / 发送记录</td><td><a href="06-平台端UI.html#p12">短信管理</a></td></tr>
+          <tr><td>平台</td><td><b>P06</b></td><td>抖店/微信 · 商户进件</td><td><a href="06-平台端UI.html#p06">渠道配置</a></td></tr>
+          <tr><td>商家</td><td><b>A16 / A18 / A19</b></td><td>角色、合并额度、本店展示</td><td><a href="01-管理端UI.html#a16">A16</a> · <a href="01-管理端UI.html#a18">A18</a> · <a href="01-管理端UI.html#a19">A19</a></td></tr>
+          <tr><td>商家</td><td>A17 / A02 / A03 / A14</td><td>业务页触达配额与公域</td><td><a href="01-管理端UI.html#a18">A18</a></td></tr>
+        </table>
+      </div>
+    </details>
+
+    <h2 class="section-title">交易合规四道闸（Phase 1）</h2>
+    <p class="section-sub">对齐 <a href="../../00-总览/内容获客平台方案摘要.md">方案摘要 §5</a>：主体资质 → 商品上架 → 公域挂载 → 事后稽查。虚拟商品须机审 + 人审后方可上架与映射抖店。</p>
+    <table class="compare-table">
+      <tr><th>闸</th><th>平台</th><th>商家</th><th>数据流</th></tr>
+      <tr><td>主体资质</td><td>P02-A / P03</td><td>A17 开店前置</td><td><a href="03-数据流.html#f0">F0</a></td></tr>
+      <tr><td>商品上架</td><td>P09 人审</td><td>A02–A03 提交审核</td><td><a href="03-数据流.html#f6">F6</a></td></tr>
+      <tr><td>公域挂载</td><td>P06 渠道</td><td>A14 商品映射</td><td><a href="03-数据流.html#f7">F7</a></td></tr>
+      <tr><td>事后稽查</td><td><a href="06-平台端UI.html#p07">P07</a></td><td>—</td><td><a href="03-数据流.html#f12">F12</a></td></tr>
+    </table>
+
+    <details class="fold" id="p1-16-demo">
+      <summary>P1-16 · IP 获客演示包（招商/内部分享最小脚本）</summary>
+      <div class="fold-body">
+        <p class="section-sub">非 Mx 硬验收。编排见 <a href="03-数据流.html#f11">F11</a>；验收口径见 <a href="PRD-内容获客商城-phase1.md#93-m3m8-规划验收要点脚本待建">PRD §9.3</a>（不替代 M7）。</p>
+        <table class="compare-table">
+          <tr><th>步骤</th><th>角色</th><th>页面 / 动作</th><th>说明</th></tr>
+          <tr><td>1</td><td>商家</td><td><a href="01-管理端UI.html#a02">A02</a> → <a href="01-管理端UI.html#a03">A03</a> → <a href="06-平台端UI.html#p09">P09</a></td><td>课类商品上架 <code>on_sale</code></td></tr>
+          <tr><td>2</td><td>商家</td><td><a href="01-管理端UI.html#a14">A14</a></td><td>路径 A/B；挂载闸 <a href="03-数据流.html#f7">F7</a></td></tr>
+          <tr><td>3</td><td>运营</td><td><a href="06-平台端UI.html#p06">P06</a></td><td>Webhook：见 <a href="04-数据模型.html#webhook-urls">04 §Webhook</a></td></tr>
+          <tr><td>4</td><td>买家</td><td><a href="02-买家端UI.html#m02">M02</a> → <a href="02-买家端UI.html#m04">M04</a></td><td>私域微信支付 → <code>paid</code>（M3）</td></tr>
+          <tr><td>5</td><td>买家</td><td><a href="02-买家端UI.html#m06">M06</a> / <a href="02-买家端UI.html#m07">M07</a></td><td>已购 → 学课</td></tr>
+          <tr><td>6</td><td>买家</td><td><a href="02-买家端UI.html#m14">M14</a></td><td>公域：短信领权 → M06（M7）</td></tr>
+        </table>
+        <p class="section-sub" style="margin-top:10px;margin-bottom:0">演示数据：<code>apps/api/tests/seed_shop_demo.py</code>；M0 脚本 <code>verify_shop_m0.py</code> 覆盖入驻与权限，不含完整交易链。</p>
+      </div>
+    </details>
+
+    <h2 class="section-title">竞品对标 · 商家端是否做 H5？</h2>
+    <p class="section-sub">知识付费 / 私域 SaaS：商家完整后台普遍为 <strong>PC Web</strong>；移动端用 APP / 小程序做轻量经营，而非 H5 版全功能后台。</p>
+    <table class="compare-table">
+      <tr><th>竞品</th><th>商家完整后台</th><th>商家移动端</th><th>说明</th></tr>
+      <tr>
+        <td><b>小鹅通</b></td>
+        <td class="yes">PC Web</td>
+        <td class="partial">商家版 APP</td>
+        <td>管理台不支持嵌入 SDK；「鹅零售」小程序做核销扫码</td>
+      </tr>
+      <tr>
+        <td><b>有赞</b></td>
+        <td class="yes">PC 商家后台</td>
+        <td class="partial">门店 / 微商城 APP</td>
+        <td>H5 多指买家店铺渠道，非商家管理端</td>
+      </tr>
+      <tr>
+        <td><b>千聊</b></td>
+        <td class="yes">PC Web</td>
+        <td class="partial">讲师助手 APP</td>
+        <td>移动侧重开播与提醒，非全功能后台</td>
+      </tr>
+      <tr>
+        <td><b>知识星球</b></td>
+        <td class="yes">PC Web</td>
+        <td class="partial">星主 APP</td>
+        <td>审核与成员管理以 PC 为主</td>
+      </tr>
+    </table>
+    <div class="decision-box">
+      <strong>Phase 1：</strong>商家店后台仅做 Web（与竞品一致）。A21/A22 提供 Web + H5 线框（主站入口，非完整店后台）。<br>
+      <strong>Phase 2 可选：</strong>店员核销做 H5 / 小程序（对标鹅零售，覆盖 <code>shop_clerk</code>）；完整后台仍 Web。<br>
+      <strong>买家端 H5</strong>（公众号内嵌）可与小程序并行，与商家管理端无关。
+    </div>
+
+    <h2 class="section-title">界面预览</h2>
+    <p class="section-sub">完整交互请打开上方线框；静态截图目录 <code>screenshots/</code>（若有）。</p>
+    <div class="preview-grid">
+      <figure class="preview-card">
+        <div class="preview-card__head"><h4>商家端 · A01 交易看板</h4><span>侧栏 + 指标</span></div>
+        <a href="01-管理端UI.html#a01" class="preview-link">打开 A01 线框 →</a>
+        <figcaption class="preview-card__cap">对齐 CRM 列表与看板布局</figcaption>
+      </figure>
+      <figure class="preview-card">
+        <div class="preview-card__head"><h4>买家端 · M02 首页</h4><span>手机壳</span></div>
+        <a href="02-买家端UI.html#m02" class="preview-link">打开 M02 线框 →</a>
+        <figcaption class="preview-card__cap">底栏：首页 · 已购 · 我的</figcaption>
+      </figure>
+    </div>
+
+    <p class="footer-note" style="margin-top:16px;text-align:left">
+      方案总览：<code>docs/00-总览/内容获客平台方案摘要.md</code><br>
+      执行计划：<code>docs/02-执行计划/内容获客平台-执行计划.md</code>
+    </p>
+  </div>
+
+  <p class="footer-note">别名入口：<code>内容获客商城-prd-phase1.html</code> · <code>【点我看UI】商家端与买家端.html</code></p>
+</main>
+</body>
+</html>

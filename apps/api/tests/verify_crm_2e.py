@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CRM-2e 验收：v0.5 缺口补齐（docs/v0.5-crm-gap执行计划.md）。"""
+"""CRM-2e 验收：v0.5 缺口补齐（docs/02-执行计划/v0.5-crm-gap执行计划.md）。"""
 from __future__ import annotations
 
 import sys

@@ -16,11 +16,19 @@ from app.permissions import (
     PLATFORM_ADMIN_ROLE,
     SALES_DEFAULT_PERMISSIONS,
     SALES_MANAGER_DEFAULT_PERMISSIONS,
+    SHOP_ADMIN_DEFAULT_PERMISSIONS,
+    SHOP_CLERK_DEFAULT_PERMISSIONS,
+    SHOP_CONTENT_DEFAULT_PERMISSIONS,
+    SHOP_SUPPORT_DEFAULT_PERMISSIONS,
     SYSTEM_ROLE_ADMIN,
     SYSTEM_ROLE_EDITOR,
     SYSTEM_ROLE_MARKETING,
     SYSTEM_ROLE_SALES,
     SYSTEM_ROLE_SALES_MANAGER,
+    SYSTEM_ROLE_SHOP_ADMIN,
+    SYSTEM_ROLE_SHOP_CLERK,
+    SYSTEM_ROLE_SHOP_CONTENT,
+    SYSTEM_ROLE_SHOP_SUPPORT,
 )
 
 
@@ -60,7 +68,41 @@ def seed_tenant_roles(db: Session, tenant_id: UUID) -> tuple[TenantRole, TenantR
         name="市场运营",
         is_system=True,
     )
-    for role in (admin, editor, sales, sales_manager, marketing):
+    shop_admin = TenantRole(
+        tenant_id=tenant_id,
+        code=SYSTEM_ROLE_SHOP_ADMIN,
+        name="店铺管理员",
+        is_system=True,
+    )
+    shop_content = TenantRole(
+        tenant_id=tenant_id,
+        code=SYSTEM_ROLE_SHOP_CONTENT,
+        name="内容运营",
+        is_system=True,
+    )
+    shop_support = TenantRole(
+        tenant_id=tenant_id,
+        code=SYSTEM_ROLE_SHOP_SUPPORT,
+        name="客服",
+        is_system=True,
+    )
+    shop_clerk = TenantRole(
+        tenant_id=tenant_id,
+        code=SYSTEM_ROLE_SHOP_CLERK,
+        name="店员",
+        is_system=True,
+    )
+    for role in (
+        admin,
+        editor,
+        sales,
+        sales_manager,
+        marketing,
+        shop_admin,
+        shop_content,
+        shop_support,
+        shop_clerk,
+    ):
         db.add(role)
     db.flush()
 
@@ -69,6 +111,10 @@ def seed_tenant_roles(db: Session, tenant_id: UUID) -> tuple[TenantRole, TenantR
     _add_role_permissions(db, sales.id, SALES_DEFAULT_PERMISSIONS)
     _add_role_permissions(db, sales_manager.id, SALES_MANAGER_DEFAULT_PERMISSIONS)
     _add_role_permissions(db, marketing.id, MARKETING_DEFAULT_PERMISSIONS)
+    _add_role_permissions(db, shop_admin.id, SHOP_ADMIN_DEFAULT_PERMISSIONS)
+    _add_role_permissions(db, shop_content.id, SHOP_CONTENT_DEFAULT_PERMISSIONS)
+    _add_role_permissions(db, shop_support.id, SHOP_SUPPORT_DEFAULT_PERMISSIONS)
+    _add_role_permissions(db, shop_clerk.id, SHOP_CLERK_DEFAULT_PERMISSIONS)
     db.flush()
     return admin, editor
 
@@ -226,9 +272,12 @@ def pick_default_tenant_id(db: Session, user: User) -> UUID | None:
 
 
 def assert_membership_access(db: Session, user: User, tenant_id: UUID) -> TenantMembership:
-    if is_platform_admin(user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="平台管理员请使用用户工作台")
     membership = get_membership(db, user.id, tenant_id)
-    if not membership:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该公司")
-    return membership
+    if membership:
+        return membership
+    if is_platform_admin(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="平台管理员请从商家登录入口 /login 进入后再选择公司",
+        )
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该公司")

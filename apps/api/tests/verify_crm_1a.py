@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CRM-1a 验收：线索/客户/联系人/跟进（docs/v0.5-crm执行计划.md §3）。"""
+"""CRM-1a 验收：线索/客户/联系人/跟进（docs/02-执行计划/v0.5-crm执行计划.md §3）。"""
 from __future__ import annotations
 
 import sys
@@ -83,7 +83,7 @@ def step_1a_3(results: list[bool]) -> None:
         "POST",
         "/crm/leads",
         token=sales_a,
-        body={"company_name": "CRM测试公司A", "contact_name": "张三", "mobile": "13800001111"},
+        body=lead_body("CRM测试公司A"),
     )
     results.append(check("V1a-3-1 sales创建线索", code == 201 and lead.get("company_name"), str(code)))
     lead_id = lead.get("id") if code == 201 else None
@@ -114,7 +114,9 @@ def step_1a_3(results: list[bool]) -> None:
         results.append(check("V1a-3-5 无assign改owner", code == 403, str(code)))
 
         code, _ = req("DELETE", f"/crm/leads/{lead_id}", token=admin)
-        results.append(check("V1a-3-6 admin软删", code == 204, str(code)))
+        results.append(check("V1a-3-6 admin不能删他人线索", code == 403, str(code)))
+        code, _ = req("DELETE", f"/crm/leads/{lead_id}", token=sales_a)
+        results.append(check("V1a-3-6 负责人软删", code == 204, str(code)))
         code, list_after = req("GET", "/crm/leads", token=admin)
         ids_after = [x["id"] for x in list_after.get("items", [])] if code == 200 else []
         results.append(check("V1a-3-6 删后不可见", lead_id not in ids_after))
@@ -131,11 +133,14 @@ def step_1a_4(results: list[bool]) -> None:
     sales_a = sales_token(SALES_A_PHONE, tenant_id)
     sales_b = sales_token(SALES_B_PHONE, tenant_id)
 
+    import uuid as _uuid
+
+    tag = _uuid.uuid4().hex[:8]
     code, cust = req(
         "POST",
         "/crm/customers",
         token=sales_a,
-        body={"company_name": "客户A公司", "mobile": "13800002222"},
+        body={"company_name": f"客户A公司-{tag}", "mobile": f"138{int(tag, 16) % 100000000:08d}"},
     )
     results.append(check("V1a-4-1 客户CRUD创建", code == 201, str(code)))
     cust_id = cust.get("id") if code == 201 else None
@@ -145,7 +150,7 @@ def step_1a_4(results: list[bool]) -> None:
             "POST",
             f"/crm/customers/{cust_id}/contacts",
             token=sales_a,
-            body={"name": "李四", "mobile": "13800003333", "is_primary": True},
+            body={"name": "李四", "mobile": f"137{int(tag, 16) % 100000000:08d}", "is_primary": True},
         )
         results.append(check("V1a-4-2 新建联系人", code == 201, str(code)))
 
@@ -153,7 +158,7 @@ def step_1a_4(results: list[bool]) -> None:
             "POST",
             f"/crm/customers/{cust_id}/contacts",
             token=sales_a,
-            body={"name": "王五", "is_primary": True},
+            body={"name": "王五", "mobile": f"136{int(tag, 16) % 100000000:08d}", "is_primary": True},
         )
         results.append(check("V1a-4-4 新首要取消旧首要", code == 201, str(code)))
         if code == 201:

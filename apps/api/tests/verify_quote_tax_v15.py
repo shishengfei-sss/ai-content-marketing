@@ -35,8 +35,8 @@ from tests.verify_crm_helpers import finish_phase  # noqa: E402
 
 def _docs_ok() -> list[tuple[str, bool, str]]:
     results: list[tuple[str, bool, str]] = []
-    prd = REPO_ROOT / "product-quote-tax-prd" / "product-quote-tax-prd.html"
-    ux = REPO_ROOT / "product-quote-tax-ui-ux" / "product-quote-tax-ui-ux.html"
+    prd = REPO_ROOT / "产品报价价税-prd" / "产品报价价税-prd.html"
+    ux = REPO_ROOT / "产品报价价税UI交互" / "产品报价价税UI交互.html"
     plan = REPO_ROOT / "docs" / "v1.5-产品报价价税增强执行计划.md"
     srs = REPO_ROOT / "docs" / "需求规格.md"
     results.append(check("V15-DOC-01 PRD exists", prd.is_file(), str(prd)))

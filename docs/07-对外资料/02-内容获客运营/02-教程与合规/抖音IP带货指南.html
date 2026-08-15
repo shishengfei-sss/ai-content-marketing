@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抖音个人IP打造与电商带货完整教程（2025-2026 最新规则）</title>
+<style>
+:root {
+  --bg: #f4f6fb;
+  --bg2: #ffffff;
+  --bg3: #eef2ff;
+  --ink: #1e293b;
+  --text: #334155;
+  --text-secondary: #64748b;
+  --muted: #94a3b8;
+  --rule: #e2e8f0;
+  --accent: #e11d48;
+  --accent2: #0d9488;
+  --accent-soft: #fff1f2;
+  --accent2-soft: #f0fdfa;
+  --accent-glow: rgba(225, 29, 72, 0.08);
+  --accent2-glow: rgba(13, 148, 136, 0.08);
+  --primary: #4f46e5;
+  --primary-soft: #eef2ff;
+  --success: #16a34a;
+  --warn: #d97706;
+  --danger: #dc2626;
+  --sidebar-w: 272px;
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 15px; line-height: 1.8; color: var(--text); background: var(--bg);
+}
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+  background:
+    radial-gradient(ellipse 70% 50% at 10% 0%, rgba(225,29,72,0.05) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 45% at 90% 100%, rgba(13,148,136,0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(79,70,229,0.03) 0%, transparent 50%);
+}
+a { color: var(--primary); text-decoration: none; }
+a:hover { color: var(--accent); }
+
+.layout { display: flex; min-height: 100vh; }
+.sidebar {
+  position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
+  background: var(--bg2); border-right: 1px solid var(--rule);
+  box-shadow: var(--shadow); overflow-y: auto;
+  padding: 1.25rem 0 2rem; z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1rem; margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.sidebar-brand h1 {
+  font-size: 0.92rem; font-weight: 800; line-height: 1.45; color: var(--ink);
+  background: linear-gradient(135deg, var(--accent), var(--primary));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.sidebar-brand .ver { font-size: 0.7rem; color: var(--muted); margin-top: 0.3rem; }
+.sidebar nav { padding: 0 0.6rem; }
+
+.sidebar nav .part {
+  font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--muted); padding: 0.85rem 0.75rem 0.3rem;
+}
+
+.nav-group { margin-bottom: 0.15rem; }
+.nav-parent {
+  display: flex; align-items: center; gap: 0.35rem;
+  padding: 0.42rem 0.7rem; font-size: 0.82rem; font-weight: 600; color: var(--ink);
+  border-radius: 8px; text-decoration: none; transition: all 0.15s;
+}
+.nav-parent:hover { background: var(--primary-soft); color: var(--primary); text-decoration: none; }
+.nav-parent.active { background: linear-gradient(135deg, var(--accent-soft), var(--primary-soft)); color: var(--accent); }
+.nav-parent .dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--rule); flex-shrink: 0;
+}
+.nav-parent.active .dot { background: var(--accent); }
+
+.nav-sub { padding: 0.1rem 0 0.35rem 0.55rem; margin-left: 0.7rem; border-left: 2px solid var(--rule); }
+.nav-sub a {
+  display: block; padding: 0.28rem 0.65rem; font-size: 0.76rem; color: var(--text-secondary);
+  border-radius: 6px; text-decoration: none; transition: all 0.12s; line-height: 1.45;
+}
+.nav-sub a:hover { background: var(--bg3); color: var(--primary); text-decoration: none; }
+.nav-sub a.active {
+  background: var(--primary-soft); color: var(--primary); font-weight: 600;
+  border-left: 2px solid var(--primary); margin-left: -2px; padding-left: calc(0.65rem + 2px);
+}
+
+.content { margin-left: var(--sidebar-w); flex: 1; min-width: 0; }
+.cover {
+  background: linear-gradient(135deg, #ffffff 0%, #fff8f9 40%, #f0fdfa 100%);
+  border-bottom: 1px solid var(--rule); padding: 3.5rem 3rem 2.75rem;
+  position: relative; overflow: hidden;
+}
+.cover::before {
+  content: ''; position: absolute; top: -40%; right: -5%; width: 480px; height: 480px;
+  background: radial-gradient(circle, rgba(225,29,72,0.07) 0%, transparent 65%); pointer-events: none;
+}
+.cover::after {
+  content: ''; position: absolute; bottom: -30%; left: 5%; width: 360px; height: 360px;
+  background: radial-gradient(circle, rgba(13,148,136,0.08) 0%, transparent 65%); pointer-events: none;
+}
+.cover h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.75rem; position: relative; color: var(--ink); }
+.cover .subtitle { font-size: 1.05rem; color: var(--text-secondary); max-width: 680px; margin-bottom: 1.25rem; position: relative; }
+.cover .meta { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); position: relative; }
+.badge { display: inline-block; padding: 3px 11px; border-radius: 20px; font-size: 0.74rem; font-weight: 600; }
+.badge.cyan { background: var(--accent2-soft); color: var(--accent2); border: 1px solid rgba(13,148,136,0.2); }
+.badge.red { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(225,29,72,0.2); }
+
+main { max-width: 900px; padding: 2.25rem 3rem 4.5rem; }
+
+section { margin-bottom: 3.25rem; scroll-margin-top: 1.5rem; }
+h2 {
+  font-size: 1.55rem; font-weight: 800; margin-bottom: 1.1rem; padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--rule); position: relative; color: var(--ink);
+}
+h2::after { content: ''; position: absolute; bottom: -2px; left: 0; width: 72px; height: 2px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+h3 {
+  font-size: 1.1rem; font-weight: 700; margin: 2rem 0 0.7rem; color: var(--ink);
+  scroll-margin-top: 1.5rem;
+}
+h4 { font-size: 0.98rem; font-weight: 700; color: var(--primary); margin: 1.4rem 0 0.45rem; }
+p { margin-bottom: 0.85rem; color: var(--text); }
+strong { color: var(--ink); }
+ul, ol { padding-left: 1.5rem; margin-bottom: 0.85rem; color: var(--text); }
+li { margin-bottom: 0.3rem; }
+
+.card {
+  background: var(--bg2); border: 1px solid var(--rule); border-radius: 12px;
+  padding: 1.35rem 1.5rem; margin: 1.15rem 0; box-shadow: var(--shadow);
+}
+.callout {
+  border-radius: 0 10px 10px 0; padding: 1rem 1.2rem; margin: 1.15rem 0;
+  border-left: 3px solid var(--primary); background: var(--primary-soft);
+}
+.callout.warn { border-left-color: var(--warn); background: #fffbeb; }
+.callout.danger { border-left-color: var(--danger); background: #fef2f2; }
+.callout.success { border-left-color: var(--success); background: #f0fdf4; }
+.callout .title { font-weight: 700; font-size: 0.88rem; margin-bottom: 0.35rem; color: var(--ink); }
+
+.table-wrap { overflow-x: auto; margin: 1.15rem 0; border-radius: 10px; border: 1px solid var(--rule); background: var(--bg2); box-shadow: var(--shadow); }
+table { width: 100%; border-collapse: collapse; font-size: 0.84rem; min-width: 560px; }
+thead { background: linear-gradient(180deg, #f8fafc, #f1f5f9); }
+th { text-align: left; padding: 0.65rem 0.9rem; font-weight: 700; font-size: 0.73rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); border-bottom: 2px solid var(--rule); white-space: nowrap; }
+td { padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--text); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(79,70,229,0.03); }
+td strong { color: var(--primary); }
+
+.step-flow {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin: 1rem 0;
+  padding: 1rem 1.2rem; background: var(--bg2); border-radius: 10px;
+  border: 1px solid var(--rule); box-shadow: var(--shadow);
+}
+.step-flow .step { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.86rem; color: var(--text); }
+.step-flow .arrow { color: var(--accent); font-weight: 700; }
+.step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--primary));
+  color: #fff; font-size: 0.68rem; font-weight: 800; flex-shrink: 0;
+}
+
+.path-box {
+  background: var(--bg3); border: 1px solid rgba(79,70,229,0.15); border-radius: 8px;
+  padding: 0.75rem 1rem; font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.82rem; color: var(--primary); margin: 0.75rem 0; line-height: 1.6;
+}
+
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin: 1.15rem 0; }
+.grid-card { background: var(--bg2); border: 1px solid var(--rule); border-radius: 10px; padding: 1.2rem; box-shadow: var(--shadow); }
+.grid-card h4 { margin: 0 0 0.45rem; font-size: 0.94rem; }
+.grid-card p, .grid-card li { font-size: 0.86rem; color: var(--text-secondary); }
+
+.timeline { position: relative; padding-left: 1.75rem; margin: 1.15rem 0; }
+.timeline::before { content: ''; position: absolute; left: 6px; top: 8px; bottom: 8px; width: 2px; background: var(--rule); }
+.timeline-item { position: relative; margin-bottom: 1.15rem; }
+.timeline-item::before {
+  content: ''; position: absolute; left: -1.75rem; top: 6px; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--bg2); border: 2px solid var(--accent2);
+}
+.timeline-item h4 { margin: 0 0 0.3rem; font-size: 0.92rem; }
+.timeline-item p { font-size: 0.86rem; margin: 0; color: var(--text-secondary); }
+
+.checklist { list-style: none; padding-left: 0; }
+.checklist li { padding: 0.38rem 0 0.38rem 1.75rem; position: relative; font-size: 0.88rem; }
+.checklist li::before { content: '☐'; position: absolute; left: 0; color: var(--accent2); font-weight: 700; }
+
+.rule-tag { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; margin-right: 4px; }
+.rule-tag.new { background: var(--accent-soft); color: var(--accent); }
+.rule-tag.key { background: var(--accent2-soft); color: var(--accent2); }
+
+footer.doc-footer {
+  border-top: 1px solid var(--rule); padding: 1.75rem 3rem; font-size: 0.8rem; color: var(--muted);
+  background: var(--bg2);
+}
+footer.doc-footer a { color: var(--primary); }
+footer.doc-footer code { background: var(--bg3); padding: 2px 6px; border-radius: 4px; font-size: 0.78rem; }
+
+.menu-toggle { display: none; position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 200;
+  width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer;
+  background: linear-gradient(135deg, var(--accent), var(--primary)); color: #fff; font-size: 1.2rem;
+  box-shadow: 0 4px 20px rgba(225,29,72,0.35);
+}
+
+@media (max-width: 900px) {
+  .sidebar { transform: translateX(-100%); transition: transform 0.25s; box-shadow: 4px 0 24px rgba(0,0,0,0.12); }
+  .sidebar.open { transform: translateX(0); }
+  .content { margin-left: 0; }
+  .cover { padding: 2.25rem 1.5rem 2rem; }
+  .cover h1 { font-size: 1.55rem; }
+  main { padding: 1.5rem 1.25rem 3.5rem; }
+  .menu-toggle { display: flex; align-items: center; justify-content: center; }
+}
+@media print {
+  .sidebar, .menu-toggle { display: none; }
+  .content { margin-left: 0; }
+  body::before { display: none; }
+}
+</style>
+</head>
+<body>
+
+<button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="目录">☰</button>
+
+<div class="layout">
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <h1>抖音 IP 与电商带货教程</h1>
+    <div class="ver">2026 最新规则 · 2026-08-07</div>
+  </div>
+  <nav>
+    <div class="part">认知</div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#overview"><span class="dot"></span>总览与路线图</a>
+    </div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#algorithm"><span class="dot"></span>2026 算法与流量</a>
+      <div class="nav-sub">
+        <a href="#algo-eco">生态三大变化</a>
+        <a href="#algo-change">算法三处变化</a>
+        <a href="#algo-tower">双塔信任模型</a>
+        <a href="#algo-weight">权重金字塔</a>
+        <a href="#algo-pool">七级流量池</a>
+      </div>
+    </div>
+
+    <div class="part">入门</div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#account"><span class="dot"></span>账号注册与养号</a>
+      <div class="nav-sub">
+        <a href="#account-register">下载与注册</a>
+        <a href="#account-verify">实名认证</a>
+        <a href="#account-type">账号类型选择</a>
+        <a href="#account-profile">五件套包装</a>
+        <a href="#account-warmup">养号与标签校准</a>
+        <a href="#account-creator">创作者服务中心</a>
+      </div>
+    </div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#ip"><span class="dot"></span>个人 IP 定位打造</a>
+      <div class="nav-sub">
+        <a href="#ip-3step">定位三步法</a>
+        <a href="#ip-track">赛道垂直细分</a>
+        <a href="#ip-real">真人出镜信任</a>
+        <a href="#ip-script">黄金脚本结构</a>
+      </div>
+    </div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#content-plan"><span class="dot"></span>内容策划方法论</a>
+      <div class="nav-sub">
+        <a href="#content-value">价值三要素</a>
+        <a href="#content-search">搜索流量选题</a>
+        <a href="#content-series">系列化矩阵</a>
+        <a href="#content-checklist">拍摄前检查清单</a>
+      </div>
+    </div>
+
+    <div class="part">实操</div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#publish"><span class="dot"></span>发视频完整流程</a>
+      <div class="nav-sub">
+        <a href="#publish-shoot">拍摄与剪辑</a>
+        <a href="#publish-steps">发布步骤</a>
+        <a href="#publish-cart">挂小黄车</a>
+        <a href="#publish-rhythm">发布节奏</a>
+      </div>
+    </div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#live"><span class="dot"></span>直播开播实操</a>
+      <div class="nav-sub">
+        <a href="#live-threshold">开播门槛</a>
+        <a href="#live-device">设备清单</a>
+        <a href="#live-first">第一次开播</a>
+        <a href="#live-rules">直播红线</a>
+      </div>
+    </div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#growth"><span class="dot"></span>冷启动与涨粉</a>
+      <div class="nav-sub">
+        <a href="#growth-5">冷启动 5 动作</a>
+        <a href="#growth-30d">30 天涨粉路径</a>
+        <a href="#growth-fans">有效粉丝</a>
+        <a href="#growth-metrics">数据指标</a>
+      </div>
+    </div>
+
+    <div class="part">变现</div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#commerce-rules"><span class="dot"></span>带货权限与门槛</a>
+    </div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#window"><span class="dot"></span>橱窗与小黄车</a>
+    </div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#shop"><span class="dot"></span>抖店开店流程</a>
+      <div class="nav-sub">
+        <a href="#shop-type">店铺类型对比</a>
+        <a href="#shop-steps">入驻步骤</a>
+        <a href="#shop-alliance">精选联盟</a>
+      </div>
+    </div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#hang-product"><span class="dot"></span>挂商品实操</a>
+    </div>
+
+    <div class="part">增长</div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#douplus"><span class="dot"></span>DOU+ 内容加热</a>
+      <div class="nav-sub">
+        <a href="#douplus-compare">DOU+ vs 千川</a>
+        <a href="#douplus-verify">DOU+ 投放前验证</a>
+        <a href="#douplus-strategy">DOU+ 核心策略</a>
+      </div>
+    </div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#qianchuan"><span class="dot"></span>巨量千川投流</a>
+      <div class="nav-sub">
+        <a href="#qc-open">开通条件与入口</a>
+        <a href="#qc-mode">三种投放模式</a>
+        <a href="#qc-plan">创建计划 SOP</a>
+        <a href="#qc-budget">出价与预算</a>
+        <a href="#qc-material">素材与 ROI</a>
+        <a href="#qc-review">数据复盘避坑</a>
+      </div>
+    </div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#private"><span class="dot"></span>私域转化</a>
+      <div class="nav-sub">
+        <a href="#private-inside">站内私域</a>
+        <a href="#private-outside">合规站外引流</a>
+        <a href="#private-sop">承接 SOP</a>
+      </div>
+    </div>
+
+    <div class="part">合规</div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#compliance"><span class="dot"></span>违规红线与标注</a>
+      <div class="nav-sub">
+        <a href="#compliance-tags">6 类发布标签</a>
+        <a href="#compliance-ai">AI 三重标注</a>
+        <a href="#compliance-trademark">商标 R 标</a>
+        <a href="#compliance-check">限流自查清单</a>
+      </div>
+    </div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#tools"><span class="dot"></span>工具与行动清单</a>
+    </div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#faq"><span class="dot"></span>避坑 FAQ</a>
+    </div>
+    <div class="nav-group">
+      <a class="nav-parent" href="#refs"><span class="dot"></span>规则来源</a>
+    </div>
+  </nav>
+</aside>
+
+<div class="content">
+<header class="cover">
+  <h1>抖音个人 IP 打造与电商带货<br>完整实操教程</h1>
+  <p class="subtitle">认知 → 规则 → 定位 → 内容 → 从 0 到 1 实操 → 起号 → 运营（DOU+ / 千川 / 私域）→ 带货变现。整合 2026 年算法变化、中央网信办短视频标注规范、抖音 5～7 月新规及电商带货门槛。</p>
+  <div class="meta">
+    <span><span class="badge cyan">带货门槛 2025.04.17</span></span>
+    <span><span class="badge red">6 类发布标签 + AI 三重标注</span></span>
+    <span><span class="badge cyan">商标/R 标 2026.07</span></span>
+    <span>适用：抖音 / 极速版 / 火山版</span>
+  </div>
+</header>
+
+<main>
+
+<!-- ===== 总览 ===== -->
+<section id="overview">
+<h2>一、总览：从 0 到变现的路线图</h2>
+
+<p>在抖音打造个人 IP 并实现带货变现，本质上是一条<strong>「定位 → 内容 → 信任 → 转化」</strong>的闭环。以下路线图按时间顺序排列，新手可按阶段推进。</p>
+
+<div class="step-flow">
+  <span class="step"><span class="step-num">1</span>注册实名</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">2</span>IP 定位包装</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">3</span>日更发视频</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">4</span>涨有效粉丝</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">5</span>开橱窗带货</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">6</span>抖店/挂车变现</span>
+</div>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>阶段</th><th>目标</th><th>关键动作</th><th>预计周期</th></tr></thead>
+<tbody>
+<tr><td><strong>冷启动期</strong></td><td>跑通内容方向</td><td>日更 1 条，测试 3～5 个选题方向</td><td>第 1～14 天</td></tr>
+<tr><td><strong>成长期</strong></td><td>有效粉丝 ≥ 200</td><td>优化爆款结构，开通直播带货</td><td>第 15～45 天</td></tr>
+<tr><td><strong>带货期</strong></td><td>有效粉丝 ≥ 500</td><td>开橱窗、短视频挂小黄车</td><td>第 45～90 天</td></tr>
+<tr><td><strong>店铺期</strong></td><td>自有商品上架</td><td>注册抖店、精选联盟、自播带货</td><td>第 90 天+</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout success">
+  <div class="title">2025～2026 核心变化</div>
+  <p style="margin:0">带货：个人号 <strong>200 粉开直播带货、500 粉开视频带货、1000 粉开图文带货</strong>（2025.04.17）。算法：收藏率 &gt; 完播率，搜索流量占比持续走高，推流窗口拉长至 7～30 天。合规：发布须选 <strong>6 类内容标签</strong>之一，AI 内容须<strong>三重标注</strong>（2026.05 起），商标/R 标成为品牌流量权重信号（2026.07）。</p>
+</div>
+
+<h3>1.2 从 0 到 1 全流程地图</h3>
+<div class="step-flow">
+  <span class="step"><span class="step-num">1</span>注册实名</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">2</span>完善资料</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">3</span>养号校准</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">4</span>发第一条视频</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">5</span>持续发视频</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">6</span>开播准备</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">7</span>第一次直播</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">8</span>短视频+直播联动</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">9</span>橱窗/抖店变现</span>
+</div>
+</section>
+
+<!-- ===== 2026算法 ===== -->
+<section id="algorithm">
+<h2>二、2026 算法与流量逻辑（认知篇）</h2>
+<p>破除「流量玄学」，建立对当前推荐机制的正确认知——<strong>合规是底线，有用是王道，真人信任是红利</strong>。</p>
+
+<h3 id="algo-eco">2.1 2026 生态三大变化</h3>
+<div class="grid-2">
+  <div class="grid-card">
+    <h4>从「刷」到「搜」</h4>
+    <p>搜索流量占比持续走高（2026 Q1 同比约 +40%，部分口径已破 50%）。标题/描述埋关键词成为新号破圈关键。</p>
+  </div>
+  <div class="grid-card">
+    <h4>从「好看」到「有用」</h4>
+    <p>平台价值导向切换：收藏率、复访率权重超过单纯完播和点赞。「能帮到用户」的内容获更多推流。</p>
+  </div>
+  <div class="grid-card">
+    <h4>从标签匹配到 AI 行为预测</h4>
+    <p>推荐精准度提升，账号标签更精细（如「西安本地探店」「川味家常菜」级），跨领域发内容会打乱标签。</p>
+  </div>
+  <div class="grid-card">
+    <h4>推流周期拉长</h4>
+    <p>旧逻辑：首发 24 小时定生死。新逻辑：评估窗口 7～30 天，复访/收藏持续走高会触发二次推流，长尾干货吃香。</p>
+  </div>
+</div>
+
+<h3 id="algo-change">2.2 算法三处关键变化（与旧打法最不同）</h3>
+<ol>
+  <li><strong>完播率权重下降</strong>，有效互动（评论/收藏/转发/关注）权重飙升</li>
+  <li><strong>搜索流量成为破圈关键</strong>——长尾、精准、新号可抢，不必和大号硬拼推荐流</li>
+  <li><strong>账号标签更精细</strong>——一条美食 + 一条汽车会打乱账号画像，前 10 条务必高度垂直</li>
+</ol>
+
+<h3 id="algo-tower">2.3 双塔模型：内容 + 创作者信任权重</h3>
+<div class="card">
+<p>旧模型：单塔，只看单条内容质量。新模型：<strong>「内容塔 + 创作者塔」双塔</strong>，综合原创率、粉丝停留、历史质量给账号算「信任权重」。</p>
+<ul>
+  <li>真人出镜、稳定垂直输出的账号获流量倾斜（信任权重约占 30%）</li>
+  <li>直播沉淀铁粉 → 提升信任权重 → 反哺短视频推流</li>
+</ul>
+</div>
+
+<h3 id="algo-weight">2.4 2026 权重金字塔（优先级排序）</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>优先级</th><th>指标</th><th>运营启示</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><strong>收藏率</strong></td><td>做「可收藏」的干货：清单、模板、步骤</td></tr>
+<tr><td>2</td><td><strong>复访/回看</strong></td><td>系列化栏目，让用户回主页看其他内容</td></tr>
+<tr><td>3</td><td><strong>铁粉深度互动</strong></td><td>粉丝群、直播、固定更新培养铁粉</td></tr>
+<tr><td>4</td><td><strong>整体停留时长</strong></td><td>中段信息密度要高，避免拖沓</td></tr>
+<tr><td>5</td><td><strong>5 秒完播</strong></td><td>开篇直接点价值，而非纯悬念标题党</td></tr>
+<tr><td>6</td><td><strong>评论质量</strong></td><td>埋讨论点，引导有内容的评论</td></tr>
+<tr><td>7</td><td><strong>点赞</strong></td><td>退居末位——「有用」比「好看」重要</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="algo-pool">2.5 七级流量池赛马机制（2026 修订）</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>流量池</th><th>预估曝光</th><th>晋级参考标准</th></tr></thead>
+<tbody>
+<tr><td>初始池</td><td>50～200</td><td>基础质量审核通过</td></tr>
+<tr><td>基础池</td><td>约 500</td><td>2 秒停留率 ≥ 65%</td></tr>
+<tr><td>待推荐池</td><td>约 1,000</td><td>完播率 ≥ 28%</td></tr>
+<tr><td>待爆池</td><td>约 1 万</td><td>收藏率 ≥ 3% 或评论率 ≥ 1.5%</td></tr>
+<tr><td>热门池</td><td>约 10 万</td><td>叠加人工审核</td></tr>
+<tr><td>大爆款池</td><td>100～500 万</td><td>全站分发</td></tr>
+</tbody>
+</table>
+</div>
+<p>同级、同标签内容 PK，数据达标晋级，否则停止推流。因此<strong>垂直标签 + 高收藏内容</strong>是破池核心。</p>
+</section>
+
+<!-- ===== 账号注册 ===== -->
+<section id="account">
+<h2>三、账号注册、养号与基础设置</h2>
+
+<h3 id="account-register">3.1 下载与注册</h3>
+<ol>
+  <li>在应用商店搜索「抖音」或「抖音极速版」，下载官方客户端（认准开发者：北京抖音科技有限公司）。</li>
+  <li>打开 App → 点击右下角「我」→「登录/注册」。</li>
+  <li>推荐使用<strong>手机号注册</strong>（一个手机号对应一个抖音账号）。也可使用今日头条账号一键登录。</li>
+  <li>设置登录密码，完成基础注册。</li>
+</ol>
+
+<div class="callout warn">
+  <div class="title">一机一卡一号</div>
+  <p style="margin:0">建议<strong>一机一卡一号</strong>，避免同一设备频繁切换多个账号被判定为营销号。企业号可绑营业执照，部分权限可 0 粉开通。</p>
+</div>
+
+<h3 id="account-verify">3.2 实名认证（必做）</h3>
+<p>未完成实名认证将无法开通电商带货、直播、提现等功能。带货权限还要求<strong>年满 18 周岁</strong>。</p>
+<div class="path-box">我 → 右上角「≡」菜单 → 设置 → 账号与安全 → 实名认证 → 上传身份证正反面 → 人脸识别</div>
+
+<div class="callout warn">
+  <div class="title">重要限制</div>
+  <p style="margin:0">同一身份证信息<strong>仅允许开通一个个人带货账号</strong>。企业/个体户账号需使用营业执照对应主体认证，规则与个人号不同（见第六节）。</p>
+</div>
+
+<h3 id="account-type">3.3 账号类型选择</h3>
+<div class="grid-2">
+  <div class="grid-card">
+    <h4>个人号（推荐新手）</h4>
+    <ul>
+      <li>自然人身份证实名</li>
+      <li>门槛低，适合 IP 打造</li>
+      <li>带货权限按「有效粉丝」分级</li>
+      <li>可后续升级为企业号</li>
+    </ul>
+  </div>
+  <div class="grid-card">
+    <h4>企业号 / 蓝 V</h4>
+    <ul>
+      <li>需营业执照 + 对公验证</li>
+      <li>粉丝 ≥ 1000 开通全带货权限</li>
+      <li>支持更多营销组件（优惠券等）</li>
+      <li>适合品牌官方运营</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="account-profile">3.4 账号五件套包装</h3>
+<p>账号包装决定用户的第一印象，直接影响关注转化率。建议注册当天一次性完成：</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>元素</th><th>规范</th><th>示例</th></tr></thead>
+<tbody>
+<tr><td><strong>昵称</strong></td><td>简短好记 + 领域关键词，≤ 20 字</td><td>「健身教练老王」「职场成长李姐」</td></tr>
+<tr><td><strong>头像</strong></td><td>真人出镜最佳（增强信任）；或高辨识度 Logo</td><td>正面清晰半身照，背景干净</td></tr>
+<tr><td><strong>简介</strong></td><td>一句话价值主张 + 钩子 + 可选引流信息</td><td>「专注职场提升｜帮 5000+ 人升职加薪｜每周三更干货」</td></tr>
+<tr><td><strong>封面风格</strong></td><td>统一字体、色调、排版，形成视觉识别</td><td>固定模板：大字标题 + 人物 + 品牌色</td></tr>
+<tr><td><strong>背景图</strong></td><td>可放个人 slogan 或核心服务</td><td>「10 年行业经验 · 1 对 1 咨询」</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="account-warmup">3.5 养号与标签校准（新号前 3～7 天）</h3>
+<p>注册后<strong>不要急着发视频</strong>，先让算法认识「你是谁」：</p>
+<ol>
+  <li>像真实用户一样刷、搜、互动：搜索你赛道关键词，看完、点赞、收藏、评论</li>
+  <li>关注 5～10 个同领域对标账号，观察其爆款结构</li>
+  <li>避免跨领域乱刷，行为数据会直接影响初始账号标签</li>
+  <li>目的：为后续发垂直内容、快速打标签打底</li>
+</ol>
+
+<h3 id="account-creator">3.6 创作者服务中心</h3>
+<p>注册完成后，进入创作者服务中心绑定能力，这是后续发视频、看数据、开电商的入口：</p>
+<div class="path-box">我 → 右上角「≡」→ 创作者服务中心（或搜索「创作者中心」小程序）</div>
+<p>建议开启：作品数据分析、违规查询、电商工具箱（后续带货用）。</p>
+</section>
+
+<!-- ===== 个人IP ===== -->
+<section id="ip">
+<h2>四、个人 IP 定位与打造</h2>
+
+<h3>4.1 什么是个人 IP，为什么 2026 更要做</h3>
+<p>个人 IP = <strong>可被记住的人设 + 持续信任</strong>。2026 年双塔模型下信任权重约占 30%，真人 IP 天然吃流量红利——用户关注你不是因为你发了一条视频，而是因为他们认可「你代表什么」。</p>
+
+<h3 id="ip-3step">4.2 定位三步法：人群 × 痛点 × 人设</h3>
+<div class="card">
+<ol>
+  <li><strong>人群</strong>：越具体越好（如「深圳 30+ 职场妈妈」，而非「女性用户」）</li>
+  <li><strong>痛点</strong>：一个细分场景的真问题（如「加班没时间做晚饭」）</li>
+  <li><strong>人设</strong>：真实、有观点、可亲近（如「做了 8 年 HR 的二胎妈妈」）</li>
+</ol>
+</div>
+
+<h3>4.3 IP 定位四要素（延伸）</h3>
+<div class="card">
+<ol>
+  <li><strong>目标人群</strong>：你想服务谁？（例：25～35 岁一线城市职场女性）</li>
+  <li><strong>核心痛点</strong>：他们最头疼什么？（例：不会穿搭、存不下钱、职场晋升难）</li>
+  <li><strong>独特价值</strong>：你能提供什么差异化解决方案？（例：小个子穿搭公式、3 步理财法）</li>
+  <li><strong>变现路径</strong>：最终怎么赚钱？（带货 / 知识付费 / 线下服务 / 广告）</li>
+</ol>
+</div>
+
+<h3>4.4 人设公式</h3>
+<p>用一句话锁定人设，后续所有内容围绕这句话展开：</p>
+<div class="path-box">我是 [身份标签]，帮助 [目标人群] 解决 [核心痛点]，通过 [内容形式] 实现 [用户收益]。</div>
+<p>示例：「我是前 HR 总监，帮助应届生解决面试焦虑，通过真实案例拆解帮你拿到 offer。」</p>
+
+<h3 id="ip-track">4.5 赛道选择：垂直细分 &gt; 大而全</h3>
+<p>算法标签已精细到「西安本地探店」「川味家常菜」级别。用<strong>「大领域 + 细分切口」</strong>定位：</p>
+<ul>
+  <li>「家常菜」→「打工人 10 分钟晚餐」</li>
+  <li>「健身」→「小个子女生居家塑形」</li>
+  <li>「装修」→「西安老房翻新报价避坑」</li>
+</ul>
+<p>一条美食 + 一条汽车会打乱账号标签，前 30 条务必只做一个细分领域。</p>
+
+<h3 id="ip-real">4.6 真人出镜 = 信任权重</h3>
+<p>真人出镜是建立信任最直接的方式（信任权重约 30%）。配合<strong>固定开场、固定视觉符号、稳定更新节奏</strong>，快速形成识别度。</p>
+
+<h3>4.7 差异化：找到你的「记忆点」</h3>
+<div class="grid-2">
+  <div class="grid-card">
+    <h4>同质化账号</h4>
+    <p>通用昵称、模板封面、无口头禅、内容东一榔头西一棒 → 用户刷过即忘</p>
+  </div>
+  <div class="grid-card">
+    <h4>有记忆点账号</h4>
+    <p>一个标签 + 一句口头禅 + 一个视觉锤（如固定红衣、固定开场「家人们注意了」）</p>
+  </div>
+</div>
+
+<h3>4.8 内容形式选择</h3>
+<div class="grid-2">
+  <div class="grid-card">
+    <h4>口播类</h4>
+    <p>面对镜头直接讲解。适合知识、观点、经验分享类 IP。制作成本低，信任感强。</p>
+  </div>
+  <div class="grid-card">
+    <h4>剧情类</h4>
+    <p>短剧、情景演绎。适合情感、搞笑、职场剧情。涨粉快但制作成本高。</p>
+  </div>
+  <div class="grid-card">
+    <h4>Vlog 类</h4>
+    <p>记录真实生活/工作日常。适合生活方式、探店、手作类 IP。</p>
+  </div>
+  <div class="grid-card">
+    <h4>图文类</h4>
+    <p>图片轮播 + 配音/文字。适合清单、攻略、对比类内容。需 1000 有效粉丝才可带货。</p>
+  </div>
+</div>
+
+<h3>4.9 爆款内容公式</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>公式</th><th>结构</th><th>示例标题</th></tr></thead>
+<tbody>
+<tr><td>痛点 + 方案</td><td>戳中痛点 → 给具体方法</td><td>「为什么你总是存不下钱？3 个方法帮你无痛攒钱」</td></tr>
+<tr><td>反常识 + 反转</td><td>颠覆认知 → 给出真相</td><td>「其实 90% 的人健身都在浪费时间！」</td></tr>
+<tr><td>争议话题</td><td>抛出观点 → 引发讨论</td><td>「35 岁被裁员？其实这才是你的黄金期」</td></tr>
+<tr><td>热点借势</td><td>结合时事/节日 → 关联领域</td><td>「春节回家如何应对催婚？高情商回复模板」</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="ip-script">4.10 黄金视频脚本结构</h3>
+<p>2026 年建议：<strong>开篇直接点价值</strong>（「看完你能得到什么」），告别纯悬念标题党。以下提供三种时长模板：</p>
+
+<h4>15 秒快剪版</h4>
+<div class="timeline">
+  <div class="timeline-item"><h4>0～2 秒</h4><p>直接说结论/价值：「3 步搞定通勤妆」</p></div>
+  <div class="timeline-item"><h4>2～12 秒</h4><p>快速分点，每点 3 秒</p></div>
+  <div class="timeline-item"><h4>12～15 秒</h4><p>引导收藏：「先收藏，明天用得上」</p></div>
+</div>
+
+<h4>25～45 秒标准版（推荐起号）</h4>
+<div class="timeline">
+  <div class="timeline-item">
+    <h4>0～3 秒：钩子</h4>
+    <p>提问、冲突、悬念、反常识。前 3 帧必须出现人脸 / 大字标题 / 高速动作。例：「千万别这样洗脸！」</p>
+  </div>
+  <div class="timeline-item">
+    <h4>3～8 秒：痛点放大</h4>
+    <p>让用户产生「说的就是我」的感觉。例：「90% 的人每天都在伤害皮肤」</p>
+  </div>
+  <div class="timeline-item">
+    <h4>8～35 秒：干货输出</h4>
+    <p>分点讲解，每 5～8 秒一个信息点。口播语速适中，配合字幕。</p>
+  </div>
+  <div class="timeline-item">
+    <h4>35～45 秒：行动号召</h4>
+    <p>引导互动：「你觉得呢？评论区告诉我」「扣 1 领取完整清单」「先收藏再看」</p>
+  </div>
+</div>
+
+<h4>60 秒～3 分钟深度版</h4>
+<div class="timeline">
+  <div class="timeline-item"><h4>0～5 秒</h4><p>点明价值 + 建立权威（「做了 10 年装修，今天说真话」）</p></div>
+  <div class="timeline-item"><h4>5～40 秒</h4><p>分 3～5 点干货，每点配合画面演示</p></div>
+  <div class="timeline-item"><h4>40～60 秒</h4><p>总结 + 引导收藏/关注/评论区讨论</p></div>
+  <div class="timeline-item"><h4>1～3 分钟</h4><p>适合教程类，需完播率 &gt; 30% 才值得做，否则拆成系列</p></div>
+</div>
+</section>
+
+<!-- ===== 内容策划 ===== -->
+<section id="content-plan">
+<h2>五、内容策划方法论</h2>
+
+<h3 id="content-value">5.1 内容价值三要素（可收藏价值）</h3>
+<div class="grid-2">
+  <div class="grid-card">
+    <h4>工具属性</h4>
+    <p>操作步骤、清单模板、对比表——用户愿意收藏反复看</p>
+  </div>
+  <div class="grid-card">
+    <h4>认知增量</h4>
+    <p>行业洞察、反常识观点——引发「原来如此」</p>
+  </div>
+  <div class="grid-card">
+    <h4>方法体系</h4>
+    <p>系列教程、思维模型——培养追更习惯，提升复访率</p>
+  </div>
+</div>
+
+<h3 id="content-search">5.2 选题方法论：布局搜索流量</h3>
+<p>新号推荐流量要和大号抢，<strong>搜索流量是长尾精准蓝海</strong>：</p>
+<ul>
+  <li>标题放核心关键词：「西安老房翻新多少钱｜2026 报价」优于「装修好简单」</li>
+  <li>描述前两行写关键词，抢占搜索结果长尾</li>
+  <li>用「抖音热点宝」「巨量算数」找上升关键词</li>
+  <li>内容必须解决一个明确问题，而非泛泛而谈</li>
+</ul>
+
+<h3 id="content-series">5.3 系列化内容矩阵</h3>
+<p>固定栏目，每期解决一个具体问题（如「职场避坑第 12 期」）。用户回主页看其他内容 = 被算法判为高价值账号，触发复访加权。</p>
+
+<h3>5.4 互动设计：埋讨论点</h3>
+<ul>
+  <li>在视频里埋一个值得讨论的观点/轻微争议，引导评论（评论质量权重高）</li>
+  <li>结尾明确引导「收藏 / 转发 / 关注」，而非只求点赞</li>
+  <li>发布后 1 小时内积极回复评论，提升互动权重</li>
+</ul>
+
+<h3 id="content-checklist">5.5 拍摄前合规检查清单</h3>
+<ul class="checklist">
+  <li>确认内容属于 6 类发布标签中的哪一类（见第十七节）</li>
+  <li>含 AI 生成画面/声音须三重标注</li>
+  <li>虚构演绎须选「含有虚构演绎内容」标签</li>
+  <li>标题/描述已埋搜索关键词</li>
+  <li>视频中有互动钩子（讨论点/收藏引导）</li>
+  <li>挂载商品须与内容相关</li>
+</ul>
+</section>
+
+<!-- ===== 内容创作规范 ===== -->
+<section id="content">
+<h2>六、内容创作规范（平台红线）</h2>
+
+<p>抖音内容审核依据《抖音社区自律公约》《抖音用户服务协议》《抖音电商内容创作规范》等。违规轻则限流，重则封号、清退电商权限。</p>
+
+<h3>6.1 绝对禁止的内容</h3>
+<ul>
+  <li>涉黄、涉赌、涉毒、暴力恐怖、极端主义</li>
+  <li>虚假宣传、夸大功效、伪造专家/媒体/官方身份</li>
+  <li>诱导站外交易（留微信/QQ/手机号、引导去其他平台购买）</li>
+  <li>搬运、洗稿、侵犯他人版权</li>
+  <li>演戏炒作、虚构剧情砍价、恶意炒作负面事件</li>
+  <li>使用极限词：「全网最低」「第一」「100% 有效」等</li>
+  <li>未授权使用名人、医生、央视等名义或形象</li>
+</ul>
+
+<h3>6.2 低质内容（会被限流）</h3>
+<ul>
+  <li>画面模糊、无意义重复、纯文字幻灯片</li>
+  <li>内容与挂载商品/锚点完全无关</li>
+  <li>批量生产同质化内容、矩阵号重复画风</li>
+  <li>标题党但内容不符</li>
+</ul>
+
+<h3>6.3 五大内容红线（2026 重点整治）</h3>
+<ul>
+  <li><strong>全面禁烟</strong>：直播/视频严禁展示烟草、电子烟、吸烟动作</li>
+  <li><strong>禁止「假打假真带货」</strong>：测评打假需有科学依据，不得虚构对比</li>
+  <li><strong>保护未成年人</strong>：禁儿童网红牟利；露未成年人须监护人同意并打码</li>
+  <li><strong>虚构演绎必须标注</strong>：剧情、摆拍须选对应发布标签</li>
+  <li><strong>医美等特殊行业</strong>：谨慎使用 AIGC，禁功效承诺/虚假效果</li>
+</ul>
+
+<h3>6.4 营销合规要点</h3>
+<div class="callout danger">
+  <div class="title">带货专项红线</div>
+  <ul style="margin:0.5rem 0 0">
+    <li>禁止虚构原价/比价（「专柜 999，今天 99」需有依据）</li>
+    <li>食品、保健品、医疗器械等需相应资质，个人店多数类目不可经营</li>
+    <li>禁止引导私下转账，所有交易应走平台链路</li>
+    <li>直播带货需实时介绍商品，不得只放录像不互动</li>
+  </ul>
+</div>
+</section>
+
+<!-- ===== 发视频 ===== -->
+<section id="publish">
+<h2>七、发视频完整操作流程</h2>
+
+<h3 id="publish-shoot">7.1 拍摄与剪辑</h3>
+<ol>
+  <li><strong>拍摄</strong>：手机竖屏 9:16，分辨率建议 1080×1920。光线充足，收音清晰（可配领夹麦）。</li>
+  <li><strong>剪辑</strong>：推荐「剪映」（抖音官方工具），自动识别字幕、一键卡点、模板丰富。</li>
+  <li><strong>封面</strong>：在剪辑软件或发布页截取最吸引人帧，叠加统一风格标题文字。</li>
+</ol>
+
+<h3 id="publish-steps">7.2 发布步骤（App 端）</h3>
+<div class="step-flow">
+  <span class="step"><span class="step-num">1</span>点底部「+」</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">2</span>上传/拍摄</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">3</span>编辑文案</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">4</span>添加话题/音乐</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">5</span>设置权限</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">6</span>发布</span>
+</div>
+
+<h4>详细说明</h4>
+<ol>
+  <li>打开抖音 → 底部点击「<strong>+</strong>」→ 选择「相册」上传已剪辑视频，或「拍摄」直接录。</li>
+  <li>进入编辑页：可添加滤镜、贴纸、文字、配乐（注意版权音乐）。</li>
+  <li>点击「下一步」→ 填写<strong>作品描述</strong>（前两行埋搜索关键词 + 2～3 个精准话题标签，非大词）。</li>
+  <li><strong>@好友</strong>、<strong>#话题</strong>：选择垂直领域话题，避免纯蹭无关热点。</li>
+  <li><strong>选择内容标签</strong>（发布必经环节）：从 6 类标签中选 1 项——详见第十七节。</li>
+  <li><strong>谁可以看</strong>：起号期建议「公开」；测试内容可设「仅自己可见」。</li>
+  <li><strong>高级设置</strong>（重要）：
+    <ul>
+      <li>允许下载：按需开启</li>
+      <li>发布时间：可定时发布，算法按「兴趣时钟」动态调推荐池</li>
+      <li>关联热点：可绑定抖音热点宝中的热门事件</li>
+      <li>AI 内容声明：含 AI 须三重标注（见第十七节）</li>
+    </ul>
+  </li>
+  <li>确认无误 → 点击「发布」→ 发布后观察 <strong>7 天数据</strong>（慢推流窗口）。</li>
+</ol>
+
+<h3 id="publish-cart">7.3 挂商品（小黄车）发布</h3>
+<p>需先满足<strong>有效粉丝 ≥ 500</strong>且已开通视频带货权限（个人号）。发布时在编辑页：</p>
+<div class="path-box">发布页 → 添加标签 → 商品 → 选择橱窗内已审核通过的商品 → 确认 → 发布</div>
+<div class="callout warn">
+  <div class="title">注意</div>
+  <p style="margin:0">商品必须先加入橱窗并审核通过，才能在短视频中挂载。视频内容需与商品相关，否则会被判定为「相关性不足」而限流或解绑。</p>
+</div>
+
+<h3 id="publish-rhythm">7.4 发布策略与兴趣时钟</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>维度</th><th>建议</th></tr></thead>
+<tbody>
+<tr><td><strong>频率</strong></td><td>冷启动期日更 1 条；稳定期每周 3～5 条</td></tr>
+<tr><td><strong>时长</strong></td><td>起号推荐 25～45 秒；知识类可 1～3 分钟（需完播率支撑）</td></tr>
+<tr><td><strong>时段</strong></td><td>早 7～9 点、午 12～13 点、晚 18～22 点；最终以粉丝活跃数据为准</td></tr>
+<tr><td><strong>前 10 条</strong></td><td>主题高度一致，决定账号标签，不要跨领域</td></tr>
+<tr><td><strong>搜索破冷启动</strong></td><td>标题/描述埋词，抢占长尾搜索流量</td></tr>
+<tr><td><strong>数据观察</strong></td><td>发布后看 7 天数据，收藏/复访走高会触发二次推流</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<!-- ===== 直播 ===== -->
+<section id="live">
+<h2>八、直播开播实操</h2>
+
+<h3 id="live-threshold">8.1 开播门槛（2026 最新）</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>直播类型</th><th>粉丝要求</th><th>其他条件</th></tr></thead>
+<tbody>
+<tr><td>普通直播（聊天/才艺）</td><td><strong>0 粉丝</strong></td><td>实名 + 人脸认证，健康分 ≥ 70</td></tr>
+<tr><td>直播带货</td><td>有效粉丝 ≥ 200</td><td>开通电商权限 + 缴作者保证金（约 500 元，可退）</td></tr>
+<tr><td>视频挂小黄车</td><td>有效粉丝 ≥ 500</td><td>同上</td></tr>
+<tr><td>图文带货</td><td>有效粉丝 ≥ 1000</td><td>同上</td></tr>
+<tr><td>橱窗展示</td><td>0 粉可开</td><td>实名 + 入驻流程</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="live-device">8.2 开播设备清单（预算 &lt; 500 元）</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>设备</th><th>建议</th></tr></thead>
+<tbody>
+<tr><td>手机</td><td>128G+ 存储，摄像头清晰</td></tr>
+<tr><td>领夹麦</td><td>50～150 元，解决收音问题</td></tr>
+<tr><td>灯光</td><td>6500K 补光灯，面部均匀</td></tr>
+<tr><td>背景</td><td>浅灰/米白纯色，避免杂物穿帮</td></tr>
+<tr><td>网络</td><td>上行带宽 ≥ 5Mbps，建议有线或 5G WiFi</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="live-first">8.3 第一次开直播（4 步操作）</h3>
+<ol>
+  <li><strong>开通权限</strong>：我 → 设置 → 反馈与帮助 → 我是主播 → 按提示完成认证</li>
+  <li><strong>创建直播间</strong>：首页「+」→ 左滑「开直播」→ 设封面(1:1) + 标题(5～30 字) + 选模式（视频/聊天室）</li>
+  <li><strong>优化设置</strong>：清晰度 1080P、开评论/礼物/回放、关敏感词过滤</li>
+  <li><strong>开始直播</strong>：可用悬浮提词器；每 5 分钟口播互动（「点赞破 XX 抽奖」「扣 1 提问」）</li>
+</ol>
+
+<h3>8.4 直播流量入口与挂车</h3>
+<ul>
+  <li><strong>流量入口</strong>：推荐流 / 关注流 / 同城 / 搜索 + 短视频预告引流</li>
+  <li><strong>挂小黄车</strong>：开播后点「商品」图标从橱窗加品；用「讲解」标记主推商品</li>
+  <li><strong>短视频 + 直播联动</strong>：开播前发预告短视频导流；直播高光切片二次剪辑分发；直播沉淀铁粉反哺短视频推流</li>
+</ul>
+
+<h3 id="live-rules">8.5 直播专属红线（2026 最新）</h3>
+<div class="callout danger">
+  <div class="title">直播合规必知</div>
+  <ul style="margin:0.5rem 0 0">
+    <li>直播诱导消费顶格处罚（2026 年 5 月新规重点整治）</li>
+    <li>禁用 AI 换脸、情感绑架话术（「不买不是家人」）、「免费送」等敏感词</li>
+    <li>不得遮挡品牌信息或引导线下交易</li>
+    <li>带货需真实合规，禁绝对化用语（「全网最低」「100% 有效」）</li>
+    <li>未成年人保护同样适用直播场景</li>
+  </ul>
+</div>
+</section>
+
+<!-- ===== 运营涨粉 ===== -->
+<section id="growth">
+<h2>九、冷启动与涨粉策略</h2>
+
+<h3 id="growth-5">9.1 冷启动 5 个关键动作</h3>
+<ol>
+  <li><strong>前 10 条视频主题高度一致</strong>——决定账号标签</li>
+  <li><strong>每条带 2～3 个精准话题标签</strong>（非泛大词）</li>
+  <li><strong>稳定更新节奏</strong>（日更/隔日更），真人出镜 + 垂直深耕</li>
+  <li><strong>善用搜索关键词破冷启动</strong>——标题/描述埋词</li>
+  <li><strong>数据复盘后放大跑通的内容</strong>，不要频繁删低数据视频（伤权重）</li>
+</ol>
+
+<h3 id="growth-30d">9.2 0 → 1 万粉 30 天路径</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>周期</th><th>目标</th><th>关键动作</th></tr></thead>
+<tbody>
+<tr><td>第 1 周</td><td>标签校准</td><td>发满 7 条垂直内容，主题高度一致</td></tr>
+<tr><td>第 2～3 周</td><td>搜索流量 + 系列栏目</td><td>标题埋词，开固定栏目培养追更</td></tr>
+<tr><td>第 4 周</td><td>数据复盘放大</td><td>找出收藏率最高的内容类型，加大产出</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="growth-fans">9.3 有效粉丝（核心概念）</h3>
+<div class="callout">
+  <div class="title"><span class="rule-tag key">关键概念</span> 有效粉丝 ≠ 主页显示粉丝数</div>
+  <p style="margin:0.5rem 0 0">「有效粉丝」指通过你发布的<strong>优质原创内容</strong>带来的真实关注用户。平台每 <strong>48 小时</strong>更新一次数据。买粉、互粉来的粉丝通常不计入有效粉丝，无法用于开通带货权限。</p>
+</div>
+
+<h3 id="growth-metrics">9.4 关键数据指标（2026 优先级）</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>优先级</th><th>指标</th><th>健康参考</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>收藏率</td><td>＞ 3% 为优秀</td></tr>
+<tr><td>2</td><td>复访率</td><td>用户回主页看其他内容</td></tr>
+<tr><td>3</td><td>铁粉互动</td><td>粉丝群/直播互动活跃</td></tr>
+<tr><td>4</td><td>5 秒完播</td><td>＞ 50% 说明开篇有效</td></tr>
+<tr><td>5</td><td>完播率</td><td>＞ 28% 可晋级下一流量池</td></tr>
+<tr><td>6</td><td>互动率</td><td>（赞+评+藏+转）/ 播放 ＞ 3%</td></tr>
+<tr><td>7</td><td>点赞</td><td>参考即可，权重已下降</td></tr>
+</tbody>
+</table>
+</div>
+<p>直播另看：停留时长、互动率、转粉率、GMV。查看路径：<span class="path-box" style="display:inline;padding:2px 8px">创作者服务中心 → 数据中心</span></p>
+
+<h3>9.5 IP 商业化路径</h3>
+<div class="step-flow">
+  <span class="step">星图/商单</span>
+  <span class="arrow">→</span>
+  <span class="step">带货（橱窗/挂车）</span>
+  <span class="arrow">→</span>
+  <span class="step">知识付费</span>
+  <span class="arrow">→</span>
+  <span class="step">私域/线下引流</span>
+</div>
+<p>注意：2026 年 7 月起，<strong>商标/R 标</strong>成为 AI 识别品牌主体、分配流量权重的重要依据，有品牌计划的创作者建议尽早注册。</p>
+</section>
+
+<!-- ===== 带货权限 ===== -->
+<section id="commerce-rules">
+<h2>十、带货权限与粉丝门槛（2025 最新）</h2>
+
+<p>以下规则依据《抖音电商创作者入驻管理规范》<strong>2025 年 4 月 17 日</strong>修订生效版本。</p>
+
+<h3>10.1 个人创作者（自然人账号）</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>有效粉丝量</th><th>开通权限</th><th>生效时间</th></tr></thead>
+<tbody>
+<tr>
+  <td><strong>&lt; 200</strong></td>
+  <td>仅橱窗带货（需完成实名 + 入驻流程）</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td><strong>≥ 200</strong></td>
+  <td><span class="rule-tag new">2025 新增</span> 直播间带货权限</td>
+  <td>达标次日</td>
+</tr>
+<tr>
+  <td><strong>≥ 500</strong></td>
+  <td>短视频/视频带货 + 主页/评论区展示橱窗</td>
+  <td>达标次日</td>
+</tr>
+<tr>
+  <td><strong>≥ 1000</strong></td>
+  <td>图文带货权限</td>
+  <td>达标次日</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<h3>10.2 企业号 / 个体工商户号</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>粉丝量</th><th>权限</th></tr></thead>
+<tbody>
+<tr><td>&lt; 1000</td><td>仅橱窗带货</td></tr>
+<tr><td>≥ 1000</td><td>直播间 + 短视频 + 图文全权限</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>10.3 通用准入条件</h3>
+<ul>
+  <li>已完成实名认证，年满 18 周岁</li>
+  <li>近 90 天无严重违规（曾被清退的账号可能永久禁止开通）</li>
+  <li>同一身份证仅可申请一个个人带货账号</li>
+  <li>开通后<strong>连续 180 天无成交</strong>，平台将收回带货权限（可重新申请）</li>
+</ul>
+
+<h3>10.4 0 元入驻（试运营）</h3>
+<p>抖音支持创作者在未缴纳保证金的情况下先入驻试运营，但功能受限——通常只能推广<strong>精选联盟</strong>中平台指定的商品，且部分营销功能不可用。建议业务稳定后足额缴纳保证金。</p>
+</section>
+
+<!-- ===== 橱窗 ===== -->
+<section id="window">
+<h2>十一、商品橱窗与小黄车开通</h2>
+
+<h3>11.1 橱窗 vs 小黄车</h3>
+<div class="grid-2">
+  <div class="grid-card">
+    <h4>商品橱窗</h4>
+    <p>个人主页展示的「商品货架」，用户可随时浏览购买。开通电商权限后即可在主页展示（500 有效粉丝后可在评论区展示）。</p>
+  </div>
+  <div class="grid-card">
+    <h4>小黄车</h4>
+    <p>短视频或直播中挂载的购物车图标，用户可直接点击购买。短视频小黄车需 ≥ 500 有效粉丝；直播小黄车需 ≥ 200 有效粉丝。</p>
+  </div>
+</div>
+
+<h3>11.2 开通流程</h3>
+<div class="path-box">我 → 创作者服务中心 → 电商带货（电商工具箱）→ 立即入驻 → 选择身份（个人/个体/企业）→ 签署协议 → 缴纳保证金 → 绑定结算账户</div>
+
+<h3>11.3 保证金参考（2025-2026）</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>类型</th><th>金额</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>创作者基础保证金</td><td>500 元起</td><td>按类目浮动，可退（满足 30 天无纠纷等条件）</td></tr>
+<tr><td>日用百货（抖店）</td><td>约 2000 元</td><td>商家类目保证金</td></tr>
+<tr><td>美妆个护</td><td>约 2000 元</td><td>—</td></tr>
+<tr><td>食品保健</td><td>约 3000～5000 元</td><td>需食品经营许可证</td></tr>
+<tr><td>数码家电</td><td>约 5000 元</td><td>—</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>11.4 技术服务费</h3>
+<ul>
+  <li>自营商品：订单实付金额约 1%～5%（因类目而异）</li>
+  <li>精选联盟商品：从佣金中扣除约 10% 平台服务费</li>
+  <li>月销售额低于一定额度可享费率优惠（以平台最新公示为准）</li>
+</ul>
+
+<h3>11.5 结算</h3>
+<p>货款通常 <strong>T+3</strong> 或 <strong>T+7</strong> 自动结算至绑定的银行卡/抖音钱包，具体以入驻时签署的协议为准。</p>
+</section>
+
+<!-- ===== 抖店 ===== -->
+<section id="shop">
+<h2>十二、抖店（抖音小店）开店流程</h2>
+
+<p>如果你想卖<strong>自己的商品</strong>（而非仅帮别人带货），需要注册抖店。官方入口：<a href="https://fxg.jinritemai.com" target="_blank" rel="noopener">fxg.jinritemai.com</a>（请从官方域名进入，谨防钓鱼链接）。</p>
+
+<h3 id="shop-type">12.1 店铺类型对比</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>类型</th><th>资质要求</th><th>年销售额上限</th><th>保证金</th></tr></thead>
+<tbody>
+<tr>
+  <td><strong>个人店</strong></td>
+  <td>身份证（18 岁以上）</td>
+  <td>20 万元/年</td>
+  <td>500～2000 元</td>
+</tr>
+<tr>
+  <td><strong>个体工商户</strong></td>
+  <td>营业执照 + 身份证</td>
+  <td>无上限</td>
+  <td>1000～5000 元</td>
+</tr>
+<tr>
+  <td><strong>企业店</strong></td>
+  <td>营业执照 + 法人身份证 + 对公账户</td>
+  <td>无上限</td>
+  <td>2000～10000 元</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout warn">
+  <div class="title">个人店限制</div>
+  <p style="margin:0">个人店<strong>不可经营</strong>食品、医疗器械、保健品等特殊类目。年销售额超 20 万需升级为个体或企业店，否则平台将限制发货。</p>
+</div>
+
+<h3 id="shop-steps">12.2 入驻步骤</h3>
+<ol>
+  <li>访问 <strong>fxg.jinritemai.com</strong> → 点击「立即入驻」/ 下载「抖店」App。</li>
+  <li>使用手机号注册，<strong>一个手机号只能绑定 1 家抖店</strong>。</li>
+  <li>选择店铺类型 → 上传资质（身份证 / 营业执照）。</li>
+  <li>选择经营类目 → 系统显示对应保证金金额。</li>
+  <li>缴纳保证金（支付宝 / 抖音钱包，不可用他人账户代付）。</li>
+  <li>绑定结算账户：个人店绑本人储蓄卡；企业店绑对公账户（名称须与执照一致）。</li>
+  <li>等待审核（通常 1～3 个工作日）。</li>
+  <li>审核通过 → 完善店铺信息（名称、logo、客服电话）→ 上架商品。</li>
+</ol>
+
+<h3>12.3 绑定抖音账号</h3>
+<p>抖店需绑定一个抖音账号作为<strong>官方运营账号</strong>，橱窗、直播、短视频挂车均通过该账号进行。建议使用已实名、有一定粉丝基础的账号。</p>
+
+<h3 id="shop-alliance">12.4 精选联盟</h3>
+<p>店铺开通后，建议加入精选联盟让其他达人帮你带货：</p>
+<ul>
+  <li>条件：店铺已上架商品 ≥ 2 件 + 近 90 天无严重违规</li>
+  <li>设置佣金比例：新店建议 20%～35%，吸引达人选品</li>
+  <li>路径：抖店后台 → 精选联盟 → 开通 → 商品投放 → 设置佣金</li>
+</ul>
+</section>
+
+<!-- ===== 挂商品 ===== -->
+<section id="hang-product">
+<h2>十三、挂商品实操（短视频 / 直播 / 橱窗）</h2>
+
+<h3>13.1 上架商品到店铺</h3>
+<div class="path-box">抖店后台 → 商品管理 → 发布商品 → 填写标题/主图/详情/价格/库存/运费模板 → 提交审核</div>
+<p>商品标题避免极限词；主图需清晰、无牛皮癣；详情页须与商品实物一致。审核通常 几小时～1 天。</p>
+
+<h3>13.2 短视频挂车（小黄车）</h3>
+<ol>
+  <li>确保已开通视频带货权限（有效粉丝 ≥ 500）。</li>
+  <li>将商品加入橱窗：创作者服务中心 → 选品广场 / 我的店铺 → 添加商品到橱窗。</li>
+  <li>发布视频时：编辑页 → 添加标签 → 商品 → 选择商品。</li>
+  <li>视频内容须展示商品使用场景，结尾引导「点击左下角小黄车购买」。</li>
+</ol>
+
+<h3>13.3 直播挂车</h3>
+<ol>
+  <li>有效粉丝 ≥ 200 即可开通直播带货。</li>
+  <li>开播前：直播中控台 → 添加直播商品 → 从橱窗/店铺选择。</li>
+  <li>直播中：点击商品卡讲解，用户点击购物车下单。</li>
+  <li>注意：需实时讲解，不得仅播放录像不互动。</li>
+</ol>
+
+<h3>13.4 帮别人带货（精选联盟选品）</h3>
+<p>没有自己店铺也能带货：在选品广场挑选他人商品，加入橱窗赚取佣金。</p>
+<div class="path-box">创作者服务中心 → 选品广场 → 筛选类目/佣金 → 加入橱窗 → 拍视频/直播推广</div>
+
+<h3>13.5 带货内容建议</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>阶段</th><th>动作</th></tr></thead>
+<tbody>
+<tr><td>第 1～7 天</td><td>橱窗上架 3～5 款引流品（低价、高频）</td></tr>
+<tr><td>第 8～15 天</td><td>日发 1～2 条挂车短视频，25～45 秒，聚焦使用场景</td></tr>
+<tr><td>第 16～30 天</td><td>开通直播，每周 2～3 场，每场 1～2 小时</td></tr>
+<tr><td>稳定期</td><td>短视频引流 + 直播转化 + 私域复购</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<!-- ===== DOU+ ===== -->
+<section id="douplus">
+<h2>十四、DOU+ 内容加热（轻量投流）</h2>
+
+<p>DOU+ 本质是<strong>内容加热工具</strong>（非广告），不改内容质量门槛、不绕过审核。需自然播放 ≥ 500 且过审才能加热。目标是涨粉、测内容、放大自然爆款——<strong>不是直接买成交</strong>。要买 ROI 走下一节巨量千川。</p>
+
+<h3 id="douplus-compare">14.1 DOU+ vs 巨量千川（怎么选）</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>对比项</th><th>DOU+</th><th>巨量千川</th></tr></thead>
+<tbody>
+<tr><td><strong>定位</strong></td><td>内容加热 / 涨粉 / 曝光</td><td>电商付费投流，优化成交 ROI</td></tr>
+<tr><td><strong>门槛</strong></td><td>低，视频过审即可</td><td>需抖店/橱窗带货资质，完成千川开户</td></tr>
+<tr><td><strong>优化目标</strong></td><td>播放、互动、粉丝</td><td>商品点击、成交、支付 ROI、直播间成交</td></tr>
+<tr><td><strong>预算</strong></td><td>68 元起，适合小额测试</td><td>建议日预算 200～500 元起，需预充值</td></tr>
+<tr><td><strong>适合阶段</strong></td><td>起号测内容、放大自然爆款</td><td>已有挂车视频/稳定直播、要出单放量</td></tr>
+<tr><td><strong>入口</strong></td><td>视频右下角「DOU+」</td><td>qianchuan.jinritemai.com / 抖店后台推广中心</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout">
+  <div class="title">一句话选型</div>
+  <p style="margin:0"><strong>测内容用 DOU+，买成交用千川。</strong>两者目标不同，不要混在一个视频上同时开两种投放，数据会互相干扰。</p>
+</div>
+
+<h3 id="douplus-verify">14.2 DOU+ 投放前验证</h3>
+<ul>
+  <li>账号正常无违规</li>
+  <li>视频发布 &gt; 24h 且自然完播率 &gt; 35%</li>
+  <li>内容质量分 ≥ 70（创作中心可查）</li>
+  <li>自然流量测试：完播率 &gt; 25%、互动率 &gt; 3% 才值得投</li>
+</ul>
+
+<h3 id="douplus-strategy">14.3 DOU+ 核心投放策略</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>策略</th><th>做法</th></tr></thead>
+<tbody>
+<tr><td>小步快跑</td><td>100 元小额试投，数据好按 1:2:4 阶梯加码，任一轮变差立即停</td></tr>
+<tr><td>定向</td><td>初期智能推荐；进阶用自定义（年龄±5、2～3 兴趣标签、3～5 对标达人相似粉丝）</td></tr>
+<tr><td>时机</td><td>发布后 2～4h 内、晚 18～20 点、周末；避开 22:00～6:00</td></tr>
+<tr><td>目标选择</td><td>测试期选「播放量」；互动好选「点赞评论」；主页完整可选「粉丝增长」</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout warn">
+  <div class="title">避坑</div>
+  <p style="margin:0">不为投而投；新号未养直接投浪费预算。2026 年 DOU+ 新用户可领最高 500 元无门槛代金券（以平台活动为准）。记录 3 个月投放数据，建立「最佳投放配方」。</p>
+</div>
+</section>
+
+<!-- ===== 巨量千川 ===== -->
+<section id="qianchuan">
+<h2>十五、巨量千川（电商付费投流）</h2>
+
+<p><strong>巨量千川</strong>是抖音电商官方一体化付费投放平台，专为「卖货」设计，打通短视频挂车、直播间、商品卡、商城搜索等场景。与 DOU+ 不同，千川以<strong>成交和 ROI</strong>为核心优化目标，是抖店商家和带货达人做规模化的主投流工具。</p>
+
+<div class="callout success">
+  <div class="title">官方入口（请从官方域名进入）</div>
+  <p style="margin:0">
+    电脑端：<a href="https://qianchuan.jinritemai.com" target="_blank" rel="noopener">qianchuan.jinritemai.com</a><br>
+    抖店后台：推广 → 巨量千川<br>
+    达人移动端：抖音 App → 小店随心推（轻量版千川，适合小额测试）
+  </p>
+</div>
+
+<h3 id="qc-open">15.1 开通条件与账户搭建</h3>
+
+<h4>谁可以开千川？</h4>
+<div class="table-wrap">
+<table>
+<thead><tr><th>身份</th><th>开通路径</th><th>核心条件</th></tr></thead>
+<tbody>
+<tr>
+  <td><strong>抖店商家</strong></td>
+  <td>抖店后台 → 推广 → 巨量千川</td>
+  <td>店铺已审核通过、正常营业；主体资质与店铺一致</td>
+</tr>
+<tr>
+  <td><strong>带货达人</strong></td>
+  <td>已开通橱窗 + 千川资质 / 小店随心推</td>
+  <td>完成实名；橱窗审核通过；有可推广商品</td>
+</tr>
+<tr>
+  <td><strong>企业蓝 V</strong></td>
+  <td>认证后跳转千川开户</td>
+  <td>营业执照 + 对公/对私验证</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<h4>开户步骤（商家标准路径）</h4>
+<div class="step-flow">
+  <span class="step"><span class="step-num">1</span>抖店入驻</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">2</span>绑定抖音号</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">3</span>千川开户</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">4</span>资质审核</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">5</span>首次充值</span>
+  <span class="arrow">→</span>
+  <span class="step"><span class="step-num">6</span>创建计划</span>
+</div>
+<ol>
+  <li>登录抖店后台或 <strong>qianchuan.jinritemai.com</strong>，使用绑定的抖音账号扫码登录。</li>
+  <li>完成主体资质认证（营业执照/身份证与店铺主体一致）。</li>
+  <li>绑定投流抖音号与抖店，确认数据授权（订单回传）。</li>
+  <li>首次充值激活账户（通常 <strong>100～1000 元</strong>起，以申请页为准；建议准备 1000 元用于冷启动测试）。</li>
+  <li>食品、医疗器械等特殊类目需额外上传行业许可证。</li>
+  <li>在「转化追踪」中确认「商品购买」「成交」等事件已打通。</li>
+</ol>
+
+<div class="callout warn">
+  <div class="title">注意</div>
+  <p style="margin:0">店铺 DSR 评分过低、近 90 天有严重违规、商品未过审，会导致计划审核被拒。直播投放前须已开通直播权限（普通直播 0 粉可开，带货直播需 ≥ 200 有效粉丝）。</p>
+</div>
+
+<h3 id="qc-mode">15.2 三种投放模式（怎么选）</h3>
+<div class="grid-2">
+  <div class="grid-card">
+    <h4>① 短视频带货</h4>
+    <p><strong>适合</strong>：已有挂车视频、想种草转化的新手商家/达人。</p>
+    <p><strong>优化目标</strong>：商品点击、商品购买、支付 ROI。</p>
+    <p><strong>建议</strong>：单条视频消耗 200～500 元即可判断素材质量，成本可控、可反复测素材。</p>
+  </div>
+  <div class="grid-card">
+    <h4>② 直播间带货</h4>
+    <p><strong>适合</strong>：有稳定开播节奏、主播话术成熟、能承接流量的商家。</p>
+    <p><strong>优化目标</strong>：直播间成交、支付 ROI、观看人次。</p>
+    <p><strong>建议</strong>：开播后 30 分钟内启动计划；预算建议直播:短视频 ≈ 6:4，按数据动态调。</p>
+  </div>
+  <div class="grid-card">
+    <h4>③ 商品卡 / 搜索推广</h4>
+    <p><strong>适合</strong>：货架型商家、有明确爆款 SKU、想抢搜索主动流量。</p>
+    <p><strong>优化目标</strong>：商品点击、成交。</p>
+    <p><strong>建议</strong>：标题含核心关键词，配合商城/搜索场景。</p>
+  </div>
+  <div class="grid-card">
+    <h4>④ 全域推广（进阶）</h4>
+    <p><strong>适合</strong>：有一定消耗基础、希望系统自动分配内容场+货架场流量的成熟账户。</p>
+    <p><strong>说明</strong>：系统会在短视频、直播、商城、搜索间智能分配，需账户有足够转化样本。</p>
+  </div>
+</div>
+
+<h3 id="qc-plan">15.3 创建投放计划 SOP</h3>
+
+<h4>短视频带货计划（新手首选）</h4>
+<ol>
+  <li>千川后台 → <strong>推广管理</strong> → 新建计划 → 选择「推商品」或「短视频带货」。</li>
+  <li><strong>营销目标</strong>：商品购买（要出单）或 商品点击（测素材）。</li>
+  <li><strong>选择素材</strong>：挑选已发布、已挂小黄车、自然数据较好的视频（完播率 &gt; 25%）。</li>
+  <li><strong>选择商品</strong>：关联橱窗/店铺内已审核商品，确保库存充足、详情页合规。</li>
+  <li><strong>人群定向</strong>：冷启动用「系统智能推荐」；有数据后用「自定义人群」（年龄、兴趣、达人相似粉丝）。</li>
+  <li><strong>预算与出价</strong>：日预算 200～500 元；出价选手动或自动（见 15.4）。</li>
+  <li>填写广告文案（不含极限词）→ 提交审核 → 通常 2～4 小时过审 → 自动投放。</li>
+</ol>
+
+<h4>直播间带货计划</h4>
+<ol>
+  <li>新建计划 → 选择「推直播间」→ 绑定开播抖音号。</li>
+  <li>优化目标选「直播间商品购买」或「支付 ROI」。</li>
+  <li>设置投放时段与开播时间对齐，<strong>开播后尽快启动</strong>。</li>
+  <li>直播中用「讲解」标记主推款，配合千川流量放大成交。</li>
+</ol>
+
+<div class="path-box">抖店后台 → 推广 → 巨量千川 → 推广管理 → 新建 → 选目标 → 选素材/商品 → 设人群 → 设预算出价 → 提交审核</div>
+
+<h3 id="qc-budget">15.4 出价、预算与冷启动</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>阶段</th><th>日预算</th><th>出价方式</th><th>操作要点</th></tr></thead>
+<tbody>
+<tr>
+  <td><strong>冷启动（1～3 天）</strong></td>
+  <td>200～500 元/天</td>
+  <td>自动出价 / 偏低手动出价</td>
+  <td>让系统积累转化样本，<strong>不要频繁改计划</strong></td>
+</tr>
+<tr>
+  <td><strong>测素材（3～5 天）</strong></td>
+  <td>300～800 元/天</td>
+  <td>按 ROI 或 CPA 观察</td>
+  <td>保留 ROI 高的素材，关停差的</td>
+</tr>
+<tr>
+  <td><strong>放量期</strong></td>
+  <td>逐步 +20%～30%/天</td>
+  <td>支付 ROI 目标出价</td>
+  <td>设置日消耗上限，防止跑飞</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<ul>
+  <li><strong>支付 ROI</strong> = 成交金额 ÷ 广告消耗。例：ROI = 3 表示花 1 元广告费带来 3 元成交（需扣除商品成本才算净利）。</li>
+  <li>新手建议目标 ROI 设保守一点（如 2～3），跑通后再逐步提高。</li>
+  <li>在账户设置中开启<strong>消耗预警</strong>和<strong>日预算上限</strong>，防止计划失控。</li>
+</ul>
+
+<h3 id="qc-material">15.5 素材优化与 ROI 提升</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>维度</th><th>优化做法</th></tr></thead>
+<tbody>
+<tr><td>前 3 秒</td><td>产品特写 / 使用场景 / 价格钩子，禁止纯铺垫</td></tr>
+<tr><td>中段</td><td>展示卖点、对比、用户证言，与挂车商品强相关</td></tr>
+<tr><td>结尾</td><td>口播「点击购物车」+ 限时优惠（需真实）</td></tr>
+<tr><td>规格</td><td>竖屏 9:16，1080×1920，15～60 秒为佳</td></tr>
+<tr><td>合规</td><td>6 类发布标签选对、AI 三重标注、禁极限词和虚假比价</td></tr>
+<tr><td>A/B 测试</td><td>同一商品拍 3～5 条不同角度，各投 200 元比 ROI</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="qc-review">15.6 数据复盘与避坑</h3>
+
+<h4>核心指标看板</h4>
+<div class="table-wrap">
+<table>
+<thead><tr><th>指标</th><th>含义</th><th>健康参考（因类目而异）</th></tr></thead>
+<tbody>
+<tr><td>消耗</td><td>广告花费金额</td><td>控制在毛利可承受范围</td></tr>
+<tr><td>支付 ROI</td><td>成交金额 / 消耗</td><td>＞ 2 通常可盈利（需算清成本）</td></tr>
+<tr><td>CPA / 成交成本</td><td>每单广告成本</td><td>＜ 客单价的 30%～40%</td></tr>
+<tr><td>点击率 CTR</td><td>点击 / 展示</td><td>＜ 1% 检查封面和前 3 秒</td></tr>
+<tr><td>转化率 CVR</td><td>成交 / 点击</td><td>低则优化详情页、价格、评价</td></tr>
+<tr><td>直播间停留</td><td>人均观看时长</td><td>＜ 30 秒检查主播承接和货盘</td></tr>
+</tbody>
+</table>
+</div>
+
+<h4>千川常见避坑</h4>
+<ul>
+  <li><strong>新店零自然单直接大力投</strong>：先有小额自然成交，再开千川，模型才有学习样本</li>
+  <li><strong>一天内多次改出价/预算</strong>：打乱学习期，至少跑满 3 天再优化</li>
+  <li><strong>素材与商品无关</strong>：审核拒投或 ROI 极差</li>
+  <li><strong>库存不足仍投放</strong>：浪费预算且影响店铺评分</li>
+  <li><strong>DOU+ 和千川同时加热同一视频</strong>：数据归因混乱，分开测</li>
+  <li><strong>忽略售后和差评</strong>：DSR 下滑会导致投放受限</li>
+</ul>
+
+<div class="callout">
+  <div class="title">新手推荐路径</div>
+  <p style="margin:0">自然出 3～5 单 → 选 ROI 最好的挂车视频 → 千川日预算 200 元测 3 天 → 保留 ROI &gt; 2 的计划逐步放量 → 稳定后加直播千川 + 全域推广。移动端可用「小店随心推」做 100 元级快速测试，再迁移到 PC 端千川做规模化。</p>
+</div>
+</section>
+
+<!-- ===== 私域 ===== -->
+<section id="private">
+<h2>十六、私域转化（合规优先）</h2>
+
+<p>公域触达受限、粉丝易流失，私域可提升复购与 LTV。但<strong>导流红线极严</strong>，违规 15 秒内 AI 识别，轻限流重封号。</p>
+
+<h3 id="private-inside">16.1 抖音生态内私域（推荐）</h3>
+<ul>
+  <li><strong>粉丝群</strong>：设入群门槛（关注 + 点赞 3 条），群公告发福利，定期直播/干货维持活跃</li>
+  <li><strong>铁粉团/会员</strong>：培养铁粉（呼应算法铁粉互动高权重），提升信任与复购</li>
+  <li><strong>企业号组件</strong>：「联系我们」「小风车」落地页合规留资（需开通企业号）</li>
+  <li><strong>私信自动回复</strong>：关键词触发引导（如回「资料」自动发指引）</li>
+  <li><strong>评论区置顶</strong>：「点击头像领《XX 指南》」——勿直接留微信</li>
+</ul>
+
+<h3 id="private-outside">16.2 合规站外引流</h3>
+<div class="callout danger">
+  <div class="title">导流红线</div>
+  <p style="margin:0">禁直接放微信号/二维码/「加微信」等词。话术替代：「点击主页联系我们」「私信领取资料」，绝不用「微信/VX」等词。单日私信引导建议 &lt; 50 条。</p>
+</div>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>合规路径</th><th>说明</th><th>参考转化率</th></tr></thead>
+<tbody>
+<tr><td>企业号主页挂企微</td><td>官方「联系方式」入口</td><td>3%～5%</td></tr>
+<tr><td>信息流广告 + 落地页</td><td>备案中间页（H5）→ 跳转企微，需巨量广告账户</td><td>因行业而异</td></tr>
+<tr><td>内容赠品钩子</td><td>高价值资料 + 低门槛领取（平台允许 + 用户需要 + 交付轻松）</td><td>—</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="private-sop">16.3 私域承接 SOP</h3>
+<ol>
+  <li><strong>欢迎语</strong>：称呼昵称 + 一句话价值点</li>
+  <li><strong>按来源打标签</strong>：区分短视频/直播/评论区来源，分层运营</li>
+  <li><strong>阶梯社群</strong>：新人群 → VIP 群 → 高客单群</li>
+</ol>
+
+<h3 id="private-metrics">16.4 私域数据指标参考</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>指标</th><th>健康参考</th></tr></thead>
+<tbody>
+<tr><td>入群率</td><td>&gt; 15%</td></tr>
+<tr><td>企微添加率</td><td>&gt; 8%</td></tr>
+<tr><td>社群日活</td><td>&gt; 5%</td></tr>
+<tr><td>首单转化</td><td>&gt; 10%</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<!-- ===== 合规 ===== -->
+<section id="compliance">
+<h2>十七、违规红线、发布标注与 AI 规范</h2>
+
+<h3 id="compliance-tags">17.1 中央网信办：6 类发布标签（必经环节）</h3>
+<p>发布视频/图文时，必须从以下 6 类中选 1 项才能发布：</p>
+<div class="table-wrap">
+<table>
+<thead><tr><th>标签类型</th><th>适用场景</th></tr></thead>
+<tbody>
+<tr><td>含有虚构演绎内容</td><td>剧情、摆拍、情景演绎</td></tr>
+<tr><td>含有 AI 生成内容</td><td>画面/声音/人物由 AI 生成</td></tr>
+<tr><td>含有营销信息</td><td>广告、推广、带货导向明显</td></tr>
+<tr><td>内容为转载</td><td>非原创，来自其他平台或作者</td></tr>
+<tr><td>内容为个人观点</td><td>主观评论、观点输出</td></tr>
+<tr><td>无需标注</td><td>真实生活记录、日常分享</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="compliance-ai">17.2 AI 内容三重标注（2026 年 5 月起）</h3>
+<p>含 AI 生成内容须<strong>三重标注缺一不可</strong>：</p>
+<ol>
+  <li><strong>口播/文字提示</strong>：视频前 5 秒或画面中显著提示</li>
+  <li><strong>发布页勾选</strong>：高级设置 → 发文助手自主声明 →「内容由 AI 生成」</li>
+  <li><strong>描述写明</strong>：作品描述中注明 AI 辅助创作</li>
+</ol>
+<p>平台已上线 AI 检测系统（隐式标识 + 数字水印），规避无效。依据《人工智能生成合成内容标识办法》，2025 年 9 月 1 日起正式施行。</p>
+
+<h3>17.3 AI 漏标处罚（2026 年 7 月新规）</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>违规程度</th><th>处罚</th></tr></thead>
+<tbody>
+<tr><td>首次漏标</td><td>限流 50%～90%</td></tr>
+<tr><td>二次违规</td><td>扣健康分 15～20，关挂车 3 天、冻佣金</td></tr>
+<tr><td>三次违规</td><td>橱窗封禁 7 天</td></tr>
+<tr><td>故意隐匿元数据</td><td>下架/封号</td></tr>
+<tr><td>多次恶意违规</td><td>降权 7～14 天</td></tr>
+</tbody>
+</table>
+</div>
+<p>2026 年 1～5 月平台已清理违规 AI 视频 52 万+，处罚账号 6.8 万+。</p>
+
+<h3 id="compliance-trademark">17.4 商标/R 标成为「刚需」（2026 年 7 月）</h3>
+<p>商标从「可选」变「刚需」：R 标成为 AI 识别品牌主体、分配流量权重的重要依据。信号是鼓励<strong>真实主体 / 真实品牌 / 真实价值</strong>，排斥无主化、批量化、同质化 AI 流水线。</p>
+
+<h3>17.5 违规成本对照表</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>等级</th><th>典型行为</th><th>处罚</th></tr></thead>
+<tbody>
+<tr><td>轻度</td><td>漏标 AI、低质内容、轻度营销违规</td><td>限流、提醒</td></tr>
+<tr><td>中度</td><td>多次违规、虚假宣传、诱导消费</td><td>降权、挂车/橱窗受限、扣健康分</td></tr>
+<tr><td>重度</td><td>恶意违规、隐匿标识、售违禁品、近 90 天严重违规</td><td>下架、封禁、永久禁止电商权限</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="compliance-check">17.6 限流自查清单</h3>
+<ul class="checklist">
+  <li>是否漏标 AI / 虚构演绎（6 类标签选对了吗？）</li>
+  <li>是否跨领域发内容打乱了账号标签</li>
+  <li>是否触碰五大内容红线 / 直播红线</li>
+  <li>是否频繁删除低数据视频（伤账号权重）</li>
+  <li>是否买粉/互粉（有效粉丝不计入，且可能降权）</li>
+  <li>是否直接留微信/二维码引流</li>
+</ul>
+
+<h3>17.7 申诉渠道</h3>
+<p>若认为处罚有误：创作者服务中心 → 违规查询 → 选择罚单 → 提交申诉（附证据材料）。</p>
+
+<div class="callout">
+  <div class="title">实用建议：AI 要不要打标？</div>
+  <p style="margin:0">AI 辅助写脚本、生成字幕、智能剪辑<strong>一般无需打标</strong>；但<strong>画面/声音/人物由 AI 生成</strong>的内容必须三重标注。拿不准时，主动声明更稳妥。</p>
+</div>
+</section>
+
+<!-- ===== 工具 ===== -->
+<section id="tools">
+<h2>十八、工具清单与行动清单</h2>
+
+<h3 id="tools-list">18.1 推荐工具</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>用途</th><th>工具</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>剪辑</td><td>剪映</td><td>抖音官方，字幕/模板/AI 功能齐全</td></tr>
+<tr><td>选题/热点</td><td>抖音热点宝、巨量算数</td><td>查趋势关键词、行业洞察</td></tr>
+<tr><td>数据</td><td>创作者服务中心</td><td>播放、粉丝、收益一站式</td></tr>
+<tr><td>选品</td><td>精选联盟选品广场</td><td>按佣金/销量筛选</td></tr>
+<tr><td>店铺</td><td>抖店后台 / 抖店 App</td><td>商品、订单、售后管理</td></tr>
+<tr><td>内容加热</td><td>DOU+</td><td>测内容、涨粉、放大自然爆款（68 元起）</td></tr>
+<tr><td>电商投流</td><td>巨量千川 / 小店随心推</td><td>短视频/直播/商品卡付费引流，优化成交 ROI</td></tr>
+<tr><td>脚本辅助</td><td>ChatGPT / 豆包 / Kimi</td><td>生成选题和脚本草稿，需人工审核</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="tools-action">18.2 本周行动清单（PPT 核心结论）</h3>
+<ul class="checklist">
+  <li>完成定位三步法：写下人群 × 痛点 × 人设</li>
+  <li>注册 + 实名 + 完善五件套资料</li>
+  <li>养号 3～7 天，校准赛道标签</li>
+  <li>发布前 3 条垂直视频（含 6 类标签 + 搜索关键词）</li>
+  <li>跑通一次 DOU+ 100 元小额测试</li>
+  <li>有挂车视频后，千川日预算 200 元测 3 天 ROI</li>
+  <li>熟悉创作者数据中心，按收藏率优先级复盘</li>
+</ul>
+
+<h3 id="tools-milestone">18.3 30 天里程碑</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>天数</th><th>目标</th></tr></thead>
+<tbody>
+<tr><td>第 1～7 天</td><td>发满 7 条垂直内容，跑通拍摄剪辑流程</td></tr>
+<tr><td>第 8～14 天</td><td>出现第一条播放 5000+ 的视频，复盘原因</td></tr>
+<tr><td>第 15～21 天</td><td>有效粉丝突破 200，尝试首场直播带货</td></tr>
+<tr><td>第 22～30 天</td><td>有效粉丝冲击 500，开通短视频挂车；尝试首场直播</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<!-- ===== FAQ ===== -->
+<section id="faq">
+<h2>十九、避坑 FAQ</h2>
+
+<div class="card">
+<h4>内容 / 起号误区</h4>
+<ul>
+  <li><strong>唯完播论</strong>：2026 年收藏率权重更高，要做可收藏的干货</li>
+  <li><strong>堆热门大词话题</strong>：用 2～3 个精准垂直标签，而非泛大词</li>
+  <li><strong>买粉</strong>：不计入有效粉丝，且可能降权</li>
+  <li><strong>搬运用 AI 不标注</strong>：三重标注 + 6 类标签，漏标限流 50%～90%</li>
+  <li><strong>跨领域发内容</strong>：打乱精细账号标签</li>
+  <li><strong>频繁删低数据视频</strong>：伤害账号历史权重</li>
+</ul>
+</div>
+
+<div class="card">
+<h4>千川投流误区</h4>
+<ul>
+  <li><strong>零自然单大力投千川</strong>：模型无样本，消耗高不出单</li>
+  <li><strong>冷启动期频繁改计划</strong>：至少跑 3 天再优化</li>
+  <li><strong>ROI 不算商品成本</strong>：支付 ROI 3 也可能亏本，要算清毛利</li>
+  <li><strong>直播未准备好就投流</strong>：承接不住会烧钱</li>
+</ul>
+</div>
+
+<div class="card">
+<h4>投流误区（DOU+）</h4>
+<ul>
+  <li><strong>为投而投</strong>：先自然测试，完播率 &gt; 25% 再投</li>
+  <li><strong>DOU+ 与千川混用</strong>：目标不同，别混</li>
+  <li><strong>新号未养直接投</strong>：先发 3～5 条优质内容</li>
+</ul>
+</div>
+
+<div class="card">
+<h4>私域 / 直播误区</h4>
+<ul>
+  <li><strong>直接留微信</strong>：AI 15 秒识别，轻限流重封号</li>
+  <li><strong>直播情感绑架</strong>：「不买不是家人」等话术顶格处罚</li>
+  <li><strong>无钩子硬推</strong>：用内容赠品（资料/清单）做合规钩子</li>
+  <li><strong>不加标签分层</strong>：私域用户要按来源/意向分层运营</li>
+</ul>
+</div>
+
+<div class="callout success">
+  <div class="title">核心结论</div>
+  <p style="margin:0"><strong>合规是底线，有用是王道，真人信任是红利，公域 + 私域闭环才长久。</strong></p>
+</div>
+</section>
+
+<!-- ===== 规则来源 ===== -->
+<section id="refs">
+<h2>二十、规则来源与延伸阅读</h2>
+
+<p>平台规则持续更新，以下为核心依据。运营中以<strong>官方最新公示</strong>为准。</p>
+
+<div class="table-wrap">
+<table>
+<thead><tr><th>规则名称</th><th>要点</th><th>官方入口</th></tr></thead>
+<tbody>
+<tr>
+  <td>《抖音电商创作者入驻管理规范》</td>
+  <td>2025.04.17 修订：200/500/1000 粉三档权限</td>
+  <td><a href="https://school.jinritemai.com" target="_blank" rel="noopener">抖音电商学习中心</a></td>
+</tr>
+<tr>
+  <td>《抖音社区自律公约》</td>
+  <td>内容安全、社区秩序总则</td>
+  <td><a href="https://www.douyin.com/agreements" target="_blank" rel="noopener">抖音用户协议与公约</a></td>
+</tr>
+<tr>
+  <td>巨量千川投放规范</td>
+  <td>电商付费投流、ROI 出价、素材审核</td>
+  <td><a href="https://qianchuan.jinritemai.com" target="_blank" rel="noopener">qianchuan.jinritemai.com</a> · <a href="https://school.jinritemai.com" target="_blank" rel="noopener">电商学习中心</a></td>
+</tr>
+<tr>
+  <td>《人工智能生成合成内容标识办法》</td>
+  <td>2025.09.01 施行；2026.05 三重标注；2026.07 AI 处罚升级</td>
+  <td><a href="https://www.cac.gov.cn" target="_blank" rel="noopener">国家网信办</a></td>
+</tr>
+<tr>
+  <td>中央网信办短视频内容标注规范</td>
+  <td>6 类发布标签，发布必经环节</td>
+  <td>创作者服务中心 → 规则中心</td>
+</tr>
+<tr>
+  <td>抖音安全与信任中心</td>
+  <td>规则更新公示、AI 治理公告</td>
+  <td><a href="https://95152.douyin.com" target="_blank" rel="noopener">95152.douyin.com</a></td>
+</tr>
+<tr>
+  <td>本教程 PPT 提纲来源</td>
+  <td>《如何在抖音打造个人IP与短视频运营》内部分享提纲</td>
+  <td>WorkBuddy 2026-08-07</td>
+</tr>
+<tr>
+  <td>《抖音电商内容创作规范》</td>
+  <td>带货内容合规细则</td>
+  <td>创作者服务中心 → 规则中心</td>
+</tr>
+<tr>
+  <td>抖店入驻规则</td>
+  <td>店铺类型、保证金、类目资质</td>
+  <td><a href="https://fxg.jinritemai.com" target="_blank" rel="noopener">fxg.jinritemai.com</a></td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout warn">
+  <div class="title">免责声明</div>
+  <p style="margin:0">本教程为实操梳理与学习参考，不构成法律意见。保证金金额、费率、粉丝门槛等以抖音平台实时公示为准。政策可能调整，请定期查阅抖音安全与信任中心（<a href="https://95152.douyin.com" target="_blank" rel="noopener">95152.douyin.com</a>）及电商学习中心。</p>
+</div>
+</section>
+
+</main>
+
+<footer class="doc-footer">
+  <p>智营获客 · 抖音个人 IP 与电商带货教程 · 整合 PPT 提纲 v2 · 2026-08-07</p>
+  <p>文档路径：<code>docs/07-对外资料/02-内容获客运营/02-教程与合规/抖音IP带货指南.html</code> · 返回 <a href="../../README.md">内容获客运营</a></p>
+</footer>
+</div>
+</div>
+
+<script>
+// 侧边栏高亮：章节 + 子节点同步
+const navTargets = document.querySelectorAll('section[id], h3[id]');
+const allNavLinks = document.querySelectorAll('.sidebar nav a');
+
+function setActiveNav(id) {
+  allNavLinks.forEach(a => a.classList.remove('active'));
+  const exact = document.querySelector('.sidebar nav a[href="#' + id + '"]');
+  if (exact) {
+    exact.classList.add('active');
+    // 子节点高亮时，父级章节也高亮
+    const group = exact.closest('.nav-group');
+    if (group) {
+      const parent = group.querySelector('.nav-parent');
+      if (parent && parent !== exact) parent.classList.add('active');
+    }
+  }
+}
+
+const observer = new IntersectionObserver(entries => {
+  const visible = entries.filter(e => e.isIntersecting)
+    .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+  if (visible.length) setActiveNav(visible[0].target.id);
+}, { rootMargin: '-10% 0px -75% 0px', threshold: [0, 0.1, 0.5] });
+
+navTargets.forEach(el => observer.observe(el));
+
+// 移动端点击子节点后收起侧栏
+document.querySelectorAll('.sidebar nav a').forEach(a => {
+  a.addEventListener('click', () => {
+    if (window.innerWidth <= 900) document.querySelector('.sidebar').classList.remove('open');
+  });
+});
+</script>
+</body>
+</html>

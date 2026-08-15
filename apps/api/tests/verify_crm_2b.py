@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""CRM-2b 验收：Schema + 列偏好（docs/v0.5-crm执行计划.md §7）。"""
+"""CRM-2b 验收：Schema + 列偏好（docs/02-执行计划/v0.5-crm执行计划.md §7）。"""
 
 from __future__ import annotations
 

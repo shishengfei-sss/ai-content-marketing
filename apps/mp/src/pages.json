@@ -212,6 +212,101 @@
       "style": {
         "navigationBarTitleText": "产品"
       }
+    },
+    {
+      "path": "pages/shop/home",
+      "style": {
+        "navigationBarTitleText": "店铺",
+        "enablePullDownRefresh": true,
+        "onReachBottomDistance": 80
+      }
+    },
+    {
+      "path": "pages/shop/product",
+      "style": {
+        "navigationBarTitleText": "商品详情"
+      }
+    },
+    {
+      "path": "pages/shop/checkout",
+      "style": {
+        "navigationBarTitleText": "确认订单"
+      }
+    },
+    {
+      "path": "pages/shop/pay-result",
+      "style": {
+        "navigationBarTitleText": "支付结果"
+      }
+    },
+    {
+      "path": "pages/shop/claim",
+      "style": {
+        "navigationBarTitleText": "领取课程",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/shop/entitlements",
+      "style": {
+        "navigationBarTitleText": "已购"
+      }
+    },
+    {
+      "path": "pages/shop/booking",
+      "style": {
+        "navigationBarTitleText": "服务预约"
+      }
+    },
+    {
+      "path": "pages/shop/verify-code",
+      "style": {
+        "navigationBarTitleText": "核销码"
+      }
+    },
+    {
+      "path": "pages/shop/bookings",
+      "style": {
+        "navigationBarTitleText": "我的预约"
+      }
+    },
+    {
+      "path": "pages/shop/orders",
+      "style": {
+        "navigationBarTitleText": "我的订单"
+      }
+    },
+    {
+      "path": "pages/shop/order-detail",
+      "style": {
+        "navigationBarTitleText": "订单详情"
+      }
+    },
+    {
+      "path": "pages/shop/invoice",
+      "style": {
+        "navigationBarTitleText": "申请开票"
+      }
+    },
+    {
+      "path": "pages/shop/learn",
+      "style": {
+        "navigationBarTitleText": "课时目录"
+      }
+    },
+    {
+      "path": "pages/shop/player",
+      "style": {
+        "navigationBarTitleText": "播放",
+        "navigationBarBackgroundColor": "#0f172a",
+        "navigationBarTextStyle": "white"
+      }
+    },
+    {
+      "path": "pages/shop/materials",
+      "style": {
+        "navigationBarTitleText": "资料领取"
+      }
     }
   ],
   "globalStyle": {

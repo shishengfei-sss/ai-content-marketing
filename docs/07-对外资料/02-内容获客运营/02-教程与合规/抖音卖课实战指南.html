@@ -1,0 +1,1660 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抖音卖课实战指南（2026 合规版）</title>
+<style>
+:root {
+  --bg: #f4f6fb;
+  --bg2: #ffffff;
+  --bg3: #eef2ff;
+  --ink: #1e293b;
+  --text: #334155;
+  --text-secondary: #64748b;
+  --muted: #94a3b8;
+  --rule: #e2e8f0;
+  --accent: #fe2c55;
+  --accent2: #0d9488;
+  --accent-soft: #fff1f3;
+  --accent2-soft: #f0fdfa;
+  --primary: #4f46e5;
+  --primary-soft: #eef2ff;
+  --success: #16a34a;
+  --warn: #d97706;
+  --danger: #dc2626;
+  --sidebar-w: 272px;
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 15px; line-height: 1.8; color: var(--text); background: var(--bg);
+}
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+  background:
+    radial-gradient(ellipse 70% 50% at 10% 0%, rgba(254,44,85,0.05) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 45% at 90% 100%, rgba(13,148,136,0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(79,70,229,0.03) 0%, transparent 50%);
+}
+a { color: var(--primary); text-decoration: none; }
+a:hover { color: var(--accent); }
+
+.layout { display: flex; min-height: 100vh; }
+.sidebar {
+  position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
+  background: var(--bg2); border-right: 1px solid var(--rule);
+  box-shadow: var(--shadow); overflow-y: auto;
+  padding: 1.25rem 0 2rem; z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1rem; margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.sidebar-brand h1 {
+  font-size: 0.92rem; font-weight: 800; line-height: 1.45; color: var(--ink);
+  background: linear-gradient(135deg, var(--accent), var(--primary));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.sidebar-brand .ver { font-size: 0.7rem; color: var(--muted); margin-top: 0.3rem; }
+.sidebar nav { padding: 0 0.6rem; }
+.sidebar nav .part {
+  font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--muted); padding: 0.85rem 0.75rem 0.3rem;
+}
+.nav-group { margin-bottom: 0.15rem; }
+.nav-parent {
+  display: flex; align-items: center; gap: 0.35rem;
+  padding: 0.42rem 0.7rem; font-size: 0.82rem; font-weight: 600; color: var(--ink);
+  border-radius: 8px; text-decoration: none; transition: all 0.15s;
+}
+.nav-parent:hover { background: var(--primary-soft); color: var(--primary); text-decoration: none; }
+.nav-parent.active { background: linear-gradient(135deg, var(--accent-soft), var(--primary-soft)); color: var(--accent); }
+.nav-parent .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--rule); flex-shrink: 0; }
+.nav-parent.active .dot { background: var(--accent); }
+.nav-sub { padding: 0.1rem 0 0.35rem 0.55rem; margin-left: 0.7rem; border-left: 2px solid var(--rule); }
+.nav-sub a {
+  display: block; padding: 0.28rem 0.65rem; font-size: 0.76rem; color: var(--text-secondary);
+  border-radius: 6px; text-decoration: none; transition: all 0.12s; line-height: 1.45;
+}
+.nav-sub a:hover { background: var(--bg3); color: var(--primary); text-decoration: none; }
+
+.content { margin-left: var(--sidebar-w); flex: 1; min-width: 0; }
+.cover {
+  background: linear-gradient(135deg, #ffffff 0%, #fff8f9 40%, #f0fdfa 100%);
+  border-bottom: 1px solid var(--rule); padding: 3.5rem 3rem 2.75rem;
+  position: relative; overflow: hidden;
+}
+.cover h1 { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.75rem; color: var(--ink); position: relative; }
+.cover .subtitle { font-size: 1.05rem; color: var(--text-secondary); max-width: 720px; margin-bottom: 1.25rem; position: relative; }
+.cover .meta { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); position: relative; }
+.badge { display: inline-block; padding: 3px 11px; border-radius: 20px; font-size: 0.74rem; font-weight: 600; }
+.badge.red { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(254,44,85,0.2); }
+.badge.cyan { background: var(--accent2-soft); color: var(--accent2); border: 1px solid rgba(13,148,136,0.2); }
+.badge.purple { background: var(--primary-soft); color: var(--primary); border: 1px solid rgba(79,70,229,0.2); }
+
+main { max-width: 900px; padding: 2.25rem 3rem 4.5rem; width: 100%; }
+section { display: block; width: 100%; margin-bottom: 3.25rem; scroll-margin-top: 1.5rem; }
+h2 {
+  font-size: 1.55rem; font-weight: 800; margin-bottom: 1.1rem; padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--rule); position: relative; color: var(--ink);
+}
+h2::after { content: ''; position: absolute; bottom: -2px; left: 0; width: 72px; height: 2px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+h3 { font-size: 1.1rem; font-weight: 700; margin: 2rem 0 0.7rem; color: var(--ink); scroll-margin-top: 1.5rem; }
+h4 { font-size: 0.98rem; font-weight: 700; color: var(--primary); margin: 1.4rem 0 0.45rem; }
+p { margin-bottom: 0.85rem; color: var(--text); }
+strong { color: var(--ink); }
+ul, ol { padding-left: 1.5rem; margin-bottom: 0.85rem; color: var(--text); }
+li { margin-bottom: 0.3rem; }
+
+.card {
+  background: var(--bg2); border: 1px solid var(--rule); border-radius: 12px;
+  padding: 1.35rem 1.5rem; margin: 1.15rem 0; box-shadow: var(--shadow);
+}
+.callout {
+  border-radius: 0 10px 10px 0; padding: 1rem 1.2rem; margin: 1.15rem 0;
+  border-left: 3px solid var(--primary); background: var(--primary-soft);
+}
+.callout.warn { border-left-color: var(--warn); background: #fffbeb; }
+.callout.danger { border-left-color: var(--danger); background: #fef2f2; }
+.callout.success { border-left-color: var(--success); background: #f0fdf4; }
+.callout .title { font-weight: 700; font-size: 0.88rem; margin-bottom: 0.35rem; color: var(--ink); }
+
+.table-wrap { overflow-x: auto; margin: 1.15rem 0; border-radius: 10px; border: 1px solid var(--rule); background: var(--bg2); box-shadow: var(--shadow); }
+table { width: 100%; border-collapse: collapse; font-size: 0.84rem; min-width: 560px; }
+thead { background: linear-gradient(180deg, #f8fafc, #f1f5f9); }
+th { text-align: left; padding: 0.65rem 0.9rem; font-weight: 700; font-size: 0.73rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); border-bottom: 2px solid var(--rule); white-space: nowrap; }
+td { padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--text); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(79,70,229,0.03); }
+
+.step-flow {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin: 1rem 0;
+  padding: 1rem 1.2rem; background: var(--bg2); border-radius: 10px;
+  border: 1px solid var(--rule); box-shadow: var(--shadow);
+}
+.step-flow .step { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.86rem; color: var(--text); }
+.step-flow .arrow { color: var(--accent); font-weight: 700; }
+.step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--primary));
+  color: #fff; font-size: 0.68rem; font-weight: 800; flex-shrink: 0;
+}
+
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin: 1.15rem 0; }
+.grid-card { background: var(--bg2); border: 1px solid var(--rule); border-radius: 10px; padding: 1.2rem; box-shadow: var(--shadow); }
+.grid-card h4 { margin: 0 0 0.45rem; font-size: 0.94rem; }
+.grid-card p, .grid-card li { font-size: 0.86rem; color: var(--text-secondary); }
+
+.checklist { list-style: none; padding-left: 0; }
+.checklist li { padding: 0.38rem 0 0.38rem 1.75rem; position: relative; font-size: 0.88rem; }
+.checklist li::before { content: '☐'; position: absolute; left: 0; color: var(--accent2); font-weight: 700; }
+
+.rule-tag { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; margin-right: 4px; }
+.rule-tag.new { background: var(--accent-soft); color: var(--accent); }
+.rule-tag.key { background: var(--accent2-soft); color: var(--accent2); }
+.rule-tag.ban { background: #fef2f2; color: var(--danger); }
+
+.compare-highlight { background: linear-gradient(135deg, var(--accent-soft), var(--primary-soft)); border-radius: 10px; padding: 1rem 1.2rem; margin: 1rem 0; }
+.script-box {
+  background: #f8fafc; border: 1px solid var(--rule); border-radius: 8px;
+  padding: 1rem 1.15rem; margin: 0.85rem 0; font-size: 0.88rem; line-height: 1.75; color: var(--text);
+}
+.script-box .label { font-size: 0.72rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.35rem; }
+.path-box {
+  background: var(--bg3); border: 1px solid rgba(79,70,229,0.15); border-radius: 8px;
+  padding: 0.75rem 1rem; font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.82rem; color: var(--primary); margin: 0.75rem 0; line-height: 1.6;
+}
+
+footer.doc-footer {
+  border-top: 1px solid var(--rule); padding: 1.75rem 3rem; font-size: 0.8rem; color: var(--muted);
+  background: var(--bg2);
+}
+footer.doc-footer a { color: var(--primary); }
+
+.menu-toggle { display: none; position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 200;
+  width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer;
+  background: linear-gradient(135deg, var(--accent), var(--primary)); color: #fff; font-size: 1.2rem;
+  box-shadow: 0 4px 20px rgba(254,44,85,0.35);
+}
+
+@media (max-width: 900px) {
+  .sidebar { transform: translateX(-100%); transition: transform 0.25s; box-shadow: 4px 0 24px rgba(0,0,0,0.12); }
+  .sidebar.open { transform: translateX(0); }
+  .content { margin-left: 0; }
+  .cover { padding: 2.25rem 1.5rem 2rem; }
+  .cover h1 { font-size: 1.55rem; }
+  main { padding: 1.5rem 1.25rem 3.5rem; }
+  .menu-toggle { display: flex; align-items: center; justify-content: center; }
+}
+@media print {
+  .sidebar, .menu-toggle { display: none; }
+  .content { margin-left: 0; }
+  body::before { display: none; }
+}
+</style>
+</head>
+<body>
+
+<button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="目录">☰</button>
+
+<div class="layout">
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <h1>抖音卖课实战（2026 合规版）</h1>
+    <div class="ver">合规 + 实操 · 2026-08-07</div>
+  </div>
+  <nav>
+    <div class="part">模块一 · 政策</div>
+    <div class="nav-group"><a class="nav-parent" href="#overview"><span class="dot"></span>2026 政策总览</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#q2-rules"><span class="dot"></span>Q2 营销合规新规</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#forbidden"><span class="dot"></span>禁售与红线</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#qualification"><span class="dot"></span>资质与入驻</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#alt-paths"><span class="dot"></span>普通人 4 条变现路径</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#service-provider"><span class="dot"></span>官方服务商入驻</a></div>
+
+    <div class="part">模块二 · 路径</div>
+    <div class="nav-group"><a class="nav-parent" href="#path-select"><span class="dot"></span>短视频 vs 直播选型</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#paths"><span class="dot"></span>官方卖课路径对比</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#doudian"><span class="dot"></span>抖店小黄车</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#miniprogram"><span class="dot"></span>泛知识小程序</a></div>
+
+    <div class="part">模块三 · 短视频</div>
+    <div class="nav-group"><a class="nav-parent" href="#video"><span class="dot"></span>账号定位与选题</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#video-script"><span class="dot"></span>爆款脚本模板</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#video-mount"><span class="dot"></span>挂载与精选联盟</a></div>
+
+    <div class="part">模块四 · 直播</div>
+    <div class="nav-group"><a class="nav-parent" href="#live"><span class="dot"></span>场景与挂载门槛</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#live-script"><span class="dot"></span>留人/逼单话术</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#live-funnel"><span class="dot"></span>转化漏斗与指标</a></div>
+
+    <div class="part">模块五～九</div>
+    <div class="nav-group"><a class="nav-parent" href="#course-price"><span class="dot"></span>阶梯定价与命名</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#traffic"><span class="dot"></span>流量与冷启动</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#private"><span class="dot"></span>私域与降退费</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#analytics"><span class="dot"></span>数据复盘看板</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#roadmap"><span class="dot"></span>30 天行动路线</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#script"><span class="dot"></span>话术禁忌汇总</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#penalty"><span class="dot"></span>违规处罚</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#checklist"><span class="dot"></span>开播前自查</a></div>
+    <div class="nav-group"><a class="nav-parent" href="#refs"><span class="dot"></span>官方参考</a></div>
+  </nav>
+</aside>
+
+<div class="content">
+<header class="cover">
+  <h1>抖音卖课实战（2026 合规版）</h1>
+  <p class="subtitle">合规政策 + 路径选型 + 短视频/直播实操 + 阶梯定价 + 数据复盘 + 30 天行动路线。整合定向邀约新政、Q2 营销合规细则、泛知识课程库规范与挂载要求。</p>
+  <div class="meta">
+    <span class="badge red">2026 定向邀约</span>
+    <span class="badge cyan">Q2 营销合规</span>
+    <span class="badge purple">实战 SOP</span>
+    <span>整理日期：2026-08-07</span>
+  </div>
+</header>
+
+<main>
+
+<!-- ========== 政策总览 ========== -->
+<section id="overview">
+  <h2>2026 政策总览</h2>
+
+  <div class="callout danger">
+    <div class="title">核心变化：「人人都能卖课」时代已结束</div>
+    <p style="margin:0">自 <strong>2026 年 1 月 21 日</strong> 起，抖音修订《【本地生活及虚拟】行业管理规范》，<strong>教育培训一级类目下全部二级/三级类目改为定向邀约</strong>，个人/中小机构无法自主上架自有课程，仅能参与官方分销或借助持证第三方。3 月起平台清理存量市场，据行业报道约 70–80% 中小玩家被清退（非官方数据，仅供参考）。</p>
+  </div>
+
+  <h3>知识付费市场：抖音仍是最大公域入口</h3>
+  <p>尽管政策收紧，抖音日活与内容消费时长仍居国内短视频平台首位。合规资质到位后，公域获客效率远高于私域冷启动。2026 年策略重心从「野蛮上架」转向<strong>资质合规 + 内容质量 + 精准转化</strong>。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>维度</th><th>2026 最新要求</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>入驻方式</strong></td>
+          <td><span class="rule-tag new">定向邀约</span></td>
+          <td>仅平台主动邀约，或商家资质提报经平台审查许可后方可入驻；<strong>暂不支持自主申请</strong></td>
+        </tr>
+        <tr>
+          <td><strong>主体门槛</strong></td>
+          <td>企业优先</td>
+          <td>注册资本 ≥ 100 万、注册满 1 年；个体工商户基本不符合准入条件</td>
+        </tr>
+        <tr>
+          <td><strong>泛知识小程序</strong></td>
+          <td>仅限企业主体</td>
+          <td>服务类目须含「在线教育」；课程须接入课程库统一审核</td>
+        </tr>
+        <tr>
+          <td><strong>合规排查</strong></td>
+          <td>生效后 30 天内</td>
+          <td>老商家资质不全可能被清退；课程需通过专家评审团审核评分</td>
+        </tr>
+        <tr>
+          <td><strong>咨询渠道</strong></td>
+          <td>950529</td>
+          <td>定向邀约入驻联系电话（官方客服口径）</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>政策时间线</h3>
+  <div class="card">
+    <ul>
+      <li><strong>2021-11-19</strong> — 禁止 K12 学科类、学龄前课程；中小学非学科类不得以直播/视频推广</li>
+      <li><strong>2026-01-14</strong> — 公示修订《【本地生活及虚拟】行业管理规范》</li>
+      <li><strong>2026-01-21</strong> — 教育培训类目全面改为定向邀约，生效</li>
+      <li><strong>2026-03</strong> — 启动存量市场清理，批量下架未获邀约课程</li>
+      <li><strong>2026-04</strong> — 《误导售卖商品》《违规营销噱头》细则上线，严打夸大宣传</li>
+      <li><strong>持续</strong> — 平台将公布邀约指标（企业资质、投诉率阈值、课程备案要求等）</li>
+    </ul>
+  </div>
+
+  <div class="callout warn">
+    <div class="title">过渡方案</div>
+    <p style="margin:0">拿不到定向邀约、没有正规教培资质的中小机构/个人老师，参见下文 <a href="#alt-paths">普通人 4 条合规变现路径</a>。同时建议<strong>多平台布局</strong>，降低单一平台政策风险。</p>
+  </div>
+</section>
+
+<!-- ========== Q2 营销合规 ========== -->
+<section id="q2-rules">
+  <h2>2026 Q2 营销合规新规</h2>
+  <p>2026 年第二季度，抖音电商密集出台创作者营销规范，与卖课话术、直播逼单直接相关。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>规则</th><th>生效时间</th><th>重点打击</th><th>卖课场景影响</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>《创作者【误导售卖商品】实施细则》</td>
+          <td>2026-04-28</td>
+          <td>隐瞒核心参数、隐瞒限制条件、信息指向不明</td>
+          <td>课程详情须写清课时数、有效期、适用人群；不得「挂羊头卖狗肉」</td>
+        </tr>
+        <tr>
+          <td>《创作者【违规营销噱头】违规细则》</td>
+          <td>2026-04-17</td>
+          <td>「仅此 X 天」「只亏 XX 单」「闭店限时」等虚假紧迫感</td>
+          <td>直播憋单话术须合规，禁止虚构限时限量</td>
+        </tr>
+        <tr>
+          <td>虚假价格宣传专项治理</td>
+          <td>2026-02 起</td>
+          <td>夸大折扣、虚构到手价、制造低价错觉</td>
+          <td>标价须真实可购；活动价须注明条件与期限</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>误导售卖三种典型模式（避坑）</h3>
+  <div class="grid-2">
+    <div class="grid-card">
+      <h4>隐瞒关键信息</h4>
+      <p>课程核心参数「擦边」——如只说「30 节课」不说每节时长、是否含答疑。</p>
+    </div>
+    <div class="grid-card">
+      <h4>隐瞒限制条件</h4>
+      <p>对适用范围含糊其辞——如「所有人都能学」但实际需前置基础。</p>
+    </div>
+    <div class="grid-card">
+      <h4>信息指向不明</h4>
+      <p>用户无法确定实际售卖商品——如视频讲 A 课，购物车挂 B 课。</p>
+    </div>
+    <div class="grid-card">
+      <h4>违规营销噱头</h4>
+      <p>「你有 XX 位好友已购买」「XX 元不要拍」「国补下线倒计时」等。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 禁售与红线 ========== -->
+<section id="forbidden">
+  <h2>禁售类目与宣传红线</h2>
+
+  <h3>绝对禁止售卖</h3>
+  <div class="grid-2">
+    <div class="grid-card">
+      <h4><span class="rule-tag ban">禁售</span> K12 学科类</h4>
+      <p>语文、数学、外语、物理、化学、生物、政治、历史、地理、科学及其衍生课程。自 2021 年起全面禁止。</p>
+    </div>
+    <div class="grid-card">
+      <h4><span class="rule-tag ban">禁售</span> 学龄前课程</h4>
+      <p>面向学龄前儿童的培训课程一律禁止发布。</p>
+    </div>
+    <div class="grid-card">
+      <h4><span class="rule-tag ban">禁售</span> 中小学非学科直播推广</h4>
+      <p>面向中小学（含高中）的非学科类课程，只允许放在「教育培训-中小幼培训-儿童兴趣」类目，<strong>不得以直播、视频形式推广</strong>。</p>
+    </div>
+    <div class="grid-card">
+      <h4><span class="rule-tag ban">禁售</span> 其他违规内容</h4>
+      <p>投资荐股、医美培训、伪成功学/私董会、「两周变现」承诺课、高考志愿、PUA、赌博手法、未成年人网游教学、外挂教授、引流站外交易等。</p>
+    </div>
+    <div class="grid-card">
+      <h4><span class="rule-tag ban">禁售</span> 无实质教学内容</h4>
+      <p>纯社群/资料包/答疑、单节课 &lt; 1 分钟、页面空白。平台以「课程无实质内容」驳回。</p>
+    </div>
+    <div class="grid-card">
+      <h4><span class="rule-tag ban">禁售</span> 低价课</h4>
+      <p>售价 ≤ 10 元（含活动价、团购价）一律不允许上架。</p>
+    </div>
+  </div>
+
+  <h3>完整禁售清单</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>类别</th><th>具体禁售内容</th><th>备注</th></tr></thead>
+      <tbody>
+        <tr><td>学科类</td><td>K12 全学科、学龄前、中小学非学科直播推广</td><td>K12 禁售自 2021-11-19 起</td></tr>
+        <tr><td>金融投资</td><td>投资荐股、理财承诺收益类课程</td><td>常识兴趣中经济学仅限老师接入，不含投资科普</td></tr>
+        <tr><td>医疗健康</td><td>医美培训、疾病治疗类食疗</td><td>医学类资格认证需对应资质</td></tr>
+        <tr><td>焦虑营销</td><td>伪成功学、高价私董会、「两周变现」课</td><td>2026 重点稽查</td></tr>
+        <tr><td>升学规划</td><td>高考志愿、择校保录类</td><td>敏感类目，慎入</td></tr>
+        <tr><td>空心交付</td><td>纯社群、资料包、答疑，无视频/直播教学</td><td>泛知识 FAQ 明确驳回</td></tr>
+        <tr><td>低价规避</td><td>10 元及以下课程</td><td>含优惠后价格</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>宣传话术禁区</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>类型</th><th>禁止表述示例</th><th>合规替代</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>效果保证</td>
+          <td>包学包会、包过、100% 成功率、学完必赚</td>
+          <td>「帮助掌握 XX 技能」「系统学习 XX 方法论」</td>
+        </tr>
+        <tr>
+          <td>收益承诺</td>
+          <td>学完月入过万、保证涨粉 XX、躺赚</td>
+          <td>展示真实学员案例（需授权），不承诺具体金额</td>
+        </tr>
+        <tr>
+          <td>时限夸大</td>
+          <td>终身有效、永久更新、一次购买终身受益</td>
+          <td>明确标注课程有效期、更新周期</td>
+        </tr>
+        <tr>
+          <td>焦虑营销</td>
+          <td>再不学就晚了、错过后悔一辈子</td>
+          <td>客观描述行业趋势、课程价值</td>
+        </tr>
+        <tr>
+          <td>站外引流</td>
+          <td>加微信私聊、扫码进群、私信领资料</td>
+          <td>AI 识别限流封号；用购物车/小程序内转化</td>
+        </tr>
+        <tr>
+          <td>虚假背书</td>
+          <td>冒用机构/专家名义、伪造学员证言</td>
+          <td>展示案例须获学员书面授权</td>
+        </tr>
+        <tr>
+          <td>包过承诺</td>
+          <td>包过/保过/一次通过、终身/永久</td>
+          <td>明确课程有效期与更新周期</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ========== 资质与入驻 ========== -->
+<section id="qualification">
+  <h2>资质与入驻要求</h2>
+
+  <h3>抖店教育培训类目</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>资质项</th><th>要求</th><th>备注</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>营业执照</td>
+          <td>经营范围须包含培训/教育相关内容</td>
+          <td>类目与实际经营内容须一致</td>
+        </tr>
+        <tr>
+          <td>ICP 备案</td>
+          <td>线上平台须提供 ICP 备案</td>
+          <td>网站/小程序均适用</td>
+        </tr>
+        <tr>
+          <td>办学许可证</td>
+          <td>语言培训、考研辅导等部分三级类目须提供《民办学校办学许可证》</td>
+          <td>无许可时可与持证机构签一级合作协议+授权（有效期 ≥ 6 个月，双方公章）</td>
+        </tr>
+        <tr>
+          <td>师资资质</td>
+          <td>教师资格证、行业认证、专业学历等</td>
+          <td>按课程分类对应提交</td>
+        </tr>
+        <tr>
+          <td>课程合规材料</td>
+          <td>课程大纲、目录、试听样章等</td>
+          <td>上架前通过平台审核</td>
+        </tr>
+        <tr>
+          <td>出版物资质</td>
+          <td>书课包/书籍类目需合法 ISBN 书号</td>
+          <td>内容与书籍一致；不得用书籍类目规避教培审核</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>泛知识小程序（老师/机构资质）</h3>
+  <p>老师与机构资质<strong>至少上传一个</strong>。按课程分类提交对应行业资质：</p>
+  <ul>
+    <li><strong>语言培训</strong> — 教师资格证或语言类专业认证</li>
+    <li><strong>职业技能</strong> — 相关行业从业资格证、专业认证</li>
+    <li><strong>学历/职业资格考试</strong> — 对应考试辅导资质</li>
+    <li><strong>常识兴趣</strong> — 部分类目仅允许老师接入（机构不准入）</li>
+    <li><strong>万粉/优质创作者</strong> — 可提交抖音账号万粉资质或优质创作者认证作为补充</li>
+  </ul>
+
+  <div class="callout">
+    <div class="title">资质替代路径</div>
+    <p style="margin:0">无办学许可时：与持证机构签署<strong>一级合作协议 + 授权书</strong>（有效期 ≥ 6 个月，加盖双方公章），作为资质替代方案。</p>
+  </div>
+</section>
+
+<!-- ========== 普通人 4 条变现路径 ========== -->
+<section id="alt-paths">
+  <h2>普通人合规变现的 4 条路径</h2>
+  <p>2026 年后无教培资质、拿不到定向邀约的创作者，仍可通过以下路径合规变现（须持续关注平台政策变化）。</p>
+
+  <div class="grid-2">
+    <div class="grid-card">
+      <h4><span class="rule-tag key">路径 1</span> 第三方 SaaS + 精选联盟分销</h4>
+      <p><strong>代表：</strong>千聊、课堂街、小鹅通等官方合作服务商。</p>
+      <ul>
+        <li>个人 0 门槛上架到服务商店铺，进精选联盟供达人分销</li>
+        <li>自己或他人挂小黄车/小雪花分销，赚佣金</li>
+        <li>须确认服务商是否仍持有 2026 定向邀约资质</li>
+      </ul>
+    </div>
+    <div class="grid-card">
+      <h4><span class="rule-tag key">路径 2</span> 书课包（ISBN + 书籍类目）</h4>
+      <p>将课程配套实体书，绑定合法 ISBN 书号，走<strong>书籍类目</strong>销售。</p>
+      <ul>
+        <li>书与课内容须一致，不得用书籍类目规避教培审核</li>
+        <li>需出版物经营许可证（视经营主体而定）</li>
+        <li>适合有出版资源或能对接出版社的老师</li>
+      </ul>
+    </div>
+    <div class="grid-card">
+      <h4><span class="rule-tag key">路径 3</span> 公域内容 → 合规私域成交</h4>
+      <p>抖音做免费干货引流，在<strong>合规渠道</strong>承接高客单服务。</p>
+      <ul>
+        <li>禁止口播「加微信」「私信领资料」</li>
+        <li>可用：企业号私信、直播间合规表单/小风车、官方客服组件</li>
+        <li>线下大课、企业内训等重交付在私域完成</li>
+      </ul>
+    </div>
+    <div class="grid-card">
+      <h4><span class="rule-tag key">路径 4</span> 重交付转型</h4>
+      <p>弱化低价线上课，转向高附加值交付。</p>
+      <ul>
+        <li>实体教辅/工具周边（与教学强相关）</li>
+        <li>企业内训、定制咨询（B 端合同交付）</li>
+        <li>线下训练营/工作坊（需对应经营资质）</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <div class="title">风险提示</div>
+    <p style="margin:0">路径 2、3 若操作不当易被判定为规避教培审核。上架前建议咨询平台客服（950529）或服务商合规团队。路径 1 须核实第三方是否仍在平台白名单内。若你想<strong>自己成为</strong>这类服务商，见下一节 <a href="#service-provider">官方服务商入驻要求</a>。</p>
+  </div>
+</section>
+
+<!-- ========== 官方服务商入驻 ========== -->
+<section id="service-provider">
+  <h2>如何成为抖音官方服务商（2026 要求）</h2>
+  <p>千聊、课堂街、小鹅通等能帮老师挂课，通常同时具备<strong>泛知识代运营资质</strong>与<strong>抖店教培白名单</strong>（或一级合作授权）。个人老师挂靠的是它们的店铺；若你要自己做平台，需走下面三条路（可叠加）。</p>
+
+  <h3>三种「官方服务商」身份对照</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>类型</th><th>平台入口</th><th>能做什么</th><th>与卖课关系</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>代开发服务商（ISV）</strong></td>
+          <td><a href="https://partner.open-douyin.com/" target="_blank" rel="noopener">服务商平台</a></td>
+          <td>帮客户开发/托管抖音小程序</td>
+          <td>卖课小程序的技术底座</td>
+        </tr>
+        <tr>
+          <td><strong>泛知识代运营服务商</strong></td>
+          <td>开放平台 · 行业运营平台</td>
+          <td>帮老师/机构上架课程、角色授权、进课程库</td>
+          <td>千聊/小鹅通的核心经营资质</td>
+        </tr>
+        <tr>
+          <td><strong>抖店教培商家</strong></td>
+          <td>抖店 + 学浪</td>
+          <td>小黄车直接卖课</td>
+          <td>2026 后须<strong>定向邀约</strong>，不可自主申请</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <div class="title">关键认知</div>
+    <p style="margin:0">做成泛知识代运营服务商 ≠ 自动获得抖店教培新店资格。小黄车卖课还需单独持有 2026 定向邀约白名单，或与持证机构签一级合作授权。</p>
+  </div>
+
+  <h3>路径 A：泛知识「代运营服务商」</h3>
+  <p>官方文档：<a href="https://developer.open-douyin.com/docs/resource/zh-CN/mini-app/open-capacity/Industry/pan-knowledge/mini-app-access" target="_blank" rel="noopener">泛知识行业接入指南</a></p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>评估项</th><th>入驻要求</th></tr></thead>
+      <tbody>
+        <tr><td>主体</td><td><strong>独立企业法人</strong>；个体工商户、分公司不准入</td></tr>
+        <tr><td>注册资本</td><td>≥ <strong>50 万元</strong>（单一主体）</td></tr>
+        <tr><td>员工规模</td><td>≥ <strong>20 人</strong></td></tr>
+        <tr><td>经营范围</td><td>须含教育、培训、咨询、计算机技术服务、营销策划等至少一项</td></tr>
+        <tr><td>近一年销售额</td><td>≥ <strong>10 万元</strong></td></tr>
+        <tr><td>服务客户数</td><td>≥ <strong>10 家</strong>老师/机构</td></tr>
+        <tr><td>过往案例</td><td>PDF：客户名称、解决方案、成果（含合同/后台截图）</td></tr>
+        <tr><td>技术能力</td><td>建议已有抖音小程序（提供 appid + 方案交互图）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="step-flow">
+    <span class="step"><span class="step-num">1</span>注册服务商平台</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">2</span>主体/经营信息审核</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">3</span>对公认证</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">4</span>代运营服务商角色认证</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">5</span>绑定小程序</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">6</span>接入课程库+交易系统</span>
+  </div>
+  <p><em>平台审核一般 5 个工作日内；角色认证约 1–2 天。</em></p>
+
+  <h3>路径 B：代开发服务商（ISV，自建 SaaS 平台）</h3>
+  <p>官方文档：<a href="https://partner.open-douyin.com/docs/resource/zh-CN/thirdparty/guide/prepare/process" target="_blank" rel="noopener">服务商平台入驻流程</a></p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>能力认证</th><th>额外要求</th></tr></thead>
+      <tbody>
+        <tr><td><strong>小程序-代开发</strong></td><td>公司注册满 <strong>1 年</strong>；注册资本 ≥ <strong>100 万</strong></td></tr>
+        <tr><td><strong>小程序-代运营</strong></td><td>提供 ≥ <strong>3 个</strong>代运营抖音号资源（粉丝数、后台截图、合同）</td></tr>
+        <tr><td><strong>抖音号-人工运营</strong></td><td><span class="rule-tag ban">仅定向准入</span>，不开放自主申请</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>路径 C：抖店教培「定向邀约」（小黄车资质）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>2026 要求</th></tr></thead>
+      <tbody>
+        <tr><td>入驻方式</td><td>仅平台主动邀约或资质提报审查；<strong>不支持自主申请</strong></td></tr>
+        <tr><td>主体</td><td>企业优先：注册资本 ≥ <strong>100 万</strong>、注册 ≥ <strong>1 年</strong></td></tr>
+        <tr><td>核心资质</td><td>营业执照（含培训经营范围）、ICP 备案、师资资质、课程合规材料</td></tr>
+        <tr><td>部分类目</td><td>语言/考研等需《民办学校办学许可证》</td></tr>
+        <tr><td>咨询</td><td>定向邀约电话 <strong>950529</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><em>行业消息称后续或在「抖音来客」开放申请，门槛或达年 GMV 200 万（非官方最终口径，以平台公告为准）。</em></p>
+
+  <h3>小程序卖课必接能力（服务商侧）</h3>
+  <ul>
+    <li><strong>课程库</strong> — 全量课程审核入库</li>
+    <li><strong>交易系统</strong> — 订单、退款、支付闭环</li>
+    <li><strong>客服入口</strong> — 个人中心 + 订单详情页在线客服</li>
+    <li>课程价 ≥ 10 元；iOS 虚拟商品购买仍有限制</li>
+  </ul>
+
+  <h3>个人老师 vs 官方服务商</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>对比</th><th>个人老师</th><th>官方服务商</th></tr></thead>
+      <tbody>
+        <tr><td>自主上架教培类目</td><td>❌ 不能</td><td>✅ 已有白名单的可以</td></tr>
+        <tr><td>变现方式</td><td>精选联盟分销、挂靠服务商</td><td>自营 + 帮客户代运营</td></tr>
+        <tr><td>门槛</td><td>低</td><td>高（50–100 万注册资本 + 团队 + 案例）</td></tr>
+        <tr><td>收入模式</td><td>佣金</td><td>技术服务费 + 分成 + SaaS 订阅</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>建议行动路径（想做 SaaS 平台）</h3>
+  <ol>
+    <li><strong>短期</strong> — 企业入驻 <a href="https://developer.open-douyin.com/" target="_blank" rel="noopener">开发者平台</a> + <a href="https://partner.open-douyin.com/" target="_blank" rel="noopener">服务商平台</a>，完成代开发认证</li>
+    <li><strong>中期</strong> — 申请泛知识「代运营服务商」角色，跑通课程库 + 交易系统</li>
+    <li><strong>长期</strong> — 申请抖店教培定向邀约（950529），或与持证机构签一级合作授权</li>
+    <li><strong>过渡</strong> — 政策未放开前，可先服务「精选联盟分销」场景</li>
+  </ol>
+</section>
+
+<!-- ========== 路径选型 ========== -->
+<section id="path-select">
+  <h2>短视频 vs 直播：选型与自测</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>维度</th><th>更适合短视频</th><th>更适合直播</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>品类</strong></td><td>标准化录播课、低客单（99–499 元）</td><td>高客单（1000+ 元）、训练营、需答疑</td></tr>
+        <tr><td><strong>人群</strong></td><td>有时间打磨内容、偏内向、擅长写脚本</td><td>表达力强、能连播 2h+、即时互动</td></tr>
+        <tr><td><strong>转化</strong></td><td>长尾搜索 + 爆款带课，转化周期长</td><td>当场逼单、限时优惠（须合规），转化快</td></tr>
+        <tr><td><strong>时间投入</strong></td><td>前期重（拍摄剪辑），后期可自动化</td><td>每次开播都需实时投入</td></tr>
+        <tr><td><strong>2026 合规</strong></td><td>挂载审核相对简单</td><td>教育类须真人教学；卡片须提前 24h 审核</td></tr>
+        <tr><td><strong>数据关注</strong></td><td>完播率、挂车点击率、ROI</td><td>停留时长、转粉率、GPM、成交转化率</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>5 题自测：我该先做短视频还是直播？</h3>
+  <div class="card">
+    <ul class="checklist">
+      <li>我能每周稳定直播 3 场、每场 2 小时以上？→ <strong>是</strong> 偏直播</li>
+      <li>我的课程需要实时答疑、互动演示？→ <strong>是</strong> 偏直播</li>
+      <li>我更擅长写脚本、一次拍摄多条复用？→ <strong>是</strong> 偏短视频</li>
+      <li>客单价 &lt; 500 元、标准化录播内容？→ <strong>是</strong> 偏短视频</li>
+      <li>目前粉丝 &lt; 1000、尚无挂载权限？→ <strong>先短视频养号</strong>，达标后再开直播挂课</li>
+    </ul>
+    <p style="margin:0.5rem 0 0"><strong>建议：</strong>多数新手「短视频起号 → 粉丝破千 → 直播转化」组合最优。</p>
+  </div>
+</section>
+
+<!-- ========== 官方卖课路径 ========== -->
+<section id="paths">
+  <h2>官方卖课路径对比</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>路径</th><th>挂载形态</th><th>适用场景</th><th>门槛</th><th>优势</th><th>劣势</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>抖店小黄车</strong></td>
+          <td>购物车图标</td>
+          <td>官方电商渠道，标准化课程</td>
+          <td>定向邀约 + 抖店保证金 + 学浪绑定</td>
+          <td>用户习惯成熟，转化路径短</td>
+          <td>入驻门槛高，类目管控严</td>
+        </tr>
+        <tr>
+          <td><strong>泛知识小程序</strong></td>
+          <td>小雪花锚点</td>
+          <td>高客单价、需自定义详情页和交付闭环</td>
+          <td>企业主体 + 课程库审核 + 粉丝 ≥ 1000</td>
+          <td>详情页可深度定制，私域转化强</td>
+          <td>开发/接入成本高，需持续维护</td>
+        </tr>
+        <tr>
+          <td><strong>直播小程序卡片</strong></td>
+          <td>直播间卡片</td>
+          <td>直播带货课程，实时互动转化</td>
+          <td>粉丝 ≥ 1000 + 无近期违规</td>
+          <td>直播场景原生挂载，点击直达课程页</td>
+          <td>卡片须提前 24h 提交审核</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="compare-highlight">
+    <strong>选型建议：</strong>客单价 &lt; 500 元、标准化录播课 → 优先抖店小黄车；客单价 ≥ 1000 元、需深度转化页和私域运营 → 泛知识小程序；直播为主要获客渠道 → 小程序直播卡片 + 小黄车组合。
+  </div>
+</section>
+
+<!-- ========== 抖店小黄车 ========== -->
+<section id="doudian">
+  <h2>抖店小黄车卖课流程</h2>
+
+  <div class="step-flow">
+    <span class="step"><span class="step-num">1</span>获得定向邀约</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">2</span>开通学浪</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">3</span>开通抖店</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">4</span>上传课程到学浪</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">5</span>抖店上架商品</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">6</span>添加橱窗</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">7</span>短视频/直播挂车</span>
+  </div>
+
+  <h3>关键步骤说明</h3>
+  <div class="card">
+    <h4>1. 学浪（课程交付平台）</h4>
+    <ul>
+      <li>入驻学浪免费，用于课程视频托管与学员学习</li>
+      <li>用户购买后在抖音 + 学浪 App 内学习</li>
+      <li>需上传资质证书（教师资格证、学历证书等）</li>
+    </ul>
+
+    <h4>2. 抖店（交易与商品管理）</h4>
+    <ul>
+      <li>开通抖店需缴纳保证金（金额因类目而异）</li>
+      <li>将学浪课程同步为抖店商品，设置价格与详情</li>
+      <li>商品审核通过后方可挂橱窗</li>
+    </ul>
+
+    <h4>3. 橱窗与挂车</h4>
+    <ul>
+      <li>开通商品橱窗后，在发布视频或开播时选择「添加商品」</li>
+      <li>短视频挂小黄车：用户点击直达抖店商品页购买</li>
+      <li>直播挂小黄车：主播讲解时弹出商品卡片</li>
+    </ul>
+  </div>
+
+  <div class="callout warn">
+    <div class="title">注意</div>
+    <p style="margin:0">2026 年起教育培训类目不再支持自主入驻抖店，须先获得平台定向邀约。已入驻老商家可继续运营，但须在 30 天合规排查期内补齐资质。</p>
+  </div>
+</section>
+
+<!-- ========== 泛知识小程序 ========== -->
+<section id="miniprogram">
+  <h2>泛知识小程序卖课流程</h2>
+
+  <div class="step-flow">
+    <span class="step"><span class="step-num">1</span>企业主体注册小程序</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">2</span>类目选「在线教育」</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">3</span>接入角色系统</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">4</span>课程进课程库</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">5</span>获取分发能力</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">6</span>短视频/直播挂载</span>
+  </div>
+
+  <p>合规流程：<strong>小程序上线 → 课程相关内容进库 → 获取相应分发能力 → 分发成功</strong></p>
+
+  <h3>课程开放分类（部分）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>一级分类</th><th>二级分类示例</th><th>编码</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>少儿成长</td><td>家长教育、少儿编程、儿童兴趣</td><td>10000</td></tr>
+        <tr><td>语言培训</td><td>英语、汉语学习、日语、韩语等</td><td>30000</td></tr>
+        <tr><td>学历/职业资格考试</td><td>教师资格、考研、司法考试、IT 认证等</td><td>40000</td></tr>
+        <tr><td>常识兴趣</td><td>音乐、美术、摄影、健身、书法等</td><td>50000</td></tr>
+        <tr><td>技能培训</td><td>电商运营、IT/编程、烹饪、设计等</td><td>70000</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><em>完整分类表见抖音开放平台《泛知识行业课程运营规范》第三节。</em></p>
+
+  <h3>课程库审核要点</h3>
+  <ul>
+    <li>所有课程（存量 + 新增）均须接入课程库</li>
+    <li>上传字段须与课程落地页信息保持一致</li>
+    <li>课程分类对应老师/机构资质，分类选错会导致入库失败</li>
+    <li>审核按入库顺序陆续审出，新课上架需预留时间</li>
+  </ul>
+</section>
+
+<!-- ========== 课程内容规范（折叠引用） ========== -->
+<section id="course-content">
+  <h2>课程内容质量规范</h2>
+  <p>以下规范来自抖音开放平台《泛知识行业课程运营规范》，上架前必查。</p>
+
+  <h3>详情页必含模块</h3>
+  <div class="grid-2">
+    <div class="grid-card">
+      <h4>课程/班级封面</h4>
+      <p>画面清晰、与内容强相关，符合平台基本要求。</p>
+    </div>
+    <div class="grid-card">
+      <h4>课程标题</h4>
+      <p>简洁清晰，体现核心知识内容；不得仅用无意义数字/字母。</p>
+    </div>
+    <div class="grid-card">
+      <h4>老师/机构介绍</h4>
+      <p>含资质、行业背景、历史成就；「我是谁 + 学历/经验/擅长」。</p>
+    </div>
+    <div class="grid-card">
+      <h4>课程介绍</h4>
+      <p>大纲、教学形式（直播/录播）、面向人群、学完收获。</p>
+    </div>
+    <div class="grid-card">
+      <h4>课程目录</h4>
+      <p>每节课内容、课节数量、更新时间、观看时长。</p>
+    </div>
+    <div class="grid-card">
+      <h4>试听课程</h4>
+      <p>建议 1–2 节；高价课（≥ 1000 元）须开通试看。</p>
+    </div>
+    <div class="grid-card">
+      <h4>购课须知</h4>
+      <p>退款规则、支付方式、课程权益、收看方式、客诉说明。</p>
+    </div>
+  </div>
+
+  <h3>时长与内容要求</h3>
+  <ul>
+    <li>课程须有实质内容，单节课 &lt; 1 分钟、页面空白、已下架跳转均会被驳回</li>
+    <li>修图/音视频剪辑（51700）、互联网运营/电商运营（70200）类目：整体有效内容时长不得少于 <strong>30 分钟</strong></li>
+    <li>课程内容与详情页描述须一致（教学形式、课时数、赠品等）</li>
+    <li>实物赠品须与教学强相关，须在主图/标题明示；禁止赠送食品烟酒、药品、医美等</li>
+  </ul>
+
+  <h3>四大基本原则</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>原则</th><th>要求</th></tr></thead>
+      <tbody>
+        <tr><td><strong>真实性</strong></td><td>不得盗用、侵权、伪造、编造；委托运营须先行核实</td></tr>
+        <tr><td><strong>有效性</strong></td><td>课程在有效期内；标题、封面、简介各板块信息一致</td></tr>
+        <tr><td><strong>合规性</strong></td><td>遵守国家法律法规与平台运营规范</td></tr>
+        <tr><td><strong>完整性</strong></td><td>消费者享有充分知情权，主要信息真实、正确、有效</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ========== 阶梯定价与命名 ========== -->
+<section id="course-price">
+  <h2>阶梯定价、命名与售后</h2>
+
+  <h3>课程阶梯产品设计</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>层级</th><th>定价区间</th><th>内容形态</th><th>目的</th></tr></thead>
+      <tbody>
+        <tr><td><strong>引流课</strong></td><td>19–99 元（平台最低 10 元）</td><td>1–3 节精华课 / 训练营体验营</td><td>降低决策门槛，筛选精准用户</td></tr>
+        <tr><td><strong>正价课</strong></td><td>299–1999 元</td><td>系统录播 + 社群答疑 / 作业点评</td><td>主力利润产品</td></tr>
+        <tr><td><strong>高阶课</strong></td><td>3000–20000 元</td><td>1v1 辅导 / 线下集训 / 企业内训</td><td>高客单、重交付（私域或线下成交）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>命名卖点提炼公式</h3>
+  <div class="compare-highlight">
+    <strong>公式：</strong>人群 + 痛点 + 解决方案 + 形式<br>
+    <strong>示例：</strong>「零基础宝妈 · 30 天学会手机剪辑 · 录播课 + 作业点评」<br>
+    <strong>反例：</strong>「2026 最新课程」「全网最全」（无意义、违规风险）
+  </div>
+
+  <h3>详情页结构模板</h3>
+  <ol>
+    <li><strong>首屏</strong> — 课程标题 + 核心卖点 3 条 + 讲师头像</li>
+    <li><strong>讲师介绍</strong> — 资质 + 经历 + 擅长（附证书图）</li>
+    <li><strong>课程大纲</strong> — 模块 → 课节 → 时长（可展开）</li>
+    <li><strong>适合人群</strong> — 谁适合 / 谁不适合（降低退费）</li>
+    <li><strong>学员成果</strong> — 真实案例（需授权，不承诺金额）</li>
+    <li><strong>试听区</strong> — 1–2 节免费试看</li>
+    <li><strong>购课须知</strong> — 退款规则、有效期、学习方式、客服渠道</li>
+  </ol>
+
+  <h3>平台价格规则</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>规则</th><th>详情</th></tr></thead>
+      <tbody>
+        <tr><td>最低定价</td><td>课程价格不得低于 <strong>10 元</strong>（含活动价、优惠价、团购价）</td></tr>
+        <tr><td>高价课试看</td><td>售价 ≥ 1000 元的课程，须开通至少 1 个试看课节，试看时长不少于该课节的 <strong>10%</strong></td></tr>
+        <tr><td>价格信息</td><td>不得刻意规避交易规则，价格信息须完整</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>退款规则（泛知识售后服务规范）</h3>
+  <div class="card">
+    <p>课程页面须明示退款规则，标准口径：</p>
+    <ul>
+      <li><strong>支付后 7 天内</strong>，且课程内容观看未满 <strong>10 分钟</strong>（部分类目为 30 分钟）→ 全额退款</li>
+      <li>须在购课须知中说明退款流程、客诉渠道</li>
+      <li>小程序须接入并使用开放平台交易评价组件</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== 短视频：定位与选题 ========== -->
+<section id="video">
+  <h2>短视频卖课：账号定位与选题</h2>
+
+  <h3>人设定位：老师 vs 过来人</h3>
+  <div class="grid-2">
+    <div class="grid-card">
+      <h4>专业老师型</h4>
+      <p>强调资质、体系、方法论。适合职业培训、考试辅导。</p>
+      <p><strong>标签模板：</strong>「XX 领域 X 年从业者 · 已辅导 X00+ 学员 · 专注 [细分技能]」</p>
+    </div>
+    <div class="grid-card">
+      <h4>过来人型</h4>
+      <p>强调自身蜕变故事、实操结果。适合兴趣、副业、技能类。</p>
+      <p><strong>标签模板：</strong>「从 [低谷] 到 [成果] · 普通人也能学会的 [技能] · 踩过坑所以教你避坑」</p>
+    </div>
+  </div>
+
+  <h3>选题库三类 + 示例（每类 5 个）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>类型</th><th>逻辑</th><th>选题示例（以「手机剪辑」为例）</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>痛点型</strong></td>
+          <td>戳中目标人群具体困扰</td>
+          <td>① 拍了 100 条视频还是没人看 ② 剪辑 1 条要 3 小时 ③ 不会配字幕和 BGM ④ 封面太丑没人点 ⑤ 发了就删、永远起不来号</td>
+        </tr>
+        <tr>
+          <td><strong>反常识型</strong></td>
+          <td>打破固有认知，引发好奇</td>
+          <td>① 剪辑软件越多越做不好 ② 新手别学 PR，用手机就够 ③ 完播率比粉丝数重要 10 倍 ④ 第一条视频就该挂课 ⑤ 教程类视频越短越难火</td>
+        </tr>
+        <tr>
+          <td><strong>结果型</strong></td>
+          <td>展示可感知的变化/成果</td>
+          <td>① 3 分钟剪出一条 vlog ② 学员 7 天从 0 到出片 ③ 一条视频涨粉 2000 的方法 ④ 用剪映做出电影感 ⑤ 封面改 1 个字播放翻倍</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>拍摄剪辑 SOP（简版）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>环节</th><th>建议</th></tr></thead>
+      <tbody>
+        <tr><td>设备</td><td>手机即可（主摄 1080p/4K）；领夹麦（几十元）提升收音；环形灯或窗边自然光</td></tr>
+        <tr><td>参数</td><td>竖屏 9:16；帧率 30fps；导出 1080p；文件 &lt; 500MB</td></tr>
+        <tr><td>字幕</td><td>剪映自动识别 + 人工校对；关键词放大加色；每屏 ≤ 2 行</td></tr>
+        <tr><td>节奏</td><td>前 3 秒出价值点；每 5–8 秒切镜头或加特效；总长 25–60 秒起号，知识类可 1–3 分钟</td></tr>
+        <tr><td>BGM</td><td>抖音音乐库内选（避免版权）；音量为人声的 15–25%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>完整设备与参数见 <a href="./抖音IP带货指南.html#publish-shoot">抖音 IP 与带货教程 · 拍摄与剪辑</a>。</p>
+</section>
+
+<!-- ========== 短视频：脚本模板 ========== -->
+<section id="video-script">
+  <h2>爆款脚本 5 步结构 + 模板</h2>
+
+  <div class="step-flow">
+    <span class="step"><span class="step-num">1</span>钩子（0–3s）</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">2</span>痛点（3–10s）</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">3</span>干货（10–40s）</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">4</span>信任（40–50s）</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">5</span>引导（50–60s）</span>
+  </div>
+
+  <div class="script-box">
+    <div class="label">可直接套用的模板</div>
+    <p><strong>【钩子】</strong>「90% 的人剪视频都卡在这一步。」<br>
+    <strong>【痛点】</strong>「你是不是也拍了好多条，播放量永远两位数？其实不是你不行，是方法不对。」<br>
+    <strong>【干货】</strong>「今天教你 3 步：第一，开头 3 秒直接说结果；第二，用剪映「一键成片」；第三，字幕只留关键词。」<br>
+    <strong>【信任】</strong>「我带过 200 多个零基础学员，平均 7 天能独立出片。」<br>
+    <strong>【引导】</strong>「完整 30 节系统课在左下角，含素材包和作业点评，可以先看试学章节。」</p>
+  </div>
+
+  <h3>案例拆解：1 条爆款如何带课</h3>
+  <div class="card">
+    <p><strong>视频结构：</strong>「手机拍美食视频总像随手拍」痛点 → 演示「运镜 + 调色」2 个技巧（40s 干货）→ 展示学员前后对比 → 左下角挂「美食短视频系统课」。</p>
+    <p><strong>数据参考：</strong>播放 12 万 · 完播率 38% · 挂车点击率 2.1% · 成交 47 单（客单 299 元）。</p>
+    <p style="margin:0"><strong>关键：</strong>视频本身交付了真实价值，挂课是自然延伸而非硬广；内容与课程类目强相关。</p>
+  </div>
+</section>
+
+<!-- ========== 短视频：挂载 ========== -->
+<section id="video-mount">
+  <h2>挂载变现：小黄车 / 橱窗 / 精选联盟 / SaaS</h2>
+
+  <h3>四种挂载方式对比</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>方式</th><th>门槛</th><th>操作路径</th><th>适合谁</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>自有抖店小黄车</strong></td>
+          <td>定向邀约 + 抖店 + 学浪</td>
+          <td>发布页 → 添加商品 → 选自有课程</td>
+          <td>持证机构/获邀约企业</td>
+        </tr>
+        <tr>
+          <td><strong>橱窗分销</strong></td>
+          <td>粉丝 ≥ 500（视频带货）</td>
+          <td>创作者中心 → 商品橱窗 → 添加精选联盟商品</td>
+          <td>个人达人分销他人课程</td>
+        </tr>
+        <tr>
+          <td><strong>精选联盟</strong></td>
+          <td>开通橱窗</td>
+          <td>选品广场 → 按佣金/销量筛选 → 加入橱窗 → 视频挂车</td>
+          <td>无自有课、赚佣金</td>
+        </tr>
+        <tr>
+          <td><strong>第三方 SaaS 小雪花</strong></td>
+          <td>服务商有邀约资质</td>
+          <td>在服务商后台上架 → 获取挂载链接 → 视频添加小程序锚点</td>
+          <td>个人老师借船出海</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>精选联盟分销步骤</h3>
+  <ol>
+    <li>开通商品橱窗（创作者服务中心 → 商品橱窗 → 申请）</li>
+    <li>进入选品广场，筛选「教育培训」类目，按佣金比例排序</li>
+    <li>将课程加入橱窗，发布视频时「添加商品」选择该课程</li>
+    <li>用户通过你的链接购买，你获得佣金（平台扣除约 10% 服务费）</li>
+  </ol>
+
+  <div class="callout success">
+    <div class="title">内容公式</div>
+    <p style="margin:0"><strong>痛点（3s）</strong> → <strong>价值（15–30s）</strong> → <strong>钩子（5s）</strong> → <strong>挂载转化</strong>。完播率 &gt; 28% 再考虑 DOU+ 加热，详见 <a href="./抖音IP带货指南.html#douplus">投流章节</a>。</p>
+  </div>
+</section>
+
+<!-- ========== 直播卖课 ========== -->
+<section id="live">
+  <h2>直播卖课：场景搭建与挂载门槛</h2>
+
+  <h3>直播间场景搭建清单</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>项目</th><th>基础版</th><th>进阶版</th></tr></thead>
+      <tbody>
+        <tr><td><strong>灯光</strong></td><td>1 盏环形灯正面 45°</td><td>主光 + 补光 + 背景轮廓光</td></tr>
+        <tr><td><strong>背景</strong></td><td>纯色墙/书架/品牌幕布</td><td>课程海报 + 学员作品展示墙</td></tr>
+        <tr><td><strong>机位</strong></td><td>手机 + 三脚架，平视角度</td><td>相机 + 采集卡 + 直播伴侣推流</td></tr>
+        <tr><td><strong>收音</strong></td><td>领夹麦</td><td>指向性麦克风 + 声卡</td></tr>
+        <tr><td><strong>道具</strong></td><td>白板/提词器、课程大纲手卡</td><td>实物教材、学员锦旗（需授权）、演示设备</td></tr>
+        <tr><td><strong>网络</strong></td><td>Wi-Fi 或 5G，上传 ≥ 10Mbps</td><td>有线网络 + 4G 热点备份</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>开播与挂载门槛</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>能力</th><th>门槛</th><th>版本要求</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>挂载小程序（直播卡片/小雪花）</td>
+          <td>抖音单端粉丝 ≥ 1000；近期无违规</td>
+          <td>抖音 App ≥ 20.3.0；直播伴侣 ≥ 2.7.0</td>
+        </tr>
+        <tr>
+          <td>抖店小黄车直播带货</td>
+          <td>已开通抖店 + 商品橱窗 + 定向邀约资质</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>直播权限</td>
+          <td>实名认证；部分情况需满足有效粉丝要求</td>
+          <td>—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>教育类直播特殊要求</h3>
+  <div class="callout danger">
+    <div class="title">教育类直播间硬性规定</div>
+    <ul style="margin:0">
+      <li>直播间必须为<strong>真人教学</strong>（真人实时直播或播放真人教学录像）</li>
+      <li>不得夸大宣传：禁止承诺包学包会、承诺购买课程可获得金钱/流量/粉丝等收益</li>
+      <li>不得售卖 K12 学科类及学龄前课程</li>
+      <li>中小学非学科类课程不得以直播形式推广</li>
+    </ul>
+  </div>
+
+  <h3>小程序直播卡片操作流程</h3>
+  <ol>
+    <li>在<strong>抖音直播伴侣</strong>点击「小程序管理」，扫码登录小程序直播助手</li>
+    <li>添加卡片：绑定小程序 → 填写卡片标题（≤ 16 字）→ 上传 1:1 配图 → 设置落地页路径</li>
+    <li>提交审核（建议开播前 <strong>24 小时</strong>提交，审核中卡片只能跳转首页且为默认样式）</li>
+    <li>直播中上架卡片 → 点击「展示讲解卡片」在用户侧展示</li>
+    <li>下播后可批量删除过期卡片</li>
+  </ol>
+</section>
+
+<!-- ========== 直播话术 ========== -->
+<section id="live-script">
+  <h2>直播留人、逼单与互动话术</h2>
+
+  <div class="callout danger">
+    <div class="title">2026 话术红线提醒</div>
+    <p style="margin:0">禁止使用「只亏 XX 单」「仅此今天」「闭店限时」等违规营销噱头（2026-04-17 细则）。福袋、憋单须真实可兑现，不得虚构紧迫感。</p>
+  </div>
+
+  <h3>留人话术模板</h3>
+  <div class="grid-2">
+    <div class="grid-card">
+      <h4>开场留人（前 5 分钟）</h4>
+      <p>「刚进来的朋友点个关注，今天讲 [主题]，最后会演示一个完整案例，留在直播间的朋友都能学到。」</p>
+    </div>
+    <div class="grid-card">
+      <h4>福袋互动（合规版）</h4>
+      <p>「等会儿会发一个福袋，里面是课程试听名额，真实有效，参与方式：点个关注 + 打「想学」。」</p>
+    </div>
+    <div class="grid-card">
+      <h4>中段互动</h4>
+      <p>「打 1 表示遇到过这个问题，打 2 表示想学。我看到很多朋友打 1，那我重点讲这个……」</p>
+    </div>
+    <div class="grid-card">
+      <h4>憋单预热（合规版）</h4>
+      <p>「这套课平时在详情页是 [原价]，今天直播间下单有 [具体优惠]，优惠说明写在购物车页面了。」</p>
+    </div>
+  </div>
+
+  <h3>逼单成交 + 价格锚点</h3>
+  <div class="script-box">
+    <div class="label">三段式逼单（合规版）</div>
+    <p><strong>【锚点】</strong>「线下同款培训 3 天要 9800，今天这套系统课 30 节课 + 作业点评，详情页标价 999。」<br>
+    <strong>【对比】</strong>「自己摸索至少 3 个月，跟系统学 7 天能独立出片。时间成本远比学费贵。」<br>
+    <strong>【行动】</strong>「点击右下角购物车，第 1 个链接就是。支付后 7 天内未学满 10 分钟可全额退款，零风险试听。」</p>
+  </div>
+
+  <h3>直播卖课节奏</h3>
+  <div class="card">
+    <div class="table-wrap" style="margin:0;border:none;box-shadow:none">
+      <table>
+        <thead><tr><th>时段</th><th>内容</th><th>挂载动作</th></tr></thead>
+        <tbody>
+          <tr><td>开场 5–10 min</td><td>自我介绍、今日主题、福利预告</td><td>暂不挂车，积累在线人数</td></tr>
+          <tr><td>中段 30–60 min</td><td>干货教学、实操演示、学员答疑</td><td>讲解中适时弹出课程卡片/小黄车</td></tr>
+          <tr><td>转化 10–15 min</td><td>课程亮点回顾、合规优惠说明、购课指引</td><td>置顶课程卡片，引导点击购买</td></tr>
+          <tr><td>收尾 5 min</td><td>感谢互动、预告下一场、引导关注</td><td>保持卡片展示至下播</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 直播转化漏斗 ========== -->
+<section id="live-funnel">
+  <h2>直播转化漏斗与关键指标</h2>
+
+  <div class="step-flow">
+    <span class="step"><span class="step-num">1</span>场观（曝光）</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">2</span>停留（3min+）</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">3</span>转粉</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">4</span>点击购物车</span>
+    <span class="arrow">→</span>
+    <span class="step"><span class="step-num">5</span>成交</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>指标</th><th>含义</th><th>健康参考值</th><th>优化动作</th></tr></thead>
+      <tbody>
+        <tr><td>平均停留时长</td><td>观众在直播间停留多久</td><td>&gt; 3 分钟</td><td>开场留人话术、中段干货密度</td></tr>
+        <tr><td>转粉率</td><td>新增关注 / 场观</td><td>&gt; 3%</td><td>关注福利、内容价值感</td></tr>
+        <tr><td>商品点击率</td><td>点击购物车 / 场观</td><td>&gt; 5%</td><td>讲解时机、价格锚点</td></tr>
+        <tr><td>成交转化率</td><td>成交单数 / 商品点击</td><td>&gt; 8%</td><td>详情页、退款保障、逼单话术</td></tr>
+        <tr><td>GPM</td><td>千次观看成交额</td><td>因品类而异，教培参考 &gt; 200</td><td>客单价 × 转化率综合优化</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>查看路径：<span class="path-box" style="display:inline;padding:2px 8px">创作者服务中心 → 数据中心 → 直播数据</span></p>
+</section>
+
+<!-- ========== 流量与冷启动 ========== -->
+<section id="traffic">
+  <h2>流量与冷启动</h2>
+
+  <h3>自然流量三率优化</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>指标</th><th>健康值</th><th>优化动作</th></tr></thead>
+      <tbody>
+        <tr><td><strong>完播率</strong></td><td>&gt; 28%（晋级流量池）；带课视频建议 &gt; 30%</td><td>前 3 秒出价值；控制时长；系列化拆条</td></tr>
+        <tr><td><strong>互动率</strong></td><td>评论+收藏+转发 / 播放 &gt; 3%</td><td>结尾提问；引导收藏「以后用得上」</td></tr>
+        <tr><td><strong>转粉率</strong></td><td>新增粉 / 播放 &gt; 1%</td><td>关注送资料（站内私信，非站外）；系列预告</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>DOU+ vs 千川（卖课场景）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>工具</th><th>目标</th><th>门槛</th><th>卖课建议</th></tr></thead>
+      <tbody>
+        <tr><td><strong>DOU+</strong></td><td>内容加热、涨粉、测爆款</td><td>视频过审；自然播放 ≥ 500</td><td>完播 &gt; 25% 再投；测内容用，不直接买成交</td></tr>
+        <tr><td><strong>千川/随心推</strong></td><td>优化成交 ROI</td><td>抖店/橱窗带货资质</td><td>自然出 3–5 单后开投；日预算 200 元测 3 天</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>完整投流 SOP 见 <a href="./抖音IP带货指南.html#douplus">抖音 IP 教程 · DOU+ 与千川</a>。</p>
+
+  <h3>7 天冷启动每日动作</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>天数</th><th>动作</th></tr></thead>
+      <tbody>
+        <tr><td>Day 1</td><td>完善五件套（头像/昵称/简介/背景/置顶）；确定人设与细分赛道</td></tr>
+        <tr><td>Day 2</td><td>搭建选题库 30 条；拍 3 条不发，练手</td></tr>
+        <tr><td>Day 3</td><td>发布第 1 条（不挂车）；观察完播率与互动</td></tr>
+        <tr><td>Day 4–5</td><td>日更 1 条；根据数据调整选题方向</td></tr>
+        <tr><td>Day 6</td><td>选数据最好 1 条，DOU+ 投 100 元测试</td></tr>
+        <tr><td>Day 7</td><td>复盘 7 天数据；规划下周挂车测试（需粉丝 ≥ 500）</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ========== 私域与降退费 ========== -->
+<section id="private">
+  <h2>私域转化与降退费</h2>
+
+  <h3>公转私合规路径</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>方式</th><th>合规性</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>口播「加微信」「私信领资料」</td><td><span class="rule-tag ban">禁止</span></td><td>AI 识别限流封号</td></tr>
+        <tr><td>购物车 / 小程序内购买</td><td><span class="rule-tag key">推荐</span></td><td>公域直接成交，路径最短</td></tr>
+        <tr><td>企业号私信自动回复</td><td><span class="rule-tag key">合规</span></td><td>用户主动咨询后回复，非主动导流</td></tr>
+        <tr><td>直播间合规表单/小风车</td><td><span class="rule-tag key">合规</span></td><td>用于预约咨询、线下活动等</td></tr>
+        <tr><td>官方客服组件</td><td><span class="rule-tag key">合规</span></td><td>小程序/抖店内置客服</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>信任建立 + 降退费 + 复购</h3>
+  <ul>
+    <li><strong>试看策略</strong> — 上架前开通 1–2 节试听，让用户「先尝后买」</li>
+    <li><strong>退款规则对齐</strong> — 详情页明示 7 天/10 分钟退款，降低购买顾虑</li>
+    <li><strong>适合人群写清</strong> — 「不适合谁」比「适合谁」更能降退费</li>
+    <li><strong>学员案例授权</strong> — 真实前后对比（不承诺金额），附学员许可</li>
+    <li><strong>复购转介绍</strong> — 老学员续高阶课折扣；推荐有礼（平台内优惠券，非现金返利）</li>
+  </ul>
+</section>
+
+<!-- ========== 数据复盘 ========== -->
+<section id="analytics">
+  <h2>数据复盘看板</h2>
+
+  <h3>核心指标定义</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>指标</th><th>公式</th><th>卖课健康参考</th></tr></thead>
+      <tbody>
+        <tr><td>GPM</td><td>成交额 / 场观 × 1000</td><td>教培直播 &gt; 200</td></tr>
+        <tr><td>挂车点击率</td><td>商品点击 / 播放</td><td>&gt; 2%</td></tr>
+        <tr><td>成交转化率</td><td>成交单 / 商品点击</td><td>&gt; 8%</td></tr>
+        <tr><td>ROI</td><td>成交额 / 投流消耗</td><td>&gt; 2（千川场景）</td></tr>
+        <tr><td>退费率</td><td>退款单 / 总成交</td><td>&lt; 10%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>周复盘 SOP</h3>
+  <ol>
+    <li>导出本周播放 Top 5 / 成交 Top 3 视频数据</li>
+    <li>对比完播率、挂车点击率，找出共性（选题/钩子/时长）</li>
+    <li>直播：复盘 GPM、停留、转粉、成交漏斗哪一环最弱</li>
+    <li>制定下周 A/B 测试：封面 A vs B、钩子话术 A vs B（每次只测 1 个变量）</li>
+    <li>记录投流数据：DOU+/千川花费、ROI，保留 ROI &gt; 2 的计划</li>
+  </ol>
+</section>
+
+<!-- ========== 30 天行动路线 ========== -->
+<section id="roadmap">
+  <h2>30 天行动路线图</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>周次</th><th>目标</th><th>关键动作</th><th>验收标准</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>W1 合规与定位</strong></td>
+          <td>搞清楚能不能卖、卖什么</td>
+          <td>资质自查；选变现路径；确定人设与细分赛道；完善账号五件套</td>
+          <td>明确路径 + 选题库 30 条</td>
+        </tr>
+        <tr>
+          <td><strong>W2 内容测试</strong></td>
+          <td>跑通内容方向</td>
+          <td>日更 1 条；3 类选题各测 2 条；记录完播/互动数据</td>
+          <td>至少 1 条完播 &gt; 28%</td>
+        </tr>
+        <tr>
+          <td><strong>W3 上架与挂车</strong></td>
+          <td>完成首次变现闭环</td>
+          <td>课程上架（自有/分销/SaaS）；粉丝达标后挂车；DOU+ 100 元测爆款</td>
+          <td>首次挂车视频发布</td>
+        </tr>
+        <tr>
+          <td><strong>W4 直播与放量</strong></td>
+          <td>首场直播 + 投流测试</td>
+          <td>首场直播卖课；千川/随心推日预算 200 测 3 天；周复盘 + 定下期计划</td>
+          <td>首场直播完成 + 首周复盘报告</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout success">
+    <div class="title">行动号召</div>
+    <p style="margin:0">2026 年的抖音卖课，拼的不是胆子大，而是<strong>资质合规、内容真实、转化扎实</strong>。今天完成 W1 的资质自查和路径选择，比明天拍 10 条硬广更有价值。</p>
+  </div>
+</section>
+
+<!-- ========== 话术与宣传禁忌 ========== -->
+<section id="script">
+  <h2>话术与宣传禁忌汇总</h2>
+
+  <h3>推荐话术框架</h3>
+  <div class="card">
+    <h4>痛点共鸣</h4>
+    <p>「你是不是也遇到过 [具体场景]？很多人学了半天还是 [痛点结果]……」</p>
+
+    <h4>价值展示</h4>
+    <p>「这套课程会带你从 [起点] 到 [终点]，包含 [X] 个模块、[Y] 节实操课……」</p>
+
+    <h4>信任背书</h4>
+    <p>「我是 [身份]，[X] 年行业经验，已帮助 [数量] 位学员 [成果描述，不承诺金额]。」</p>
+
+    <h4>行动引导</h4>
+    <p>「点击左下角/购物车，可以查看完整课程大纲，现在下单还有 [合规优惠说明]。」</p>
+  </div>
+
+  <h3>绝对不能说</h3>
+  <ul>
+    <li>「学完保证月入 X 万」「保证涨粉 10 万」</li>
+    <li>「包过考试」「100% 上岸」</li>
+    <li>「加我微信，私下给你更低价」</li>
+    <li>「这个课永久有效、终身免费更新」（除非合同明确约定）</li>
+    <li>贬低其他老师/机构</li>
+    <li>冒充官方或虚假身份</li>
+  </ul>
+
+  <p>完整违规处罚标准见下节；课程库违规处置见 <a href="#penalty">违规处罚</a>。</p>
+</section>
+
+<!-- ========== 违规处罚 ========== -->
+<section id="penalty">
+  <h2>违规处罚标准</h2>
+
+  <h3>小程序直播达人违规处置（节选）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>违规类型</th><th>具体事项</th><th>处置方式</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td rowspan="3">内容违规</td>
+          <td>违反法律法规、公序良俗、色情低俗</td>
+          <td>第 1 次警告 → 第 2 次限制挂载 7 天 → 第 3 次起永久限制</td>
+        </tr>
+        <tr>
+          <td>贬低他人</td>
+          <td>警告 → 3 天 → 7 天 → 永久限制（累计升级）</td>
+        </tr>
+        <tr>
+          <td>引流站外交易、虚假身份、虚假夸张内容</td>
+          <td>警告 → 3 天 → 7 天（累计升级）</td>
+        </tr>
+        <tr>
+          <td>行业问题</td>
+          <td>不符合教育类特殊行业要求</td>
+          <td>警告 → 3 天 → 7 天（近 30 天累计）</td>
+        </tr>
+        <tr>
+          <td>行为违规</td>
+          <td>恶意刷票/刷粉/刷单、规避审核</td>
+          <td>一经发现，<strong>永久限制挂载权限</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><em>若存在多种违规，按就高原则处理。大量用户举报时，平台有权先行冻结未结算款项。</em></p>
+
+  <h3>课程库违规</h3>
+  <ul>
+    <li>违反课程运营规范：警告、隐藏、下架等限制措施</li>
+    <li>低价课程（≤ 10 元）：驳回</li>
+    <li>课程无实质内容：驳回</li>
+    <li>课程详情不完善：驳回并要求补充</li>
+  </ul>
+</section>
+
+<!-- ========== 开播前自查 ========== -->
+<section id="checklist">
+  <h2>开播/发视频前自查清单</h2>
+
+  <div class="grid-2">
+    <div class="grid-card">
+      <h4>资质合规</h4>
+      <ul class="checklist">
+        <li>已获得定向邀约或资质提报通过</li>
+        <li>营业执照经营范围与课程类目一致</li>
+        <li>师资资质在有效期内</li>
+        <li>ICP 备案有效（线上交付）</li>
+        <li>无办学许可时已签署一级合作授权</li>
+      </ul>
+    </div>
+    <div class="grid-card">
+      <h4>课程合规</h4>
+      <ul class="checklist">
+        <li>课程已进课程库并审核通过</li>
+        <li>详情页含全部必含模块</li>
+        <li>价格 ≥ 10 元；高价课已开通试看</li>
+        <li>退款规则已明示</li>
+        <li>非禁售类目（K12/学龄前等）</li>
+      </ul>
+    </div>
+    <div class="grid-card">
+      <h4>直播准备</h4>
+      <ul class="checklist">
+        <li>粉丝 ≥ 1000，近期无违规记录</li>
+        <li>小程序直播卡片已提前 24h 提交审核</li>
+        <li>直播内容为真人教学</li>
+        <li>话术已排查禁语（包过/收益承诺等）</li>
+        <li>直播伴侣 / 抖音 App 版本满足要求</li>
+      </ul>
+    </div>
+    <div class="grid-card">
+      <h4>短视频准备</h4>
+      <ul class="checklist">
+        <li>视频内容与挂载课程强相关</li>
+        <li>无站外引流信息（微信号/二维码等）</li>
+        <li>小黄车/小雪花商品已审核上架</li>
+        <li>封面与标题不含夸大宣传</li>
+        <li>不涉及学科类禁售内容</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 官方参考 ========== -->
+<section id="refs">
+  <h2>官方参考链接</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>文档</th><th>来源</th><th>链接</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>《创作者【误导售卖商品】实施细则》</td>
+          <td>抖音电商</td>
+          <td><a href="https://school.jinritemai.com" target="_blank" rel="noopener">抖音电商学习中心</a></td>
+        </tr>
+        <tr>
+          <td>《创作者【违规营销噱头】违规细则》</td>
+          <td>抖音电商</td>
+          <td><a href="https://school.jinritemai.com" target="_blank" rel="noopener">抖音电商学习中心</a></td>
+        </tr>
+        <tr>
+          <td>《【本地生活及虚拟】行业管理规范》</td>
+          <td>抖音电商</td>
+          <td><a href="https://school.jinritemai.com" target="_blank" rel="noopener">抖音电商学习中心</a></td>
+        </tr>
+        <tr>
+          <td>泛知识行业课程运营规范</td>
+          <td>抖音开放平台</td>
+          <td><a href="https://partner.open-douyin.com/docs/resource/zh-CN/mini-app/operation/industry-norm/pan-knowledge/fanzhishi/" target="_blank" rel="noopener">查看文档</a></td>
+        </tr>
+        <tr>
+          <td>泛知识行业审核标准</td>
+          <td>抖音开放平台</td>
+          <td><a href="https://developer.open-douyin.com/docs/resource/zh-CN/mini-app/operation/industry-norm/pan-knowledge/control-management-norms/" target="_blank" rel="noopener">查看文档</a></td>
+        </tr>
+        <tr>
+          <td>使用直播助手挂载小程序</td>
+          <td>抖音开放平台</td>
+          <td><a href="https://developer.open-douyin.com/docs/resource/zh-CN/mini-app/open-capacity/flow-entrance/douyin/live/manual" target="_blank" rel="noopener">查看文档</a></td>
+        </tr>
+        <tr>
+          <td>小程序直播达人管理规范</td>
+          <td>抖音开放平台</td>
+          <td><a href="https://partner.open-douyin.com/docs/resource/zh-CN/mini-app/operation/platform-capabilities/livetalent/managementpractices" target="_blank" rel="noopener">查看文档</a></td>
+        </tr>
+        <tr>
+          <td>泛知识售后服务规范</td>
+          <td>抖音开放平台</td>
+          <td><a href="https://partner.open-douyin.com/docs/resource/zh-CN/mini-app/operation/industry-norm/pan-knowledge/" target="_blank" rel="noopener">泛知识文档目录</a></td>
+        </tr>
+        <tr>
+          <td>定向邀约咨询</td>
+          <td>抖音官方客服</td>
+          <td>电话 <strong>950529</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <div class="title">免责声明</div>
+    <p style="margin:0">本文档根据 2026 年 8 月前公开资料整理，平台规则动态更新。上架、直播前请以<strong>抖音电商学习中心</strong>和<strong>抖音开放平台</strong>最新公告为准。与仓库内 <a href="./抖音IP带货指南.html">抖音 IP 与电商带货教程</a>、<a href="../../../01-PRD/21-内容获客商城-phase1/index.html">内容获客商城 PRD</a> 配套使用。</p>
+  </div>
+</section>
+
+</main>
+
+<footer class="doc-footer">
+  <p>抖音卖课实战（2026 合规版）· <a href="../../../README.md">07-对外资料</a> · 配套 <a href="./抖音IP带货指南.html">IP 与带货教程</a> · 整理：2026-08-07</p>
+  <p style="margin-top:0.5rem">规则来源：抖音开放平台泛知识规范、抖音电商《【本地生活及虚拟】行业管理规范》（2026.1.14 发布 / 1.21 生效）、小程序直播达人管理规范等公开文档。</p>
+</footer>
+</div>
+</div>
+
+<script>
+(function(){
+  var links = document.querySelectorAll('.nav-parent, .nav-sub a');
+  var sections = [];
+  links.forEach(function(a){
+    var id = (a.getAttribute('href')||'').replace('#','');
+    if(id){ var el = document.getElementById(id); if(el) sections.push({link:a, el:el}); }
+  });
+  function onScroll(){
+    var scrollY = window.scrollY + 120;
+    var current = sections[0];
+    sections.forEach(function(s){ if(s.el.offsetTop <= scrollY) current = s; });
+    links.forEach(function(a){ a.classList.remove('active'); });
+    if(current) current.link.classList.add('active');
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+})();
+</script>
+</body>
+</html>

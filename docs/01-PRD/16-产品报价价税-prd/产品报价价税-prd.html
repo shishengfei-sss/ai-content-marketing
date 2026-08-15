@@ -1,0 +1,450 @@
+<!-- Generated for v1.5 product/quote tax pricing -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>产品与报价价税增强 PRD v1.0 — 税率 / 含税价 / 不含税价 — 智营获客 CRM</title>
+<style>
+@font-face { font-family:'InstrumentSans'; src:url('./_shared/fonts/InstrumentSans-Regular.ttf') format('truetype'); font-weight:400; }
+@font-face { font-family:'InstrumentSans'; src:url('./_shared/fonts/InstrumentSans-Bold.ttf') format('truetype'); font-weight:700; }
+@font-face { font-family:'GeistMono'; src:url('./_shared/fonts/GeistMono-Regular.ttf') format('truetype'); font-weight:400; }
+@font-face { font-family:'GeistMono'; src:url('./_shared/fonts/GeistMono-Bold.ttf') format('truetype'); font-weight:700; }
+</style>
+<style>
+:root { --bg:#fafbfc;--bg2:#f0f2f5;--ink:#1a1d23;--muted:#6b7280;--rule:#e2e5ea;--accent:#1677ff;--accent2:#0d9488;--danger:#ef4444;--warning:#f59e0b;--success:#059669;--purple:#7c3aed;--font:'InstrumentSans',-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;--font-mono:'GeistMono',monospace;--max:1200px;--radius:8px;--shadow:0 1px 4px rgba(0,0,0,0.08); }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px;scroll-behavior:smooth}
+body{font-family:var(--font);color:var(--ink);background:var(--bg);line-height:1.7;padding:2rem 1rem}
+article.page{max-width:var(--max);margin:0 auto}
+.cover{text-align:center;padding:3rem 0 2rem;border-bottom:1px solid var(--rule);margin-bottom:2.5rem}
+.cover h1{font-size:1.75rem;font-weight:700;letter-spacing:-0.02em;margin-bottom:.4rem}
+.cover .sub{font-size:.95rem;color:var(--muted)}
+.cover .meta{margin-top:1rem;font-size:.78rem;color:var(--muted)}
+.cover .meta span{margin:0 .5rem}
+.phase-nav{display:flex;gap:4px;margin-bottom:2rem;flex-wrap:wrap}
+.phase-nav a{text-decoration:none;padding:.4rem .8rem;border-radius:6px;font-size:.8rem;font-weight:600;border:1px solid var(--rule);color:var(--muted);transition:all .15s}
+.phase-nav a:hover,.phase-nav a.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.section{margin-bottom:2.5rem;scroll-margin-top:2rem}
+.section-header{display:flex;align-items:center;gap:.6rem;margin-bottom:1rem;padding-bottom:.4rem;border-bottom:2px solid var(--accent)}
+.section-num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;font-size:.75rem;font-weight:700;color:#fff;flex-shrink:0}
+.n-red{background:#dc2626}.n-amber{background:#d97706}.n-green{background:#059669}.n-blue{background:var(--accent)}.n-purple{background:var(--purple)}
+.section-title{font-size:1.1rem;font-weight:700}
+.subsection{margin-bottom:1.5rem}
+.subsection h3{font-size:.95rem;font-weight:700;margin-bottom:.6rem}
+.card{background:#fff;border:1px solid var(--rule);border-radius:var(--radius);padding:1rem;margin-bottom:.6rem;box-shadow:var(--shadow)}
+.card-title{font-size:.85rem;font-weight:700;margin-bottom:.5rem;color:var(--accent)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th{text-align:left;padding:.5rem .6rem;background:var(--bg2);color:var(--muted);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.02em;border-bottom:2px solid var(--rule);white-space:nowrap}
+td{padding:.5rem .6rem;border-bottom:1px solid var(--rule);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#f8fafc}
+code{font-family:var(--font-mono);font-size:.78rem;background:var(--bg2);padding:.1rem .3rem;border-radius:3px;color:var(--accent)}
+pre.code-block{font-family:var(--font-mono);font-size:.75rem;background:#1a1d23;color:#e2e8f0;padding:.8rem 1rem;border-radius:var(--radius);overflow-x:auto;line-height:1.5;margin:.5rem 0;white-space:pre-wrap;word-break:break-all}
+.badge{display:inline-block;padding:.12rem .45rem;border-radius:10px;font-size:.7rem;font-weight:600;white-space:nowrap}
+.badge-exist{background:#dcfce7;color:#166534}.badge-partial{background:#fef3c7;color:#92400e}.badge-missing{background:#fee2e2;color:#991b1b}
+.p-high::before,.p-medium::before,.p-low::before{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.p-high::before{background:#dc2626}.p-medium::before{background:#d97706}.p-low::before{background:#059669}
+.note{background:#fffbeb;border-left:3px solid #f59e0b;padding:.6rem .8rem;border-radius:0 var(--radius) var(--radius) 0;font-size:.82rem;color:#92400e;margin:.5rem 0}
+.note-blue{background:#eff6ff;border-left-color:var(--accent);color:#1e40af}
+.note-red{background:#fef2f2;border-left-color:var(--danger);color:#991b1b}
+.note-green{background:#f0fdf4;border-left-color:var(--success);color:#166534}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+@media(max-width:768px){.two-col{grid-template-columns:1fr}}
+.roadmap{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+@media(max-width:768px){.roadmap{grid-template-columns:1fr}}
+.roadmap-card{background:#fff;border:1px solid var(--rule);border-radius:var(--radius);padding:1rem;box-shadow:var(--shadow)}
+.roadmap-card h3{font-size:.9rem;font-weight:700;margin-bottom:.6rem}
+.phase{display:inline-block;padding:.12rem .4rem;border-radius:4px;font-size:.68rem;font-weight:600;color:#fff}
+.phase-p0{background:#dc2626}.phase-p1{background:#d97706}.phase-p2{background:#059669}
+.roadmap-card ul{list-style:none}
+.roadmap-card li{font-size:.78rem;padding:.25rem 0;border-bottom:1px solid var(--rule)}
+.roadmap-card li:last-child{border-bottom:none}
+footer .sources{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule)}
+footer .sources h2{font-size:.95rem;font-weight:700;margin-bottom:.5rem}
+footer .sources ol{padding-left:1.2rem;font-size:.78rem;color:var(--muted)}
+footer .sources li{margin-bottom:.3rem}
+</style>
+</head>
+<body>
+<article class="page">
+
+<div class="cover">
+  <h1>产品与报价价税增强需求规格书</h1>
+  <p class="sub">默认税率 · 标价含税语义 · 报价行税率/税额 · 含税/未税展示 · 转单透传</p>
+  <p class="meta">
+    <span>版本 v1.0</span>
+    <span>2026-07-20</span>
+    <span>产品包 v1.5</span>
+    <span>基线 Alembic 086 · 目标 087+</span>
+  </p>
+</div>
+
+<nav class="phase-nav">
+  <a href="#baseline">0. 现状与目标</a>
+  <a href="#decisions">1. 关键决策</a>
+  <a href="#product">2. 产品主数据价税</a>
+  <a href="#quote">3. 报价价税</a>
+  <a href="#calc">4. 计算与精度</a>
+  <a href="#db">5. 数据模型</a>
+  <a href="#api">6. 接口</a>
+  <a href="#rules">7. 业务规则</a>
+  <a href="#roadmap">8. 路线图</a>
+  <a href="#out">9. 明确不做</a>
+</nav>
+
+<!-- 0 -->
+<div id="baseline" class="section">
+  <div class="section-header"><span class="section-num n-amber">0</span><span class="section-title">现状校验与产品目标</span></div>
+
+  <div class="note-blue note">
+    关联文档：
+    <code>docs/00-总览/需求规格.md</code> §3.26 ·
+    UI/UX <code>产品报价价税UI交互/产品报价价税UI交互.html</code> ·
+    订单已交付参照 <code>docs/02-执行计划/v1.0-订单合同回款营销产品增强执行计划.md</code>（OrderLine 税率）·
+    行业对照：纷享销客/销售易行级税、本仓库 CPQ 报价生成器价税汇总。
+  </div>
+
+  <div class="card">
+    <p class="card-title">仓库现状（相对 2026-07-20 代码）</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>能力</th><th>状态</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>订单行税率/税额/含税展示</td><td><span class="badge badge-exist">已有</span></td><td><code>order_lines.tax_rate/tax_amount</code>；<code>line_total</code>=折后未税；OrderDetail/OrderFormDialog 已展示</td></tr>
+        <tr><td>产品默认税率 / 标价含税语义</td><td><span class="badge badge-missing">缺失</span></td><td>仅 <code>list_price</code>/<code>cost_price</code>；选品无法带入税率</td></tr>
+        <tr><td>报价行税率/税额</td><td><span class="badge badge-missing">缺失</span></td><td><code>QuoteLine</code> 仅有 unit_price/discount/line_total；手册写「可选税率」但未实现</td></tr>
+        <tr><td>报价→订单税透传</td><td><span class="badge badge-missing">缺失</span></td><td><code>convert_quote_to_order</code> 不复制税字段</td></tr>
+        <tr><td>CPQ 计价 / PDF 价税分项</td><td><span class="badge badge-partial">部分</span></td><td>CPQ 出报价无税列；PDF 无增值税汇总行（P1）</td></tr>
+        <tr><td>发票记录税额</td><td><span class="badge badge-exist">已有</span></td><td>订单发票 <code>tax_amount</code>（本包不改发票模型）</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <p class="card-title">本包解决的三类用户诉求</p>
+    <ol style="padding-left:1.2rem;font-size:.85rem">
+      <li><b>产品要标默认税</b> — 维护默认税率与「标价是否含税」，选入报价/订单自动带入，减少手工填税。</li>
+      <li><b>报价要看清价税</b> — 行级税率、税额、未税小计、含税小计；整单未税合计 / 税额合计 / 价税合计。</li>
+      <li><b>转单不断税</b> — 报价转订单、合同路径尽量透传税字段，与订单 v1.0 公式一致，避免二次录入。</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <p class="card-title">行业对照（决策依据）</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>系统</th><th>价税做法</th><th>对本包启示</th></tr></thead>
+      <tbody>
+        <tr><td>纷享销客 / 销售易</td><td>产品默认税率；单据行可改；未税/税额/含税分列；整单汇总</td><td>产品默认税率 + 行级可覆盖；展示对齐订单</td></tr>
+        <tr><td>Salesforce CPQ / 制造 CPQ</td><td>价目多为税前价；税在单据计算；多税率/区域 VAT</td><td>P0 国内增值税；标价默认不含税；多区域 VAT→P2</td></tr>
+        <tr><td>本仓库 quote-generator</td><td>小计→折扣→税额→总计；文档级税率演示</td><td>PDF/汇总用「行税合计」；文档级税率作默认填充即可</td></tr>
+        <tr><td>本仓库订单 v1.0</td><td><code>tax_rate</code>/<code>tax_amount</code>；line_total 未税；含税前端算</td><td><strong>报价必须同构</strong>，禁止第二套公式</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- 1 -->
+<div id="decisions" class="section">
+  <div class="section-header"><span class="section-num n-blue">1</span><span class="section-title">关键决策</span></div>
+  <div class="card">
+    <div class="table-wrap"><table>
+      <thead><tr><th>ID</th><th>决策</th><th>选择</th></tr></thead>
+      <tbody>
+        <tr><td>D1</td><td>价税模型</td><td>与订单一致：<code>line_total</code>=折后<strong>未税</strong>；存 <code>tax_rate</code>/<code>tax_amount</code>；含税=未税+税额（可不落库）</td></tr>
+        <tr><td>D2</td><td>产品主数据</td><td>增加 <code>default_tax_rate</code> + <code>price_includes_tax</code>（默认 false=标价不含税）</td></tr>
+        <tr><td>D3</td><td>报价行</td><td><code>quote_lines</code> 增加与 OrderLine 同名字段 <code>tax_rate</code>/<code>tax_amount</code></td></tr>
+        <tr><td>D4</td><td>整单金额语义</td><td>总未税=Σ行未税；总税额=Σ行税额；价税合计=总未税+总税额。持久化 <code>total_amount</code>=总未税；展示/Out 含 <code>tax_total</code>、<code>amount_incl_tax</code></td></tr>
+        <tr><td>D5</td><td>取整与尾差</td><td>每行独立算未税/税额并四舍五入到分；再求和。若行税合计与「精确税额」差 <strong>±0.01</strong>，自动把差额塞入<strong>最后一行</strong>税额找平（P0 必做）</td></tr>
+        <tr><td>D6</td><td>选品带入</td><td>选产品→带 <code>default_tax_rate</code>；若 <code>price_includes_tax=true</code> 则拆未税单价后再入行</td></tr>
+        <tr><td>D7</td><td>转单</td><td>报价→订单必须复制 <code>tax_rate</code>/<code>tax_amount</code>（含尾差调整后的税额）</td></tr>
+        <tr><td>D8</td><td>范围</td><td>P0 仅 Web；H5 报价详情只读展示税列（P1）；不做出口多币种 VAT 矩阵</td></tr>
+        <tr><td>D9</td><td>报价/订单同公式</td><td>报价与订单共用同一套行级价税引擎（含尾差）；禁止两套取整</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div class="note note-green">手册已写「报价可选税率」——本包补齐实现，消除文档与代码落差。</div>
+</div>
+
+<!-- 2 -->
+<div id="product" class="section">
+  <div class="section-header"><span class="section-num n-green">2</span><span class="section-title">产品主数据价税（FR-PROD-TAX）</span></div>
+
+  <div class="subsection">
+    <h3>2.1 目标</h3>
+    <p style="font-size:.85rem;color:var(--muted)">产品主档可维护默认税率与标价含税语义；列表/详情可看税率与换算含税/未税标价；导入模板支持两列；选品入报价/订单带入默认税率。</p>
+  </div>
+
+  <div class="card">
+    <p class="card-title">功能清单</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>ID</th><th>需求</th><th>优先级</th><th>验收要点</th></tr></thead>
+      <tbody>
+        <tr><td>PRD-TAX-01</td><td>产品默认税率</td><td><span class="p-high">P0</span></td><td><code>products.default_tax_rate</code> Numeric(5,2) 可空；常用快捷 13/9/6/3/1/0；范围 0～100</td></tr>
+        <tr><td>PRD-TAX-02</td><td>标价含税开关</td><td><span class="p-high">P0</span></td><td><code>products.price_includes_tax</code> BOOL 默认 false；表单文案：「标价为含税价」</td></tr>
+        <tr><td>PRD-TAX-03</td><td>表单/详情展示换算</td><td><span class="p-high">P0</span></td><td>编辑时输入标价；旁注只读「含税参考 / 未税参考」按当前税率换算（不双写两套主价）</td></tr>
+        <tr><td>PRD-TAX-04</td><td>列表列</td><td><span class="p-medium">P1</span></td><td>可选列「税率%」「标价含税」；默认可不显示税率列</td></tr>
+        <tr><td>PRD-TAX-05</td><td>变体/价目</td><td><span class="p-medium">P1</span></td><td>变体/价目条目<strong>不强制</strong>独立税率；继承产品默认税率；P1 可允许价目覆盖（本包 P0 不做价目税字段）</td></tr>
+        <tr><td>PRD-TAX-06</td><td>导入</td><td><span class="p-high">P0</span></td><td>模板增加「默认税率」「标价含税」（是/否或 true/false）；非法数字行错误</td></tr>
+        <tr><td>PRD-TAX-07</td><td>Schema 种子</td><td><span class="p-high">P0</span></td><td>系统字段 <code>default_tax_rate</code>、<code>price_includes_tax</code>；存量租户 ensure 补种</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- 3 -->
+<div id="quote" class="section">
+  <div class="section-header"><span class="section-num n-purple">3</span><span class="section-title">报价价税（FR-QUOTE-TAX）</span></div>
+
+  <div class="subsection">
+    <h3>3.1 目标</h3>
+    <p style="font-size:.85rem;color:var(--muted)">报价明细与订单明细价税能力对齐；表单可编辑税率；实时显示税额/含税；转订单透传；CPQ 写入 quotes 时带税（无产品默认则 0 或空）。</p>
+  </div>
+
+  <div class="card">
+    <p class="card-title">功能清单</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>ID</th><th>需求</th><th>优先级</th><th>验收要点</th></tr></thead>
+      <tbody>
+        <tr><td>PRD-QTAX-01</td><td>报价行税字段</td><td><span class="p-high">P0</span></td><td><code>quote_lines.tax_rate</code>/<code>tax_amount</code>；Schema Create/Update/Out 同步</td></tr>
+        <tr><td>PRD-QTAX-02</td><td>表单列</td><td><span class="p-high">P0</span></td><td>QuoteFormDialog：税率% 可编；税额只读（由公式算，允许高级覆盖见 BR）；未税小计/含税列</td></tr>
+        <tr><td>PRD-QTAX-03</td><td>选品带入</td><td><span class="p-high">P0</span></td><td>选产品写入 unit_price（按含税语义拆解）+ tax_rate=default_tax_rate</td></tr>
+        <tr><td>PRD-QTAX-04</td><td>整单汇总</td><td><span class="p-high">P0</span></td><td>底部：未税合计、税额合计、价税合计；total_amount 仍为未税（折扣后）</td></tr>
+        <tr><td>PRD-QTAX-05</td><td>详情页</td><td><span class="p-high">P0</span></td><td>Quotes 详情/列表金额旁可显示含税合计（有税时）</td></tr>
+        <tr><td>PRD-QTAX-06</td><td>转订单透传</td><td><span class="p-high">P0</span></td><td><code>convert_quote_to_order</code> 复制 tax_rate/tax_amount；订单 amount=未税合计不变</td></tr>
+        <tr><td>PRD-QTAX-07</td><td>CPQ 出报价</td><td><span class="p-medium">P1</span></td><td>CPQ 生成 line 时带产品 default_tax_rate 并算 tax_amount</td></tr>
+        <tr><td>PRD-QTAX-08</td><td>报价 PDF</td><td><span class="p-medium">P1</span></td><td>汇总区：小计(未税)→折扣→税额→价税合计</td></tr>
+        <tr><td>PRD-QTAX-09</td><td>合同路径</td><td><span class="p-medium">P1</span></td><td>报价→合同→订单若复制行，税字段一并复制（若合同行无税模型则跳过并记明确不做）</td></tr>
+        <tr><td>PRD-QTAX-10</td><td>批量改税率</td><td><span class="p-low">P2</span></td><td>报价头「统一税率」一键填入全部空税率行</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- 4 -->
+<div id="calc" class="section">
+  <div class="section-header"><span class="section-num n-amber">4</span><span class="section-title">计算与精度（行级独立 + 尾差兜底）</span></div>
+
+  <div class="note note-green">
+    <b>P0 硬规则（产品决议）：</b>每行商品独立计算并四舍五入到分 → 再求和 → 自动校验「总未税 + 总税额 = 价税合计」→
+    若与精确税额差 0.01，系统把差额塞入<strong>最后一行商品的税额</strong>找平。
+  </div>
+
+  <div class="card">
+    <p class="card-title">行级公式（每行独立）</p>
+<pre class="code-block"># 入行单价（未税）——选品时
+if product.price_includes_tax and tax_rate:
+    unit_price = round(list_price / (1 + tax_rate/100), 2)
+else:
+    unit_price = list_price
+
+# —— 每行独立 ——
+# 行未税金额（有行折扣时先折再取整；无折扣即 单价×数量）
+line_ex_tax = round(unit_price * quantity * (1 - (discount_rate or 0)/100), 2)
+
+# 行税额：单行单独四舍五入到分
+line_tax = round(line_ex_tax * (tax_rate or 0) / 100, 2)
+
+# 行价税合计（不再二次 round）
+line_incl_tax = line_ex_tax + line_tax
+
+# 持久化：line_total = line_ex_tax；tax_amount = line_tax（可被尾差修正）</pre>
+  </div>
+
+  <div class="card">
+    <p class="card-title">整单汇总与平衡校验</p>
+<pre class="code-block">order_ex_tax   = sum(line_ex_tax)          # 总未税 → total_amount / amount
+order_tax      = sum(line_tax)             # 总税额 → tax_total
+order_incl_tax = order_ex_tax + order_tax  # 价税合计 → amount_incl_tax
+
+# 自动校验（保存前后必须成立）：
+assert order_ex_tax + order_tax == order_incl_tax</pre>
+  </div>
+
+  <div class="card">
+    <p class="card-title">尾差自动兜底（P0）</p>
+<pre class="code-block"># 「精确税额」定义：
+# - 全单同一税率：exact_tax = round(order_ex_tax * tax_rate / 100, 2)
+# - 多税率：exact_tax = round(sum(line_ex_tax_i * rate_i / 100), 2)
+#   （中间项用更高精度，最后一次 round 到分；与「每行先 round 再加」对比）
+
+delta = exact_tax - order_tax   # 通常为 -0.01 / 0 / +0.01
+
+if abs(delta) == 0.01 and lines:
+    last = lines[-1]   # sort_order 最后一行；优先有税率的行
+    last.tax_amount = round(last.tax_amount + delta, 2)
+    # 刷新：order_tax = sum(line_tax)；order_incl_tax = order_ex_tax + order_tax
+
+# |delta| &gt; 0.01：不静默多行分摊，记日志/告警；delta == 0：无需调整</pre>
+  </div>
+
+  <div class="card">
+    <p class="card-title">精度硬决议</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>项</th><th>规则</th></tr></thead>
+      <tbody>
+        <tr><td>税率</td><td><code>Numeric(5,2)</code>，单位 %；校验 0≤x≤100</td></tr>
+        <tr><td>金额</td><td>全部金额保留 <strong>2 位小数（分）</strong>；四舍五入</td></tr>
+        <tr><td>行未税</td><td><code>round(未税单价 × 数量 [×(1−行折扣%)], 2)</code></td></tr>
+        <tr><td>行税额</td><td><code>round(行未税 × 税率/100, 2)</code> — <strong>每行单独</strong>取整</td></tr>
+        <tr><td>行价税合计</td><td>行未税 + 行税额（不二次 round）</td></tr>
+        <tr><td>整单</td><td>总未税/总税额均为行求和；价税合计=二者之和</td></tr>
+        <tr><td>平衡</td><td>恒等式：总未税 + 总税额 = 价税合计（保存时校验）</td></tr>
+        <tr><td>尾差</td><td>±0.01 自动写入最后一行税额；属 <strong>P0</strong></td></tr>
+        <tr><td>实现</td><td>前后端同引擎；以服务端最终写入（含尾差）为准；推荐 Decimal</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="note note-blue">
+    <b>行折扣：</b>有 <code>discount_rate</code> 时，行未税 = round(未税单价×数量×(1−折扣%/100), 2)，仍满足「先得行未税再算行税」。
+    <b>头折扣（锁定）：</b>按行未税占比摊入 → 末行吃未税分摊尾差使 Σ=round(Σ×(1−头折%),2) → 再算行税与税额尾差。
+    禁止只减总未税而保留原行税。实现见 <code>tax_engine.compute_tax_lines(..., header_discount_rate=)</code>。
+  </div>
+</div>
+
+<!-- 5 -->
+<div id="db" class="section">
+  <div class="section-header"><span class="section-num n-blue">5</span><span class="section-title">数据模型变更</span></div>
+
+  <div class="card">
+    <p class="card-title">products 扩展</p>
+<pre class="code-block">products
+  + default_tax_rate     Numeric(5,2) NULL     -- 默认税率 %
+  + price_includes_tax   Boolean NOT NULL DEFAULT false  -- 标价是否含税</pre>
+  </div>
+
+  <div class="card">
+    <p class="card-title">quote_lines 扩展（对齐 order_lines）</p>
+<pre class="code-block">quote_lines
+  + tax_rate     Numeric(5,2) NULL
+  + tax_amount   Numeric(14,2) NULL</pre>
+  </div>
+
+  <div class="card">
+    <p class="card-title">可选（P1）quotes 汇总落库</p>
+<pre class="code-block">quotes
+  + tax_total          Numeric(14,2) NULL   -- Σ 行税
+  + amount_incl_tax    Numeric(14,2) NULL   -- 价税合计
+-- P0 可不落库：Out 用计算字段；列表筛含税价延后</pre>
+  </div>
+
+  <div class="card">
+    <p class="card-title">其它</p>
+    <ul style="padding-left:1.2rem;font-size:.85rem">
+      <li>预估 Alembic：<b>087</b>（086 已为规格型号；冲突则顺延）</li>
+      <li>存量：default_tax_rate=NULL、price_includes_tax=false；旧报价行税为空，展示「—」，转单行为与今相同（无税）</li>
+      <li>不改 order_lines / invoices 结构</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 6 -->
+<div id="api" class="section">
+  <div class="section-header"><span class="section-num n-green">6</span><span class="section-title">接口概要</span></div>
+  <div class="card">
+    <div class="table-wrap"><table>
+      <thead><tr><th>能力</th><th>变更</th></tr></thead>
+      <tbody>
+        <tr><td>Product Create/Update/Out</td><td>+ <code>default_tax_rate</code>、<code>price_includes_tax</code>；Out 可带只读 <code>list_price_ex_tax</code>/<code>list_price_incl_tax</code>（计算）</td></tr>
+        <tr><td>QuoteLine Create/Update/Out</td><td>+ <code>tax_rate</code>、<code>tax_amount</code></td></tr>
+        <tr><td>Quote Out</td><td>+ 计算字段 <code>tax_total</code>、<code>amount_incl_tax</code>（P0）</td></tr>
+        <tr><td>POST quotes/{id}/convert-to-order</td><td>复制行税字段</td></tr>
+        <tr><td>CPQ create-quote</td><td>P1：写入行税</td></tr>
+        <tr><td>Import product</td><td>模板/解析两列</td></tr>
+        <tr><td>新路由</td><td>无（不建独立税码表）</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- 7 -->
+<div id="rules" class="section">
+  <div class="section-header"><span class="section-num n-purple">7</span><span class="section-title">业务规则</span></div>
+  <div class="card">
+    <div class="table-wrap"><table>
+      <thead><tr><th>ID</th><th>规则</th></tr></thead>
+      <tbody>
+        <tr><td>BR-TAX-01</td><td>每行：行未税=round(未税单价×数量[×折],2)；行税=round(行未税×税率/100,2)；行价税=行未税+行税</td></tr>
+        <tr><td>BR-TAX-02</td><td>总未税=Σ行未税；总税额=Σ行税；价税合计=总未税+总税额；保存时断言平衡</td></tr>
+        <tr><td>BR-TAX-03</td><td>尾差：|exact_tax − Σ行税|==0.01 时，差额写入最后一行 tax_amount 并刷新汇总</td></tr>
+        <tr><td>BR-TAX-04</td><td>税率空：税额按 0；展示「—」允许；该行不参与精确税额分子项</td></tr>
+        <tr><td>BR-TAX-05</td><td>改数量/单价/折扣/税率 → 全量重算行税 + 再跑尾差兜底</td></tr>
+        <tr><td>BR-TAX-06</td><td>price_includes_tax 仅影响选品拆价；不回写已入行单价</td></tr>
+        <tr><td>BR-TAX-07</td><td>报价转订单：复制含尾差后的 tax_amount；订单 amount=总未税</td></tr>
+        <tr><td>BR-TAX-08</td><td>权限沿用既有 manage；无新权限码；不建税码字典（P2）</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- 8 -->
+<div id="roadmap" class="section">
+  <div class="section-header"><span class="section-num n-amber">8</span><span class="section-title">实施路线图</span></div>
+  <div class="roadmap">
+    <div class="roadmap-card">
+      <h3><span class="phase phase-p0">P0</span> 核心闭环（约 4～6 人天）</h3>
+      <ul>
+        <li>Alembic 087：products + quote_lines 字段</li>
+        <li>Schema/Service 产品税字段</li>
+        <li>Quote 行税 + 表单/详情汇总</li>
+        <li>选品带入 + 含税拆未税</li>
+        <li>转订单透传</li>
+        <li>共用价税引擎 + ±0.01 末行尾差</li>
+        <li>产品导入两列</li>
+        <li>verify（含尾差用例）</li>
+      </ul>
+    </div>
+    <div class="roadmap-card">
+      <h3><span class="phase phase-p1">P1</span> 体验增强（约 2～3 人天）</h3>
+      <ul>
+        <li>CPQ 出报价带税（走同一引擎）</li>
+        <li>报价 PDF 价税分项</li>
+        <li>产品列表税率列</li>
+        <li>H5 报价详情只读税列</li>
+        <li>可选 quotes 汇总落库</li>
+      </ul>
+    </div>
+    <div class="roadmap-card">
+      <h3><span class="phase phase-p2">P2</span> 延后</h3>
+      <ul>
+        <li>租户税码字典</li>
+        <li>出口/多币种 VAT</li>
+        <li>价目表行级税覆盖</li>
+        <li>头「统一税率」批量填</li>
+        <li>|delta|&gt;0.01 的多行分摊策略</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 9 -->
+<div id="out" class="section">
+  <div class="section-header"><span class="section-num n-red">9</span><span class="section-title">明确不做（本包）</span></div>
+  <div class="card">
+    <ul style="padding-left:1.2rem;font-size:.85rem">
+      <li>订单与报价共用本包价税引擎（含尾差）；允许改造订单保存路径以对齐，不另起公式</li>
+      <li>不建独立税码/税组主数据表（P0）</li>
+      <li>不做运费单独计税、价外费用税拆分</li>
+      <li>不做合同行独立税模型（若合同无明细价税则本包不扩）</li>
+      <li>不做红冲/专票勾稽规则（属发票域）</li>
+      <li>不改成本价毛利公式为「税后毛利」（P2 可评估）</li>
+    </ul>
+  </div>
+</div>
+
+<footer>
+  <div class="sources">
+    <h2>参考来源</h2>
+    <ol>
+      <li>仓库：<code>order_service._line_amounts</code>、<code>OrderFormDialog.vue</code>、<code>QuoteFormDialog.vue</code>、<code>quote_service.convert_quote_to_order</code></li>
+      <li>规格：<code>docs/00-总览/需求规格.md</code> §3.20.6-A FR-ORDER-ENH-02；用户操作手册报价税率描述</li>
+      <li>PRD：<code>订单合同回款增强-prd</code> 订单明细税率</li>
+      <li>行业：纷享销客/销售易行级税；<code>b2b-manufacturing-ai-cpq/quote/quote-generator.html</code> 价税汇总</li>
+    </ol>
+  </div>
+</footer>
+
+</article>
+</body>
+</html>

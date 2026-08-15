@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CRM-1c 验收：任务 + 转化 + 工作台（docs/v0.5-crm执行计划.md §5）。"""
+"""CRM-1c 验收：任务 + 转化 + 工作台（docs/02-执行计划/v0.5-crm执行计划.md §5）。"""
 from __future__ import annotations
 
 import sys
@@ -64,8 +64,55 @@ def _ensure_sales_manager(db) -> None:
         db.add(
             TenantMembership(user_id=user.id, tenant_id=tenant_id, role_id=mgr_role.id, is_active=True)
         )
+        db.flush()
+        membership = get_membership(db, user.id, tenant_id)
     else:
         membership.role_id = mgr_role.id
+        membership.is_active = True
+        db.flush()
+
+    from app.models.crm import MembershipSalesProfile
+    from app.services.crm.sales_org_service import ensure_default_territories
+
+    territories = ensure_default_territories(db, tenant_id)
+    default_tid = territories[0].id if territories else None
+    mgr_m = membership
+    mgr_profile = (
+        db.query(MembershipSalesProfile)
+        .filter(MembershipSalesProfile.membership_id == mgr_m.id)
+        .first()
+    )
+    if not mgr_profile:
+        db.add(
+            MembershipSalesProfile(
+                membership_id=mgr_m.id,
+                primary_territory_id=default_tid,
+            )
+        )
+    for phone in (SALES_A_PHONE, SALES_B_PHONE):
+        sales_user = db.query(User).filter(User.phone == phone).first()
+        if not sales_user:
+            continue
+        sales_m = get_membership(db, sales_user.id, tenant_id)
+        if not sales_m:
+            continue
+        profile = (
+            db.query(MembershipSalesProfile)
+            .filter(MembershipSalesProfile.membership_id == sales_m.id)
+            .first()
+        )
+        if not profile:
+            db.add(
+                MembershipSalesProfile(
+                    membership_id=sales_m.id,
+                    primary_territory_id=default_tid,
+                    reports_to_membership_id=mgr_m.id,
+                )
+            )
+        else:
+            profile.reports_to_membership_id = mgr_m.id
+            if not profile.primary_territory_id:
+                profile.primary_territory_id = default_tid
     db.commit()
 
 

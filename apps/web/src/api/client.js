@@ -47,8 +47,9 @@ api.interceptors.response.use(
       (text.includes('用户不存在') || text.includes('登录已失效') || text.includes('未登录'))
     ) {
       localStorage.removeItem('token')
-      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
-        window.location.href = '/login'
+      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register') && !window.location.pathname.startsWith('/admin/login')) {
+        const isAdminPath = window.location.pathname.startsWith('/admin')
+        window.location.href = isAdminPath ? '/admin/login' : '/login'
       }
     }
     const error = new Error(text)
@@ -62,13 +63,24 @@ export default api
 export { isBenignEmptyError, isRouteNotFoundError, applyEmptyListFallback, shouldSilenceLoadError, formatApiError, ROUTE_NOT_FOUND_HINT } from '../utils/apiError.js'
 
 export const authApi = {
-  login: (phone, password) => api.post('/api/v1/auth/login', { phone, password }),
+  login: (phone, password, workspaceMode) =>
+    api.post('/api/v1/auth/login', {
+      phone,
+      password,
+      workspace_mode: workspaceMode || undefined,
+    }),
   sendSmsCode: (phone) => api.post('/api/v1/auth/sms/send', { phone }),
-  loginBySms: (phone, code) => api.post('/api/v1/auth/sms/login', { phone, code }),
+  loginBySms: (phone, code, workspaceMode) =>
+    api.post('/api/v1/auth/sms/login', {
+      phone,
+      code,
+      workspace_mode: workspaceMode || undefined,
+    }),
   register: (data) => api.post('/api/v1/auth/register', data),
   me: () => api.get('/api/v1/auth/me'),
   selectTenant: (tenant_id) => api.post('/api/v1/auth/select-tenant', { tenant_id }),
   switchTenant: (tenant_id) => api.post('/api/v1/auth/switch-tenant', { tenant_id }),
+  switchWorkspace: (workspace_mode) => api.post('/api/v1/auth/switch-workspace', { workspace_mode }),
   forgotSendCode: (phone) => api.post('/api/v1/auth/password/forgot/send-code', { phone }),
   forgotReset: (data) => api.post('/api/v1/auth/password/forgot/reset', data),
 }
@@ -632,6 +644,9 @@ export const adminApi = {
     api.post(`/api/v1/admin/tenants/${id}/transfer-admin`, { new_admin_user_id }),
   listUsers: (params) => api.get('/api/v1/admin/users', { params }),
   updateUser: (id, data) => api.patch(`/api/v1/admin/users/${id}`, data),
+  listShopPermissionAudits: (id, params) =>
+    api.get(`/api/v1/admin/users/${id}/shop-permission-audits`, { params }),
+  getShopPermissionCatalog: () => api.get('/api/v1/admin/shop/permissions/catalog'),
   resetUserPassword: (id, password) =>
     api.post(`/api/v1/admin/users/${id}/reset-password`, { password }),
   deleteUser: (id) => api.delete(`/api/v1/admin/users/${id}`),
@@ -672,4 +687,284 @@ export const adminApi = {
     api.get('/api/v1/admin/platform-tender-leads/parse-jobs', { params }),
   confirmPlatformTenderParseJob: (id, data) =>
     api.post(`/api/v1/admin/platform-tender-leads/parse-jobs/${id}/confirm`, data),
+  // 内容获客商城 · 平台端
+  listShopMerchants: (params) => api.get('/api/v1/admin/shop/merchants', { params }),
+  exportShopMerchants: (params) =>
+    api.get('/api/v1/admin/shop/merchants/export', { params, responseType: 'blob' }),
+  createShopMerchantExport: (data) => api.post('/api/v1/admin/shop/merchants/export', data),
+  getShopMerchantExportFile: (id) =>
+    api.get(`/api/v1/admin/shop/merchants/export-tasks/${id}/file`, { responseType: 'blob' }),
+  getShopMerchant: (tenantId) => api.get(`/api/v1/admin/shop/merchants/${tenantId}`),
+  listShopMerchantServiceLogs: (tenantId, params) =>
+    api.get(`/api/v1/admin/shop/merchants/${tenantId}/service-logs`, { params }),
+  createShopServiceNote: (tenantId, data) =>
+    api.post(`/api/v1/admin/shop/merchants/${tenantId}/service-logs/notes`, data),
+  createShopRenewalRequest: (tenantId, data) =>
+    api.post(`/api/v1/admin/shop/merchants/${tenantId}/service-logs/renewal-requests`, data),
+  getShopMerchantSubscriptions: (tenantId) =>
+    api.get(`/api/v1/admin/shop/merchants/${tenantId}/subscriptions`),
+  getShopMerchantEntitlements: (tenantId, params) =>
+    api.get(`/api/v1/admin/shop/merchants/${tenantId}/entitlements`, { params }),
+  listShopFeatureDictionary: (params) =>
+    api.get('/api/v1/admin/shop/feature-dictionary', { params }),
+  previewShopFeatureCode: () => api.post('/api/v1/admin/shop/feature-dictionary/preview-code'),
+  createShopFeature: (data) => api.post('/api/v1/admin/shop/feature-dictionary', data),
+  getShopFeature: (id) => api.get(`/api/v1/admin/shop/feature-dictionary/${id}`),
+  updateShopFeature: (id, data) => api.patch(`/api/v1/admin/shop/feature-dictionary/${id}`, data),
+  deactivateShopFeature: (id, data) =>
+    api.post(`/api/v1/admin/shop/feature-dictionary/${id}/deactivate`, data || {}),
+  activateShopFeature: (id) => api.post(`/api/v1/admin/shop/feature-dictionary/${id}/activate`),
+  suspendShopMerchant: (tenantId, data) =>
+    api.post(`/api/v1/admin/shop/merchants/${tenantId}/suspend`, data),
+  resumeShopMerchant: (tenantId, data) =>
+    api.post(`/api/v1/admin/shop/merchants/${tenantId}/resume`, data || {}),
+  closeShopMerchant: (tenantId, data) =>
+    api.post(`/api/v1/admin/shop/merchants/${tenantId}/close`, data),
+  listShopCsUsers: () => api.get('/api/v1/admin/shop/cs-users'),
+  assignShopMerchant: (tenantId, data) =>
+    api.post(`/api/v1/admin/shop/merchants/${tenantId}/assign`, data),
+  batchAssignShopMerchants: (data) =>
+    api.post('/api/v1/admin/shop/merchants/batch-assign', data),
+  listShopMerchantTags: (params) => api.get('/api/v1/admin/shop/merchant-tags', { params }),
+  putShopMerchantTags: (tenantId, data) =>
+    api.put(`/api/v1/admin/shop/merchants/${tenantId}/tags`, data),
+  revealShopMerchantSensitive: (tenantId, data) =>
+    api.post(`/api/v1/admin/shop/merchants/${tenantId}/reveal-sensitive`, data || {}),
+  listShopPlanTemplates: (params) => api.get('/api/v1/admin/shop/plan-templates', { params }),
+  previewShopPlanCode: () => api.post('/api/v1/admin/shop/plan-templates/preview-code'),
+  createShopPlanTemplate: (data) => api.post('/api/v1/admin/shop/plan-templates', data),
+  getShopPlanTemplate: (code) => api.get(`/api/v1/admin/shop/plan-templates/${code}`),
+  updateShopPlanTemplate: (code, data) => api.patch(`/api/v1/admin/shop/plan-templates/${code}`, data),
+  publishShopPlanTemplate: (code) => api.post(`/api/v1/admin/shop/plan-templates/${code}/publish`),
+  unpublishShopPlanTemplate: (code) => api.post(`/api/v1/admin/shop/plan-templates/${code}/unpublish`),
+  listShopSubscriptions: (params) => api.get('/api/v1/admin/shop/subscriptions', { params }),
+  exportShopSubscriptions: (params) =>
+    api.get('/api/v1/admin/shop/subscriptions/export', { params, responseType: 'blob' }),
+  createShopSubscriptionExport: (data) =>
+    api.post('/api/v1/admin/shop/subscriptions/export', data || {}),
+  getShopSubscriptionExportFile: (id) =>
+    api.get(`/api/v1/admin/shop/subscriptions/export-tasks/${id}/file`, { responseType: 'blob' }),
+  createShopSubscription: (data) => api.post('/api/v1/admin/shop/subscriptions', data),
+  getShopSubscription: (id) => api.get(`/api/v1/admin/shop/subscriptions/${id}`),
+  replaceShopSubscription: (id, data) =>
+    api.post(`/api/v1/admin/shop/subscriptions/${id}/replace`, data),
+  renewShopSubscription: (id, data) =>
+    api.post(`/api/v1/admin/shop/subscriptions/${id}/renew`, data),
+  cancelShopSubscription: (id, data) =>
+    api.post(`/api/v1/admin/shop/subscriptions/${id}/cancel`, data || {}),
+  listShopPendingRenewals: () => api.get('/api/v1/admin/shop/merchants/pending-renewals'),
+  cancelShopRenewalRequest: (tenantId, logId, note) =>
+    api.post(
+      `/api/v1/admin/shop/merchants/${tenantId}/service-logs/renewal-requests/${logId}/cancel`,
+      {},
+      { params: { note } },
+    ),
+  markShopRenewalProcessing: (tenantId, logId) =>
+    api.post(
+      `/api/v1/admin/shop/merchants/${tenantId}/service-logs/renewal-requests/${logId}/mark-processing`,
+    ),
+  revertShopRenewalPending: (tenantId, logId) =>
+    api.post(
+      `/api/v1/admin/shop/merchants/${tenantId}/service-logs/renewal-requests/${logId}/revert-pending`,
+    ),
+  listShopOnboardingApplications: (params) =>
+    api.get('/api/v1/admin/shop/onboarding/applications', { params }),
+  getShopOnboardingApplication: (id) =>
+    api.get(`/api/v1/admin/shop/onboarding/applications/${id}`),
+  revealShopOnboardingSensitive: (applicationId, data) =>
+    api.post(
+      `/api/v1/admin/shop/onboarding/applications/${applicationId}/reveal-sensitive`,
+      data || {},
+    ),
+  listShopOnboardingRejectReasons: () =>
+    api.get('/api/v1/admin/shop/onboarding/reject-reasons'),
+  listShopOnboardingApproveOptions: (params) =>
+    api.get('/api/v1/admin/shop/onboarding/approve-options', { params }),
+  downloadShopOnboardingFile: (applicationId, fileId) =>
+    api.get(`/api/v1/admin/shop/onboarding/applications/${applicationId}/files/${fileId}`, {
+      responseType: 'blob',
+    }),
+  listShopOnboardingTenantOptions: (params) =>
+    api.get('/api/v1/admin/shop/onboarding/tenant-options', { params }),
+  getShopOnboardingPrefill: (tenantId) =>
+    api.get(`/api/v1/admin/shop/onboarding/tenants/${tenantId}/prefill`),
+  createShopOnboardingApplication: (data) =>
+    api.post('/api/v1/admin/shop/onboarding/applications', data),
+  approveShopOnboarding: (id, data) =>
+    api.post(`/api/v1/admin/shop/onboarding/applications/${id}/approve`, data),
+  rejectShopOnboarding: (id, data) =>
+    api.post(`/api/v1/admin/shop/onboarding/applications/${id}/reject`, data),
+  uploadShopOnboardingFile: (tenantId, docType, file) => {
+    const fd = new FormData()
+    fd.append('tenant_id', tenantId)
+    fd.append('doc_type', docType)
+    fd.append('file', file)
+    return api.post('/api/v1/admin/shop/onboarding/files', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  shopOnboardingOcr: (data) => api.post('/api/v1/admin/shop/onboarding/ocr', data),
+  listShopPaymentOnboarding: (params) =>
+    api.get('/api/v1/admin/shop/payment-onboarding', { params }),
+  exportShopPaymentOnboarding: (params) =>
+    api.get('/api/v1/admin/shop/payment-onboarding/export', { params, responseType: 'blob' }),
+  createShopPaymentOnboardingExport: (data) =>
+    api.post('/api/v1/admin/shop/payment-onboarding/export', data || {}),
+  getShopPaymentOnboardingExportFile: (id) =>
+    api.get(`/api/v1/admin/shop/payment-onboarding/export-tasks/${id}/file`, { responseType: 'blob' }),
+  getShopPaymentOnboarding: (tenantId) =>
+    api.get(`/api/v1/admin/shop/payment-onboarding/${tenantId}`),
+  getShopChannelConfig: () => api.get('/api/v1/admin/shop/payment-onboarding/channel-config'),
+  saveShopDoudianConfig: (data) =>
+    api.put('/api/v1/admin/shop/payment-onboarding/channel-config/doudian', data || {}),
+  rotateShopDoudianSecret: (data) =>
+    api.post('/api/v1/admin/shop/payment-onboarding/channel-config/doudian/rotate', data || {}),
+  testShopDoudianConfig: () =>
+    api.post('/api/v1/admin/shop/payment-onboarding/channel-config/doudian/test'),
+  saveShopWechatPayConfig: (data) =>
+    api.put('/api/v1/admin/shop/payment-onboarding/channel-config/wechat-pay', data || {}),
+  rotateShopWechatCert: (data) =>
+    api.post('/api/v1/admin/shop/payment-onboarding/channel-config/wechat-pay/rotate-cert', data || {}),
+  rotateShopWechatV3: (data) =>
+    api.post('/api/v1/admin/shop/payment-onboarding/channel-config/wechat-pay/rotate-v3', data || {}),
+  testShopWechatPayConfig: () =>
+    api.post('/api/v1/admin/shop/payment-onboarding/channel-config/wechat-pay/test'),
+  refreshShopPaymentOnboarding: (tenantId) =>
+    api.post(`/api/v1/admin/shop/payment-onboarding/${tenantId}/refresh`),
+  submitShopPaymentWechat: (tenantId) =>
+    api.post(`/api/v1/admin/shop/payment-onboarding/${tenantId}/submit-wechat`),
+  approveShopPaymentOnboarding: (tenantId, data) =>
+    api.post(`/api/v1/admin/shop/payment-onboarding/${tenantId}/approve`, data),
+  rejectShopPaymentOnboarding: (tenantId, data) =>
+    api.post(`/api/v1/admin/shop/payment-onboarding/${tenantId}/reject`, data),
+  revealShopPaymentSensitive: (tenantId) =>
+    api.post(`/api/v1/admin/shop/payment-onboarding/${tenantId}/reveal-sensitive`),
+  notifyShopPaymentMerchant: (tenantId) =>
+    api.post(`/api/v1/admin/shop/payment-onboarding/${tenantId}/notify`),
+  getShopSmsChannelConfig: () => api.get('/api/v1/admin/shop/sms/channel-config'),
+  saveShopSmsChannelConfig: (data) => api.put('/api/v1/admin/shop/sms/channel-config', data || {}),
+  testShopSmsChannelConfig: () => api.post('/api/v1/admin/shop/sms/channel-config/test'),
+  listShopSmsMerchants: () => api.get('/api/v1/admin/shop/sms/merchant-options'),
+  listShopSmsSignatures: (params) => api.get('/api/v1/admin/shop/sms/signatures', { params }),
+  exportShopSmsSignatures: (params) =>
+    api.get('/api/v1/admin/shop/sms/signatures/export', { params, responseType: 'blob' }),
+  createShopSmsSignatureExport: (data) =>
+    api.post('/api/v1/admin/shop/sms/signatures/export', data || {}),
+  getShopSmsSignatureExportFile: (id) =>
+    api.get(`/api/v1/admin/shop/sms/signatures/export-tasks/${id}/file`, { responseType: 'blob' }),
+  createShopSmsSignature: (data) => api.post('/api/v1/admin/shop/sms/signatures', data),
+  getShopSmsSignature: (id) => api.get(`/api/v1/admin/shop/sms/signatures/${id}`),
+  syncShopSmsSignature: (id) => api.post(`/api/v1/admin/shop/sms/signatures/${id}/sync`),
+  withdrawShopSmsSignature: (id) => api.post(`/api/v1/admin/shop/sms/signatures/${id}/withdraw`),
+  approveShopSmsSignature: (id) => api.post(`/api/v1/admin/shop/sms/signatures/${id}/approve`),
+  rejectShopSmsSignature: (id, data) =>
+    api.post(`/api/v1/admin/shop/sms/signatures/${id}/reject`, data),
+  resubmitShopSmsSignature: (id, data) =>
+    api.post(`/api/v1/admin/shop/sms/signatures/${id}/resubmit`, data),
+  listShopSmsTemplates: (params) => api.get('/api/v1/admin/shop/sms/templates', { params }),
+  exportShopSmsTemplates: (params) =>
+    api.get('/api/v1/admin/shop/sms/templates/export', { params, responseType: 'blob' }),
+  createShopSmsTemplateExport: (data) =>
+    api.post('/api/v1/admin/shop/sms/templates/export', data || {}),
+  getShopSmsTemplateExportFile: (id) =>
+    api.get(`/api/v1/admin/shop/sms/templates/export-tasks/${id}/file`, { responseType: 'blob' }),
+  createShopSmsTemplate: (data) => api.post('/api/v1/admin/shop/sms/templates', data),
+  updateShopSmsTemplate: (id, data) => api.patch(`/api/v1/admin/shop/sms/templates/${id}`, data),
+  setDefaultShopSmsTemplate: (id) => api.post(`/api/v1/admin/shop/sms/templates/${id}/set-default`),
+  listShopSmsAssignments: (params) => api.get('/api/v1/admin/shop/sms/assignments', { params }),
+  exportShopSmsAssignments: (params) =>
+    api.get('/api/v1/admin/shop/sms/assignments/export', { params, responseType: 'blob' }),
+  createShopSmsAssignmentExport: (data) =>
+    api.post('/api/v1/admin/shop/sms/assignments/export', data || {}),
+  getShopSmsAssignmentExportFile: (id) =>
+    api.get(`/api/v1/admin/shop/sms/assignments/export-tasks/${id}/file`, { responseType: 'blob' }),
+  getShopSmsAssignOptions: (tenantId) =>
+    api.get('/api/v1/admin/shop/sms/assignments/options', { params: { tenant_id: tenantId } }),
+  assignShopSms: (data) => api.post('/api/v1/admin/shop/sms/assignments', data),
+  listShopSmsLogs: (params) => api.get('/api/v1/admin/shop/sms/logs', { params }),
+  exportShopSmsLogs: (params) =>
+    api.get('/api/v1/admin/shop/sms/logs/export', { params, responseType: 'blob' }),
+  createShopSmsLogExport: (data) => api.post('/api/v1/admin/shop/sms/logs/export', data || {}),
+  getShopSmsLogExportFile: (id) =>
+    api.get(`/api/v1/admin/shop/sms/logs/export-tasks/${id}/file`, { responseType: 'blob' }),
+  getShopSmsLog: (id) => api.get(`/api/v1/admin/shop/sms/logs/${id}`),
+  revealShopSmsMobile: (id) => api.post(`/api/v1/admin/shop/sms/logs/${id}/reveal-mobile`),
+  retryShopSmsLog: (id) => api.post(`/api/v1/admin/shop/sms/logs/${id}/retry`),
+  getShopAnalyticsSummary: () => api.get('/api/v1/admin/shop/analytics/summary'),
+  getShopAnalyticsTrends: (params) => api.get('/api/v1/admin/shop/analytics/trends', { params }),
+  exportShopAnalyticsDaily: (data) =>
+    api.post('/api/v1/admin/shop/analytics/export-daily', data || {}, { responseType: 'blob' }),
+  listShopSettlementBatches: (params) => api.get('/api/v1/admin/shop/settlement-batches', { params }),
+  exportShopSettlementBatches: (params) =>
+    api.get('/api/v1/admin/shop/settlement-batches/export', { params, responseType: 'blob' }),
+  createShopSettlementExport: (data) =>
+    api.post('/api/v1/admin/shop/settlement-batches/export', data || {}),
+  getShopSettlementExportFile: (id) =>
+    api.get(`/api/v1/admin/shop/settlement-batches/export-tasks/${id}/file`, { responseType: 'blob' }),
+  getShopSettlementBatch: (id) => api.get(`/api/v1/admin/shop/settlement-batches/${id}`),
+  confirmShopSettlement: (id, data) =>
+    api.post(`/api/v1/admin/shop/settlement-batches/${id}/confirm`, data || {}),
+  retryShopSettlement: (id, data) =>
+    api.post(`/api/v1/admin/shop/settlement-batches/${id}/retry`, data),
+  uploadShopSettlementVoucher: (id, file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post(`/api/v1/admin/shop/settlement-batches/${id}/voucher`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  downloadShopSettlementVoucher: (id, fileId) =>
+    api.get(`/api/v1/admin/shop/settlement-batches/${id}/voucher/${fileId}`, { responseType: 'blob' }),
+  exportShopSettlementVoucher: (id) =>
+    api.get(`/api/v1/admin/shop/settlement-batches/${id}/export`, { responseType: 'blob' }),
+  exportShopSettlementItems: (id) =>
+    api.get(`/api/v1/admin/shop/settlement-batches/${id}/export-items`, { responseType: 'blob' }),
+  listShopModerationCases: (params) => api.get('/api/v1/admin/shop/moderation-cases', { params }),
+  getShopModerationSummary: () => api.get('/api/v1/admin/shop/moderation-cases/summary'),
+  exportShopModerationCases: (params) =>
+    api.get('/api/v1/admin/shop/moderation-cases/export', { params, responseType: 'blob' }),
+  createShopModerationExport: (data) =>
+    api.post('/api/v1/admin/shop/moderation-cases/export', data || {}),
+  getShopModerationExportFile: (id) =>
+    api.get(`/api/v1/admin/shop/moderation-cases/export-tasks/${id}/file`, { responseType: 'blob' }),
+  getShopModerationCase: (id) => api.get(`/api/v1/admin/shop/moderation-cases/${id}`),
+  downloadShopModerationAttachment: (id, fileId) =>
+    api.get(`/api/v1/admin/shop/moderation-cases/${id}/attachments/${fileId}`, { responseType: 'blob' }),
+  takeShopModerationCase: (id) => api.post(`/api/v1/admin/shop/moderation-cases/${id}/take`),
+  forceOffShopModerationCase: (id, data) =>
+    api.post(`/api/v1/admin/shop/moderation-cases/${id}/force-off-sale`, data || {}),
+  closeShopModerationCase: (id, data) =>
+    api.post(`/api/v1/admin/shop/moderation-cases/${id}/close`, data || {}),
+  listShopProductReviews: (params) => api.get('/api/v1/admin/shop/product-reviews', { params }),
+  getShopProductReview: (id) => api.get(`/api/v1/admin/shop/product-reviews/${id}`),
+  getShopProductReviewBuyerPreview: (id) =>
+    api.get(`/api/v1/admin/shop/product-reviews/${id}/buyer-preview`),
+  approveShopProductReview: (id, data) =>
+    api.post(`/api/v1/admin/shop/product-reviews/${id}/approve`, data || {}),
+  rejectShopProductReview: (id, data) =>
+    api.post(`/api/v1/admin/shop/product-reviews/${id}/reject`, data),
+  forceOffShopProductReview: (id, data) =>
+    api.post(`/api/v1/admin/shop/product-reviews/${id}/force-off-sale`, data),
+  listShopNumberRules: () => api.get('/api/v1/admin/shop/number-rules'),
+  updateShopNumberRule: (entityType, data) =>
+    api.put(`/api/v1/admin/shop/number-rules/${entityType}`, data),
+  previewShopNumberRule: (entityType, data) =>
+    api.post(`/api/v1/admin/shop/number-rules/${entityType}/preview`, data || {}),
+  resetShopNumberRules: () => api.post('/api/v1/admin/shop/number-rules/reset-defaults'),
+}
+
+/** 内容获客商城 · 商家端（智营壳内 A20） */
+export const shopApi = {
+  getOnboardingStatus: () => api.get('/api/v1/shop/onboarding/status'),
+  submitOnboarding: (data) => api.post('/api/v1/shop/onboarding/applications', data),
+  resubmitOnboarding: (id, data) => api.put(`/api/v1/shop/onboarding/applications/${id}`, data),
+  uploadOnboardingFile: (docType, file) => {
+    const fd = new FormData()
+    fd.append('doc_type', docType)
+    fd.append('file', file)
+    return api.post('/api/v1/shop/onboarding/files', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  onboardingOcr: (data) => api.post('/api/v1/shop/onboarding/ocr', data),
 }

@@ -11,7 +11,7 @@ WEB_CREATE = API_ROOT.parent / "web" / "src" / "views" / "Create.vue"
 WEB_CLIENT = API_ROOT.parent / "web" / "src" / "api" / "client.js"
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import check, req, ensure_fake_platform
+from tests.http_client import check, req, ensure_fake_platform, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -126,8 +126,7 @@ def main() -> int:
             )
         )
 
-    proc = subprocess.run([sys.executable, "-B", "tests/verify_wf_ui.py"], cwd=API_ROOT)
-    results.append(check("VWF2-8 回归 verify_wf_ui", proc.returncode == 0, str(proc.returncode)))
+    results.append(run_nested_script("VWF2-8 回归 verify_wf_ui", "verify_wf_ui.py"))
 
     failed = [i for i, ok in enumerate(results) if not ok]
     if failed:

@@ -1,34 +1,29 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { ref } from 'vue'
 import { setToken } from '@/utils/auth'
-import { assistantsApi, authApi } from '@/utils/api'
+import { authApi } from '@/utils/api'
 
+const displayName = ref('')
 const phone = ref('')
 const password = ref('')
 const tenantName = ref('')
-const industryCode = ref('finance')
-const assistants = ref([])
 const loading = ref(false)
 
 const phonePattern = /^1\d{10}$/
 
-onMounted(async () => {
-  try {
-    const data = await assistantsApi.list()
-    assistants.value = data
-    if (data.length) industryCode.value = data[0].code
-  } catch {
-    /* fallback finance */
-  }
-})
-
 async function handleRegister() {
-  if (!phone.value.trim() || !password.value.trim() || !tenantName.value.trim()) {
-    uni.showToast({ title: '请填写手机号、密码和公司名称', icon: 'none' })
+  const name = displayName.value.trim()
+  const workspace = tenantName.value.trim()
+  if (!name || !phone.value.trim() || !password.value.trim() || !workspace) {
+    uni.showToast({ title: '请填写昵称、手机号、密码和工作台名称', icon: 'none' })
     return
   }
-  if (tenantName.value.trim().length < 2) {
-    uni.showToast({ title: '公司名称至少 2 个字符', icon: 'none' })
+  if (name.length < 2) {
+    uni.showToast({ title: '昵称至少 2 个字符', icon: 'none' })
+    return
+  }
+  if (workspace.length < 2) {
+    uni.showToast({ title: '工作台名称至少 2 个字符', icon: 'none' })
     return
   }
   if (!phonePattern.test(phone.value.trim())) {
@@ -44,8 +39,8 @@ async function handleRegister() {
     const data = await authApi.register({
       phone: phone.value.trim(),
       password: password.value,
-      tenant_name: tenantName.value.trim(),
-      industry_code: industryCode.value,
+      tenant_name: workspace,
+      display_name: name,
     })
     setToken(data.access_token)
     uni.showToast({ title: '注册成功', icon: 'success' })
@@ -64,32 +59,23 @@ async function handleRegister() {
   <view class="page">
     <view class="card">
       <text class="title">注册账号</text>
-      <text class="sub">手机号注册，一人一号</text>
+      <text class="sub">手机号注册 · 创建智营工作台</text>
 
       <view class="form-item">
-        <text class="label">手机号</text>
-        <input v-model="phone" class="input" type="number" maxlength="11" placeholder="11 位手机号" />
+        <text class="label">昵称</text>
+        <input v-model="displayName" class="input" maxlength="100" placeholder="团队内显示的名称" />
       </view>
       <view class="form-item">
-        <text class="label">公司名称</text>
-        <input v-model="tenantName" class="input" maxlength="200" placeholder="公司全称，全平台唯一" />
+        <text class="label">登录手机号</text>
+        <input v-model="phone" class="input" type="number" maxlength="11" placeholder="用于登录与接收重要通知" />
       </view>
       <view class="form-item">
         <text class="label">密码</text>
         <input v-model="password" class="input" password placeholder="至少 8 位" />
       </view>
-      <view v-if="assistants.length" class="form-item">
-        <text class="label">默认 AI 助手</text>
-        <picker
-          mode="selector"
-          :range="assistants"
-          range-key="name"
-          @change="(e) => (industryCode = assistants[e.detail.value].code)"
-        >
-          <view class="picker">
-            {{ assistants.find((a) => a.code === industryCode)?.name || '请选择' }}
-          </view>
-        </picker>
+      <view class="form-item">
+        <text class="label">工作台名称</text>
+        <input v-model="tenantName" class="input" maxlength="200" placeholder="团队对外称呼，可与营业执照名称不同" />
       </view>
       <button class="btn" :loading="loading" @click="handleRegister">注册</button>
     </view>
@@ -134,8 +120,7 @@ async function handleRegister() {
   margin-bottom: 12rpx;
 }
 
-.input,
-.picker {
+.input {
   width: 100%;
   height: 88rpx;
   line-height: 88rpx;

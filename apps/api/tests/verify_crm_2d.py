@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""CRM-2d 验收：数据导入（docs/v0.5-crm执行计划.md §9）。"""
+"""CRM-2d 验收：数据导入（docs/02-执行计划/v0.5-crm执行计划.md §9）。"""
 
 from __future__ import annotations
 

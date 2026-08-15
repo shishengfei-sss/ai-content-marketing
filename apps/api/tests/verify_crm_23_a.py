@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """v0.7 CRM-2/3 Phase A 验收：建表 + 默认管道种子 + 权限种子 + schema_seeds（含 payments）。
 
-详见 docs/v0.7-crm-deal执行计划.md §Phase A。
+详见 docs/02-执行计划/v0.7-crm-deal执行计划.md §Phase A。
 """
 
 from __future__ import annotations

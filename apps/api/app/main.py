@@ -11,11 +11,14 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database import SessionLocal
 from app.runtime_stamp import health_payload
-from app.routers import admin, admin_platform_tender, agent, analytics, assistants, auth, brand_settings, content, crm, dashboard, knowledge, llm_settings, me, team, templates, tenant, wechat_settings
+from app.routers import admin, admin_platform_tender, agent, analytics, assistants, auth, brand_settings, content, crm, dashboard, knowledge, llm_settings, me, platform_shop, shop, team, templates, tenant, wechat_settings
+from app.routers import mp as mp_router
+from app.routers.webhooks import router as webhooks_router
 from app.services.publish_service import process_due_scheduled_async
 from app.services.crm.pool_reclaim_job import process_auto_reclaim
 from app.services.crm.contract_expiry_job import process_contract_expiry
 from app.services.crm.quote_expiry_job import process_quote_expiry
+from app.services.shop.booking_expiry_job import process_expired_unredeemed_bookings
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +79,20 @@ async def _crm_quote_expiry_scheduler_loop() -> None:
             db.close()
 
 
+async def _shop_booking_expiry_scheduler_loop() -> None:
+    """过期未核销预约（默认每 15 分钟）。对照 #m10-cancel-policy。"""
+    interval = max(60, int(getattr(settings, "SHOP_BOOKING_EXPIRE_POLL_SEC", 900) or 900))
+    while True:
+        await asyncio.sleep(interval)
+        db = SessionLocal()
+        try:
+            process_expired_unredeemed_bookings(db)
+        except Exception:
+            logger.exception("Shop booking expiry scheduler error")
+        finally:
+            db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.storage_published_dir.mkdir(parents=True, exist_ok=True)
@@ -83,12 +100,14 @@ async def lifespan(app: FastAPI):
     reclaim_task = asyncio.create_task(_crm_reclaim_scheduler_loop())
     expiry_task = asyncio.create_task(_crm_contract_expiry_scheduler_loop())
     quote_expiry_task = asyncio.create_task(_crm_quote_expiry_scheduler_loop())
+    booking_expiry_task = asyncio.create_task(_shop_booking_expiry_scheduler_loop())
     yield
     task.cancel()
     reclaim_task.cancel()
     expiry_task.cancel()
     quote_expiry_task.cancel()
-    for t in (task, reclaim_task, expiry_task, quote_expiry_task):
+    booking_expiry_task.cancel()
+    for t in (task, reclaim_task, expiry_task, quote_expiry_task, booking_expiry_task):
         try:
             await t
         except asyncio.CancelledError:
@@ -144,6 +163,10 @@ app.include_router(agent.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 app.include_router(admin_platform_tender.router, prefix="/api/v1")
 app.include_router(crm.router, prefix="/api/v1")
+app.include_router(shop.router, prefix="/api/v1")
+app.include_router(platform_shop.router, prefix="/api/v1")
+app.include_router(mp_router.router, prefix="/api/v1")
+app.include_router(webhooks_router, prefix="/api/v1")
 app.include_router(me.router, prefix="/api/v1")
 
 settings.storage_published_dir.mkdir(parents=True, exist_ok=True)

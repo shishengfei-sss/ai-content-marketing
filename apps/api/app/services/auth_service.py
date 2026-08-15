@@ -52,12 +52,16 @@ def register_user(
 
     company_name = assert_tenant_name_available(db, tenant_name)
 
+    normalized_name = (display_name or "").strip()
+    if not normalized_name:
+        normalized_name = f"用户{phone[-4:]}"
+
     user = User(
         tenant_id=None,
         phone=phone,
         email=None,
         hashed_password=hash_password(password),
-        display_name=display_name or f"用户{phone[-4:]}",
+        display_name=normalized_name,
         role="user",
         is_active=True,
     )

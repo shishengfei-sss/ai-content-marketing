@@ -21,7 +21,15 @@ def main():
     results = []
     admin_token = login("13900000099", "test123456")
     code, me = req("GET", "/auth/me", token=admin_token)
-    results.append(check("V3-1 admin permissions", code == 200 and len(me.get("permissions", [])) == len(ALL_PERMISSIONS)))
+    admin_perms = set(me.get("permissions") or [])
+    missing_admin = set(ALL_PERMISSIONS) - admin_perms
+    results.append(
+        check(
+            "V3-1 admin permissions",
+            code == 200 and not missing_admin,
+            f"have={len(admin_perms)} catalog={len(ALL_PERMISSIONS)} missing={len(missing_admin)}",
+        )
+    )
 
     multi_token = login("13900008888", "Test123456")
     code, me_m = req("GET", "/auth/me", token=multi_token)

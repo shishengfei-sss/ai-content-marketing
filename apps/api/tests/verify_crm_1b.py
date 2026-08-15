@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CRM-1b 验收：销售组织 + Scope 并集（docs/v0.5-crm执行计划.md §4）。"""
+"""CRM-1b 验收：销售组织 + Scope 并集（docs/02-执行计划/v0.5-crm执行计划.md §4）。"""
 from __future__ import annotations
 
 import sys

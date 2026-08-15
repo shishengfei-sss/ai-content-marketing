@@ -12,7 +12,7 @@ sys.path.insert(0, str(API_ROOT))
 from app.database import SessionLocal
 from app.services.agent.pipelines import PIPELINE_REGISTRY
 from tests.alembic_head import is_at_expected_head
-from tests.http_client import check, req, ensure_fake_platform
+from tests.http_client import check, req, ensure_fake_platform, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -145,8 +145,7 @@ def main() -> int:
         )
     )
 
-    proc = subprocess.run([sys.executable, "-B", "tests/verify_lm5.py"], cwd=API_ROOT)
-    results.append(check("VC1-7 verify_lm5 回归", proc.returncode == 0))
+    results.append(run_nested_script("VC1-7 verify_lm5 回归", "verify_lm5.py"))
 
     passed = all(results)
     print("\n=== C1", "全部通过" if passed else "存在失败", "===")

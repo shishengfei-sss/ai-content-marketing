@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>智营获客 · 用户操作手册（v1.3）</title>
+<style>
+  :root{
+    --bg:#f6f8fb; --panel:#ffffff; --ink:#1f2733; --muted:#6b7785;
+    --line:#e6ebf1; --brand:#2f6bff; --brand-soft:#eaf1ff;
+    --green:#16a34a; --green-soft:#e9f8ef; --blue:#2563eb; --blue-soft:#e8f0fe;
+    --orange:#d97706; --orange-soft:#fdf3e3; --red:#dc2626; --red-soft:#fdeaea;
+    --purple:#7c3aed; --purple-soft:#f2ebfe;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.65;font-size:15px}
+  a{color:var(--brand);text-decoration:none}
+  /* layout */
+  .topbar{position:sticky;top:0;z-index:30;background:linear-gradient(90deg,#1f3a8a,#2f6bff);color:#fff;
+    padding:14px 22px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 10px rgba(20,40,90,.18)}
+  .topbar .logo{font-weight:800;font-size:18px;letter-spacing:.5px}
+  .topbar .sub{opacity:.85;font-size:13px}
+  .topbar .search{margin-left:auto}
+  .topbar .search input{width:240px;max-width:40vw;padding:8px 12px;border-radius:8px;border:none;outline:none;font-size:14px}
+  .wrap{display:flex;align-items:flex-start}
+  /* sidebar */
+  .side{position:sticky;top:58px;align-self:flex-start;width:248px;flex:0 0 248px;height:calc(100vh - 58px);
+    overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:14px 10px}
+  .side h4{margin:14px 10px 6px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+  .side a{display:block;padding:8px 12px;border-radius:8px;color:var(--ink);font-size:14px;margin:2px 0}
+  .side a:hover{background:var(--brand-soft)}
+  .side a.active{background:var(--brand);color:#fff;font-weight:600}
+  /* content */
+  .content{flex:1;min-width:0;padding:26px 34px 80px;max-width:980px}
+  .hero{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-bottom:22px}
+  .hero h1{margin:0 0 6px;font-size:24px}
+  .hero p{margin:6px 0;color:var(--muted)}
+  .roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:14px}
+  .role{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .role b{display:block;color:var(--brand);margin-bottom:4px}
+  .role span{font-size:13px;color:var(--muted)}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin-bottom:20px;scroll-margin-top:70px}
+  section h2{margin:0 0 4px;font-size:21px;border-bottom:2px solid var(--brand-soft);padding-bottom:8px}
+  section h3{margin:22px 0 8px;font-size:16px;display:flex;align-items:center;gap:8px}
+  section p{margin:8px 0}
+  .lead{color:var(--muted);margin-top:2px}
+  /* crud grid */
+  .crud{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px}
+  @media(max-width:760px){.crud{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);border-radius:11px;padding:14px 16px;background:var(--bg)}
+  .card .ttl{font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .card ol{margin:0;padding-left:20px}
+  .card li{margin:4px 0}
+  .badge{font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap}
+  .b-add{background:var(--green-soft);color:var(--green)}
+  .b-view{background:var(--blue-soft);color:var(--blue)}
+  .b-edit{background:var(--orange-soft);color:var(--orange)}
+  .b-del{background:var(--red-soft);color:var(--red)}
+  .b-key{background:var(--purple-soft);color:var(--purple)}
+  .b-tip{background:#eef2f7;color:#475569}
+  .note{border-left:4px solid var(--orange);background:var(--orange-soft);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:14px}
+  .warn{border-left:4px solid var(--red);background:var(--red-soft);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:14px}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--brand-soft);color:#1f3a8a}
+  code{background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:13px}
+  .kbd{display:inline-block;background:#1f2733;color:#fff;border-radius:5px;padding:1px 7px;font-size:12px;margin:0 1px}
+  .toc{columns:2;column-gap:26px}
+  .toc a{display:block;padding:3px 0;color:var(--ink)}
+  footer{color:var(--muted);font-size:13px;text-align:center;padding:24px}
+  .pill{display:inline-block;font-size:12px;background:var(--brand-soft);color:var(--brand);padding:2px 10px;border-radius:999px;margin-right:6px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">🐺 智营获客</div>
+  <div class="sub">用户操作手册 · v1.3</div>
+  <div class="search"><input id="q" placeholder="搜索模块 / 操作（如 导入、克隆、claim）" oninput="search()" /></div>
+</div>
+
+<div class="wrap">
+  <nav class="side" id="side">
+    <h4>开始</h4>
+    <a href="#intro">导读与角色</a>
+    <a href="#login">登录与账号</a>
+    <h4>营销创作</h4>
+    <a href="#create">AI 创作</a>
+    <a href="#campaign">营销活动</a>
+    <h4>CRM 主数据</h4>
+    <a href="#lead">线索 Leads</a>
+    <a href="#customer">客户 Customers</a>
+    <a href="#contact">联系人 Contacts</a>
+    <a href="#task">跟进与任务 Tasks</a>
+    <h4>交易链路</h4>
+    <a href="#deal">商机 Deals</a>
+    <a href="#product">产品与价目</a>
+    <a href="#quote">报价与 CPQ</a>
+    <a href="#contract">合同 Contracts</a>
+    <a href="#order">订单 Orders</a>
+    <a href="#payment">回款与发票</a>
+    <h4>获客增强</h4>
+    <a href="#tender">招标线索</a>
+    <a href="#report">运营报表与提醒</a>
+    <h4>平台</h4>
+    <a href="#admin">平台后台 /admin</a>
+    <a href="#faq">常见问题</a>
+  </nav>
+
+  <main class="content">
+    <div class="hero" id="intro">
+      <h1>智营获客 · 用户操作手册</h1>
+      <p>面向最终用户的功能操作指引。覆盖 v1.3 全部模块，逐条给出 <b>新增 / 查看 / 编辑 / 删除</b> 等具体操作步骤。</p>
+      <p>开发运维请看 <code>docs/04-运维与手册/操作手册.md</code>；产品规格见 <code>docs/00-总览/需求规格.md</code>。</p>
+      <div class="roles">
+        <div class="role"><b>市场运营 / 编辑</b><span>AI 创作、活动、知识库、线索只读+新建</span></div>
+        <div class="role"><b>销售 sales</b><span>线索/客户/任务（本人）、跟进、转化、导入</span></div>
+        <div class="role"><b>销售经理</b><span>销售全部 + 团队/地区视图、分配、全量报表</span></div>
+        <div class="role"><b>企业管理员 admin</b><span>本企业全功能 + 成员/角色/设置</span></div>
+        <div class="role"><b>平台运营 platform_admin</b><span>企业管理、账号、公共知识库（仅 Web）</span></div>
+      </div>
+      <p class="lead" style="margin-top:14px">一个手机号可加入多家公司，登录后先<b>选公司</b>，数据随公司隔离。您只能看到有权限的数据。</p>
+    </div>
+
+    <!-- ========== 登录 ========== -->
+    <section id="login">
+      <h2>① 登录与账号</h2>
+      <p class="lead">所有操作的起点：登录、选公司、个人设置。</p>
+      <div class="crud">
+        <div class="card">
+          <div class="ttl"><span class="badge b-add">登录</span></div>
+          <ol>
+            <li>打开 Web（默认 <code>http://localhost:5173</code>）或 H5（默认 <code>http://localhost:5174</code>）。</li>
+            <li>进入 <code>/login</code>（H5 为 <code>#/pages/login/login</code>），用<b>手机号</b>登录。</li>
+            <li>验证码：开发 / UAT 环境固定为 <span class="kbd">1111</span>（真实短信接入前均为 Mock）。</li>
+            <li>加入多家公司时，按提示<b>选择当前公司</b>。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-edit">切换公司 / 设置</span></div>
+          <ol>
+            <li>顶部或设置菜单点<b>切换公司</b>，选目标公司后菜单与数据随之切换。</li>
+            <li><b>账号</b>：改密码、查看所属公司与角色。</li>
+            <li><b>AI 模型</b>：填自有 LLM Key → 测试连接 → 保存；不填则用平台额度。</li>
+            <li><b>权限菜单</b>：角色不同可见菜单不同（销售看不到平台管理）。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-view">找回密码</span></div>
+          <ol>
+            <li>登录页点「忘记密码」。</li>
+            <li>输入手机号收验证码（Mock <span class="kbd">1111</span>）。</li>
+            <li>校验通过后设置新密码。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-del">禁用 / 退出</span></div>
+          <ol>
+            <li>账号禁用由<b>平台运营</b>在 <code>/admin</code> 操作（见平台后台章）。</li>
+            <li>Web / H5 右上角头像可<b>退出登录</b>。</li>
+          </ol>
+        </div>
+      </div>
+      <div class="note">工作台(scope)：顶部可在 <b>本人 / 全公司</b> 间切换（有权限时才出现「全公司」），看板数字与列表实时一致。</div>
+    </section>
+
+    <!-- ========== AI 创作 ========== -->
+    <section id="create">
+      <h2>② AI 创作</h2>
+      <p class="lead">通用营销顾问 + 9 型人格自动适配，无需手动切行业/助手。支持公众号 / 小红书 / 抖音多形态内容。</p>
+      <div class="crud">
+        <div class="card">
+          <div class="ttl"><span class="badge b-add">新建会话 / 创作</span></div>
+          <ol>
+            <li>进入「创作」页，左侧为<b>历史会话</b>列表，点「新建会话」。</li>
+            <li>在对话框描述需求（题材、平台、风格、要点）。</li>
+            <li>系统先出<b>方案</b>（不扣额度）→ 您确认后<b>生成正文</b>（成功扣 1 次额度）。</li>
+            <li>生成过程<b>流式(SSE)</b>实时输出；可多轮追问。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-view">查看 / 恢复会话</span></div>
+          <ol>
+            <li>左侧列表点任意历史会话即可<b>恢复上下文</b>（长期记忆，关掉再来还在）。</li>
+            <li>遇到异常会<b>脱敏</b>；可「会话恢复」回到上一稳定节点。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-edit">改稿 / 合规</span></div>
+          <ol>
+            <li>敏感词 / 合规问题触发<b>自检</b>：通过 / 提醒 / 拦截。</li>
+            <li>点「合规改稿」一键按规则重写；或手动在输入框要求修改。</li>
+            <li>视频时长等参数可在创作选项中配置（v1.1 起）。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-key">发布 / 导出 / 删除</span></div>
+          <ol>
+            <li><b>公众号</b>：Mock 发布（开发）或真实发布（需备案服务号）。</li>
+            <li><b>小红书 / 抖音</b>：当前为<b>导出</b>内容（官方自动发布为远期）。</li>
+            <li><b>活动关联</b>：把内容关联到营销活动（<code>campaign_contents</code>）。</li>
+            <li><b>删除</b>：在历史会话行尾「⋯」可删除会话 / 清空内容库。</li>
+          </ol>
+        </div>
+      </div>
+      <div class="warn">安全规则：AI <b>不会</b>在您未确认时自动发布；被问「提示词 / 系统规则」只答「我不回答。」这是正常保护，不是故障。</div>
+    </section>
+
+    <!-- ========== 营销活动 ========== -->
+    <section id="campaign">
+      <h2>③ 营销活动 Campaigns</h2>
+      <p class="lead">市场运营组织内容、线索、任务的容器，可统计活动产出。</p>
+      <div class="crud">
+        <div class="card">
+          <div class="ttl"><span class="badge b-add">新增活动</span></div>
+          <ol><li>「营销活动」→ 新建，填名称、时间、目标、关联渠道。</li><li>保存后进入活动详情。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-edit">关联内容 / 线索 / 任务</span></div>
+          <ol><li>活动详情内可<b>绑定</b>已生成内容、从线索列表拉入线索、建任务。</li><li>创作页生成内容时可选择关联到本活动。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-view">查看效果</span></div>
+          <ol><li>活动页查看关联内容数、线索数、转化等（活动 ROI 为后续版本能力）。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-del">编辑 / 删除</span></div>
+          <ol><li>活动行尾「编辑」改信息；「删除」移除（关联数据不随删）。</li></ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 线索 ========== -->
+    <section id="lead">
+      <h2>④ 线索 Leads</h2>
+      <p class="lead">获客入口：从创作、导入、活动、招标认领进入，转化为客户 / 商机。</p>
+      <div class="crud">
+        <div class="card">
+          <div class="ttl"><span class="badge b-add">新增线索</span></div>
+          <ol>
+            <li>线索列表点「新建线索」。</li>
+            <li>填<b>公司名称、联系人、手机</b>（必填）等字段。</li>
+            <li>地区用<b>省 / 市 / 区</b>级联选择。</li>
+            <li>保存即生成线索（owner 为当前用户）。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-view">查看 / 筛选</span></div>
+          <ol>
+            <li>列表支持<b>高级筛选</b>（行业、地区、状态、负责人、评分等）。</li>
+            <li>常用筛选可<b>保存视图</b>并钉到侧栏。</li>
+            <li>点行进入线索<b>详情</b>（跟进、任务、关联客户）。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-edit">编辑 / 补充</span></div>
+          <ol>
+            <li>详情页「编辑」改字段；可加<b>标签</b>、评分、分配负责人。</li>
+            <li>进入<b>公海</b>或回收由分配规则 / 管理员操作。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-key">转化客户</span></div>
+          <ol>
+            <li>点「转化为客户」，系统<b>去重 / 合并</b>同名客户。</li>
+            <li>可选<b>联动建商机</b>；转化时填 <b>BANT</b>（预算/授权/需求/时间）评估，建议金额。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-add">批量导入</span></div>
+          <ol>
+            <li>列表「导入」→ 下载模板 → 字段映射 → 预览 → 执行。</li>
+            <li>支持 CSV / XLSX；按「公司+联系人+手机」<b>去重</b>（skip / update）。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-del">删除 / 通知</span></div>
+          <ol>
+            <li>行尾「⋯」可删线索（需权限；删除不删已转化客户）。</li>
+            <li>右上角<b>铃铛</b>提醒分配、到期、待跟进等事件。</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 客户 ========== -->
+    <section id="customer">
+      <h2>⑤ 客户 Customers</h2>
+      <p class="lead">转化后的企业主体，承载 360 视图与全生命周期。</p>
+      <div class="crud">
+        <div class="card">
+          <div class="ttl"><span class="badge b-add">新增客户</span></div>
+          <ol><li>通常由线索<b>转化</b>自动建；也可在客户列表手动「新建」。</li><li>填公司名、行业、规模、地址等。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-view">360 视图</span></div>
+          <ol><li>客户详情汇聚联系人、跟进、商机、订单、回款、生命周期阶段。</li><li>列表支持<b>导出</b>（v0.9 起）。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-edit">编辑 / 标签</span></div>
+          <ol><li>「编辑」改资料；可加<b>标签</b>分组、维护<b>多地址</b>。</li><li>维护<b>生命周期阶段</b>、培育动作、UTM 来源。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-del">删除 / 合并</span></div>
+          <ol><li>重复客户在转化时<b>合并</b>；手动删除需 admin 权限。</li><li>删除客户会连带提示其下未结商机（谨慎）。</li></ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== 联系人 ========== -->
+    <section id="contact">
+      <h2>⑥ 联系人 Contacts</h2>
+      <p class="lead">客户下的具体人，随客户继承数据范围。</p>
+      <div class="crud">
+        <div class="card"><div class="ttl"><span class="badge b-add">新增</span></div><ol><li>客户详情 → 联系人 → 新建，填姓名、职位、手机、邮箱。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-view">查看</span></div><ol><li>列表 / 客户 360 内查看；支持搜索。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-edit">编辑</span></div><ol><li>行尾「编辑」改联系信息；可设为主要联系人。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-del">删除</span></div><ol><li>「删除」移除单个联系人（不删客户）。</li></ol></div>
+      </div>
+      <div class="note">联系人<b>批量导入</b>为远期能力；当前随客户 / 线索导入带入。</div>
+    </section>
+
+    <!-- ========== 任务 ========== -->
+    <section id="task">
+      <h2>⑦ 跟进与任务 Tasks</h2>
+      <p class="lead">每条线索 / 客户都可建跟进与任务，驱动销售动作。</p>
+      <div class="crud">
+        <div class="card"><div class="ttl"><span class="badge b-add">写跟进 / 建任务</span></div><ol><li>线索 / 客户详情点「写跟进」记录；点「建任务」设负责人、截止日、内容。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-view">查看</span></div><ol><li>工作台 / 任务列表按「我负责的 / 我创建的 / 团队」查看。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-edit">编辑 / 完成</span></div><ol><li>任务详情改内容、改期、转派；完成后点「标记完成」。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-del">删除</span></div><ol><li>行尾「删除」移除任务（已完成也可删）。</li></ol></div>
+      </div>
+    </section>
+
+    <!-- ========== 商机 ========== -->
+    <section id="deal">
+      <h2>⑧ 商机 Deals</h2>
+      <p class="lead">销售管道核心。状态机 <code>open → won / lost / abandoned</code>。</p>
+      <div class="crud">
+        <div class="card">
+          <div class="ttl"><span class="badge b-add">新增商机</span></div>
+          <ol><li>线索转化时联动建，或客户 / 商机列表「新建」。</li><li>填名称、金额、预计成交日、阶段（带概率）。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-view">看板 / 详情</span></div>
+          <ol><li><b>销售管道看板</b>拖拽阶段；点卡片进详情。</li><li>详情含跟进、附件、明细、团队、漏斗、预测、赢/输。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-edit">编辑 / 克隆</span></div>
+          <ol><li>「编辑」改金额 / 阶段 / 负责人；明细行可增删产品。</li><li>「克隆」快速复制相似商机；支持<b>批量</b>操作。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-key">推进 / 赢输 / 转报价</span></div>
+          <ol><li>拖到 <b>won</b> 标记赢单；<b>lost / abandoned</b> 标记丢单（可填原因）。</li><li>商机明细可<b>一键生成报价单</b>。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-del">删除 / 作废</span></div>
+          <ol><li>行尾「删除」移除商机；已赢单需先置回 open 再删（视权限）。</li></ol>
+        </div>
+      </div>
+      <div class="note">当前<b>无商机审批流程</b>（v0.8 已砍），赢单后直接进入报价 / 合同。超时、预测、阶段停留报表在运营域。</div>
+    </section>
+
+    <!-- ========== 产品 ========== -->
+    <section id="product">
+      <h2>⑨ 产品与价目 Products</h2>
+      <p class="lead">报价 / 订单的基础主数据；支持分类、SKU、价目、CPQ 开关。</p>
+      <div class="crud">
+        <div class="card"><div class="ttl"><span class="badge b-add">新增产品</span></div><ol><li>「产品」→ 新建，填名称、分类、单位、SKU、标准价。</li><li>启用 CPQ 的产品勾选 <code>cpq_enabled</code> 并配参数价差。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-view">查看</span></div><ol><li>产品列表 / 分类树查看；价目见 <code>price_books</code>。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-edit">编辑 / 分类</span></div><ol><li>「编辑」改资料；维护产品<b>分类</b>与 SKU。</li><li>价目扩展写入 <code>price_books</code>（禁止平行价目主数据）。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-del">删除</span></div><ol><li>未用于报价 / 订单的产品可删；已引用者先解绑。</li></ol></div>
+      </div>
+    </section>
+
+    <!-- ========== 报价 ========== -->
+    <section id="quote">
+      <h2>⑩ 报价与轻量 CPQ</h2>
+      <p class="lead">v1.3 轻量 CPQ：按参数计价，结果写入现有报价单 <code>quotes</code>。仅 Web。</p>
+      <div class="crud">
+        <div class="card">
+          <div class="ttl"><span class="badge b-add">新建报价</span></div>
+          <ol><li>从商机 / 订单 / 合同任一入口「生成报价」。</li><li>选客户、产品行、税率；或启用 <b>CPQ</b> 选参数实时计价。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-view">查看 / 计算</span></div>
+          <ol><li>报价详情看明细、金额、毛利；CPQ 实时算价 <code>POST /crm/cpq/calculate</code>。</li><li><b>毛利红线</b>低于阈值时弹确认。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-edit">编辑 / PDF</span></div>
+          <ol><li>「编辑」改行、折扣、税率；可<b>复制历史报价</b>。</li><li>「生成 PDF」（异步）；AI 需求解析需<b>人审</b>后生效。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-key">转订单 / 合同 / 删除</span></div>
+          <ol><li><b>一键转订单或合同</b>。</li><li>行尾「删除」移除报价（未转单时可删）。</li><li>商机 / 线索页可<b>唤起 CPQ</b>。</li></ol>
+        </div>
+      </div>
+      <div class="note">复杂 CPQ（BOM / 约束引擎）、促销动态定价、AI 全自动报价为远期能力。</div>
+    </section>
+
+    <!-- ========== 合同 ========== -->
+    <section id="contract">
+      <h2>⑪ 合同 Contracts</h2>
+      <p class="lead">基于模板生成，一份合同可生成多个订单。</p>
+      <div class="crud">
+        <div class="card"><div class="ttl"><span class="badge b-add">新建合同</span></div><ol><li>「合同」→ 新建，选<b>模板</b>，关联客户 / 报价 / 订单。</li><li>填条款、金额、起止日。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-view">查看</span></div><ol><li>合同列表 / 详情看状态、关联订单、续约附件。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-edit">修订 / 续约</span></div><ol><li>「修订」生成新版本（v1.0）；「续约附件」追加。</li><li>「生成订单」从合同拉出订单（一对多）。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-del">删除 / 作废</span></div><ol><li>行尾「删除」移除合同（已生成订单者视权限处理）。</li></ol></div>
+      </div>
+    </section>
+
+    <!-- ========== 订单 ========== -->
+    <section id="order">
+      <h2>⑫ 订单 Orders</h2>
+      <p class="lead">四种生成路径，支持审批、税率、发货、发票、退款。H5 可做订单操作。</p>
+      <div class="crud">
+        <div class="card">
+          <div class="ttl"><span class="badge b-add">新建订单（四路径）</span></div>
+          <ol>
+            <li>商机 → 订单</li><li>报价 → 订单</li>
+            <li>合同 → 订单</li><li>报价 → 合同 → 订单</li>
+          </ol>
+          <p class="lead">选路径后填明细行与税率。</p>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-view">查看 / 查询</span></div>
+          <ol><li>订单列表支持<b>高级查询</b>；详情看明细、状态、关联回款。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-edit">审批 / 发货 / 发票</span></div>
+          <ol>
+            <li>按金额规则<b>可选审批</b>。</li>
+            <li>「发货」登记发货；「发票」开具（v1.0）。</li>
+            <li>「修订」改订单（v1.0）。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-del">退款 / 删除</span></div>
+          <ol>
+            <li>「退款」走退款流程（有<b>退款 Tab</b>）。</li>
+            <li>未发货 / 未回款订单可删（视权限）。</li>
+          </ol>
+        </div>
+      </div>
+      <div class="note">渠道 ROI 按渠道统计投放回报（v1.0）。</div>
+    </section>
+
+    <!-- ========== 回款 ========== -->
+    <section id="payment">
+      <h2>⑬ 回款与发票 Payments / Invoices</h2>
+      <p class="lead">资金闭环：回款计划 / 实际 / 冲销，发票核销。</p>
+      <div class="crud">
+        <div class="card"><div class="ttl"><span class="badge b-add">新建回款计划</span></div><ol><li>订单 / 回款页「新建回款计划」，填期次、金额、到期日。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-edit">登记实际 / 确认</span></div><ol><li>计划行「登记实际回款」填金额与日期；「确认」入账。</li><li>错误可「<b>冲销</b>」。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-view">发票核销</span></div><ol><li>「发票」Tab 查看 / 核销发票（v1.2）。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-del">删除</span></div><ol><li>未确认回款可删；已确认需冲销后调整。</li></ol></div>
+      </div>
+    </section>
+
+    <!-- ========== 招标线索 ========== -->
+    <section id="tender">
+      <h2>⑭ 招标线索 Tender（v1.3，仅 Web）</h2>
+      <p class="lead">平台维护公共招标池，您的公司按 ICP 匹配，认领后进入线索。<b>不自动建商机。</b></p>
+      <div class="crud">
+        <div class="card"><div class="ttl"><span class="badge b-view">查看匹配池 L2</span></div><ol><li>「招标线索」查看平台公共池(L1)经 <b>ICP 五维加权</b>打分后的匹配池(L2)，按匹配度排序。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-add">认领 claim</span></div><ol><li>对感兴趣标的点 <b>claim</b>：仅写入本公司的<b>线索</b>（状态 pending/valid/invalid/expired）。</li><li>后续像普通线索一样跟进、转化。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-view">效果看板</span></div><ol><li>查看认领转化情况（W11–12 试点 UAT 可选）。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-tip">平台维护 L1</span></div><ol><li><b>仅 platform_admin</b> 维护公共池（手工 / Excel / 附件 AI 人审）。</li><li>租户<b>不能投稿</b>，系统<b>无爬虫</b>。</li></ol></div>
+      </div>
+    </section>
+
+    <!-- ========== 报表 ========== -->
+    <section id="report">
+      <h2>⑮ 运营报表与提醒</h2>
+      <p class="lead">v1.2 起：交易报表、到期提醒、分配规则、阶段停留。</p>
+      <div class="crud">
+        <div class="card"><div class="ttl"><span class="badge b-view">交易报表</span></div><ol><li>查看路径占比、回款率、账龄、负责人业绩。</li><li>阶段停留报表看商机各阶段时长。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-key">到期提醒</span></div><ol><li>工作台展示<b>回款 / 合同到期</b>提醒。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-edit">分配规则</span></div><ol><li>「设置」中配置线索 / 客户<b>自动分配规则</b>（v1.2 起有 UI）。</li></ol></div>
+        <div class="card"><div class="ttl"><span class="badge b-view">发票 / 退款 Tab</span></div><ol><li>订单详情查看发票核销、退款 Tab。</li></ol></div>
+      </div>
+    </section>
+
+    <!-- ========== 平台后台 ========== -->
+    <section id="admin">
+      <h2>⑯ 平台后台 /admin（platform_admin，仅 Web）</h2>
+      <p class="lead">平台运营专用，管理租户、账号、公共知识库与平台 AI。</p>
+      <div class="crud">
+        <div class="card">
+          <div class="ttl"><span class="badge b-view">企业管理</span></div>
+          <ol><li>租户列表查看所有企业；进租户看<b>成员</b>。</li><li><b>转移管理员</b>：一换一操作。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-edit">账号管理</span></div>
+          <ol>
+            <li>Membership 汇总；设 / 取消 <b>platform_admin</b>。</li>
+            <li><b>禁用</b>、<b>重置</b>账号。</li>
+            <li><b>删账号不删租户</b>（仅移除成员身份）。</li>
+          </ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-add">公共知识库 / 平台 AI</span></div>
+          <ol><li>维护平台级知识库（租户优先于平台 KB）。</li><li>配置平台默认 AI 额度 / Key。</li></ol>
+        </div>
+        <div class="card">
+          <div class="ttl"><span class="badge b-tip">招标池维护</span></div>
+          <ol><li>在招标线索 L1 手工 / Excel / 附件 AI <b>人审</b>录入。</li></ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== FAQ ========== -->
+    <section id="faq">
+      <h2>⑰ 常见问题</h2>
+      <table>
+        <tr><th>我想…</th><th>怎么做</th></tr>
+        <tr><td>换一家公司</td><td>设置 / 切换公司菜单，选目标公司</td></tr>
+        <tr><td>找回密码</td><td>登录页「忘记密码」→ 验证码 <span class="kbd">1111</span> → 重置</td></tr>
+        <tr><td>看自己 vs 全公司</td><td>工作台顶部切「本人 / 全公司」</td></tr>
+        <tr><td>AI 不动 / 报错</td><td>刷新会话；或开 Agent 回退（VITE_AGENT_FALLBACK）</td></tr>
+        <tr><td>内容发不出去</td><td>公众号需真实服务号 + 备案；小红书 / 抖音当前只能导出</td></tr>
+        <tr><td>额度用完</td><td>让 admin 加平台额度，或「设置 → AI 模型」配自有 Key</td></tr>
+        <tr><td>批量进线索</td><td>线索列表「导入」→ 模板 / 映射 / 预览 / 执行</td></tr>
+        <tr><td>认领招标线索</td><td>招标线索页 claim → 进本公司线索（不直建商机）</td></tr>
+      </table>
+      <div class="note">暂未开放 / 后续版本：创作效果闭环（A/B、发布回流）、财务售后闭环（退货、红冲、对账单、坏账）、小红书 / 抖音官方自动发布、计费与支付、微信原生小程序、复杂 CPQ / BOM、爬虫抓取。</div>
+    </section>
+
+    <footer>智营获客 · 用户操作手册 v1.3 · 依据整合 PRD 与版本交付线整理 · 如与线上界面不符以线上为准</footer>
+  </main>
+</div>
+
+<script>
+  // 侧栏滚动高亮
+  const links = [...document.querySelectorAll('.side a')];
+  const map = {};
+  links.forEach(a=>{ const id=a.getAttribute('href').slice(1); const el=document.getElementById(id); if(el) map[id]=a; });
+  const obs = new IntersectionObserver(entries=>{
+    entries.forEach(e=>{ if(e.isIntersecting){ links.forEach(l=>l.classList.remove('active')); const a=map[e.target.id]; if(a)a.classList.add('active'); }});
+  },{rootMargin:'-70px 0px -70% 0px'});
+  Object.keys(map).forEach(id=>obs.observe(document.getElementById(id)));
+
+  // 搜索：过滤侧栏 + 内容高亮
+  function search(){
+    const v=document.getElementById('q').value.trim().toLowerCase();
+    links.forEach(a=>{ a.style.display = (!v || a.textContent.toLowerCase().includes(v)) ? '' : 'none'; });
+    if(!v){ document.querySelectorAll('section').forEach(s=>s.style.display=''); return; }
+    document.querySelectorAll('section').forEach(s=>{
+      s.style.display = s.textContent.toLowerCase().includes(v) ? '' : 'none';
+    });
+  }
+</script>
+</body>
+</html>

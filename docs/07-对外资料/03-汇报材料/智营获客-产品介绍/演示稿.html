@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智营获客 · 产品介绍演示稿</title>
+<style>
+:root {
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --ink: #1f1f1f;
+  --muted: #666666;
+  --faint: #999999;
+  --line: #e8e8e8;
+  --accent: #1677ff;
+  --accent-soft: #e6f4ff;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #111; color: var(--ink); font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif; }
+.deck { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.slide {
+  position: absolute; inset: 0;
+  display: none; flex-direction: column; justify-content: center;
+  padding: 64px 80px 96px;
+  background: var(--surface);
+}
+.slide.on { display: flex; }
+.kicker { color: var(--accent); font-size: 14px; font-weight: 600; letter-spacing: .08em; margin-bottom: 12px; }
+h1 { font-size: 48px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; }
+h2 { font-size: 36px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; max-width: 18em; }
+.lede { margin-top: 16px; font-size: 20px; color: var(--muted); max-width: 28em; line-height: 1.5; }
+.grid { display: grid; gap: 16px; margin-top: 32px; }
+.g2 { grid-template-columns: 1fr 1fr; }
+.g3 { grid-template-columns: 1fr 1fr 1fr; }
+.card {
+  border: 1px solid var(--line); border-radius: 8px; padding: 20px 22px; background: var(--bg);
+}
+.card h3 { font-size: 16px; margin-bottom: 8px; }
+.card p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+.flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 28px; }
+.flow b {
+  font-size: 14px; font-weight: 600; background: var(--accent-soft); color: var(--accent);
+  padding: 8px 12px; border-radius: 4px;
+}
+.flow i { font-style: normal; color: var(--faint); }
+ul.plain { margin-top: 24px; list-style: none; }
+ul.plain li { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 18px; color: var(--muted); }
+ul.plain li strong { color: var(--ink); }
+table.t { width: 100%; border-collapse: collapse; margin-top: 24px; font-size: 16px; }
+table.t th, table.t td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.t th { color: var(--faint); font-size: 12px; font-weight: 700; }
+.bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 24px; background: #1f1f1f; color: #fff; font-size: 13px;
+}
+.bar .hint { color: #bbb; }
+.dots { display: flex; gap: 6px; }
+.dots i { width: 8px; height: 8px; border-radius: 50%; background: #555; display: block; }
+.dots i.on { background: var(--accent); }
+.prompt {
+  display: none; position: fixed; left: 80px; right: 80px; bottom: 52px; z-index: 4;
+  background: #1f1f1f; color: #fff; padding: 14px 18px; border-radius: 8px; font-size: 16px; line-height: 1.55;
+}
+.prompt.show { display: block; }
+.prompt small { display: block; color: #8cb8ff; font-size: 12px; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+<section class="slide on" data-voice="智营获客。用 AI 写出获客内容，用同一套系统把线索跟到回款。给中小企业市场和销售团队用。">
+  <div class="kicker">产品介绍</div>
+  <h1>智营获客</h1>
+  <p class="lede">AI 写出获客内容，CRM 跟到回款</p>
+</section>
+
+<section class="slide" data-voice="很多团队是内容在一个地方写，线索在表格里跟，报价在第三个软件里做。活动效果对不上成交。">
+  <div class="kicker">问题</div>
+  <h2>内容、线索、成交不在一条链上</h2>
+  <div class="grid g3">
+    <div class="card"><h3>写完没人跟</h3><p>稿件散落在文档和聊天里，和线索对不上。</p></div>
+    <div class="card"><h3>跟完没内容</h3><p>销售缺合格获客文案，每次从零写。</p></div>
+    <div class="card"><h3>成交在表外</h3><p>报价、合同、回款另起炉灶，老板看不清。</p></div>
+  </div>
+</section>
+
+<section class="slide" data-voice="智营获客把这条链放在同一个系统：写内容，挂到活动，跟线索和客户，推进商机，出报价和合同，收到回款。">
+  <div class="kicker">做法</div>
+  <h2>一条链，从内容到回款</h2>
+  <div class="flow">
+    <b>写内容</b><i>→</i><b>营销活动</b><i>→</i><b>线索 / 客户</b><i>→</i><b>商机</b><i>→</i><b>报价</b><i>→</i><b>合同 / 订单</b><i>→</i><b>回款</b>
+  </div>
+</section>
+
+<section class="slide" data-voice="创作顾问：你说题材和平台，先出方案不扣次数，确认后再写正文。支持公众号、小红书笔记、短视频脚本。有合规检查，不会在你没点确认时自动发出去。小红书和抖音目前是导出，由人工发布。">
+  <div class="kicker">生产</div>
+  <h2>AI 营销创作顾问</h2>
+  <ul class="plain">
+    <li><strong>先方案、后正文</strong>　方案不计次，正文成功计 1 次</li>
+    <li><strong>多平台形态</strong>　公众号、小红书笔记、短视频脚本</li>
+    <li><strong>知识库 + 品牌语气</strong>　按你们公司的说法写</li>
+    <li><strong>合规检查后再导出</strong>　未确认不会自动发布</li>
+  </ul>
+</section>
+
+<section class="slide" data-voice="线索可以新建或从表格导入，跟进之后转成客户和商机。商机看板拖阶段，明细能生成报价。报价可以转合同或订单，工作台会提醒回款和合同到期。">
+  <div class="kicker">经营</div>
+  <h2>CRM 跟到回款</h2>
+  <div class="grid g2">
+    <div class="card"><h3>线索与客户</h3><p>导入、跟进、转化去重、360 视图、按本人或团队看数据。</p></div>
+    <div class="card"><h3>商机与报价</h3><p>管道看板、价税报价、轻量按参数计价、合同与订单。</p></div>
+    <div class="card"><h3>回款与提醒</h3><p>计划与实际回款；工作台提示到期；报表看回款率和阶段停留。</p></div>
+    <div class="card"><h3>电脑 + 手机浏览器</h3><p>主流程双端可用。招标匹配和配置报价在电脑端。</p></div>
+  </div>
+</section>
+
+<section class="slide" data-voice="适合咨询、信息化、对公服务这类要写内容、也要跟单的团队。一个人可以进多家公司，数据和权限跟着公司走。">
+  <div class="kicker">适用</div>
+  <h2>先给这些团队用</h2>
+  <ul class="plain">
+    <li><strong>咨询 / 信息化 / 对公服务</strong>　市场和销售是同一拨人</li>
+    <li><strong>要报价和回款的销售团队</strong>　不只是线索登记</li>
+    <li><strong>一人多公司</strong>　登录后选公司，数据隔离</li>
+  </ul>
+</section>
+
+<section class="slide" data-voice="有几件事当前不做，避免预期错位。不能代发到抖音小红书；系统里没有向买家收款的收银台；开店卖课不是当前交付。数据按公司隔离。">
+  <div class="kicker">边界</div>
+  <h2>当前做法，说清楚</h2>
+  <table class="t">
+    <thead><tr><th>关心的点</th><th>当前做法</th></tr></thead>
+    <tbody>
+      <tr><td>抖音 / 小红书一键发布</td><td>生成并导出，人工发布</td></tr>
+      <tr><td>向客户在线收款</td><td>按企业开通使用，无买家收银台</td></tr>
+      <tr><td>开店卖课、多平台成交</td><td>不是当前交付范围</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="slide" data-voice="建议先对着你们自己的选题走一遍演示：写一篇、挂活动、建线索、出报价。再开通试用公司账号。">
+  <div class="kicker">下一步</div>
+  <h2>对着真选题走一遍</h2>
+  <p class="lede">创作 → 活动 → 线索 → 商机 → 报价。当场只承诺点过的功能。试用可用平台次数，或配置你们自己的模型密钥。</p>
+</section>
+
+</div>
+
+<div class="prompt" id="prompt"><small>口播（按 T 开关，录屏用）</small><span id="promptText"></span></div>
+<div class="bar">
+  <span>智营获客 · 产品介绍</span>
+  <span class="dots" id="dots"></span>
+  <span class="hint">← → 翻页　T 提词　F 全屏　· 共 <span id="total">0</span> 页</span>
+</div>
+<script>
+(function () {
+  var slides = [].slice.call(document.querySelectorAll(".slide"));
+  var dots = document.getElementById("dots");
+  var prompt = document.getElementById("prompt");
+  var promptText = document.getElementById("promptText");
+  var total = document.getElementById("total");
+  var i = 0;
+  total.textContent = slides.length;
+  slides.forEach(function (_, n) {
+    var d = document.createElement("i");
+    if (n === 0) d.className = "on";
+    dots.appendChild(d);
+  });
+  function go(n) {
+    i = (n + slides.length) % slides.length;
+    slides.forEach(function (s, k) { s.classList.toggle("on", k === i); });
+    [].slice.call(dots.children).forEach(function (d, k) { d.classList.toggle("on", k === i); });
+    promptText.textContent = slides[i].getAttribute("data-voice") || "";
+  }
+  go(0);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); go(i + 1); }
+    if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(i - 1); }
+    if (e.key === "t" || e.key === "T") prompt.classList.toggle("show");
+    if (e.key === "f" || e.key === "F") {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+  });
+})();
+</script>
+</body>
+</html>

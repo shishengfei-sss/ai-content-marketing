@@ -48,7 +48,7 @@ def verify_doc(results: list[bool]) -> None:
     srs = REPO_ROOT / "docs" / "需求规格.md"
     plan = REPO_ROOT / "docs" / "v1.3-招标线索与CPQ执行计划.md"
     roadmap = REPO_ROOT / "docs" / "版本交付线梳理.md"
-    prd = REPO_ROOT / "opportunity-cpq-prd" / "mvp-prd-v2.html"
+    prd = REPO_ROOT / "商机与CPQ-prd" / "mvp-prd-v2.html"
 
     results.append(check("VT13-D0-1 SRS 存在", srs.is_file(), str(srs)))
     results.append(check("VT13-D0-2 执行计划存在", plan.is_file(), str(plan)))

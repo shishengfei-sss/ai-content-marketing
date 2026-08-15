@@ -8,7 +8,7 @@ from pathlib import Path
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import _get_test_client, check, req
+from tests.http_client import _get_test_client, check, req, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -83,8 +83,7 @@ def main() -> int:
     )
     results.append(check("VLM3-3 chat 仍可用", code == 200 and chat.get("action") == "proposals", chat.get("action")))
 
-    proc = subprocess.run([sys.executable, "-B", "tests/verify_lm2.py"], cwd=API_ROOT)
-    results.append(check("VLM3-4 verify_lm2 回归", proc.returncode == 0))
+    results.append(run_nested_script("VLM3-4 verify_lm2 回归", "verify_lm2.py"))
 
     passed = all(results)
     print("\n=== LM3", "全部通过" if passed else "存在失败", "===")

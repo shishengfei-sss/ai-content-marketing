@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -34,6 +34,8 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(100), default="")
     role: Mapped[str] = mapped_column(String(50), default="user")
+    platform_shop_role: Mapped[str] = mapped_column(String(50), nullable=True)
+    platform_shop_permissions: Mapped[list] = mapped_column(JSON, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -468,6 +470,64 @@ from app.models.crm import (  # noqa: E402, F401
     MarketingCampaign,
     CampaignChannel,
     NurtureRule,
+)
+from app.models.shop import (  # noqa: E402, F401
+    ShopBooking,
+    ShopBuyer,
+    ShopChannelAuditLog,
+    ShopChannelMapping,
+    ShopColumn,
+    ShopDigitalAsset,
+    ShopDigitalPackage,
+    ShopLesson,
+    ShopChannelSetting,
+    ShopClaimToken,
+    ShopDigitalDownload,
+    ShopEnrollment,
+    ShopEntitlement,
+    ShopExportTask,
+    ShopInvoiceRequest,
+    ShopLessonProgress,
+    ShopMerchantAccount,
+    ShopMerchantFeatureUsage,
+    ShopMerchantServiceLog,
+    ShopMerchantSubscription,
+    ShopMerchantTag,
+    ShopMerchantTagLink,
+    ShopModerationCase,
+    ShopOnboardingApplication,
+    ShopOnboardingReviewLog,
+    ShopAuditLog,
+    PlatformChannelCredential,
+    ShopOrder,
+    ShopPayment,
+    ShopPaymentConfig,
+    ShopPaymentLog,
+    ShopPaymentOnboarding,
+    ShopPlanFeature,
+    ShopCategoryEnableApplication,
+    ShopPlatformCategory,
+    ShopPlatformNumberCounter,
+    ShopPlatformNumberRule,
+    ShopPlatformPermissionAudit,
+    ShopProduct,
+    ShopProductReview,
+    ShopRefund,
+    ShopServiceOffer,
+    ShopServiceSlot,
+    ShopSettlementBatch,
+    ShopSettlementItem,
+    ShopSmsLog,
+    ShopStore,
+    ShopStoreMembership,
+    ShopStoreSettings,
+    ShopSubscriptionPlan,
+    ShopTenantProspectAssignment,
+    ShopTenantSettings,
+    ShopVerification,
+    ShopWebhookEvent,
+    PlatformSmsSignature,
+    PlatformSmsTemplate,
 )
 from app.models.tender import (  # noqa: E402, F401
     IcpConfig,

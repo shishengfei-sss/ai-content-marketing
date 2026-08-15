@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CRM-2a 验收：营销活动（docs/v0.5-crm执行计划.md §6）。"""
+"""CRM-2a 验收：营销活动（docs/02-执行计划/v0.5-crm执行计划.md §6）。"""
 from __future__ import annotations
 
 import sys

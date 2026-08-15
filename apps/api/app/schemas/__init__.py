@@ -9,15 +9,20 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     tenant_name: str = Field(min_length=2, max_length=200)
     industry_code: str = "finance"
-    display_name: str = ""
+    display_name: str = Field(min_length=2, max_length=100)
 
     @field_validator("tenant_name")
     @classmethod
     def strip_tenant_name(cls, value: str) -> str:
         stripped = value.strip()
         if len(stripped) < 2:
-            raise ValueError("公司名称至少 2 个字符")
+            raise ValueError("工作台名称至少 2 个字符")
         return stripped
+
+    @field_validator("display_name")
+    @classmethod
+    def strip_display_name(cls, value: str) -> str:
+        return value.strip()
 
 
 class ForgotPasswordSendRequest(BaseModel):
@@ -33,6 +38,10 @@ class ForgotPasswordResetRequest(BaseModel):
 class LoginRequest(BaseModel):
     phone: str = Field(min_length=11, max_length=20)
     password: str
+    workspace_mode: str | None = Field(
+        default=None,
+        description="platform=平台运营登录 /admin/login；merchant=商家登录 /login",
+    )
 
 
 class SmsSendRequest(BaseModel):
@@ -47,6 +56,11 @@ class SmsSendResponse(BaseModel):
 class SmsLoginRequest(BaseModel):
     phone: str = Field(pattern=r"^1\d{10}$")
     code: str = Field(min_length=4, max_length=6)
+    workspace_mode: str | None = None
+
+
+class SwitchWorkspaceRequest(BaseModel):
+    workspace_mode: str = Field(description="platform | merchant")
 
 
 class TokenResponse(BaseModel):
@@ -69,6 +83,7 @@ class TenantOut(BaseModel):
     id: UUID
     name: str
     industry_code: str
+    role_code: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -81,8 +96,16 @@ class MeOut(BaseModel):
     is_active: bool = True
     active_tenant: TenantOut | None = None
     permissions: list[str] = []
+    platform_shop_permissions: list[str] = []
+    platform_shop_role: str | None = None
     tenants: list[TenantBriefOut] = []
     need_select_tenant: bool = False
+    workspace_mode: str = "merchant"
+    has_merchant_workspace: bool = False
+
+
+class MeUpdateRequest(BaseModel):
+    display_name: str
 
 
 class SelectTenantRequest(BaseModel):
@@ -455,6 +478,8 @@ class AdminUserOut(BaseModel):
     tenant_name: str
     memberships: list["AdminMembershipBrief"] = []
     created_at: datetime
+    platform_shop_role: str | None = None
+    platform_shop_permissions: list[str] = []
 
     model_config = {"from_attributes": True}
 
@@ -512,6 +537,8 @@ class AdminUserUpdate(BaseModel):
     role: str | None = None
     is_active: bool | None = None
     display_name: str | None = None
+    platform_shop_role: str | None = None
+    platform_shop_permissions: list[str] | None = None
 
 
 class AdminUserListResponse(BaseModel):

@@ -1,6 +1,6 @@
 """AI 生成 Prompt 组装。
 
-组装顺序（不可调整，见 docs/需求规格.md §3.4）：
+组装顺序（不可调整，见 docs/00-总览/需求规格.md §3.4）：
 合规 System → 场景模板 → RAG → 品牌 → 个人提示词 → 本次 topic/补充指令。
 
 v0.6.1: build_system_prompt 输出分层结构（FR-ADVISOR-15），

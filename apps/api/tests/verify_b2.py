@@ -8,7 +8,7 @@ from pathlib import Path
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import check, req, ensure_fake_platform
+from tests.http_client import check, req, ensure_fake_platform, run_nested_m0_m8, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -99,10 +99,8 @@ def main() -> int:
         )
     )
 
-    proc = subprocess.run([sys.executable, "-B", "tests/verify_a2.py"], cwd=API_ROOT)
-    results.append(check("VB2-5 verify_a2 回归", proc.returncode == 0))
-    proc2 = subprocess.run([sys.executable, "-B", "tests/run_m0_m8.py"], cwd=API_ROOT)
-    results.append(check("VB2-5 run_m0_m8", proc2.returncode == 0))
+    results.append(run_nested_script("VB2-5 verify_a2 回归", "verify_a2.py"))
+    results.append(run_nested_m0_m8("VB2-5 run_m0_m8"))
 
     passed = all(results)
     print("\n=== B2", "全部通过" if passed else "存在失败", "===")

@@ -1,15 +1,77 @@
 # 智营获客 — AI 内容营销系统
 
-## 文档
+## 仓库导航
 
-| 文档 | 路径 |
+> 文档组织规则见 [00-总览/文档组织规范.md](docs/00-总览/文档组织规范.md)（**本项目 + 新项目模板**）。Cursor 自动遵循 [`.cursor/rules/docs-organization.mdc`](.cursor/rules/docs-organization.mdc)。
+
+### 代码
+
+| 目录 | 说明 |
 |------|------|
-| **整合 PRD（v0.3.3→v1.3 全链路）** | [docs/PRD-智营获客-整合v1.3.html](docs/PRD-智营获客-整合v1.3.html) · [Markdown](docs/PRD-智营获客-整合v1.3.md) |
-| 需求规格 SRS | [docs/需求规格.md](docs/需求规格.md) |
-| v0.3.3 执行计划 | [docs/v0.3.3执行计划.md](docs/v0.3.3执行计划.md) |
-| **v0.4 Agent 执行计划** | [docs/v0.4-agent执行计划.md](docs/v0.4-agent执行计划.md) |
-| 实现步骤计划 | [docs/实现步骤计划.md](docs/实现步骤计划.md) |
-| LLM 与 UI 计划 | [docs/LLM与UI计划.md](docs/LLM与UI计划.md) |
+| [apps/api/](apps/api/) | FastAPI 后端 |
+| [apps/web/](apps/web/) | Web 管理端（Vue 3） |
+| [apps/mp/](apps/mp/) | 移动端 H5（uni-app） |
+| [packages/shared/](packages/shared/) | 设计 token 等共享包 |
+| [scripts/](scripts/) | 部署、重启 API 等脚本 |
+
+### 文档（现行）
+
+| 入口 | 路径 |
+|------|------|
+| **文档中心** | [docs/README.md](docs/README.md) |
+| **浏览器总索引** | [project-docs-index/project-docs-index.html](project-docs-index/project-docs-index.html) |
+| **组织规范** | [docs/00-总览/文档组织规范.md](docs/00-总览/文档组织规范.md) |
+
+```
+docs/
+├── 00-总览/          版本线、SRS、全局规划
+├── 01-PRD/           产品需求文档 + HTML 可视化包
+├── 02-执行计划/      v0.3.3 → v1.6 各版本计划
+├── 03-智能体/        提示词、人格库、测试用例
+├── 04-运维与手册/    部署、操作手册、集成方案
+├── 05-测试与验收/    测试用例、自动化、验收报告
+├── 06-归档/          归档（过时/调研/无关，不删除）
+└── 07-对外资料/    产品操作 · 内容获客运营 · 汇报材料
+```
+
+| 常用文档 | 路径 |
+|----------|------|
+| 需求规格 SRS | [docs/00-总览/需求规格.md](docs/00-总览/需求规格.md) |
+| 版本交付线 | [docs/00-总览/版本交付线梳理.md](docs/00-总览/版本交付线梳理.md) |
+| **内容获客平台方案** | [方案摘要](docs/00-总览/内容获客平台方案摘要.md) · [执行计划](docs/02-执行计划/内容获客平台-执行计划.md) · [汇报材料](docs/07-对外资料/03-汇报材料/) |
+| 整合 PRD | [docs/01-PRD/PRD-智营获客-整合v1.3.md](docs/01-PRD/PRD-智营获客-整合v1.3.md) · [HTML](docs/01-PRD/PRD-智营获客-整合v1.3.html) |
+| AI 销售经理 PRD | [docs/01-PRD/PRD-智营获客-AI销售经理-v1.6.md](docs/01-PRD/PRD-智营获客-AI销售经理-v1.6.md) |
+| 智能体提示词 | [docs/03-智能体/智能体提示词模板.md](docs/03-智能体/智能体提示词模板.md) |
+| 运维部署 | [docs/04-运维与手册/v0.5-运维部署.md](docs/04-运维与手册/v0.5-运维部署.md) |
+| 操作手册（dev/ops） | [docs/04-运维与手册/操作手册.md](docs/04-运维与手册/操作手册.md) |
+| 用户操作手册 | [docs/04-运维与手册/用户操作手册.md](docs/04-运维与手册/用户操作手册.md) · [HTML](docs/07-对外资料/01-产品操作/用户操作手册.html) |
+| 商户运营（抖音卖课） | [docs/07-对外资料/](docs/07-对外资料/) |
+| 测试与验收 | [docs/05-测试与验收/](docs/05-测试与验收/) |
+| 归档文档 | [docs/06-归档/](docs/06-归档/) |
+
+### PRD（Markdown + HTML 可视化）
+
+索引 → [docs/01-PRD/README.md](docs/01-PRD/README.md)
+
+| 模块 | 路径 |
+|------|------|
+| 商机增强 | [成交增强-prd/](docs/01-PRD/07-成交增强-prd/) |
+| 线索客户 | [线索客户增强-详细版/](docs/01-PRD/04-线索客户增强-详细版/) |
+| 招标 / CPQ | [商机与CPQ-prd/](docs/01-PRD/13-商机与CPQ-prd/) |
+| 订单合同回款 | [订单合同回款增强-prd/](docs/01-PRD/11-订单合同回款增强-prd/) |
+| 产品主数据 / 价税 | [产品主数据增强-prd/](docs/01-PRD/14-产品主数据增强-prd/) · [产品报价价税-prd/](docs/01-PRD/16-产品报价价税-prd/) |
+| 营销活动 v1.6 | [营销活动字段增强-prd/](docs/01-PRD/18-营销活动字段增强-prd/) |
+| 内容获客商城 Phase1 | [内容获客商城-prd-phase1/](docs/01-PRD/21-内容获客商城-phase1/)（交易层；与 [方案摘要](docs/00-总览/内容获客平台方案摘要.md) 配套） |
+
+### 归档、测试与手册资料
+
+| 目录 | 说明 |
+|------|------|
+| [docs/06-归档/](docs/06-归档/) | 过时方案、调研、无关项目（**不删除**，见 [README](docs/06-归档/README.md)） |
+| [docs/05-测试与验收/](docs/05-测试与验收/) | 测试用例、自动化测试、验收报告 |
+| [docs/07-对外资料/](docs/07-对外资料/) | 产品操作、内容获客运营、汇报材料（见 [README](docs/07-对外资料/README.md)） |
+
+`05-测试与验收/` 子目录：`测试用例/` · `自动化测试/` · `验收报告/` · `自动化报告/`
 
 ## 当前进度
 
@@ -144,12 +206,17 @@ LLMService → DeepSeekProvider / OpenAICompatibleProvider / DashScopeProvider
            ← 租户 llm_configs（优先）或环境变量 / 平台 AI
 ```
 
-## 目录
+## 新增文档速查
 
-```
-apps/api/    FastAPI 后端
-apps/web/    Web 管理端
-apps/mp/     uni-app 移动端（H5）
-packages/shared/  设计 token
-docs/        需求规格与执行计划
-```
+| 我要加… | 放哪里 | 还要更新 |
+|---------|--------|----------|
+| 新版本执行计划 | `docs/02-执行计划/vX.x-xxx执行计划.md` | `docs/00-总览/版本交付线梳理.md`、`docs/README.md` |
+| 新 PRD（Markdown） | `docs/01-PRD/` | `docs/README.md`、`01-PRD/README.md` |
+| 新 PRD（HTML 线框） | `docs/01-PRD/<模块名>/` | `docs/01-PRD/README.md` |
+| 提示词 / Agent 规范 | `docs/03-智能体/` | `docs/README.md` |
+| 部署 / 手册 | `docs/04-运维与手册/` | — |
+| 测试 / 验收 | `docs/05-测试与验收/` | `docs/05-测试与验收/README.md` |
+| 用户手册 HTML | `docs/07-对外资料/01-产品操作/` | `docs/07-对外资料/01-产品操作/README.md` |
+| 过时 / 被取代 / 无关 | `docs/06-归档/<子目录>/` | `docs/06-归档/README.md` |
+
+完整规则：[文档组织规范](docs/00-总览/文档组织规范.md) · Cursor 规则：`.cursor/rules/docs-organization.mdc`

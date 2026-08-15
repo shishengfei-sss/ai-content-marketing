@@ -10,7 +10,7 @@ API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
 from tests.alembic_head import is_at_expected_head
-from tests.http_client import check, req, ensure_fake_platform
+from tests.http_client import check, req, ensure_fake_platform, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -177,8 +177,7 @@ def main() -> int:
             )
         )
 
-    proc = subprocess.run([sys.executable, "-B", "tests/verify_c1.py"], cwd=API_ROOT)
-    results.append(check("VWF1-8 回归 verify_c1", proc.returncode == 0, str(proc.returncode)))
+    results.append(run_nested_script("VWF1-8 回归 verify_c1", "verify_c1.py"))
 
     failed = [i for i, ok in enumerate(results) if not ok]
     if failed:

@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phase1 · 数据流</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#f5f5f5;margin:0;color:#1f1f1f;font-size:14px;line-height:1.65}
+.bar{background:#1677ff;color:#fff;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.bar h1{font-size:16px;font-weight:600;color:#fff;margin:0}
+.bar a{color:rgba(255,255,255,.92);font-size:13px;margin-left:8px;text-decoration:none;padding:4px 8px;border-radius:4px}
+.bar a:hover{background:rgba(255,255,255,.15)}
+.wrap{max-width:1000px;margin:0 auto;padding:20px}
+.block{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:20px;margin-bottom:16px}
+.block h2{font-size:16px;font-weight:600;margin:0 0 8px}
+.canvas{background:#1f1f1f;border-radius:8px;padding:16px;overflow-x:auto;margin:8px 0}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+th,td{border:1px solid #e8e8e8;padding:8px 10px;text-align:left}th{background:#fafafa;font-weight:500;color:#5c6678}
+code{font-size:12px;background:#f5f5f5;padding:2px 6px;border-radius:4px;color:#1677ff}
+.nav a{display:inline-block;padding:4px 10px;margin:2px;background:#fff;border:1px solid #e8e8e8;border-radius:6px;font-size:12px;text-decoration:none;color:#666}
+.nav a:hover{color:#1677ff;border-color:#91caff}
+</style></head><body>
+<div class="bar"><div><h1>③ 数据流程图</h1>
+<a href="index.html">索引</a><a href="04-数据模型.html#ob">入驻字段表</a><a href="07-支付与结算说明.html">支付与结算</a><a href="06-平台端UI.html">平台运营端</a><a href="01-管理端UI.html">商家端</a><a href="02-买家端UI.html">买家端</a><a href="04-数据模型.html">字段与表</a><a href="05-角色权限.html">角色权限</a>
+</div></div>
+<div class="wrap">
+<div class="nav">
+<a href="#o1">O1 订单状态</a><a href="#f0">F0 商家入驻</a><a href="#f1">F1 支付开权</a><a href="#f2">F2 退款关权</a><a href="#f2-invoice-flow">F2′ 退款×发票</a><a href="#a14-dy-flow">A14 抖音对接</a><a href="#f3">F3 抖店领权①</a><a href="#f3b">F3b 小程序付②</a><a href="#f4">F4 预约核销</a><a href="#f5">F5 开票</a><a href="#f6">F6 上架合规</a><a href="#f7">F7 公域挂载</a><a href="#f12">F12 违规稽查</a><a href="#f8">F8 套餐叠加</a><a href="#f9">F9 用量计数</a><a href="#f10">F10 清结算</a><a href="#f11">F11 IP演示</a>
+</div>
+
+<div class="block" id="o1">
+<h2>O1 订单状态机（<code>shop_orders.status</code>）</h2>
+<p class="sub">Phase 1 权威枚举见 <a href="04-数据模型.html#enum-master">04 §枚举总表</a>；与权益 <code>entitlements.status</code> 联动见 <a href="#f1">F1</a> · <a href="#f2">F2</a>。商家操作矩阵 <a href="01-管理端UI.html#a09">A09</a> · 买家 <a href="02-买家端UI.html#m11">M11</a>。</p>
+<div class="canvas">
+<svg viewBox="0 0 920 500" xmlns="http://www.w3.org/2000/svg" font-size="11" font-family="sans-serif">
+<defs>
+  <marker id="o1a" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker>
+  <marker id="o1d" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#64748b"/></marker>
+</defs>
+<!-- 入口标注 -->
+<text x="120" y="18" text-anchor="middle" fill="#7dd3fc" font-size="10">私域 wx_mp · dy_knowledge</text>
+<text x="760" y="18" text-anchor="middle" fill="#fdba74" font-size="10">公域 doudian 链路①</text>
+<!-- pending_payment -->
+<rect x="40" y="28" width="160" height="44" rx="8" fill="#0c4a6e" stroke="#38bdf8" stroke-width="2"/>
+<text x="120" y="48" text-anchor="middle" fill="#7dd3fc" font-weight="700">pending_payment</text>
+<text x="120" y="64" text-anchor="middle" fill="#bae6fd" font-size="10">待付款</text>
+<!-- claim_pending -->
+<rect x="680" y="28" width="160" height="44" rx="8" fill="#431407" stroke="#fb923c" stroke-width="2"/>
+<text x="760" y="48" text-anchor="middle" fill="#fdba74" font-weight="700">claim_pending</text>
+<text x="760" y="64" text-anchor="middle" fill="#fed7aa" font-size="10">待领权</text>
+<!-- paid hub -->
+<rect x="340" y="148" width="200" height="52" rx="10" fill="#14532d" stroke="#4ade80" stroke-width="2"/>
+<text x="440" y="172" text-anchor="middle" fill="#86efac" font-weight="700" font-size="13">paid · 已付款</text>
+<text x="440" y="190" text-anchor="middle" fill="#bbf7d0" font-size="10">开权益 · 可履约/退款</text>
+<!-- refunding -->
+<rect x="360" y="268" width="160" height="44" rx="8" fill="#422006" stroke="#fbbf24" stroke-width="2"/>
+<text x="440" y="288" text-anchor="middle" fill="#fde68a" font-weight="700">refunding</text>
+<text x="440" y="304" text-anchor="middle" fill="#fcd34d" font-size="10">退款中</text>
+<!-- closed -->
+<rect x="40" y="268" width="140" height="44" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+<text x="110" y="288" text-anchor="middle" fill="#cbd5e1" font-weight="700">closed</text>
+<text x="110" y="304" text-anchor="middle" fill="#94a3b8" font-size="10">已关闭 · 终态</text>
+<!-- refunded -->
+<rect x="300" y="388" width="150" height="44" rx="8" fill="#450a0a" stroke="#f87171" stroke-width="2"/>
+<text x="375" y="408" text-anchor="middle" fill="#fecaca" font-weight="700">refunded</text>
+<text x="375" y="424" text-anchor="middle" fill="#fca5a5" font-size="10">已退款 · 终态</text>
+<!-- partial_refunded -->
+<rect x="500" y="388" width="170" height="44" rx="8" fill="#4c0519" stroke="#fb7185" stroke-width="2"/>
+<text x="585" y="408" text-anchor="middle" fill="#fecdd3" font-weight="700">partial_refunded</text>
+<text x="585" y="424" text-anchor="middle" fill="#fda4af" font-size="10">部分退款 · 终态</text>
+<!-- 建单入口 -->
+<text x="24" y="52" fill="#64748b" font-size="9">M04 建单</text>
+<path d="M24,56 H40" stroke="#64748b" marker-end="url(#o1d)"/>
+<text x="856" y="52" fill="#64748b" font-size="9">Webhook</text>
+<path d="M844,56 H840" stroke="#64748b"/>
+<!-- pending → paid -->
+<path d="M120,72 C120,110 200,130 340,168" stroke="#38bdf8" fill="none" marker-end="url(#o1a)"/>
+<text x="175" y="108" fill="#7dd3fc" font-size="9">支付回调 F1</text>
+<!-- pending → closed -->
+<path d="M110,72 V240 H110" stroke="#64748b" fill="none" marker-end="url(#o1a)"/>
+<text x="24" y="165" fill="#94a3b8" font-size="9" transform="rotate(-90 24 165)">超时/关单/取消</text>
+<!-- claim → paid -->
+<path d="M760,72 C760,110 600,130 540,168" stroke="#fb923c" fill="none" marker-end="url(#o1a)"/>
+<text x="665" y="108" fill="#fdba74" font-size="9">M14 领权绑定</text>
+<!-- claim → refunded (direct external) -->
+<path d="M720,72 C680,200 520,360 450,388" stroke="#fb7185" fill="none" stroke-dasharray="5,4" marker-end="url(#o1a)"/>
+<text x="600" y="250" fill="#fda4af" font-size="9">抖店退款 F2（直写）</text>
+<!-- paid → refunding -->
+<path d="M440,200 V268" stroke="#fbbf24" fill="none" marker-end="url(#o1a)"/>
+<text x="452" y="240" fill="#fde68a" font-size="9">买家 M12 / 商家 A09</text>
+<!-- paid → refunded direct -->
+<path d="M380,200 C320,300 340,388 375,388" stroke="#f87171" fill="none" stroke-dasharray="5,4" marker-end="url(#o1a)"/>
+<text x="290" y="310" fill="#fca5a5" font-size="9">公域退款直写</text>
+<!-- refunding → refunded -->
+<path d="M400,312 C380,360 380,388 375,388" stroke="#f87171" fill="none" marker-end="url(#o1a)"/>
+<text x="330" y="355" fill="#fca5a5" font-size="9">回调成功·全额</text>
+<!-- refunding → partial -->
+<path d="M480,312 C540,360 560,388 585,388" stroke="#fb7185" fill="none" marker-end="url(#o1a)"/>
+<text x="545" y="355" fill="#fda4af" font-size="9">回调成功·部分</text>
+<!-- refunding → paid fail -->
+<path d="M520,290 C600,250 560,174 540,174" stroke="#86efac" fill="none" stroke-dasharray="4,3" marker-end="url(#o1a)"/>
+<text x="600" y="230" fill="#86efac" font-size="9">回调失败→可重试</text>
+<!-- legend -->
+<rect x="700" y="148" width="200" height="108" rx="8" fill="#1e293b" stroke="#334155"/>
+<text x="800" y="168" text-anchor="middle" fill="#94a3b8" font-weight="700" font-size="10">图例</text>
+<line x1="715" y1="182" x2="735" y2="182" stroke="#94a3b8"/><text x="742" y="186" fill="#cbd5e1" font-size="9">实线 = 常规流转</text>
+<line x1="715" y1="198" x2="735" y2="198" stroke="#94a3b8" stroke-dasharray="5,4"/><text x="742" y="202" fill="#cbd5e1" font-size="9">虚线 = 公域直写/回退</text>
+<text x="715" y="222" fill="#86efac" font-size="9">● paid 时权益 active</text>
+<text x="715" y="238" fill="#fca5a5" font-size="9">● refunded 时权益 revoked</text>
+<text x="715" y="254" fill="#94a3b8" font-size="9">● Phase 1 私域无 partial</text>
+</svg>
+</div>
+<table>
+<tr><th>当前态</th><th>事件 / 触发</th><th>下一态</th><th>落点 / 备注</th></tr>
+<tr><td><code>—</code></td><td>M04 建单（<code>wx_mp</code> / <code>dy_knowledge</code>）</td><td><code>pending_payment</code></td><td><a href="#f1">F1</a> 步骤 1</td></tr>
+<tr><td><code>—</code></td><td>抖店 <code>order.pay_success</code> Webhook</td><td><code>claim_pending</code></td><td><a href="#f3">F3</a>；已付+开权益+发短信</td></tr>
+<tr><td><code>pending_payment</code></td><td>微信支付回调成功</td><td><code>paid</code></td><td><a href="#f1">F1</a>；写 <code>paid_at</code></td></tr>
+<tr><td><code>pending_payment</code></td><td>超时（A19 <code>close_order_minutes</code>）</td><td><code>closed</code></td><td><code>close_reason_code=payment_timeout</code></td></tr>
+<tr><td><code>pending_payment</code></td><td>商家关单 A09-A / 买家取消 M12-B</td><td><code>closed</code></td><td>人工原因码；不产生权益</td></tr>
+<tr><td><code>claim_pending</code></td><td>M14 领权绑定成功</td><td><code>paid</code></td><td>写 <code>orders.buyer_id</code>；权益已 active</td></tr>
+<tr><td><code>claim_pending</code></td><td>抖店 <code>order.refund</code> Webhook</td><td><code>refunded</code> / <code>partial_refunded</code></td><td><a href="#f2">F2</a> 直写，不经 <code>refunding</code></td></tr>
+<tr><td><code>paid</code></td><td>买家 M12-A / 商家 A09-B 发起退款</td><td><code>refunding</code></td><td>调微信退款 API；权益仍 active</td></tr>
+<tr><td><code>paid</code></td><td>公域退款 Webhook（课程库/抖店）</td><td><code>refunded</code> / <code>partial_refunded</code></td><td><a href="#f2">F2</a>；可跳过 <code>refunding</code></td></tr>
+<tr><td><code>refunding</code></td><td>退款回调成功</td><td><code>refunded</code> / <code>partial_refunded</code></td><td>私域 Phase 1 仅全额 → <code>refunded</code></td></tr>
+<tr><td><code>refunding</code></td><td>退款回调失败</td><td><code>paid</code></td><td>可重试发起退款</td></tr>
+</table>
+<p class="sub"><b>终态</b>：<code>closed</code> · <code>refunded</code> · <code>partial_refunded</code> 不可再流转。<b>部分退款</b>：Phase 1 私域仅全额；公域 <code>partial_refunded</code> 单 item 订单仍整单关权（§4.1.2）。<b>已开票</b>：退款成功前若 <code>invoice_requests.status=issued</code> → 写 <code>needs_red_flush=true</code>。</p>
+</div>
+
+<div class="block" id="f0">
+<h2>F0 商家入驻（双通道 → 审核 → 开权）</h2>
+<p class="sub">前置：须已有智营 <code>tenant</code> + 登录账号（不在入驻单里建账号密码）。主体类型决定栏位与材料；通过后写 <code>shop_merchant_accounts</code>，再开店 A17。</p>
+<div class="canvas">
+<svg viewBox="0 0 960 520" xmlns="http://www.w3.org/2000/svg" font-size="11" font-family="sans-serif">
+<defs>
+  <marker id="f0a" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker>
+</defs>
+<!-- 起点 -->
+<rect x="380" y="12" width="200" height="36" rx="8" fill="#38bdf8"/>
+<text x="480" y="34" text-anchor="middle" fill="#0f172a" font-weight="700">已有智营租户 + 账号</text>
+
+<!-- 双通道 -->
+<path d="M480,48 V70" stroke="#94a3b8" marker-end="url(#f0a)"/>
+<text x="480" y="88" text-anchor="middle" fill="#94a3b8" font-size="10">选择入驻通道</text>
+
+<rect x="60" y="100" width="280" height="88" rx="10" fill="#1e293b" stroke="#818cf8"/>
+<text x="200" y="124" text-anchor="middle" fill="#c4b5fd" font-weight="700">通道① 运营代建 · P02-A</text>
+<text x="200" y="146" text-anchor="middle" fill="#e2e8f0">选 tenant · 主体类型 · 主体/商家名</text>
+<text x="200" y="164" text-anchor="middle" fill="#e2e8f0">联系人手机 · 可选代传材料</text>
+<text x="200" y="180" text-anchor="middle" fill="#94a3b8">发起方式 = 运营代发</text>
+
+<rect x="620" y="100" width="280" height="88" rx="10" fill="#1e293b" stroke="#38bdf8"/>
+<text x="760" y="124" text-anchor="middle" fill="#7dd3fc" font-weight="700">通道② 商家自申</text>
+<text x="760" y="146" text-anchor="middle" fill="#e2e8f0">登录商家端 · 选主体类型</text>
+<text x="760" y="164" text-anchor="middle" fill="#e2e8f0">填栏位 + 上传对应资质</text>
+<text x="760" y="180" text-anchor="middle" fill="#94a3b8">发起方式 = 商家自申</text>
+
+<path d="M200,188 V210 H480" stroke="#94a3b8"/>
+<path d="M760,188 V210 H480" stroke="#94a3b8"/>
+<path d="M480,210 V228" stroke="#94a3b8" marker-end="url(#f0a)"/>
+
+<!-- 主体类型 + OCR -->
+<rect x="300" y="232" width="360" height="56" rx="8" fill="#312e81" stroke="#818cf8"/>
+<text x="480" y="252" text-anchor="middle" fill="#c4b5fd" font-weight="700">按主体类型切栏位 / 材料</text>
+<text x="480" y="270" text-anchor="middle" fill="#e2e8f0">个人：身份证 OCR　｜　个体：执照+法人证 OCR</text>
+<text x="480" y="284" text-anchor="middle" fill="#e2e8f0">企业：执照+法人证 OCR + 对公 (+ICP)</text>
+
+<path d="M480,288 V306" stroke="#94a3b8" marker-end="url(#f0a)"/>
+
+<!-- 申请单 -->
+<rect x="280" y="310" width="400" height="40" rx="8" fill="#fbbf24"/>
+<text x="480" y="328" text-anchor="middle" fill="#0f172a" font-weight="700">提交入驻申请单</text>
+<text x="480" y="342" text-anchor="middle" fill="#78350f" font-size="10">shop_onboarding_applications · status=pending</text>
+
+<path d="M480,350 V368" stroke="#94a3b8" marker-end="url(#f0a)"/>
+
+<!-- P03 -->
+<rect x="340" y="372" width="280" height="36" rx="8" fill="#818cf8"/>
+<text x="480" y="394" text-anchor="middle" fill="#fff" font-weight="700">P03 运营审核</text>
+
+<path d="M340,390 H200" stroke="#94a3b8" marker-end="url(#f0a)"/>
+<path d="M620,390 H760" stroke="#94a3b8" marker-end="url(#f0a)"/>
+
+<!-- 驳回 / 通过 -->
+<rect x="80" y="420" width="240" height="72" rx="8" fill="#7f1d1d" stroke="#f87171"/>
+<text x="200" y="448" text-anchor="middle" fill="#fecaca" font-weight="700">驳回</text>
+<text x="200" y="468" text-anchor="middle" fill="#fee2e2">通知联系人补材料</text>
+<text x="200" y="484" text-anchor="middle" fill="#94a3b8">可改后重提 → 再进 P03</text>
+
+<rect x="640" y="420" width="260" height="72" rx="8" fill="#14532d" stroke="#86efac"/>
+<text x="770" y="444" text-anchor="middle" fill="#bbf7d0" font-weight="700">通过并开通</text>
+<text x="770" y="462" text-anchor="middle" fill="#e2e8f0">建 merchant · 首开订阅</text>
+<text x="770" y="480" text-anchor="middle" fill="#94a3b8">→ A17 开店 · A15 支付进件</text>
+
+<path d="M200,420 V400" stroke="#94a3b8" opacity="0"/>
+</svg>
+</div>
+<table>
+<tr><th>步骤</th><th>谁</th><th>写 / 结果</th></tr>
+<tr><td>前置</td><td>智营主站</td><td>已有 tenant；企业 admin 账号可登录（不新建密码）</td></tr>
+<tr><td>上传 OCR</td><td>运营/商家</td><td>证件图 → OCR 预填栏位 → 人工可改；写 <code>ocr_results</code></td></tr>
+<tr><td>发起</td><td>运营 P02-A 或 商家自申</td><td><code>shop_onboarding_applications</code>；P02 状态 → 审核中</td></tr>
+<tr><td>补材料</td><td>联系人 / 商家</td><td>按主体类型上传；运营可代传</td></tr>
+<tr><td>审核通过</td><td>运营 P03</td><td>INSERT <code>shop_merchant_accounts</code>（legal_name / entity_type）；可选首开订阅</td></tr>
+<tr><td>审核驳回</td><td>运营 P03</td><td>写驳回原因；短信/站内通知联系人；可重提</td></tr>
+<tr><td>入驻后</td><td>商家</td><td>A17 开店；A15 支付进件（材料随主体类型）</td></tr>
+</table>
+<p class="sub"><b>名称</b>：主体名称=<code>legal_name</code>（执照名）；商家展示名可另填；店铺名在 A17。<b>代表人</b>：法人在材料里；经营联系人收通知（商家自申默认=<a href="01-管理端UI.html#a20">注册姓名/手机</a>）；登录=tenant 企业 admin。注册字段映射见 <a href="PRD-内容获客商城-phase1.md#210-智营主站注册--商城入驻字段映射">PRD §2.1.0</a>。</p>
+<h3 style="font-size:14px;margin:12px 0 8px">入驻相关 API（PRD §8.2 / §8.5）</h3>
+<table>
+<tr><th>通道</th><th>方法</th><th>路径</th><th>状态</th></tr>
+<tr><td>运营 P02-A</td><td>POST</td><td><code>/admin/shop/onboarding/applications</code></td><td>✅ M0</td></tr>
+<tr><td>商家 A20</td><td>POST</td><td><code>/shop/onboarding/applications</code></td><td>📋 M3</td></tr>
+<tr><td>商家 A20</td><td>GET</td><td><code>/shop/onboarding/status</code></td><td>📋 M3</td></tr>
+<tr><td>审核 P03</td><td>POST</td><td><code>/admin/shop/onboarding/applications/{id}/approve</code></td><td>✅ M0</td></tr>
+<tr><td>OCR</td><td>POST</td><td><code>/shop/onboarding/ocr</code> · <code>/admin/shop/onboarding/ocr</code></td><td>✅ M0 stub</td></tr>
+</table>
+</div>
+
+<div class="block" id="f1">
+<h2>F1 私域下单 → 支付 → 开权益（M3）</h2>
+<div class="canvas">
+<svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="sans-serif">
+<defs><marker id="a" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+<rect x="20" y="20" width="100" height="36" rx="8" fill="#38bdf8"/><text x="70" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">买家</text>
+<rect x="160" y="20" width="100" height="36" rx="8" fill="#818cf8"/><text x="210" y="42" text-anchor="middle" fill="#fff" font-weight="700">Shop API</text>
+<rect x="300" y="20" width="100" height="36" rx="8" fill="#fbbf24"/><text x="350" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">微信支付</text>
+<rect x="440" y="20" width="120" height="36" rx="8" fill="#34d399"/><text x="500" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">DB 写库</text>
+<path d="M120,38 H160" stroke="#94a3b8" marker-end="url(#a)"/>
+<path d="M260,38 H300" stroke="#94a3b8" marker-end="url(#a)"/>
+<path d="M400,38 H440" stroke="#94a3b8" marker-end="url(#a)"/>
+<rect x="40" y="90" width="800" height="180" rx="10" fill="#1e293b" stroke="#334155"/>
+<text x="60" y="120" fill="#7dd3fc" font-weight="700">数据写入顺序</text>
+<text x="60" y="148" fill="#e2e8f0">1. INSERT shop_orders + shop_order_items（pending_payment）</text>
+<text x="60" y="172" fill="#e2e8f0">2. 调起支付 → 回调验签 → shop_payments.notify_id 幂等 UK</text>
+<text x="60" y="196" fill="#e2e8f0">3. 同事务：orders.paid → entitlements.active（UK order_item_id）</text>
+<text x="60" y="220" fill="#86efac">4. 课:+enrollment | 资料:可下载 | 服务:可预约 | sales_count+1</text>
+<text x="60" y="244" fill="#94a3b8">重复回调 10 次也只开 1 次权益</text>
+</svg>
+</div>
+</div>
+
+<div class="block" id="f2">
+<h2>F2 退款 → 关闭权益</h2>
+<div class="canvas">
+<svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="sans-serif">
+<defs><marker id="b" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+<rect x="20" y="40" width="120" height="40" rx="8" fill="#38bdf8"/><text x="80" y="64" text-anchor="middle" fill="#0f172a" font-weight="700">申请/审核</text>
+<rect x="160" y="20" width="100" height="32" rx="8" fill="#fbbf24"/><text x="210" y="40" text-anchor="middle" fill="#0f172a" font-size="11" font-weight="700">微信退款</text>
+<rect x="160" y="58" width="100" height="32" rx="8" fill="#fbbf24"/><text x="210" y="78" text-anchor="middle" fill="#0f172a" font-size="11" font-weight="700">抖店/课程库</text>
+<rect x="340" y="40" width="120" height="40" rx="8" fill="#818cf8"/><text x="400" y="64" text-anchor="middle" fill="#fff" font-weight="700">退款回调</text>
+<rect x="500" y="30" width="340" height="60" rx="8" fill="#7f1d1d" stroke="#f87171"/>
+<text x="670" y="55" text-anchor="middle" fill="#fecaca" font-weight="700">关权益 revoked</text>
+<text x="670" y="75" text-anchor="middle" fill="#fee2e2">播放/下载/核销立刻 403</text>
+<path d="M140,60 H180" stroke="#94a3b8" marker-end="url(#b)"/>
+<path d="M300,60 H340" stroke="#94a3b8" marker-end="url(#b)"/>
+<path d="M460,60 H500" stroke="#94a3b8" marker-end="url(#b)"/>
+<text x="440" y="125" text-anchor="middle" fill="#94a3b8">触发源：微信 refund-notify · 抖店 order.refund · 课程库 trade.refund · 商家 A09/A10 审核</text>
+<text x="440" y="145" text-anchor="middle" fill="#94a3b8">写：refunds.succeeded + entitlement_revoked_at + entitlements.revoked + enrollments.revoked</text>
+<text x="440" y="168" text-anchor="middle" fill="#fbbf24">若已开票 → invoice.needs_red_flush=true（Phase 1 人工红冲线下）</text>
+</svg>
+</div>
+<p class="sub"><b>部分退款</b>（§4.1.2）：Phase 1 私域仅全额；公域 <code>partial_refunded</code> 单 item 订单仍整单 <code>revoked</code>。多 item 部分退 Phase 2。<b>已开票冲红</b>见 <a href="#f2-invoice-flow">F2′ 退款×发票</a> · 开票状态机 <a href="#f5-flow">F5</a>。</p>
+
+<h3 id="f2-invoice-flow" style="font-size:15px;margin:16px 0 8px">F2′ 退款 × 已开票（冲红标记 · 不拦退）</h3>
+<p class="sub">买家 <a href="02-买家端UI.html#m12a">M12-A</a> · 商家 <a href="01-管理端UI.html#a09b">A09-B</a> · 公域 Webhook §8.11 R1–R6。开票金额=买家实付，<strong>不含</strong>平台抽成（抽成仅在 <a href="#f10">F10/P05</a>）。</p>
+<div class="canvas">
+<svg viewBox="0 0 920 440" xmlns="http://www.w3.org/2000/svg" font-size="11" font-family="sans-serif">
+<defs>
+  <marker id="f2i-a" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker>
+</defs>
+<text x="460" y="16" text-anchor="middle" fill="#94a3b8" font-size="10">退款允许；已开票时 UI 提示红冲 + F2 写 needs_red_flush（不改 invoice.status）</text>
+<!-- 入口 -->
+<rect x="60" y="28" width="140" height="40" rx="8" fill="#38bdf8"/>
+<text x="130" y="52" text-anchor="middle" fill="#0f172a" font-weight="700">M12-A 买家申请</text>
+<rect x="220" y="28" width="140" height="40" rx="8" fill="#818cf8"/>
+<text x="300" y="52" text-anchor="middle" fill="#fff" font-weight="700">A09-B 商家发起</text>
+<rect x="400" y="28" width="160" height="40" rx="8" fill="#fbbf24"/>
+<text x="480" y="52" text-anchor="middle" fill="#0f172a" font-weight="700">公域 refund Webhook</text>
+<path d="M300,68 V88 H460" stroke="#94a3b8"/>
+<path d="M130,68 V88 H460" stroke="#94a3b8"/>
+<path d="M480,68 V88" stroke="#94a3b8" marker-end="url(#f2i-a)"/>
+<rect x="320" y="92" width="280" height="44" rx="8" fill="#1e293b" stroke="#334155"/>
+<text x="460" y="112" text-anchor="middle" fill="#e2e8f0" font-weight="700">打开退款弹窗 / 调退款 API</text>
+<text x="460" y="126" text-anchor="middle" fill="#94a3b8" font-size="9">订单 paid · 策略允许 · 无在途退款</text>
+<!-- 分支：是否已开票 -->
+<path d="M460,152 V176" stroke="#94a3b8" marker-end="url(#f2i-a)"/>
+<polygon points="460,180 520,220 460,260 400,220" fill="#1e293b" stroke="#fbbf24"/>
+<text x="460" y="218" text-anchor="middle" fill="#fde68a" font-size="10">本单开票</text>
+<text x="460" y="232" text-anchor="middle" fill="#fde68a" font-size="10">issued?</text>
+<!-- 未开票 -->
+<path d="M400,220 H200" stroke="#94a3b8" marker-end="url(#f2i-a)"/>
+<text x="290" y="212" fill="#86efac" font-size="9">否</text>
+<rect x="40" y="200" width="160" height="40" rx="8" fill="#14532d" stroke="#4ade80"/>
+<text x="120" y="224" text-anchor="middle" fill="#bbf7d0" font-weight="700">常规退款 UI</text>
+<!-- 已开票 UI 提示 -->
+<path d="M520,220 H680" stroke="#94a3b8" marker-end="url(#f2i-a)"/>
+<text x="590" y="212" fill="#fda4af" font-size="9">是</text>
+<rect x="680" y="188" width="200" height="72" rx="8" fill="#78350f" stroke="#fbbf24"/>
+<text x="780" y="208" text-anchor="middle" fill="#fde68a" font-weight="700">红冲提示（不拦退）</text>
+<text x="780" y="224" text-anchor="middle" fill="#fef3c7" font-size="9">M12-A / A09-B 警告条</text>
+<text x="780" y="240" text-anchor="middle" fill="#fcd34d" font-size="9">展示发票号 · 线下红冲说明</text>
+<text x="780" y="256" text-anchor="middle" fill="#94a3b8" font-size="9">仍允许提交退款</text>
+<!-- 汇聚退款通道 -->
+<path d="M120,240 V280 H460" stroke="#94a3b8"/>
+<path d="M780,260 V300 H460" stroke="#94a3b8"/>
+<path d="M460,260 V284" stroke="#94a3b8" marker-end="url(#f2i-a)"/>
+<rect x="300" y="288" width="320" height="40" rx="8" fill="#fbbf24"/>
+<text x="460" y="312" text-anchor="middle" fill="#0f172a" font-weight="700">微信/抖店退款 · 待回调 succeeded</text>
+<path d="M460,328 V352" stroke="#94a3b8" marker-end="url(#f2i-a)"/>
+<rect x="260" y="356" width="400" height="56" rx="10" fill="#7f1d1d" stroke="#f87171"/>
+<text x="460" y="376" text-anchor="middle" fill="#fecaca" font-weight="700">F2 退款成功</text>
+<text x="460" y="392" text-anchor="middle" fill="#fee2e2" font-size="10">orders.refunded · entitlements.revoked · enrollments.revoked</text>
+<text x="460" y="408" text-anchor="middle" fill="#fbbf24" font-size="9">若 issued → invoice_requests.needs_red_flush=true</text>
+<!-- 侧注 -->
+<rect x="20" y="300" width="200" height="88" rx="8" fill="#1e293b" stroke="#fb7185"/>
+<text x="120" y="320" text-anchor="middle" fill="#fda4af" font-weight="700" font-size="10">不改开票 status</text>
+<text x="120" y="336" text-anchor="middle" fill="#fecdd3" font-size="9">issued 保持 · 无 red_flushed</text>
+<text x="120" y="352" text-anchor="middle" fill="#94a3b8" font-size="9">Phase 1 人工税控红冲</text>
+<text x="120" y="368" text-anchor="middle" fill="#94a3b8" font-size="9">Phase 2 系统闭环</text>
+</svg>
+</div>
+<table>
+<tr><th>步骤</th><th>条件</th><th>UI</th><th>写库</th></tr>
+<tr><td>1. 发起退款</td><td>订单 <code>paid</code> · 策略允许</td><td>M12-A / A09-B；已开票展示红冲提示</td><td>INSERT <code>refunds</code> · <code>orders.refunding</code>（私域）或 Webhook 直写</td></tr>
+<tr><td>2. 红冲提示</td><td>存在本单 <code>invoice_requests.status=issued</code></td><td>弹窗内警告条（发票号只读）；<strong>不增加确认勾选</strong>（Phase 1）</td><td>—</td></tr>
+<tr><td>3. 退款成功 F2</td><td><code>refunds.status=succeeded</code></td><td>买家 M12-C 进度 · 商家 A09 状态退款</td><td>关权益 + 订单 <code>refunded</code></td></tr>
+<tr><td>4. 冲红标记</td><td>步骤 3 且曾 <code>issued</code></td><td>A13 仍显示「已开票」；运营/财务线下红冲</td><td><code>needs_red_flush=true</code>；<code>invoice.status</code> 不变</td></tr>
+<tr><td>5. 线下红冲</td><td>Phase 1</td><td>税控/财务人工；买家 M13b 发票链接可失效</td><td>系统外；Phase 2 补状态与工单</td></tr>
+</table>
+<p class="sub"><b>金额</b>：退款额 = 买家实付全额（§4.1.2）；红冲票面额与开票申请 <code>amount_cents</code> 一致（= 实付，不含平台费）。<b>结算</b>：F10 下一周期 <code>refund_reversal</code> 冲正，与冲红标记并行、不替代税务红冲。</p>
+</div>
+
+<div class="block" id="a14-dy">
+<h2>A14 抖音对接总览（商家配置 → 挂载闸 → 成交）</h2>
+<p class="sub">商家页 <a href="01-管理端UI.html#a14">A14 公域对接</a> · 平台渠道 <a href="06-平台端UI.html#p06">P06</a> · 路径/链路定义 PRD <a href="PRD-内容获客商城-phase1.md#35-抖音公域-mx-验收路径-ab--链路-①②">§3.5 Mx</a>。Phase 1 Mx 默认 <b>路径 A + 链路 ①</b>（抖店付 → 短信领权 → 小程序履约）。</p>
+
+<h3 id="a14-dy-business" style="font-size:15px;margin:12px 0 8px">业务说明（先分清三件事）</h3>
+<table>
+<tr><th>概念</th><th>问什么</th><th>谁配置</th><th>落点</th></tr>
+<tr><td><b>路径 A/B</b></td><td>抖店/小程序主体归谁</td><td>平台 P06 + 商家 A14 绑店</td><td>路径 A 平台官方店（款先进平台再 P05 结商家）· 路径 B 商家自有店（Phase 2）</td></tr>
+<tr><td><b>链路 ①/②</b></td><td>买家在哪付钱、在哪学</td><td>商家 A14 选链路</td><td>① 抖店付+领权 <a href="#f3">F3</a> · ② 挂小程序内付 <a href="#f3b">F3b</a></td></tr>
+<tr><td><b>挂载闸 F7</b></td><td>能不能在抖店卖这件商品</td><td>商家 A14 映射 + 抖店外部审核</td><td>人审通过 + <code>on_sale</code> 才可映射；<code>listing_status=mapped</code> 且外部审核通过才可收单</td></tr>
+</table>
+<p class="sub"><b>与私域区别</b>：私域 F1 买家在小程序 M04 微信支付；公域订单 <code>channel=doudian</code>（链路①）或 <code>dy_knowledge</code>（链路②），须先过 A14+F7。Webhook 验签失败或没过挂载闸 → <strong>拒单</strong>并记 <code>shop_channel_audit_logs</code>。</p>
+
+<h3 id="a14-dy-flow" style="font-size:15px;margin:16px 0 8px">端到端流程图</h3>
+<div class="canvas">
+<svg viewBox="0 0 920 500" xmlns="http://www.w3.org/2000/svg" font-size="11" font-family="sans-serif">
+<defs><marker id="a14m" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+<text x="460" y="16" text-anchor="middle" fill="#94a3b8" font-size="10">上：商家 A14 五步法 · 下：链路① 成交（Mx 首选）</text>
+<!-- 五步法 -->
+<rect x="20" y="28" width="100" height="44" rx="8" fill="#818cf8"/><text x="70" y="48" text-anchor="middle" fill="#fff" font-weight="700">1 选链路</text><text x="70" y="62" text-anchor="middle" fill="#e9d5ff" font-size="9">①抖店付</text>
+<rect x="130" y="28" width="100" height="44" rx="8" fill="#818cf8"/><text x="180" y="48" text-anchor="middle" fill="#fff" font-weight="700">2 选路径</text><text x="180" y="62" text-anchor="middle" fill="#e9d5ff" font-size="9">A 官方</text>
+<rect x="240" y="28" width="100" height="44" rx="8" fill="#38bdf8"/><text x="290" y="48" text-anchor="middle" fill="#0f172a" font-weight="700">3 绑店铺</text><text x="290" y="62" text-anchor="middle" fill="#0c4a6e" font-size="9">P06+A14</text>
+<rect x="350" y="28" width="100" height="44" rx="8" fill="#34d399"/><text x="400" y="48" text-anchor="middle" fill="#0f172a" font-weight="700">4 商品映射</text><text x="400" y="62" text-anchor="middle" fill="#064e3b" font-size="9">A14-A F7</text>
+<rect x="460" y="28" width="100" height="44" rx="8" fill="#fbbf24"/><text x="510" y="48" text-anchor="middle" fill="#0f172a" font-weight="700">5 回调验通</text><text x="510" y="62" text-anchor="middle" fill="#78350f" font-size="9">Webhook 测试</text>
+<path d="M120,50 H130" stroke="#94a3b8" marker-end="url(#a14m)"/>
+<path d="M230,50 H240" stroke="#94a3b8" marker-end="url(#a14m)"/>
+<path d="M340,50 H350" stroke="#94a3b8" marker-end="url(#a14m)"/>
+<path d="M450,50 H460" stroke="#94a3b8" marker-end="url(#a14m)"/>
+<rect x="580" y="24" width="300" height="52" rx="8" fill="#1e293b" stroke="#334155"/>
+<text x="750" y="44" text-anchor="middle" fill="#94a3b8" font-weight="700">前置（每步）</text>
+<text x="750" y="58" text-anchor="middle" fill="#cbd5e1" font-size="9">套餐含抖店 · 商品 P09 人审+on_sale</text>
+<text x="750" y="72" text-anchor="middle" fill="#cbd5e1" font-size="9">映射前过 F7 挂载闸</text>
+<!-- 分隔 -->
+<path d="M40,88 H880" stroke="#334155"/>
+<text x="460" y="104" text-anchor="middle" fill="#64748b" font-size="10">链路 ① · 抖店下单付款后</text>
+<!-- 成交链 -->
+<rect x="30" y="118" width="90" height="40" rx="8" fill="#fbbf24"/><text x="75" y="142" text-anchor="middle" fill="#0f172a" font-weight="700">抖店买家付</text>
+<rect x="140" y="118" width="90" height="40" rx="8" fill="#818cf8"/><text x="185" y="142" text-anchor="middle" fill="#fff" font-weight="700">Webhook</text>
+<rect x="260" y="118" width="110" height="40" rx="8" fill="#34d399"/><text x="295" y="136" text-anchor="middle" fill="#0f172a" font-weight="700">建单+开权益</text><text x="295" y="150" text-anchor="middle" fill="#064e3b" font-size="9">claim_pending</text>
+<rect x="370" y="118" width="80" height="40" rx="8" fill="#fbbf24"/><text x="410" y="142" text-anchor="middle" fill="#0f172a" font-weight="700">短信</text>
+<rect x="520" y="118" width="90" height="40" rx="8" fill="#38bdf8"/><text x="565" y="142" text-anchor="middle" fill="#0f172a" font-weight="700">M14 领权</text>
+<rect x="630" y="118" width="90" height="40" rx="8" fill="#34d399"/><text x="675" y="142" text-anchor="middle" fill="#0f172a" font-weight="700">paid</text>
+<rect x="740" y="118" width="120" height="40" rx="8" fill="#818cf8"/><text x="800" y="142" text-anchor="middle" fill="#fff" font-weight="700">M06–M10 履约</text>
+<path d="M120,138 H140" stroke="#94a3b8" marker-end="url(#a14m)"/>
+<path d="M230,138 H260" stroke="#94a3b8" marker-end="url(#a14m)"/>
+<path d="M350,138 H370" stroke="#94a3b8" marker-end="url(#a14m)"/>
+<path d="M450,138 H520" stroke="#94a3b8" marker-end="url(#a14m)"/>
+<path d="M610,138 H630" stroke="#94a3b8" marker-end="url(#a14m)"/>
+<path d="M720,138 H740" stroke="#94a3b8" marker-end="url(#a14m)"/>
+<text x="460" y="178" text-anchor="middle" fill="#86efac" font-size="9">幂等 UK(channel, external_order_no) · 权益已 active · A09 见「待领权」</text>
+<text x="460" y="194" text-anchor="middle" fill="#f87171" font-size="9">退款：抖店 order.refund → §8.11 R1–R6 → F2 关权（Mx 第 7 步）</text>
+<!-- 挂载状态 -->
+<text x="460" y="218" text-anchor="middle" fill="#64748b" font-size="10">商品映射状态（shop_channel_listings）</text>
+<rect x="80" y="228" width="120" height="36" rx="8" fill="#78350f" stroke="#fbbf24"/>
+<text x="140" y="250" text-anchor="middle" fill="#fde68a" font-weight="700">pending 未挂载</text>
+<rect x="220" y="228" width="120" height="36" rx="8" fill="#14532d" stroke="#4ade80"/>
+<text x="280" y="250" text-anchor="middle" fill="#bbf7d0" font-weight="700">mapped 已挂载</text>
+<rect x="400" y="228" width="120" height="36" rx="8" fill="#78350f" stroke="#fb923c"/>
+<text x="460" y="250" text-anchor="middle" fill="#fed7aa" font-weight="700">paused 暂停同步</text>
+<rect x="540" y="228" width="120" height="36" rx="8" fill="#450a0a" stroke="#f87171"/>
+<text x="600" y="250" text-anchor="middle" fill="#fecaca" font-weight="700">blocked 已阻断</text>
+<path d="M200,246 H220" stroke="#94a3b8" marker-end="url(#a14m)"/>
+<text x="210" y="238" fill="#86efac" font-size="8">A14-A+外部审核</text>
+<path d="M340,246 H400" stroke="#94a3b8" marker-end="url(#a14m)"/>
+<text x="368" y="238" fill="#fdba74" font-size="8">商家暂停</text>
+<path d="M520,246 H540" stroke="#94a3b8" marker-end="url(#a14m)"/>
+<text x="528" y="238" fill="#fca5a5" font-size="8">外部拒/违规</text>
+<path d="M600,264 Q460,290 140,264" stroke="#38bdf8" fill="none" marker-end="url(#a14m)"/>
+<text x="370" y="288" fill="#7dd3fc" font-size="8" text-anchor="middle">A14-B 重新提交 → pending</text>
+<!-- 商家操作 -->
+<rect x="40" y="280" width="840" height="72" rx="8" fill="#1e293b" stroke="#334155"/>
+<text x="460" y="300" text-anchor="middle" fill="#94a3b8" font-weight="700">A14 行内操作（映射列表）</text>
+<text x="460" y="318" text-anchor="middle" fill="#cbd5e1" font-size="9">未挂载 → 新建映射(A14-A) · 已挂载 → 暂停/日志 · 暂停 → 恢复 · 已阻断 → A14-B 原因 · <tspan fill="#7dd3fc">修改并重新提交</tspan></text>
+<text x="460" y="336" text-anchor="middle" fill="#7dd3fc" font-size="9">不可映射：商品未人审通过 / 非 on_sale / mount_blocked_reason 非空</text>
+<text x="460" y="352" text-anchor="middle" fill="#94a3b8" font-size="9">Webhook URL 见 A14 页底 · 发送测试 · 验通后抖店付单才会入库</text>
+<!-- 链路② 侧注 -->
+<rect x="40" y="408" width="400" height="56" rx="8" fill="#312e81" stroke="#818cf8"/>
+<text x="260" y="428" text-anchor="middle" fill="#c4b5fd" font-weight="700">链路 ②（可选 · Phase 1 二选一验收）</text>
+<text x="260" y="444" text-anchor="middle" fill="#e9d5ff" font-size="9">短视频/直播挂小程序 → M04 微信付 → F1 开权</text>
+<text x="260" y="460" text-anchor="middle" fill="#94a3b8" font-size="9">通常无领权短信 · 见 F3b</text>
+<rect x="480" y="408" width="400" height="56" rx="8" fill="#1e293b" stroke="#38bdf8"/>
+<text x="700" y="428" text-anchor="middle" fill="#7dd3fc" font-weight="700">与 P07 稽查区别</text>
+<text x="700" y="444" text-anchor="middle" fill="#cbd5e1" font-size="9">F12 违规工单 = 事后处置 · 不处理支付 Webhook</text>
+<text x="700" y="460" text-anchor="middle" fill="#94a3b8" font-size="9">强制下架：新单拒收 · 已购权益保留</text>
+</svg>
+</div>
+
+<h3 style="font-size:14px;margin:12px 0 8px">商家对接五步法（设置 A23 + 映射 A14）</h3>
+<table>
+<tr><th>步</th><th>商家做什么</th><th>页面</th><th>系统校验</th><th>成功标志</th></tr>
+<tr><td>1 选链路</td><td>① 抖店付+领权 或 ② 小程序内付</td><td><b>A23 设置</b></td><td><code>shop.channel.write</code> · 套餐公域能力</td><td><code>shop_merchant_channel_prefs.link_mode</code></td></tr>
+<tr><td>2 选路径</td><td>A 平台官方店 / B 商家店（Phase 2）</td><td><b>A23 设置</b></td><td>与 P06 一致</td><td><code>path_type</code></td></tr>
+<tr><td>3 绑定店铺</td><td>绑外部抖店 / 平台店</td><td><b>A23 设置</b></td><td><code>shop.channel.write</code></td><td><code>external_shop_id</code> 可用</td></tr>
+<tr><td>4 商品映射</td><td>A14-A：选品 → 同步抖店 SKU</td><td><b>A14 映射页</b></td><td><code>shop.channel.map</code> · F7</td><td><code>listing_status=pending</code></td></tr>
+<tr><td>5 回调验通</td><td>Webhook URL · 发送测试</td><td><b>A23 设置</b></td><td><code>shop.channel.write</code></td><td>可收真实订单</td></tr>
+</table>
+
+<h3 style="font-size:14px;margin:12px 0 8px">映射 → 外部审核 → 可售（F7 详表）</h3>
+<table>
+<tr><th>步骤</th><th>触发</th><th>写库 / 状态</th></tr>
+<tr><td>发起映射</td><td>A14-A 提交</td><td><code>listing_status=pending</code>；调抖店/课程库提审 API</td></tr>
+<tr><td>外部审核通过</td><td>平台回调或轮询</td><td><code>external_audit_status=approved</code> → <code>listing_status=mapped</code></td></tr>
+<tr><td>外部审核拒绝</td><td>抖店驳回</td><td><code>blocked</code> + <code>mount_blocked_reason</code>；A14-B 查看；可入 F12 工单</td></tr>
+<tr><td>拒审后重提</td><td>A14-B「修改并重新提交」</td><td><code>POST …/resubmit</code> → <code>pending</code> + <code>external_audit_status=submitted</code>（沿用 <code>external_product_id</code>）</td></tr>
+<tr><td>商家暂停</td><td>A14 行内「暂停」</td><td><code>paused_sync</code>；抖店侧不同步新单</td></tr>
+<tr><td>恢复</td><td>「恢复同步」</td><td><code>mapped</code></td></tr>
+<tr><td>未过闸下单</td><td>Webhook 支付成功但 listing 不可用</td><td><strong>拒单</strong> · <code>shop_channel_audit_logs</code> · 不产生权益</td></tr>
+</table>
+<p class="sub">成交数据流：<a href="#f3">F3 链路①</a> · <a href="#f3b">F3b 链路②</a> · 退款 <a href="#f2">F2</a> · Mx 验收表 PRD §3.5.4。</p>
+</div>
+
+<div class="block" id="f3">
+<h2>F3 抖音链路①：抖店 → 短信领权 → 小程序（Mx）</h2>
+<div class="canvas">
+<svg viewBox="0 0 900 220" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="sans-serif">
+<defs><marker id="c" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+<rect x="10" y="20" width="80" height="36" rx="6" fill="#fbbf24"/><text x="50" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">抖店</text>
+<rect x="120" y="20" width="90" height="36" rx="6" fill="#818cf8"/><text x="165" y="42" text-anchor="middle" fill="#fff" font-weight="700">Webhook</text>
+<rect x="240" y="20" width="110" height="36" rx="6" fill="#34d399"/><text x="295" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">建单+开权</text>
+<rect x="380" y="20" width="80" height="36" rx="6" fill="#fbbf24"/><text x="420" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">短信</text>
+<rect x="490" y="20" width="100" height="36" rx="6" fill="#38bdf8"/><text x="540" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">领权页</text>
+<rect x="620" y="20" width="100" height="36" rx="6" fill="#34d399"/><text x="670" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">绑定买家</text>
+<rect x="750" y="20" width="120" height="36" rx="6" fill="#818cf8"/><text x="810" y="42" text-anchor="middle" fill="#fff" font-weight="700">学习/核销</text>
+<path d="M90,38 H120" stroke="#94a3b8" marker-end="url(#c)"/>
+<path d="M210,38 H240" stroke="#94a3b8" marker-end="url(#c)"/>
+<path d="M350,38 H380" stroke="#94a3b8" marker-end="url(#c)"/>
+<path d="M460,38 H490" stroke="#94a3b8" marker-end="url(#c)"/>
+<path d="M590,38 H620" stroke="#94a3b8" marker-end="url(#c)"/>
+<path d="M720,38 H750" stroke="#94a3b8" marker-end="url(#c)"/>
+<text x="450" y="100" text-anchor="middle" fill="#cbd5e1">前置：商品 on_sale + listing mapped + external_audit approved → 读 channel_listings → 写 orders + payments + entitlements + claim_tokens</text>
+<text x="450" y="125" text-anchor="middle" fill="#86efac">幂等：external_order_no；领取后写 claimed_buyer_id / orders.buyer_id / enrollment</text>
+<text x="450" y="145" text-anchor="middle" fill="#f87171">退款：抖店 order.refund → §8.11 R1–R6 → F2 关权（Mx 第 7 步）</text>
+<text x="450" y="168" text-anchor="middle" fill="#94a3b8">链路②：抖音小程序内付+学，可跳过短信</text>
+</svg>
+</div>
+</div>
+
+<div class="block" id="f3b">
+<h2>F3b 抖音链路②：挂小程序 → 小程序内付 + 学（Mx 可选）</h2>
+<div class="canvas">
+<svg viewBox="0 0 900 200" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="sans-serif">
+<defs><marker id="c2" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+<rect x="10" y="20" width="100" height="36" rx="6" fill="#fbbf24"/><text x="60" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">短视频/直播</text>
+<rect x="120" y="20" width="110" height="36" rx="6" fill="#818cf8"/><text x="175" y="42" text-anchor="middle" fill="#fff" font-weight="700">挂小程序</text>
+<rect x="240" y="20" width="100" height="36" rx="6" fill="#38bdf8"/><text x="290" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">M03 详情</text>
+<rect x="360" y="20" width="90" height="36" rx="6" fill="#34d399"/><text x="405" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">M04 下单</text>
+<rect x="470" y="20" width="90" height="36" rx="6" fill="#34d399"/><text x="515" y="42" text-anchor="middle" fill="#0f172a" font-weight="700">微信付</text>
+<rect x="590" y="20" width="100" height="36" rx="6" fill="#818cf8"/><text x="640" y="42" text-anchor="middle" fill="#fff" font-weight="700">开权 F1</text>
+<rect x="730" y="20" width="120" height="36" rx="6" fill="#818cf8"/><text x="790" y="42" text-anchor="middle" fill="#fff" font-weight="700">M06–M10 履约</text>
+<path d="M110,38 H120" stroke="#94a3b8" marker-end="url(#c2)"/>
+<path d="M230,38 H240" stroke="#94a3b8" marker-end="url(#c2)"/>
+<path d="M340,38 H360" stroke="#94a3b8" marker-end="url(#c2)"/>
+<path d="M450,38 H470" stroke="#94a3b8" marker-end="url(#c2)"/>
+<path d="M560,38 H590" stroke="#94a3b8" marker-end="url(#c2)"/>
+<path d="M680,38 H730" stroke="#94a3b8" marker-end="url(#c2)"/>
+<text x="450" y="95" text-anchor="middle" fill="#cbd5e1">前置：课程库/小程序提审 approved + F7 挂载闸；orders.channel=dy_knowledge 或 wx_mp</text>
+<text x="450" y="120" text-anchor="middle" fill="#86efac">通常无领权短信；买家 wx-login 后 buyer_id 直接绑定</text>
+<text x="450" y="155" text-anchor="middle" fill="#94a3b8">与链路①二选一先通 Mx；详见 PRD §3.5</text>
+</svg>
+</div>
+<p class="sub">API：<code>/mp/shop/*</code> · Webhook：<code>/integrations/dy-knowledge/webhook</code>（§8.11–8.12）。</p>
+</div>
+
+<div class="block" id="f4">
+<h2>F4 预约 → 核销扣次</h2>
+<table>
+<tr><th>步骤</th><th>读</th><th>写</th></tr>
+<tr><td>选时段确认</td><td>entitlements.active、shop_service_slots</td><td>条件更新 booked_count；INSERT bookings(checkin_code)</td></tr>
+<tr><td>买家取消</td><td>booking 归属买家、booked 未核销</td><td>status→cancelled(cancel_reason=buyer_cancel)；释放 booked_count；不扣次</td></tr>
+<tr><td>过期未核销</td><td>定时任务扫描 booked</td><td>booking：slot.end_at+15min 后；times_card：created_at+48h 后 → cancelled(expired_unredeemed)；释放容量</td></tr>
+<tr><td>核销台确认</td><td>booking、entitlement</td><td>redemptions；times_used+1；booking completed</td></tr>
+</table>
+</div>
+
+<div class="block" id="f5">
+<h2>F5 开票工单（<code>shop_invoice_requests.status</code>）</h2>
+<p class="sub">买家 M13 提交 · 商家 A13 处理 · 枚举 <a href="04-数据模型.html#i">04 §shop_invoice_requests</a> · <b>三态</b> <code>submitted|issued|rejected</code>（<code>processing</code> 已废止）。商家开具见 <a href="01-管理端UI.html#a13c">A13-C 抽屉</a> · 买家 <a href="02-买家端UI.html#m13">M13</a>。API 别名 <code>pending</code> → <code>submitted</code>。</p>
+<div class="canvas" id="f5-flow">
+<svg viewBox="0 0 920 480" xmlns="http://www.w3.org/2000/svg" font-size="11" font-family="sans-serif">
+<defs>
+  <marker id="f5a" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker>
+  <marker id="f5d" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#64748b"/></marker>
+</defs>
+<!-- 买家入口 -->
+<rect x="340" y="8" width="240" height="40" rx="8" fill="#38bdf8"/>
+<text x="460" y="26" text-anchor="middle" fill="#0f172a" font-weight="700">M13 买家提交申请</text>
+<text x="460" y="40" text-anchor="middle" fill="#0c4a6e" font-size="10">订单 paid · 抬头/税号/邮箱</text>
+<path d="M460,48 V68" stroke="#94a3b8" marker-end="url(#f5a)"/>
+
+<!-- submitted -->
+<rect x="300" y="72" width="320" height="52" rx="10" fill="#78350f" stroke="#fbbf24"/>
+<text x="460" y="94" text-anchor="middle" fill="#fde68a" font-weight="700">submitted · 待处理</text>
+<text x="460" y="110" text-anchor="middle" fill="#fef3c7" font-size="10">开具 A13-C 抽屉 · 驳回 A13-A</text>
+<text x="460" y="124" text-anchor="middle" fill="#fcd34d" font-size="9">一次提交 invoice_no → issued</text>
+
+<!-- 开具 → issued -->
+<path d="M460,124 V156" stroke="#94a3b8" marker-end="url(#f5a)"/>
+<text x="472" y="142" fill="#86efac" font-size="9">确认开具</text>
+
+<rect x="300" y="160" width="320" height="48" rx="10" fill="#14532d" stroke="#4ade80"/>
+<text x="460" y="182" text-anchor="middle" fill="#bbf7d0" font-weight="700">issued · 已开票</text>
+<text x="460" y="198" text-anchor="middle" fill="#86efac" font-size="10">终态 · A13-B/M13b 查看 · 通知买家</text>
+
+<!-- 驳回 branch -->
+<path d="M300,96 H140" stroke="#94a3b8" marker-end="url(#f5a)"/>
+<text x="220" y="88" text-anchor="middle" fill="#fca5a5" font-size="9">驳回 A13-A</text>
+<text x="220" y="100" text-anchor="middle" fill="#94a3b8" font-size="9">原因 ≥4 字</text>
+
+<rect x="20" y="108" width="240" height="56" rx="10" fill="#450a0a" stroke="#f87171"/>
+<text x="140" y="130" text-anchor="middle" fill="#fecaca" font-weight="700">rejected · 已驳回</text>
+<text x="140" y="146" text-anchor="middle" fill="#fca5a5" font-size="10">终态 · 买家可见原因</text>
+<text x="140" y="160" text-anchor="middle" fill="#94a3b8" font-size="9">A13 仅查看</text>
+
+<!-- 重提 loop -->
+<path d="M140,164 C140,220 200,240 300,96" stroke="#64748b" fill="none" stroke-dasharray="5,4" marker-end="url(#f5d)"/>
+<text x="200" y="228" fill="#94a3b8" font-size="9">M13 驳回后重提</text>
+
+<!-- F2 冲红侧注 -->
+<path d="M620,200 H760" stroke="#fb7185" marker-end="url(#f5a)"/>
+<text x="680" y="268" text-anchor="middle" fill="#fda4af" font-size="9">已开票订单退款 F2</text>
+<rect x="760" y="176" width="200" height="64" rx="8" fill="#1e293b" stroke="#fb7185"/>
+<text x="860" y="272" text-anchor="middle" fill="#fecdd3" font-weight="700">needs_red_flush=true</text>
+<text x="860" y="288" text-anchor="middle" fill="#fda4af" font-size="9">不改 invoice status</text>
+<text x="860" y="302" text-anchor="middle" fill="#94a3b8" font-size="9">Phase 1 人工红冲</text>
+
+<!-- 前置条件 -->
+<rect x="640" y="72" width="240" height="72" rx="8" fill="#1e293b" stroke="#334155"/>
+<text x="760" y="92" text-anchor="middle" fill="#94a3b8" font-weight="700" font-size="10">前置（M13 提交）</text>
+<text x="760" y="108" text-anchor="middle" fill="#cbd5e1" font-size="9">orders.status = paid</text>
+<text x="760" y="124" text-anchor="middle" fill="#cbd5e1" font-size="9">无在途全额退款</text>
+<text x="760" y="140" text-anchor="middle" fill="#cbd5e1" font-size="9">每单一条有效申请</text>
+<text x="760" y="156" text-anchor="middle" fill="#64748b" font-size="9">issued 后不可再申请</text>
+
+<!-- 图例 -->
+<rect x="20" y="320" width="200" height="96" rx="8" fill="#1e293b" stroke="#334155"/>
+<text x="120" y="340" text-anchor="middle" fill="#94a3b8" font-weight="700" font-size="10">图例</text>
+<line x1="35" y1="354" x2="55" y2="354" stroke="#94a3b8"/><text x="62" y="358" fill="#cbd5e1" font-size="9">实线 = 状态流转</text>
+<line x1="35" y1="370" x2="55" y2="370" stroke="#64748b" stroke-dasharray="5,4"/><text x="62" y="374" fill="#cbd5e1" font-size="9">虚线 = 买家重提</text>
+<text x="35" y="392" fill="#86efac" font-size="9">● issued / rejected 商家无写操作</text>
+<text x="35" y="408" fill="#fda4af" font-size="9">● 退款仅标冲红，不自动红冲</text>
+</svg>
+</div>
+<table>
+<tr><th>当前态</th><th>触发 / 操作</th><th>下一态</th><th>写库 / 落点</th></tr>
+<tr><td><code>—</code></td><td>M13 提交（订单已付款）</td><td><code>submitted</code></td><td>INSERT <code>shop_invoice_requests</code>；<code>applied_at</code></td></tr>
+<tr><td><code>submitted</code></td><td>A13-C <b>确认开具</b>（发票号必填 · <code>POST …/issue</code>）</td><td><code>issued</code></td><td><code>invoice_no</code> · <code>invoice_url</code> · <code>issued_at</code> · <code>processor_id</code>；通知买家 → M13b</td></tr>
+<tr><td><code>submitted</code></td><td>点「开具」仅打开抽屉未提交</td><td><code>submitted</code></td><td>无写库；关闭抽屉仍为待处理</td></tr>
+<tr><td><code>submitted</code></td><td>A13-A <b>驳回</b>（原因 ≥4 字）</td><td><code>rejected</code></td><td><code>reject_reason</code> · <code>rejected_at</code>；通知买家</td></tr>
+<tr><td><code>rejected</code></td><td>M13 买家修改后重提</td><td><code>submitted</code></td><td>更新抬头栏位；清空驳回字段；刷新 <code>applied_at</code></td></tr>
+<tr><td><code>issued</code></td><td>—</td><td>—</td><td>终态；A13/M13b 只读查看</td></tr>
+<tr><td><code>rejected</code></td><td>—</td><td>—</td><td>终态（可买家重提 → 上行）</td></tr>
+</table>
+<p class="sub"><b>与退款联动</b>：<code>issued</code> 态订单经 <a href="#f2">F2</a> 退款成功时写 <code>needs_red_flush=true</code>（Phase 1 人工红冲，不改 <code>invoice_requests.status</code>）。全图 <a href="#f2-invoice-flow">F2′ 退款×发票</a> · UI <a href="01-管理端UI.html#a09b-invoiced">A09-B</a> · <a href="02-买家端UI.html#m12a-invoiced">M12-A</a>。<b>不可开票</b>：订单非 <code>paid</code>、已全额退款、或已有 <code>issued</code> 申请。</p>
+</div>
+
+<div class="block" id="f6">
+<h2>F6 商品上架合规闸（机审 + 人审）</h2>
+<p class="sub" id="f6-flow-intro"><b>机审与人审</b>：先机审、后人审，不是二选一。机审写 <code>auto_result</code> 帮人审划重点；<strong>能不能卖以人审为准</strong>（<code>manual_result</code>）。Mx 公域首单<strong>不允许跳过人审</strong>。</p>
+<div class="canvas" id="f6-flow">
+<svg viewBox="0 0 920 500" xmlns="http://www.w3.org/2000/svg" font-size="11" font-family="sans-serif">
+<defs><marker id="f6a" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+<rect x="340" y="10" width="240" height="34" rx="8" fill="#38bdf8"/>
+<text x="460" y="32" text-anchor="middle" fill="#0f172a" font-weight="700">商家 A03 提交审核</text>
+<path d="M460,44 V62" stroke="#94a3b8" marker-end="url(#f6a)"/>
+<rect x="300" y="66" width="320" height="40" rx="8" fill="#1e293b" stroke="#818cf8"/>
+<text x="460" y="84" text-anchor="middle" fill="#c4b5fd" font-weight="700">写 pending_review + INSERT shop_product_reviews</text>
+<text x="460" y="98" text-anchor="middle" fill="#94a3b8">snapshot_json · 触发机审</text>
+<path d="M460,106 V124" stroke="#94a3b8" marker-end="url(#f6a)"/>
+<rect x="330" y="128" width="260" height="36" rx="8" fill="#312e81" stroke="#a78bfa"/>
+<text x="460" y="150" text-anchor="middle" fill="#e9d5ff" font-weight="700">机审 F6 · auto_result</text>
+<path d="M460,164 V188" stroke="#94a3b8" marker-end="url(#f6a)"/>
+<polygon points="460,192 520,232 460,272 400,232" fill="#1e293b" stroke="#fbbf24"/>
+<text x="460" y="228" text-anchor="middle" fill="#fde68a" font-size="10">结果?</text>
+<!-- pass -->
+<path d="M400,232 H120" stroke="#94a3b8" marker-end="url(#f6a)"/>
+<text x="260" y="224" text-anchor="middle" fill="#86efac" font-size="10">pass</text>
+<rect x="20" y="208" width="200" height="48" rx="8" fill="#14532d" stroke="#4ade80"/>
+<text x="120" y="228" text-anchor="middle" fill="#bbf7d0" font-weight="700">进 P09 人审队列</text>
+<text x="120" y="244" text-anchor="middle" fill="#86efac" font-size="10">仍须人工确认</text>
+<!-- flag -->
+<path d="M460,272 V310" stroke="#94a3b8" marker-end="url(#f6a)"/>
+<text x="472" y="292" fill="#fdba74" font-size="10">flag</text>
+<rect x="330" y="314" width="260" height="48" rx="8" fill="#431407" stroke="#fb923c"/>
+<text x="460" y="334" text-anchor="middle" fill="#fed7aa" font-weight="700">进 P09 · 面板标黄复核</text>
+<text x="460" y="350" text-anchor="middle" fill="#fdba74" font-size="10">须人工核对命中规则</text>
+<!-- reject -->
+<path d="M520,232 H800" stroke="#94a3b8" marker-end="url(#f6a)"/>
+<text x="660" y="224" text-anchor="middle" fill="#fca5a5" font-size="10">reject</text>
+<rect x="700" y="196" width="200" height="72" rx="8" fill="#450a0a" stroke="#f87171"/>
+<text x="800" y="218" text-anchor="middle" fill="#fecaca" font-weight="700">默认自动驳回</text>
+<text x="800" y="234" text-anchor="middle" fill="#fca5a5" font-size="10">rejected · 可免人审</text>
+<text x="800" y="252" text-anchor="middle" fill="#fca5a5" font-size="10">或运营覆写进 P09</text>
+<text x="800" y="266" text-anchor="middle" fill="#94a3b8" font-size="9">（备注≥4字+审计）</text>
+<!-- merge to P09 human -->
+<path d="M120,256 V380 H300" stroke="#94a3b8"/>
+<path d="M460,362 V380 H300" stroke="#94a3b8"/>
+<path d="M800,268 V300 H860 V380 H620" stroke="#94a3b8" stroke-dasharray="4 3"/>
+<path d="M300,380 H620" stroke="#94a3b8" marker-end="url(#f6a)"/>
+<rect x="300" y="384" width="320" height="44" rx="8" fill="#1e3a5f" stroke="#38bdf8"/>
+<text x="460" y="404" text-anchor="middle" fill="#7dd3fc" font-weight="700">平台人审 P09 · manual_result</text>
+<text x="460" y="420" text-anchor="middle" fill="#94a3b8" font-size="10">通过 / 驳回 · 右侧审核面板</text>
+<path d="M460,428 V448" stroke="#94a3b8" marker-end="url(#f6a)"/>
+<polygon points="460,452 510,472 460,492 410,472" fill="#1e293b" stroke="#94a3b8"/>
+<text x="460" y="476" text-anchor="middle" fill="#e2e8f0" font-size="10">人审?</text>
+<path d="M410,472 H160" stroke="#94a3b8" marker-end="url(#f6a)"/>
+<rect x="40" y="456" width="120" height="32" rx="6" fill="#14532d" stroke="#4ade80"/>
+<text x="100" y="476" text-anchor="middle" fill="#bbf7d0" font-weight="700">approved</text>
+<path d="M100,488 V498" stroke="#4ade80" marker-end="url(#f6a)"/>
+<text x="100" y="496" text-anchor="middle" fill="#86efac" font-size="9">商家上架→on_sale</text>
+<path d="M510,472 H760" stroke="#94a3b8" marker-end="url(#f6a)"/>
+<rect x="760" y="456" width="120" height="32" rx="6" fill="#450a0a" stroke="#f87171"/>
+<text x="820" y="476" text-anchor="middle" fill="#fecaca" font-weight="700">rejected</text>
+<text x="820" y="496" text-anchor="middle" fill="#fca5a5" font-size="9">修改后提交审核</text>
+</svg>
+</div>
+<table>
+<tr><th>步骤</th><th>读</th><th>写</th></tr>
+<tr><td>商家提交审核</td><td>products + 关联内容/封面</td><td>status=pending_review；INSERT shop_product_reviews(snapshot, auto_result)</td></tr>
+<tr><td>机审</td><td>敏感词/类目规则</td><td>auto_result=pass|flag|reject；写 compliance_flags；<code>flag|reject</code> 可 INSERT <a href="#f12">F12</a> 工单（<code>sensitive_word</code>）</td></tr>
+<tr><td>机审 reject</td><td>—</td><td>products.status=rejected；manual_result=rejected（可免人审）</td></tr>
+<tr><td>平台人审 P09</td><td>review 队列</td><td>manual_result=approved|rejected；通过→products.status=approved</td></tr>
+<tr><td>商家上架</td><td>status=approved</td><td>on_sale（私域可售）</td></tr>
+</table>
+<p class="sub">draft 不可直接 on_sale；rejected 须修改后重新提交审核。流程图见上 <a href="#f6-flow">§机审×人审</a> · UI <a href="06-平台端UI.html#p09-auto-manual-flow">P09</a> · <b>机审规则全文</b> <a href="#f6-auto-rules">§机审规则</a>。</p>
+
+<h3 id="f6-auto-rules" style="font-size:15px;margin:16px 0 8px">机审规则（F6 · 业务说明）</h3>
+<p class="sub"><b>触发</b>：商家 <code>POST …/submit-review</code> 成功写入 <code>pending_review</code> 后<strong>同步</strong>执行（与 INSERT <code>shop_product_reviews</code> 同事务）。结果写 review.<code>auto_result</code> / <code>auto_flags</code>，摘要同步 <code>shop_products.compliance_flags</code>。</p>
+<table>
+<tr><th>项</th><th>说明</th></tr>
+<tr><td><b>扫描范围</b></td><td>商品 <code>name</code> · <code>subtitle</code> · 简介/详情摘要 · <code>cover_url</code>（元数据）· 关联内容标题/正文摘要（专栏课时名、资料包文件名、服务说明）；均取自 <code>snapshot_json</code> 冻结快照</td></tr>
+<tr><td><b>不扫描</b></td><td>音视频实质内容（Phase 1 不做 ASR/画面识别）；买家订单；私域聊天记录</td></tr>
+<tr><td><b>规则配置</b></td><td>平台级 JSON（敏感词库版本、夸大承诺词表、外链白名单）；类目禁售/资质来自 <a href="06-平台端UI.html#p04">P04</a>。Phase 1 可 <code>stub</code> 降级（见下）</td></tr>
+<tr><td><b>聚合</b></td><td>多规则命中取最高严重度 → <code>auto_result</code>：<code>reject</code> &gt; <code>flag</code> &gt; <code>pass</code>；明细全量写入 <code>auto_flags[]</code></td></tr>
+</table>
+<table style="margin-top:10px">
+<tr><th>rule_code</th><th>规则名</th><th>判定要点</th><th>默认级别</th><th>典型处理</th></tr>
+<tr><td><code>sensitive_word</code></td><td>敏感词</td><td>命中平台敏感词库（分级：违禁/可疑）</td><td>违禁→<code>reject</code>；可疑→<code>flag</code></td><td>面板展示命中词与片段；可建 <a href="#f12">F12</a></td></tr>
+<tr><td><code>exaggerated_claim</code></td><td>夸大承诺</td><td>绝对化/疗效/收益承诺词表（如「保证」「100%」「根治」「月入十万」）</td><td><code>flag</code></td><td>人审重点复核文案</td></tr>
+<tr><td><code>prohibited_category</code></td><td>禁售类目</td><td>商品 <code>category_id</code> 在 P04 为 <code>blocked</code></td><td><code>reject</code></td><td>商家须换类目；可建 F12 <code>product_violation</code></td></tr>
+<tr><td><code>category_qualification</code></td><td>类目资质</td><td>类目「需资质」与商家 <code>entity_type</code>/入驻材料不匹配</td><td><code>reject</code></td><td>提示补资质或换类目</td></tr>
+<tr><td><code>media_compliance</code></td><td>封面/素材</td><td>封面缺失、格式不符、含二维码/外链图（Phase 1 规则可简化）</td><td><code>flag</code></td><td>人审看图</td></tr>
+<tr><td><code>external_link</code></td><td>外链引流</td><td>简介/资料正文含非白名单 URL、微信号变体</td><td><code>flag</code></td><td>要求删除外链后提交审核</td></tr>
+</table>
+<p class="sub" style="margin-top:8px"><b>提审前置校验</b>（同步失败，<strong>不进入机审</strong>）：名称/售价/封面/关联内容齐全；<code>line_price ≥ price</code>；专栏≥1 课时 / 资料≥1 文件 / 服务时段有效；F9 日提审额度。失败返回 422，不占机审结果。</p>
+<table style="margin-top:10px">
+<tr><th>auto_result</th><th>写库</th><th>商家 A03 展示</th><th>人审 / 副作用</th></tr>
+<tr><td><code>pass</code></td><td>review 保留 <code>pending_review</code></td><td>「机审通过，等待平台审核」</td><td>进 P09 待审队列</td></tr>
+<tr><td><code>flag</code></td><td>同上</td><td>展示命中摘要（如「夸大承诺 1 处」）</td><td>进 P09 · 面板标黄；可选 INSERT F12</td></tr>
+<tr><td><code>reject</code></td><td>默认 <code>products.status=rejected</code> + <code>manual_result=rejected</code></td><td>「机审未通过，请修改后提交审核」+ 原因列表</td><td>可免人审；运营可覆写进 P09（备注+审计）</td></tr>
+</table>
+<p class="sub"><b>Phase 1 降级（stub）</b>：配置 <code>compliance.auto_review_mode=stub</code> 时，机审固定 <code>auto_result=flag</code>、<code>auto_flags=[{rule:stub}]</code>，<strong>一律走人审</strong>，不阻塞 M4/Mx 验收。上线前可切换 <code>normal</code> 启用上表规则。</p>
+<p class="sub"><b>auto_flags 元素</b>（JSON 数组）：<code>rule</code> · <code>level</code>(flag|reject) · <code>field</code> · <code>snippet</code> · <code>message</code> · <code>dict_version</code>（词库时）。模型见 <a href="04-数据模型.html#rev">04 §shop_product_reviews</a> · API 见 PRD <a href="PRD-内容获客商城-phase1.md#f6-auto-rules">§四 机审规则</a>。</p>
+</div>
+
+<div class="block" id="f7">
+<h2>F7 公域挂载闸（抖店 / 课程库）</h2>
+<p class="sub">商家映射与外部审核闸门；未过闸的 Webhook 建单应<strong>拒单</strong>。端到端配置见 <a href="#a14-dy-flow">A14 抖音对接总览</a> · 商家页 <a href="01-管理端UI.html#a14-list">A14 商品映射</a> · <b>状态机详图</b> <a href="01-管理端UI.html#a14-mapping-state">01#a14-mapping-state</a>。</p>
+<table>
+<tr><th>步骤</th><th>校验</th><th>写</th></tr>
+<tr><td>商家发起映射 A14</td><td>product.status ∈ {approved, on_sale}；last_review 人审通过</td><td>listing_status=pending；调外部 API 提审</td></tr>
+<tr><td>外部审核回调</td><td>签名 + product_id 映射</td><td>external_audit_status；mapped 或 blocked + mount_blocked_reason；<code>rejected/blocked</code> 可 INSERT <a href="#f12">F12</a>（<code>external_audit</code>）</td></tr>
+<tr><td>平台强制下架 P07</td><td>违规工单</td><td>product.off_sale；listing paused/blocked；存量订单照常履约</td></tr>
+</table>
+<p class="sub">未过挂载闸的商品，抖店 Webhook 建单应拒绝并记审计日志。</p>
+<h3 style="font-size:14px;margin:12px 0 8px">listing_status 状态迁移</h3>
+<table>
+<tr><th>状态</th><th>含义</th><th>进入条件</th><th>能否收抖店单</th></tr>
+<tr><td><code>pending</code> 未挂载</td><td>已建映射待外部审核</td><td>A14-A 提交</td><td>否</td></tr>
+<tr><td><code>mapped</code> 已挂载</td><td>外部审核通过且同步正常</td><td>外部 <code>approved</code></td><td>是（还须 Webhook 验通）</td></tr>
+<tr><td><code>paused_sync</code> 暂停同步</td><td>商家主动暂停</td><td>A14 行内「暂停」</td><td>否（新单）</td></tr>
+<tr><td><code>blocked</code> 已阻断</td><td>外部拒审或违规</td><td>外部拒 / P07 强制下架</td><td>否</td></tr>
+<tr><td colspan="4" style="font-size:11px;color:#666">拒审后：A14-B → <code>POST …/resubmit</code> → <code>pending</code>（见 <a href="01-管理端UI.html#a14-mapping-state">状态流程图</a>）</td></tr>
+</table>
+</div>
+
+<div class="block" id="f12">
+<h2>F12 违规稽查工单入库（P07）</h2>
+<p class="sub">事后稽查闸：内容/商品/投诉类事件写入 <code>shop_moderation_cases</code>，由运营在 P07 处置。<strong>与抖店订单 Webhook（F3/F2）无关</strong>——支付/退款通知不进本流。</p>
+<table>
+<tr><th>步骤</th><th>触发来源</th><th>写</th></tr>
+<tr><td>1. 自动入库</td><td><a href="#f6">F6</a> 机审 <code>flag|reject</code></td><td>INSERT 工单 <code>case_type=sensitive_word</code> · <code>status=pending</code> · <code>source=f6_auto</code></td></tr>
+<tr><td>2. 自动入库</td><td><a href="#f7">F7</a> 公域外部审核 <code>rejected/blocked</code></td><td>INSERT <code>case_type=external_audit</code> 或 <code>product_violation</code></td></tr>
+<tr><td>3. 半自动</td><td>买家投诉 / 用户举报 / P02-B <code>complaint</code> 服务记录</td><td>运营确认后 INSERT <code>buyer_complaint</code> / <code>user_report</code>（Phase 1 可人工建单 <code>manual</code>）</td></tr>
+<tr><td>4. 列表展示</td><td>P07 / P01 汇总</td><td><code>GET …/moderation-cases</code> · <code>open_moderation_cases</code> = pending+processing</td></tr>
+<tr><td>5. 接单</td><td>运营 take</td><td><code>pending</code> → <code>processing</code> · 写 <code>assignee_id</code></td></tr>
+<tr><td>6. 强制下架</td><td>P07-A + <code>force_off</code></td><td>联动 P09-B：<code>off_sale</code> + listing <code>blocked</code>；写 <code>force_off_at</code>；工单→<code>processing</code></td></tr>
+<tr><td>7. 结案</td><td>P07-B close</td><td><code>processing</code> → <code>closed</code> · 写 <code>resolution</code> + <code>conclusion</code> · <code>closed_at</code></td></tr>
+</table>
+<p class="sub"><b>边界</b>：强制下架<strong>不</strong>自动退款、<strong>不</strong>撤销已购权益（与 P09-B 一致）；新公域 Webhook 拒单。Phase 1 不可 reopen 已结案工单。</p>
+</div>
+
+<div class="block" id="f8">
+<h2>F8 套餐开通 / 叠加 / 换档 / 到期</h2>
+<p class="sub">商家可持有<strong>多条同时生效</strong>的订阅（主套餐 + 加购包）。有效权益 = 对所有 <code>status=active</code> 且 <code>effective_at ≤ now &lt; expires_at</code> 的 <code>plan_snapshot</code> 按功能字典 <code>aggregate_mode</code> 合并（<code>expires_at</code> 为止日 inclusive，库内存 exclusive 上界，见 <a href="04-数据模型.html#subscription-dates">04 生效时间精度</a>）。</p>
+<table>
+<tr><th>场景</th><th>写</th><th>生效规则</th></tr>
+<tr><td>入驻首开</td><td>INSERT free/trial，<code>purchase_mode=stack</code></td><td>可写 merchant.<code>current_subscription_id</code> 便于展示</td></tr>
+<tr><td><b>叠加购买</b></td><td>INSERT 新条 active（如短信包、SKU 加购包），<code>purchase_mode=stack</code></td><td>旧 active 保留；合并后配额/次数按 sum 或 max 重算</td></tr>
+<tr><td>换档/升级</td><td>INSERT 新条，<code>purchase_mode=replace</code>；同 <code>replace_group</code> 旧条 superseded</td><td>如 basic→flagship；仅主套餐组互斥，不影响加购包</td></tr>
+<tr><td>单条到期</td><td>该条 <code>expired</code></td><td>重算 merge；其余 active 仍有效</td></tr>
+<tr><td>全部到期</td><td>无 active 订阅</td><td>回落平台默认免费版合并策略</td></tr>
+<tr><td>P11 人工</td><td>指定 stack/replace、生效区间</td><td>operator_id 审计</td></tr>
+</table>
+<h3 style="font-size:14px;margin:12px 0 8px">P11 相关 API（PRD §8.3）</h3>
+<table>
+<tr><th>方法</th><th>路径</th><th>说明</th></tr>
+<tr><td>POST</td><td><code>/admin/shop/subscriptions</code></td><td>人工开通（stack/replace）</td></tr>
+<tr><td>POST</td><td><code>/admin/shop/subscriptions/activate-from-renewal</code></td><td>续费预填开通；结案 <code>renewal_request</code></td></tr>
+<tr><td>POST</td><td><code>/admin/shop/subscriptions/{id}/replace</code></td><td>换档；旧条 superseded</td></tr>
+<tr><td>GET</td><td><code>/admin/shop/merchants/{tenant_id}/entitlements</code></td><td>合并权益（F8 输出）</td></tr>
+</table>
+<h3 style="font-size:14px;margin:12px 0 8px"><code>merge_entitlements(snapshots[])</code></h3>
+<table>
+<tr><th>value_type</th><th>aggregate_mode</th><th>合并规则</th></tr>
+<tr><td>bool</td><td>any</td><td>任一条 snapshot 为 true → true</td></tr>
+<tr><td>int / usage</td><td>max</td><td>取各条数值最大；任一条 unlimited → unlimited</td></tr>
+<tr><td>int / usage</td><td>sum</td><td>各条数值相加；unlimited 按 max 处理</td></tr>
+</table>
+</div>
+
+<div class="block" id="f9">
+<h2>F9 套餐用量校验与计数</h2>
+<p class="sub">周期次数上限取自 <b>F8 合并后</b>的 <code>usage_limits</code>。存量配额（店铺数、商品数）用合并后的 <code>quota.*</code> 与实时 COUNT 比对。<code>max_stores</code> 计数：<code>status ≠ 'closed'</code>（含 draft/paused）；<code>max_products</code> 计数：在售 <code>on_sale</code>。</p>
+<table>
+<tr><th>步骤</th><th>逻辑</th></tr>
+<tr><td>1. 解析权益</td><td>查全部 active 订阅 → <code>merge_entitlements</code> 得合并 quotas / features / usage_limits</td></tr>
+<tr><td>2. 算 period_key</td><td>日 <code>YYYY-MM-DD</code>、月 <code>YYYY-MM</code>（与单条订阅无关，tenant 级共享计数池）</td></tr>
+<tr><td>3. 预检</td><td><code>GET /shop/subscription/usage</code>：used / <b>merged_limit</b> / resets_at / contributing_plans[]</td></tr>
+<tr><td>4. 占用</td><td><code>used_count &lt; merged_limit</code> 则 +1，否则 403</td></tr>
+<tr><td>5. 失败回滚</td><td>业务失败时补偿 -1</td></tr>
+</table>
+<p class="sub">加购包到期仅 merged_limit 下降，已用次数不回溯。换档 replace 立即按新合并结果生效。</p>
+<p class="sub"><b>并发控制</b>（#12）：<code>UPDATE shop_merchant_feature_usage SET used_count = used_count + 1 WHERE … AND used_count &lt; merged_limit</code>（单行原子递增）；失败重试 1 次；仍失败 403。高并发配额（<code>max_products</code>）用 <code>SELECT COUNT(*) … FOR UPDATE</code> 或乐观锁 <code>version</code> 列。详见 04 <a href="04-数据模型.html#usage-concurrency">§用量并发</a>。</p>
+</div>
+
+<div class="block" id="f10">
+<h2>F10 清结算批次生成与打款（P05）</h2>
+<p class="sub">平台向商家结算已成交订单款（扣除平台服务费/类目费率）。与微信/抖店分账可并行；P05 为<strong>平台侧对账打款</strong>台账。白话说明 <a href="07-支付与结算说明.html">⑦ 支付与结算</a> · 表见 <a href="04-数据模型.html#settle">04 §settlement</a> · API §8.14.3 · 业务规则 <a href="06-平台端UI.html#p05-settlement-rules">06 §结算规则</a>。</p>
+<p class="sub"><b>可结 T+7</b>：订单支付满 7 自然日才可入池。<b>F10 日跑 T+1</b>：每日把可结订单/退款记入<strong>当期开放账期</strong>。<b>出账默认周结</b>：自然周关账<strong>每 tenant+shop 必出 1 条批次</strong>（含 net≤0）；仅 <code>net&gt;0</code> 为 <code>pending</code> 待打款。负额 <code>carried_forward</code> 结转下期；吸收批次 <code>paid</code> 后同步更新源批次为 <code>offset_settled</code>。</p>
+<table>
+<tr><th>步骤</th><th>读</th><th>写</th></tr>
+<tr><td>1. 日跑入池</td><td>前日新满足可结的 <code>shop_orders</code>；同期 <code>refunds.succeeded</code></td><td>记入<strong>当期开放账期</strong>（尚未出批次行）</td></tr>
+<tr><td>2. 计费</td><td>类目费率 <code>category_fee_rules</code></td><td>汇总 <code>period_net_cents</code> = gross − fee − reversal</td></tr>
+<tr><td>3. 周关账出批</td><td>账期结束；按 tenant+shop 汇总；读未抵扣 <code>carried_forward</code> 批次</td><td>INSERT <code>shop_settlement_batches</code> + items。写 <code>opening_balance_cents</code>（≤0）。<code>net&gt;0</code> → <code>pending</code>；<code>net=0</code> → <code>closed</code>；<code>net&lt;0</code> → <code>carried_forward</code>。含 <code>period_carry_in</code> 明细行（若有结转）</td></tr>
+<tr><td>4. 运营确认</td><td>batch.status=pending；净额 &gt; 0</td><td>P05-B confirm → <code>paid</code>；写 paid_at · transfer_voucher_url</td></tr>
+<tr><td>5. 结转同步</td><td>本批 <code>opening_balance_cents&lt;0</code></td><td>同事务：被计入本批的 <code>carried_forward</code> 批次 → <code>offset_settled</code>；写 <code>offset_by_batch_id</code> · <code>offset_settled_at</code></td></tr>
+<tr><td>6. 打款失败</td><td>银行/对公退回</td><td><code>payment_failed</code>；P05-C 重试（<strong>不</strong>回滚已 <code>offset_settled</code> 的源批次）</td></tr>
+<tr><td>7. 关账回写</td><td>批次达终态</td><td>回写订单 <code>settled_at</code>（<code>paid</code> / <code>closed</code> / <code>carried_forward</code> / <code>offset_settled</code>）</td></tr>
+</table>
+<p class="sub">Phase 1：<strong>日滚动入池 + 周关账出批 + 人工确认打款</strong>；不对接银行自动划付。与套餐 B2B 续费（§2.4.3）无关。</p>
+</div>
+
+
+<div class="block" id="f11">
+<h2>F11 · IP 获客演示编排（P1-16 · 非 Mx 硬验收）</h2>
+<p class="sub">将创作内容、公域挂载与成交串成<strong>可演示脚本</strong>；复用既有子流，不新增表。权威步骤见 <a href="index.html#p1-16-demo">index §P1-16</a> · PRD §9.3。</p>
+<div class="canvas">
+<svg viewBox="0 0 920 200" xmlns="http://www.w3.org/2000/svg" font-size="12" font-family="sans-serif">
+<defs><marker id="f11m" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+<rect x="10" y="30" width="100" height="40" rx="8" fill="#a78bfa"/><text x="60" y="54" text-anchor="middle" fill="#fff" font-weight="700">内容/CTA</text>
+<rect x="130" y="30" width="100" height="40" rx="8" fill="#34d399"/><text x="180" y="54" text-anchor="middle" fill="#0f172a" font-weight="700">A03 建品</text>
+<rect x="250" y="30" width="90" height="40" rx="8" fill="#fbbf24"/><text x="295" y="54" text-anchor="middle" fill="#0f172a" font-weight="700">F6+P09</text>
+<rect x="360" y="30" width="90" height="40" rx="8" fill="#818cf8"/><text x="405" y="54" text-anchor="middle" fill="#fff" font-weight="700">A14+F7</text>
+<rect x="470" y="30" width="100" height="40" rx="8" fill="#38bdf8"/><text x="520" y="54" text-anchor="middle" fill="#0f172a" font-weight="700">挂载曝光</text>
+<rect x="590" y="30" width="100" height="40" rx="8" fill="#34d399"/><text x="640" y="54" text-anchor="middle" fill="#0f172a" font-weight="700">下单支付</text>
+<rect x="710" y="30" width="100" height="40" rx="8" fill="#818cf8"/><text x="760" y="54" text-anchor="middle" fill="#fff" font-weight="700">履约</text>
+<rect x="820" y="30" width="80" height="40" rx="8" fill="#7f1d1d"/><text x="860" y="54" text-anchor="middle" fill="#fecaca" font-weight="700">可选退款</text>
+<path d="M110,50 H130" stroke="#94a3b8" marker-end="url(#f11m)"/>
+<path d="M230,50 H250" stroke="#94a3b8" marker-end="url(#f11m)"/>
+<path d="M340,50 H360" stroke="#94a3b8" marker-end="url(#f11m)"/>
+<path d="M450,50 H470" stroke="#94a3b8" marker-end="url(#f11m)"/>
+<path d="M570,50 H590" stroke="#94a3b8" marker-end="url(#f11m)"/>
+<path d="M690,50 H710" stroke="#94a3b8" marker-end="url(#f11m)"/>
+<path d="M810,50 H820" stroke="#94a3b8" marker-end="url(#f11m)"/>
+<text x="460" y="110" text-anchor="middle" fill="#cbd5e1">私域演示：步骤 4–5 走 F1（M04 微信付）· 公域演示：步骤 6 走 F3 领权 或 F3b 内付</text>
+<text x="460" y="135" text-anchor="middle" fill="#86efac">创作顾问素材 → 手工粘贴 A03 详情（自动导入 Phase 2 · 见 A03 灰显按钮）</text>
+<text x="460" y="165" text-anchor="middle" fill="#94a3b8">编排流不计入 Mx 硬验收；Mx 仍只验 §3.5 选定的一条公域链路</text>
+</svg>
+</div>
+<table>
+<tr><th>步骤</th><th>子流</th><th>验收点</th></tr>
+<tr><td>1 内容带 CTA</td><td>创作顾问导出（可选）</td><td>落地页/短视频描述含店铺入口</td></tr>
+<tr><td>2 建品上架</td><td><a href="#f6">F6</a> + P09</td><td><code>products.status=on_sale</code></td></tr>
+<tr><td>3 公域映射</td><td><a href="#f7">F7</a> + A14</td><td><code>listing_status=mapped</code></td></tr>
+<tr><td>4 成交</td><td><a href="#f1">F1</a> 或 <a href="#f3">F3</a>/<a href="#f3b">F3b</a></td><td><code>orders.paid</code> + entitlement active</td></tr>
+<tr><td>5 履约</td><td>M06–M10</td><td>学课/领取/核销任一条通</td></tr>
+<tr><td>6（可选）</td><td><a href="#f2">F2</a></td><td>演示退款关权</td></tr>
+</table>
+</div>
+
+</div></body></html>

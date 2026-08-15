@@ -14,7 +14,7 @@ from app.models import TenantMembership, TenantRole, User
 from app.permissions import SYSTEM_ROLE_EDITOR
 from app.services.auth_service import hash_password
 from tests.alembic_head import is_at_expected_head
-from tests.http_client import check, req, ensure_fake_platform
+from tests.http_client import check, req, ensure_fake_platform, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -190,8 +190,7 @@ def main() -> int:
     code, _ = req("GET", f"/agent/sessions/{sid}/summary", token=co_token)
     results.append(check("VLM2-5 他人会话摘要404", code == 404, str(code)))
 
-    proc = subprocess.run([sys.executable, "-B", "tests/verify_lm1.py"], cwd=API_ROOT)
-    results.append(check("VLM2-6 verify_lm1 回归", proc.returncode == 0))
+    results.append(run_nested_script("VLM2-6 verify_lm1 回归", "verify_lm1.py"))
 
     passed = all(results)
     print("\n=== LM2", "全部通过" if passed else "存在失败", "===")

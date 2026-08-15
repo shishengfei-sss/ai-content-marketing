@@ -12,7 +12,7 @@ sys.path.insert(0, str(API_ROOT))
 from app.database import SessionLocal
 from app.services.knowledge_service import backfill_knowledge_embeddings
 from tests.alembic_head import is_at_expected_head
-from tests.http_client import _get_test_client, check, req
+from tests.http_client import _get_test_client, check, req, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -140,8 +140,7 @@ def main() -> int:
         )
     )
 
-    proc = subprocess.run([sys.executable, "-B", "tests/verify_c3.py"], cwd=API_ROOT)
-    results.append(check("VC4-6 verify_c3 回归", proc.returncode == 0))
+    results.append(run_nested_script("VC4-6 verify_c3 回归", "verify_c3.py"))
 
     passed = all(results)
     print("\n=== C4", "全部通过" if passed else "存在失败", "===")

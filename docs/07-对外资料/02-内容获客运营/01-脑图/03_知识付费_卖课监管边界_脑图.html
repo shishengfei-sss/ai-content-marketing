@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>知识付费 · 抖音卖课监管边界 脑图</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; background: #f5f7fa; color: #1f2937; }
+  header { padding: 16px 22px 12px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+  header h1 { margin: 0; font-size: 20px; font-weight: 700; }
+  header p { margin: 6px 0 0; font-size: 13px; color: #6b7280; }
+  .toolbar { margin-top: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .toolbar button { border: 1px solid #d1d5db; background: #fff; color: #374151; padding: 6px 12px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .toolbar button:hover { background: #f3f4f6; }
+  .legend { display: flex; gap: 14px; margin-left: auto; font-size: 12px; color: #6b7280; align-items: center; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .legend b { color:#374151; font-weight:600; }
+  .wrap { position: relative; height: calc(100vh - 92px); overflow: hidden; }
+  svg { width: 100%; height: 100%; display: block; cursor: grab; background: #f5f7fa; }
+  svg.grabbing { cursor: grabbing; }
+  .node-box { cursor: pointer; }
+  .node-box:hover rect { filter: brightness(0.97); }
+  .node-text { font-size: 13px; fill: #1f2937; pointer-events: none; }
+  .toggle { cursor: pointer; }
+  .hint { position: absolute; left: 14px; bottom: 12px; font-size: 12px; color: #9ca3af; background: rgba(255,255,255,.85); padding: 4px 8px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>③ 知识付费 · 抖音卖课监管边界 脑图</h1>
+  <p>把五花八门的知识付费形态，按「是否属于抖音教培卖课监管范围」归类：<b>属于（严管）</b> / <b>边界模糊（个案判定）</b> / <b>不属于（管得松）</b>，外加无论哪类都躲不掉的<b>通用红线</b>。点击节点折叠/展开，拖拽平移，滚轮缩放。</p>
+  <div class="toolbar">
+    <button id="expandAll">全部展开</button>
+    <button id="collapseAll">收起分支</button>
+    <button id="reset">复位视图</button>
+    <div class="legend">
+      <span><i style="background:#dc2626"></i>属于卖课（严管）</span>
+      <span><i style="background:#ea580c"></i>边界模糊</span>
+      <span><i style="background:#16a34a"></i>不属于（管得松）</span>
+      <span><i style="background:#6b7280"></i>通用红线</span>
+    </div>
+  </div>
+</header>
+<div class="wrap">
+  <svg id="svg"></svg>
+  <div class="hint">提示：点击带 ◢ 的节点可折叠其子项</div>
+</div>
+
+<script>
+const DATA = {
+  t: "知识付费 × 抖音卖课监管边界",
+  root: true,
+  children: [
+    { t: "一、属于卖课范围 · 管得严（教培类目）", children: [
+      { t: "体系化录播 / 视频课（付费课程）" },
+      { t: "直播带课 · 一对多实时培训" },
+      { t: "训练营 / 周期制教学班" },
+      { t: "考证 / 职业资格培训" },
+      { t: "语言培训（英语等）" },
+      { t: "职业技能培训（IT / 设计 / 财务…）" },
+      { t: "企业培训课程售卖（ToB 卖课）" },
+      { t: "付费专栏 / 年度会员（系统课为核心）" },
+      { t: "付费社群 + 系统课交付（含教学）" },
+      { t: "→ 共性：教培类目报白 + 资质 + 课程质检 + 452 天售后" }
+    ]},
+    { t: "二、边界模糊 · 个案判定（看名义与交付）", children: [
+      { t: "电子资料 / 模板一次性售卖" },
+      { t: "　· 标『课程/教程』→ 教培；标『资料』→ 图书/办公类目" },
+      { t: "一对一付费咨询" },
+      { t: "　· 服务类目 ≠ 教培；以『培训』名义则算" },
+      { t: "第三方 SaaS 挂课（小鹅通 / 千聊）" },
+      { t: "　· 平台担资质，但内容仍审核" },
+      { t: "→ 判定口诀：一对多 + 系统交付 = 卖课；一对一 + 非标 = 服务" }
+    ]},
+    { t: "三、不属于卖课范围 · 管得松（无需教培报白）", children: [
+      { t: "直播打赏 / 音浪收益（内容变现）" },
+      { t: "广告商单 / 星图接单（广告收入）" },
+      { t: "带货实物（图书 / 文具 / 设备，电商实物类目）" },
+      { t: "免费内容引流（无交易，不算卖课）" },
+      { t: "纯交流社群（无系统教学交付）" },
+      { t: "软件 / SaaS 工具订阅（卖工具非内容）" },
+      { t: "研报 / 数据 / 资讯售卖（非教培类目）" },
+      { t: "→ 这些无需办学许可 / ICP 自办 / 类目报白" }
+    ]},
+    { t: "四、通用红线 · 无论哪类都受约束", children: [
+      { t: "虚假 / 夸大宣传、保过提分极限词（误导售卖细则）" },
+      { t: "未成年人保护（K12 学科类一律禁售）" },
+      { t: "依法纳税（打赏 / 广告 / 带货同样要报）" },
+      { t: "《广告法》对带货 / 商单的约束" }
+    ]}
+  ]
+};
+
+// ---------- 引擎 ----------
+const svg = document.getElementById('svg');
+const SVGNS = "http://www.w3.org/2000/svg";
+const X_GAP = 300, Y_GAP = 40, NODE_H = 34, PAD_X = 14;
+const FONT = '13px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+const branchColors = ['#dc2626', '#ea580c', '#16a34a', '#6b7280'];
+const subColors = { ent: '#2f6fed', per: '#ea580c' };
+
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d');
+ctx.font = FONT;
+function textW(s){ return ctx.measureText(s).width; }
+
+function assignColor(node, color){
+  node.color = color;
+  (node.children||[]).forEach(c => assignColor(c, color));
+}
+DATA.children.forEach((c, i) => assignColor(c, branchColors[i]));
+
+let leafY = 0;
+function computeLayout(node, depth){
+  node.depth = depth;
+  node.x = depth * X_GAP + 20;
+  node.w = Math.max(textW(node.t) + PAD_X*2, node.root ? 200 : 140);
+  const kids = (node.collapsed || !node.children) ? [] : node.children;
+  if(kids.length === 0){
+    node.y = leafY;
+    leafY += Y_GAP;
+  } else {
+    kids.forEach(k => computeLayout(k, depth+1));
+    node.y = (kids[0].y + kids[kids.length-1].y) / 2;
+  }
+}
+
+function build(){
+  leafY = 0;
+  computeLayout(DATA, 0);
+  const maxX = (function mx(n){ let m=n.x+n.w; (n.children||[]).forEach(c=>{ if(!n.collapsed) m=Math.max(m, mx(c)); }); return m; })(DATA);
+  const totalW = maxX + 40;
+  const totalH = leafY + 40;
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
+  svg.innerHTML = '';
+  const g = document.createElementNS(SVGNS, 'g');
+  g.setAttribute('id', 'viewport');
+  svg.appendChild(g);
+  drawNode(g, DATA);
+}
+
+function drawNode(g, node){
+  if(node.children && node.children.length && !node.collapsed){
+    node.children.forEach(c => {
+      const path = document.createElementNS(SVGNS, 'path');
+      const x1 = node.x + node.w, y1 = node.y + NODE_H/2;
+      const x2 = c.x, y2 = c.y + NODE_H/2;
+      const mx = (x1 + x2)/2;
+      path.setAttribute('d', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', '#cbd5e1');
+      path.setAttribute('stroke-width', '1.5');
+      g.appendChild(path);
+      drawNode(g, c);
+    });
+  }
+  const grp = document.createElementNS(SVGNS, 'g');
+  grp.setAttribute('class', 'node-box');
+  grp.setAttribute('transform', `translate(${node.x},${node.y})`);
+  const rect = document.createElementNS(SVGNS, 'rect');
+  rect.setAttribute('width', node.w);
+  rect.setAttribute('height', NODE_H);
+  rect.setAttribute('rx', 8);
+  rect.setAttribute('fill', node.root ? '#1f2937' : '#ffffff');
+  rect.setAttribute('stroke', node.root ? '#1f2937' : (node.color || '#94a3b8'));
+  rect.setAttribute('stroke-width', node.root ? 0 : 1.5);
+  if(!node.root){
+    const accent = document.createElementNS(SVGNS, 'rect');
+    accent.setAttribute('width', 5);
+    accent.setAttribute('height', NODE_H);
+    accent.setAttribute('rx', 2);
+    accent.setAttribute('fill', (node.sub && subColors[node.sub]) || node.color || '#94a3b8');
+    grp.appendChild(accent);
+  }
+  grp.appendChild(rect);
+  const txt = document.createElementNS(SVGNS, 'text');
+  txt.setAttribute('class', 'node-text');
+  txt.setAttribute('x', node.root ? node.w/2 : PAD_X + 5);
+  txt.setAttribute('y', NODE_H/2 + 4);
+  if(node.root) {
+    txt.setAttribute('text-anchor', 'middle');
+    txt.setAttribute('fill', '#fff');
+    txt.setAttribute('font-weight', '700');
+    txt.setAttribute('font-size', '14px');
+  }
+  txt.textContent = node.t;
+  grp.appendChild(txt);
+  if(node.children && node.children.length){
+    const tg = document.createElementNS(SVGNS, 'g');
+    tg.setAttribute('class', 'toggle');
+    tg.setAttribute('transform', `translate(${node.w - 2},${NODE_H/2})`);
+    const tr = document.createElementNS(SVGNS, 'rect');
+    tr.setAttribute('x', -9); tr.setAttribute('y', -9);
+    tr.setAttribute('width', 18); tr.setAttribute('height', 18);
+    tr.setAttribute('rx', 9);
+    tr.setAttribute('fill', '#fff');
+    tr.setAttribute('stroke', node.color || '#94a3b8');
+    tr.setAttribute('stroke-width', 1.5);
+    tg.appendChild(tr);
+    const sign = document.createElementNS(SVGNS, 'text');
+    sign.setAttribute('text-anchor', 'middle');
+    sign.setAttribute('y', 4);
+    sign.setAttribute('font-size', '13px');
+    sign.setAttribute('fill', node.color || '#94a3b8');
+    sign.setAttribute('font-weight', '700');
+    sign.textContent = node.collapsed ? '+' : '−';
+    tg.appendChild(sign);
+    tg.addEventListener('click', (e) => { e.stopPropagation(); node.collapsed = !node.collapsed; build(); });
+    grp.appendChild(tg);
+  }
+  grp.addEventListener('click', () => { if(node.children && node.children.length){ node.collapsed = !node.collapsed; build(); } });
+  g.appendChild(grp);
+}
+
+let scale = 1, tx = 0, ty = 0;
+function applyTransform(){
+  const vp = svg.querySelector('#viewport');
+  if(vp) vp.setAttribute('transform', `translate(${tx},${ty}) scale(${scale})`);
+}
+svg.addEventListener('mousedown', e => {
+  if(e.target.closest('.toggle')) return;
+  let sx = e.clientX, sy = e.clientY, stx = tx, sty = ty;
+  svg.classList.add('grabbing');
+  function move(ev){ tx = stx + (ev.clientX - sx); ty = sty + (ev.clientY - sy); applyTransform(); }
+  function up(){ window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); svg.classList.remove('grabbing'); }
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', up);
+});
+svg.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  scale = Math.min(2.5, Math.max(0.4, scale * factor));
+  applyTransform();
+}, { passive: false });
+
+document.getElementById('expandAll').onclick = () => { (function un(n){ n.collapsed=false; (n.children||[]).forEach(un); })(DATA); build(); resetView(); };
+document.getElementById('collapseAll').onclick = () => { DATA.children.forEach(c => c.collapsed = true); build(); resetView(); };
+document.getElementById('reset').onclick = resetView;
+function resetView(){ scale = 1; tx = 0; ty = 0; applyTransform(); }
+
+build();
+resetView();
+</script>
+</body>
+</html>

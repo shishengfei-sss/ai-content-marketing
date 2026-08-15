@@ -10,7 +10,7 @@ from uuid import uuid4
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import _get_test_client, check, req, reset_all_tenant_quotas, ensure_fake_platform
+from tests.http_client import _get_test_client, check, req, reset_all_tenant_quotas, ensure_fake_platform, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -158,8 +158,7 @@ def main() -> int:
         )
     )
 
-    proc = subprocess.run([sys.executable, "-B", "tests/verify_c5.py"], cwd=API_ROOT)
-    results.append(check("VC6-4 verify_c5 回归", proc.returncode == 0))
+    results.append(run_nested_script("VC6-4 verify_c5 回归", "verify_c5.py"))
 
     passed = all(results)
     print("\n=== C6", "全部通过" if passed else "存在失败", "===")

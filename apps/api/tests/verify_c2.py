@@ -14,7 +14,7 @@ from app.database import SessionLocal, uuid_eq
 from app.models import Content
 from app.services.agent.pipelines import PIPELINE_REGISTRY
 from tests.alembic_head import is_at_expected_head
-from tests.http_client import check, req, ensure_fake_platform
+from tests.http_client import check, req, ensure_fake_platform, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -137,8 +137,7 @@ def main() -> int:
     pipeline_tools = [s.tool_name for s in PIPELINE_REGISTRY.get("content_create", [])]
     results.append(check("VC2-8 无 publish 步骤", "publish_content" not in pipeline_tools, str(pipeline_tools)))
 
-    proc = subprocess.run([sys.executable, "-B", "tests/verify_c1.py"], cwd=API_ROOT)
-    results.append(check("VC2-9 verify_c1 回归", proc.returncode == 0))
+    results.append(run_nested_script("VC2-9 verify_c1 回归", "verify_c1.py"))
 
     passed = all(results)
     print("\n=== C2", "全部通过" if passed else "存在失败", "===")

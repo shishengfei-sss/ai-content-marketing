@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>高保真 · P02-A 发起入驻</title>
+  <link rel="stylesheet" href="_shared/hifi.css" />
+</head>
+<body>
+  <!-- 底层列表虚化示意 -->
+  <div class="shell" style="filter:brightness(.92)">
+    <header class="topbar"><div class="brand">管理后台</div><div class="meta">platform_admin</div></header>
+    <div class="body">
+      <aside class="sidebar">
+        <div class="group">内容获客</div>
+        <a class="on" href="平台-P02-商家租户.html">商家租户</a>
+        <a href="平台-P03-入驻审核.html">入驻审核</a>
+      </aside>
+      <main class="main"><div class="page-card" style="min-height:420px;opacity:.5">商家列表（背景）</div></main>
+    </div>
+  </div>
+
+  <div class="drawer-mask">
+    <div class="drawer">
+      <div class="drawer-h">
+        <span>帮客户开通商城</span>
+        <a href="平台-P02-商家租户.html" style="color:#999;font-weight:400">✕</a>
+      </div>
+      <div class="drawer-b">
+        <div class="hifi-nav" style="margin-top:0">
+          <a href="index.html">UX 枢纽</a> · <a href="../06-平台端UI.html#p02a">线框 P02-A</a>
+        </div>
+
+        <div class="field">
+          <label>关联租户 <span class="req">*</span></label>
+          <div class="val">甲公司 UAT ▾</div>
+          <div class="hint">管家仅可搜到已预分配给自己的未入驻租户</div>
+        </div>
+        <div class="field">
+          <label>主体类型 <span class="req">*</span></label>
+          <div style="display:flex;gap:8px">
+            <button class="btn" type="button">个人</button>
+            <button class="btn btn-p" type="button">个体工商户</button>
+            <button class="btn" type="button">企业</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>商家展示名 <span class="req">*</span></label>
+          <div class="val">某某工作室</div>
+        </div>
+        <div class="field">
+          <label>主体名称（执照名） <span class="req">*</span></label>
+          <div class="val">深圳市南山区某某工作室</div>
+        </div>
+        <div class="field">
+          <label>统一社会信用代码</label>
+          <div class="val">92440300MA5****12</div>
+          <div class="hint">可选；选租户后可预填</div>
+        </div>
+        <div class="field">
+          <label>法定代表人</label>
+          <div class="val">张某某</div>
+        </div>
+        <div class="field">
+          <label>经营联系人 <span class="req">*</span></label>
+          <div class="val">张某某</div>
+        </div>
+        <div class="field">
+          <label>联系手机 <span class="req">*</span></label>
+          <div class="val">13900009000</div>
+        </div>
+
+        <div class="section-title">资质材料 <span style="font-weight:400;color:#999;font-size:12px">代建可缺，审核通过前须齐</span></div>
+        <div class="mat-grid">
+          <div class="mat-card">
+            <div class="mat-thumb has-img"></div>
+            <div>营业执照</div>
+            <button class="btn-link" type="button">重新上传</button>
+          </div>
+          <div class="mat-card">
+            <div class="mat-thumb">点击选择文件</div>
+            <div>法人证正面 <span style="color:#999">选填</span></div>
+          </div>
+          <div class="mat-card">
+            <div class="mat-thumb">点击选择文件</div>
+            <div>法人证反面 <span style="color:#999">选填</span></div>
+          </div>
+        </div>
+        <div class="hint" style="margin-top:8px">须真实弹出系统文件选择器；禁止一点击就显示「已上传」。</div>
+      </div>
+      <div class="drawer-f">
+        <a class="btn" href="平台-P02-商家租户.html">取消</a>
+        <a class="btn btn-p" href="平台-P03-入驻审核.html">提交待审</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

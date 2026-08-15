@@ -71,5 +71,8 @@ def ensure_multi_tenant_user(db: Session, phone: str, password: str) -> str:
         tenant_b_id = str(tenant_b.id)
     else:
         tenant_b_id = str(memberships[1].tenant_id)
+    # 多家公司必须走选公司，不能用 user.tenant_id 自动带入（对照 M2）
+    if len(list_active_memberships(db, user.id)) >= 2:
+        user.tenant_id = None
     db.commit()
     return tenant_b_id

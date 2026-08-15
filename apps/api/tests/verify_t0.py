@@ -1,26 +1,23 @@
 """T0 验收：FakeLLM 与 unit 测试。"""
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import check
+from tests.http_client import captured_run, check
 
 
 def main() -> int:
     results: list[bool] = []
 
-    proc = subprocess.run(
+    proc = captured_run(
         [sys.executable, "-m", "pytest", "tests/unit/test_fake_llm.py", "-q"],
         cwd=API_ROOT,
-        capture_output=True,
-        text=True,
     )
-    out = proc.stdout + proc.stderr
+    out = (proc.stdout or "") + (proc.stderr or "")
     results.append(check("VT0-1 pytest fake_llm", proc.returncode == 0, out.strip()[:200]))
 
     from app.services.llm.factory import get_provider

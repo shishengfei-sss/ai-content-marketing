@@ -8,7 +8,7 @@ from pathlib import Path
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-from tests.http_client import check, req
+from tests.http_client import check, req, run_nested_m0_m8
 
 
 def login(phone: str, password: str) -> str:
@@ -71,8 +71,7 @@ def main() -> int:
         )
     )
 
-    proc = subprocess.run([sys.executable, "-B", "tests/run_m0_m8.py"], cwd=API_ROOT)
-    results.append(check("VA1-5 run_m0_m8", proc.returncode == 0))
+    results.append(run_nested_m0_m8("VA1-5 run_m0_m8"))
 
     passed = all(results)
     print("\n=== A1", "全部通过" if passed else "存在失败", "===")

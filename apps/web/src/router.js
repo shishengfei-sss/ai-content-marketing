@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from './layouts/AppLayout.vue'
 import AdminLayout from './layouts/AdminLayout.vue'
-import { useAuthStore } from './stores/auth'
+import { useAuthStore, WORKSPACE_MERCHANT, WORKSPACE_PLATFORM } from './stores/auth'
 import { NAV_ITEMS, hasAnyPermission, hasPermission } from './config/permissions'
 
 const routes = [
@@ -9,7 +9,13 @@ const routes = [
     path: '/login',
     name: 'Login',
     component: () => import('./views/Login.vue'),
-    meta: { public: true },
+    meta: { public: true, workspaceMode: WORKSPACE_MERCHANT },
+  },
+  {
+    path: '/admin/login',
+    name: 'AdminLogin',
+    component: () => import('./views/Login.vue'),
+    meta: { public: true, workspaceMode: WORKSPACE_PLATFORM, platformLogin: true },
   },
   {
     path: '/forgot-password',
@@ -76,6 +82,84 @@ const routes = [
         component: () => import('./views/admin/AdminPlatformTenderLeads.vue'),
         meta: { title: '招标线索公共池', platformAdmin: true },
       },
+      {
+        path: 'shop/dashboard',
+        name: 'AdminShopDashboard',
+        component: () => import('./views/admin/shop/PlatformDashboard.vue'),
+        meta: { title: '概览', platformAdmin: true },
+      },
+      {
+        path: 'shop/merchants',
+        name: 'AdminShopMerchants',
+        component: () => import('./views/admin/shop/MerchantsList.vue'),
+        meta: { title: '商家租户', platformAdmin: true },
+      },
+      {
+        path: 'shop/merchants/:tenantId',
+        name: 'AdminShopMerchantDetail',
+        component: () => import('./views/admin/shop/MerchantDetail.vue'),
+        meta: { title: '商家详情', platformAdmin: true },
+      },
+      {
+        path: 'shop/onboarding',
+        name: 'AdminShopOnboarding',
+        component: () => import('./views/admin/shop/OnboardingApplications.vue'),
+        meta: { title: '入驻审核', platformAdmin: true },
+      },
+      {
+        path: 'shop/plans',
+        name: 'AdminShopPlans',
+        component: () => import('./views/admin/shop/PlanConfig.vue'),
+        meta: { title: '套餐配置', platformAdmin: true },
+      },
+      {
+        path: 'shop/subscriptions',
+        name: 'AdminShopSubscriptions',
+        component: () => import('./views/admin/shop/Subscriptions.vue'),
+        meta: { title: '订阅台账', platformAdmin: true },
+      },
+      {
+        path: 'shop/product-reviews',
+        name: 'AdminShopProductReviews',
+        component: () => import('./views/admin/shop/ProductReviews.vue'),
+        meta: { title: '商品审核', platformAdmin: true },
+      },
+      {
+        path: 'shop/categories',
+        name: 'AdminShopCategories',
+        component: () => import('./views/admin/shop/CategoriesList.vue'),
+        meta: { title: '类目与费率', platformAdmin: true },
+      },
+      {
+        path: 'shop/roles-codes',
+        name: 'AdminShopRolesAndCodes',
+        component: () => import('./views/admin/shop/RolesAndCodes.vue'),
+        meta: { title: '角色与编码', platformAdmin: true },
+      },
+      {
+        path: 'shop/channels',
+        name: 'AdminShopChannels',
+        component: () => import('./views/admin/shop/ChannelPayConfig.vue'),
+        meta: { title: '渠道与支付', platformAdmin: true },
+      },
+      {
+        path: 'shop/settlements',
+        name: 'AdminShopSettlements',
+        component: () => import('./views/admin/shop/Settlements.vue'),
+        meta: { title: '清结算', platformAdmin: true },
+      },
+      {
+        path: 'shop/sms',
+        name: 'AdminShopSms',
+        component: () => import('./views/admin/shop/SmsManagement.vue'),
+        meta: { title: '短信管理', platformAdmin: true },
+      },
+      {
+        path: 'shop/moderation',
+        name: 'AdminShopModeration',
+        component: () => import('./views/admin/shop/ModerationCases.vue'),
+        meta: { title: '违规稽查', platformAdmin: true },
+      },
     ],
   },
   {
@@ -88,6 +172,225 @@ const routes = [
         name: 'Dashboard',
         component: () => import('./views/Dashboard.vue'),
         meta: { title: '工作台', permission: 'dashboard.view' },
+      },
+      {
+        path: 'shop/overview',
+        name: 'ShopOverview',
+        component: () => import('./views/shop/DashboardOverview.vue'),
+        meta: { title: '交易看板', permissionAny: ['shop.analytics.read'] },
+      },
+      {
+        path: 'shop/dashboard',
+        redirect: '/shop/overview',
+      },
+      {
+        path: 'shop/console',
+        redirect: '/shop/overview',
+      },
+      {
+        path: 'shop/onboarding',
+        name: 'ShopOnboarding',
+        component: () => import('./views/shop/OnboardingApply.vue'),
+        meta: { title: '开通商城' },
+      },
+      {
+        path: 'shop/subscription',
+        name: 'ShopSubscription',
+        component: () => import('./views/shop/SubscriptionEntitlements.vue'),
+        meta: {
+          title: '套餐信息',
+          permissionAny: ['shop.subscription.usage.read'],
+          shopSettingsHub: true,
+        },
+      },
+      {
+        path: 'shop/payment',
+        name: 'ShopPaymentOnboarding',
+        component: () => import('./views/shop/PaymentOnboarding.vue'),
+        meta: {
+          title: '支付与进件',
+          permissionAny: ['shop.settings.read', 'shop.settings.write'],
+          shopSettingsHub: true,
+        },
+      },
+      {
+        path: 'shop/sms-settings',
+        name: 'ShopSmsClaimSettings',
+        component: () => import('./views/shop/SmsClaimSettings.vue'),
+        meta: {
+          title: '短信与领权',
+          permissionAny: ['shop.settings.read', 'shop.settings.write'],
+          shopSettingsHub: true,
+        },
+      },
+      {
+        path: 'shop/roles-members',
+        name: 'ShopRolesMembers',
+        component: () => import('./views/shop/RolesMembers.vue'),
+        meta: {
+          title: '角色与成员',
+          permissionAny: ['shop.role.manage', 'team.member.view'],
+          shopSettingsHub: true,
+        },
+      },
+      {
+        path: 'shop/products',
+        name: 'ShopProducts',
+        component: () => import('./views/shop/ProductsList.vue'),
+        meta: { title: '商品管理', permissionAny: ['shop.product.read', 'shop.product.write'] },
+      },
+      {
+        path: 'shop/products/new',
+        name: 'ShopProductNew',
+        component: () => import('./views/shop/ProductEdit.vue'),
+        meta: { title: '新建商品', permissionAny: ['shop.product.write'] },
+      },
+      {
+        path: 'shop/products/:id',
+        name: 'ShopProductEdit',
+        component: () => import('./views/shop/ProductEdit.vue'),
+        meta: { title: '商品编辑', permissionAny: ['shop.product.read', 'shop.product.write'] },
+      },
+      {
+        path: 'shop/orders',
+        name: 'ShopOrders',
+        component: () => import('./views/shop/OrdersList.vue'),
+        meta: { title: '订单管理', permissionAny: ['shop.order.list_all', 'shop.order.view'] },
+      },
+      {
+        path: 'shop/orders/:id',
+        name: 'ShopOrderDetail',
+        component: () => import('./views/shop/OrderDetail.vue'),
+        meta: { title: '订单详情', permissionAny: ['shop.order.view', 'shop.order.list_all'] },
+      },
+      {
+        path: 'shop/buyers',
+        name: 'ShopBuyers',
+        component: () => import('./views/shop/BuyersList.vue'),
+        meta: { title: '买家', permissionAny: ['shop.buyer.list_all', 'shop.buyer.view'] },
+      },
+      {
+        path: 'shop/buyers/:id',
+        name: 'ShopBuyerDetail',
+        component: () => import('./views/shop/BuyerDetail.vue'),
+        meta: { title: '买家详情', permissionAny: ['shop.buyer.view', 'shop.buyer.list_all'] },
+      },
+      {
+        path: 'shop/entitlements',
+        name: 'ShopEntitlements',
+        component: () => import('./views/shop/EntitlementsList.vue'),
+        meta: {
+          title: '权益',
+          permissionAny: ['shop.entitlement.list_all', 'shop.entitlement.view'],
+        },
+      },
+      {
+        path: 'shop/verifications',
+        name: 'ShopVerifications',
+        component: () => import('./views/shop/Verifications.vue'),
+        meta: {
+          title: '核销台',
+          permissionAny: ['shop.redemption.read', 'shop.redemption.execute'],
+        },
+      },
+      {
+        path: 'shop/redemptions',
+        redirect: '/shop/verifications',
+      },
+      {
+        path: 'shop/columns',
+        name: 'ShopColumns',
+        component: () => import('./views/shop/ColumnsList.vue'),
+        meta: { title: '专栏管理', permissionAny: ['shop.content.read', 'shop.content.write'] },
+      },
+      {
+        path: 'shop/columns/:id',
+        name: 'ShopColumnEdit',
+        component: () => import('./views/shop/ColumnEdit.vue'),
+        meta: { title: '专栏与课时', permissionAny: ['shop.content.read', 'shop.content.write'] },
+      },
+      {
+        path: 'shop/digital-packages',
+        name: 'ShopDigitalPackages',
+        component: () => import('./views/shop/DigitalPackagesList.vue'),
+        meta: { title: '资料包', permissionAny: ['shop.content.read', 'shop.content.write'] },
+      },
+      {
+        path: 'shop/digital-packages/:id',
+        name: 'ShopDigitalPackageEdit',
+        component: () => import('./views/shop/DigitalPackageEdit.vue'),
+        meta: { title: '资料包编辑', permissionAny: ['shop.content.read', 'shop.content.write'] },
+      },
+      {
+        path: 'shop/service-offers',
+        name: 'ShopServiceOffers',
+        component: () => import('./views/shop/ServiceOffersList.vue'),
+        meta: { title: '服务定义', permissionAny: ['shop.content.read', 'shop.content.write'] },
+      },
+      {
+        path: 'shop/service-offers/:id',
+        name: 'ShopServiceOfferEdit',
+        component: () => import('./views/shop/ServiceOfferEdit.vue'),
+        meta: { title: '服务与时段', permissionAny: ['shop.content.read', 'shop.content.write'] },
+      },
+      {
+        path: 'shop/bookings',
+        name: 'ShopBookings',
+        component: () => import('./views/shop/BookingsList.vue'),
+        meta: { title: '预约管理', permissionAny: ['shop.redemption.read'] },
+      },
+      {
+        path: 'shop/invoices',
+        name: 'ShopInvoices',
+        component: () => import('./views/shop/InvoicesList.vue'),
+        meta: {
+          title: '发票管理',
+          permissionAny: ['shop.invoice.list_all', 'shop.invoice.process'],
+        },
+      },
+      {
+        path: 'shop/channel-mappings',
+        name: 'ShopChannelMappings',
+        component: () => import('./views/shop/ChannelMappings.vue'),
+        meta: {
+          title: '公域映射',
+          permissionAny: ['shop.channel.read', 'shop.channel.map'],
+        },
+      },
+      {
+        path: 'shop/channel-settings',
+        name: 'ShopChannelSettings',
+        component: () => import('./views/shop/ChannelSettings.vue'),
+        meta: {
+          title: '公域对接',
+          permissionAny: ['shop.channel.read', 'shop.channel.map', 'shop.channel.write'],
+          shopSettingsHub: true,
+        },
+      },
+      {
+        path: 'shop/settings',
+        name: 'ShopSettingsHub',
+        component: () => import('./views/shop/SettingsHub.vue'),
+        meta: { title: '设置' },
+      },
+      {
+        path: 'shop/store-settings',
+        name: 'ShopStoreSettings',
+        component: () => import('./views/shop/StoreSettings.vue'),
+        meta: {
+          title: '单店设置',
+          permissionAny: ['shop.store.settings.read', 'shop.store.settings.write'],
+          shopSettingsHub: true,
+        },
+      },
+      {
+        path: 'shop/stores',
+        name: 'ShopStores',
+        component: () => import('./views/shop/StoresList.vue'),
+        meta: {
+          title: '店铺管理',
+          permissionAny: ['shop.store.manage', 'shop.store.settings.read'],
+        },
       },
       {
         path: 'create',
@@ -428,6 +731,12 @@ const routes = [
         meta: { title: '设置' },
       },
       {
+        path: 'settings/account',
+        name: 'SettingsAccount',
+        component: () => import('./views/SettingsAccount.vue'),
+        meta: { title: '我的账号' },
+      },
+      {
         path: 'settings/tenant',
         name: 'SettingsTenant',
         component: () => import('./views/SettingsTenant.vue'),
@@ -505,8 +814,14 @@ const router = createRouter({
   routes,
 })
 
-function firstAllowedPath(permissions) {
+function firstAllowedPath(permissions, auth) {
+  if (auth?.isShopClerk) return '/shop/verifications'
   for (const item of NAV_ITEMS) {
+    if (item.shopOnboardingEntry || item.shopEntitlementsEntry) {
+      if (item.permissionAny && hasAnyPermission(permissions, item.permissionAny)) return item.path
+      if (item.permission && hasPermission(permissions, item.permission)) return item.path
+      continue
+    }
     if (!item.permission && !item.permissionAny) return item.path
     if (item.permissionAny && hasAnyPermission(permissions, item.permissionAny)) return item.path
     if (item.permission && hasPermission(permissions, item.permission)) return item.path
@@ -523,22 +838,36 @@ async function ensureUser(auth) {
   }
 }
 
-function redirectIfPermissionDenied(to, permissions) {
+function redirectIfPermissionDenied(to, permissions, auth) {
+  if (auth?.isShopClerk && !to.path.startsWith('/shop/verifications')) {
+    return '/shop/verifications'
+  }
   if (to.meta.permission && !hasPermission(permissions, to.meta.permission)) {
-    const fallback = firstAllowedPath(permissions)
+    const fallback = firstAllowedPath(permissions, auth)
     return to.path === fallback ? undefined : fallback
   }
   if (to.meta.permissionAny && !hasAnyPermission(permissions, to.meta.permissionAny)) {
-    const fallback = firstAllowedPath(permissions)
+    const fallback = firstAllowedPath(permissions, auth)
     return to.path === fallback ? undefined : fallback
   }
   return undefined
 }
 
+function loginHomePath(auth) {
+  if (auth.isPlatformWorkspace) return '/admin'
+  if (auth.needSelectTenant || auth.user?.need_select_tenant) return '/select-tenant'
+  if (auth.isShopClerk) return '/shop/verifications'
+  return firstAllowedPath(auth.permissions, auth)
+}
+
+function isPublicAuthRoute(path) {
+  return path === '/login' || path === '/register' || path === '/admin/login'
+}
+
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (!to.meta.public && !auth.isLoggedIn) {
-    return '/login'
+    return to.meta.platformAdmin || to.path.startsWith('/admin') ? '/admin/login' : '/login'
   }
 
   if (!auth.isLoggedIn) return
@@ -548,10 +877,15 @@ router.beforeEach(async (to) => {
     return to.meta.public ? undefined : '/login'
   }
 
-  if (auth.user?.role === 'platform_admin') {
+  if (auth.isPlatformWorkspace) {
     if (to.meta.platformAdmin) return
-    if (to.meta.public) return '/admin'
+    if (to.meta.public) return loginHomePath(auth)
     return '/admin'
+  }
+
+  if (to.meta.platformAdmin) {
+    const fallback = loginHomePath(auth)
+    return to.path === fallback ? undefined : fallback
   }
 
   if (
@@ -562,19 +896,13 @@ router.beforeEach(async (to) => {
     return '/select-tenant'
   }
 
-  if (to.meta.public && (to.path === '/login' || to.path === '/register')) {
-    if (auth.needSelectTenant || auth.user?.need_select_tenant) return '/select-tenant'
-    const home = firstAllowedPath(auth.permissions)
+  if (to.meta.public && isPublicAuthRoute(to.path)) {
+    const home = loginHomePath(auth)
     return to.path === home ? undefined : home
   }
 
-  if (to.meta.platformAdmin && auth.user?.role !== 'platform_admin') {
-    const fallback = firstAllowedPath(auth.permissions)
-    return to.path === fallback ? undefined : fallback
-  }
-
   if (!to.meta.public) {
-    return redirectIfPermissionDenied(to, auth.permissions)
+    return redirectIfPermissionDenied(to, auth.permissions, auth)
   }
 })
 

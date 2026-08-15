@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -10,7 +11,7 @@ API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
 from app.services.llm.base import LLMMessage
-from app.services.llm.fake import FakeLLMProvider, MOCK_PROPOSALS
+from app.services.llm.fake import FakeLLMProvider
 
 
 async def _run():
@@ -27,7 +28,10 @@ async def _run():
         api_key="x",
         base_url="",
     )
-    assert r1.content == r2.content == MOCK_PROPOSALS
+    assert r1.content == r2.content
+    proposals = json.loads(r1.content)
+    assert isinstance(proposals, list) and len(proposals) >= 3
+    assert all(isinstance(item.get("title"), str) and item["title"] for item in proposals)
     r3 = await provider.chat(
         [LLMMessage(role="user", content="hello")],
         model="fake",

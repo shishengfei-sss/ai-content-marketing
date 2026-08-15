@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phase1 · 字段与表</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#f5f5f5;margin:0;color:#1f1f1f;font-size:14px;line-height:1.55}
+.bar{background:#1677ff;color:#fff;padding:0 20px;height:56px;display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.bar h1{font-size:16px;font-weight:600;color:#fff;margin:0;display:inline}
+.bar a{color:rgba(255,255,255,.92);font-size:13px;margin-left:8px;text-decoration:none;padding:4px 8px;border-radius:4px}
+.bar a:hover{background:rgba(255,255,255,.15)}
+.wrap{max-width:1100px;margin:0 auto;padding:20px}
+.block{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:20px;margin-bottom:16px}
+.block h2{font-size:16px;font-weight:600;margin:0 0 8px}.block h2 code{color:#1677ff}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{border:1px solid #e8e8e8;padding:6px 8px;text-align:left;vertical-align:top}
+th{background:#fafafa;font-weight:500;color:#5c6678}
+.pk{color:#d48806;font-weight:600}.fk{color:#722ed1}.uk{color:#389e0d;font-weight:600}
+.sub{font-size:13px;color:#666;margin-bottom:8px}
+.nav a{display:inline-block;padding:4px 10px;margin:2px;background:#fff;border:1px solid #e8e8e8;border-radius:6px;font-size:12px;text-decoration:none;color:#666}
+.nav a:hover{color:#1677ff;border-color:#91caff}
+</style></head><body>
+<div class="bar"><h1>④ 字段与数据表</h1>
+<a href="index.html">索引</a><a href="03-数据流.html#f0">F0 入驻流程</a><a href="06-平台端UI.html">平台运营端</a><a href="01-管理端UI.html">商家端</a><a href="02-买家端UI.html">买家端</a><a href="03-数据流.html">数据流</a><a href="05-角色权限.html">角色权限</a>
+</div>
+<div class="wrap">
+<p class="sub">约定：UUID PK；全表 <code>tenant_id</code>（商家/企业隔离）+ 交易表带 <code>shop_id</code>（店铺隔离）；金额 NUMERIC(12,2)；TIMESTAMPTZ。买家 ≠ Contact。</p>
+<p class="sub"><b>层级</b>：平台 → <code>shop_onboarding_applications</code>（入驻申请）→ <code>shop_merchant_accounts</code>（审核通过）→ <code>shop_stores</code>（可多店）→ 商品/订单/内容。</p>
+<div class="nav">
+<a href="#ob">onboarding</a><a href="#ob-log">审核日志</a><a href="#m">merchant</a><a href="#st">stores</a><a href="#pl">plans</a>
+<a href="#platform-code-rule">业务编码</a>
+<a href="#p">products</a><a href="#c">columns/lessons</a><a href="#d">digital</a><a href="#s">service</a>
+<a href="#b">buyers</a><a href="#o">orders</a><a href="#pay">pay/refund</a><a href="#e">entitlements</a>
+<a href="#cl">claim</a><a href="#i">invoice</a><a href="#settle">settlement</a><a href="#moderate">moderation</a><a href="#ch">channel</a><a href="#rev">review</a><a href="#set">settings</a><a href="#roles">roles</a>
+<a href="#select-spec">下拉规格</a><a href="#select-cascade">级联</a>
+</div>
+
+<div class="block" id="ob"><h2><code>shop_onboarding_applications</code>（入驻申请单）</h2>
+<p class="sub">P02-A 管家代建 / 商家自申写入；P03 审核通过后再建 <code>shop_merchant_accounts</code>。流程见 <a href="03-数据流.html#f0">F0 商家入驻</a> · 栏位规则见 <a href="PRD-内容获客商城-phase1.md">PRD §2.1.1</a>。</p>
+<table>
+<tr><th>字段</th><th>类型</th><th>必填</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td>PK</td><td>申请单主键（系统内部）</td></tr>
+<tr><td><b>application_no</b></td><td>VARCHAR(32)</td><td>✓</td><td><span class="uk">UK</span> 业务单号；提交时 <code>generate_platform_number(shop_onboarding)</code>；列表/详情/P03 主展示（替代裸 UUID）</td></tr>
+<tr><td><span class="fk">tenant_id</span></td><td>UUID</td><td>✓</td><td>智营租户；<span class="uk">同一 tenant 同时仅 1 条 status=pending</span></td></tr>
+<tr><td><b>entity_type</b></td><td>VARCHAR(30)</td><td>✓</td><td><code>personal</code> 个人 · <code>individual_business</code> 个体工商户 · <code>enterprise</code> 企业</td></tr>
+<tr><td><b>initiator</b></td><td>VARCHAR(20)</td><td>✓</td><td><code>ops_assisted</code> 运营代建（P02-A）· <code>merchant_self</code> 商家自申</td></tr>
+<tr><td><b>status</b></td><td>VARCHAR(20)</td><td>✓</td><td><code>pending</code> 待审 · <code>approved</code> 已通过 · <code>rejected</code> 已驳回（<b>无 draft</b>；A20/P02-A 提交即 pending；未提交不落库）</td></tr>
+<tr><td>legal_name</td><td>VARCHAR(200)</td><td>✓</td><td>主体名称：个人=身份证姓名；个体/企业=营业执照名称；可与 tenant 企业信息预填，提交以证照为准</td></tr>
+<tr><td>display_name</td><td>VARCHAR(200)</td><td>✓</td><td>商家展示名（P02/P03 列表默认展示）；默认可=legal_name，允许品牌简称</td></tr>
+<tr><td>id_no</td><td>VARCHAR(18)</td><td>个人✓</td><td>身份证号；个人主体必填；法人身份证证号存 qualification_files 元数据</td></tr>
+<tr><td>unified_social_credit_code</td><td>VARCHAR(18)</td><td>个体/企业✓</td><td>统一社会信用代码；个体与企业必填</td></tr>
+<tr><td>legal_rep_name</td><td>VARCHAR(100)</td><td>个体/企业✓</td><td>法定代表人姓名；个体/企业必填；可由法人身份证 OCR 预填</td></tr>
+<tr><td>contact_name</td><td>VARCHAR(100)</td><td>✓</td><td>经营联系人姓名（可与法人不同）；收补材料通知</td></tr>
+<tr><td>contact_mobile</td><td>VARCHAR(11)</td><td>✓</td><td>经营联系人手机，11 位；驳回/补材料短信与站内信</td></tr>
+<tr><td>qualification_files</td><td>JSONB</td><td>审前齐</td><td>资质附件 file_id 集合，见下表「材料键」；运营可代传或商家审核前补传</td></tr>
+<tr><td><b>ocr_results</b></td><td>JSONB</td><td>—</td><td>上传 OCR 结果，提交时落库；见下表「OCR 结构」；低置信度字段须人工确认</td></tr>
+<tr><td>bank_account_info</td><td>JSONB</td><td>企业✓</td><td>对公账户：<code>bank_name</code>、<code>account_no</code>、<code>account_name</code>；个体可选</td></tr>
+<tr><td>reject_code</td><td>VARCHAR(30)</td><td>驳回时</td><td>见 <a href="#enum-onboarding-reject-code">§入驻驳回原因码</a>（15 项，分组下拉）</td></tr>
+<tr><td>reject_reason</td><td>TEXT</td><td>驳回时✓</td><td>驳回说明，≥4 字</td></tr>
+<tr><td>reviewed_by</td><td>UUID</td><td>审出时</td><td>P03 审核人 user_id</td></tr>
+<tr><td>reviewed_at</td><td>TIMESTAMPTZ</td><td>审出时</td><td>通过或驳回时间</td></tr>
+<tr><td>operator_id</td><td>UUID</td><td>代建时</td><td>运营发起 P02-A 的操作人；商家自申可空</td></tr>
+<tr><td>remark</td><td>TEXT</td><td>—</td><td>运营代建备注</td></tr>
+<tr><td><span class="fk">merchant_id</span></td><td>UUID</td><td>通过后</td><td>FK → <code>shop_merchant_accounts.id</code>；approved 后写入</td></tr>
+<tr><td>submitted_at</td><td>TIMESTAMPTZ</td><td>✓</td><td>首次提交时间（列表「申请时间」）</td></tr>
+<tr><td>created_by</td><td>UUID</td><td>—</td><td>创建人（运营或商家 admin）</td></tr>
+<tr><td>created_at / updated_at</td><td>TIMESTAMPTZ</td><td>✓</td><td>审计时间</td></tr>
+</table>
+
+<h3 style="font-size:14px;margin:14px 0 6px"><code>qualification_files</code> 材料键（按 entity_type）</h3>
+<table>
+<tr><th>键名</th><th>个人</th><th>个体</th><th>企业</th><th>说明</th></tr>
+<tr><td><code>id_card_front</code></td><td>✓</td><td>法人✓</td><td>法人✓</td><td>身份证人像面；<b>OCR</b> 预填姓名/证号</td></tr>
+<tr><td><code>id_card_back</code></td><td>✓</td><td>法人✓</td><td>法人✓</td><td>身份证国徽面；OCR 有效期</td></tr>
+<tr><td><code>id_hold_photo</code></td><td>可选</td><td>—</td><td>—</td><td>手持照</td></tr>
+<tr><td><code>business_license</code></td><td>—</td><td>✓</td><td>✓</td><td>营业执照；<b>OCR</b> 预填执照名/信用代码/法人</td></tr>
+<tr><td><code>bank_account_proof</code></td><td>—</td><td>可选</td><td>✓</td><td>对公账户证明或开户许可证</td></tr>
+<tr><td><code>icp_license</code></td><td>—</td><td>按类目</td><td>按类目</td><td>ICP 备案等类目资质</td></tr>
+<tr><td><code>category_qualification</code></td><td>—</td><td>按类目</td><td>按类目</td><td>办学许可等行业资质</td></tr>
+</table>
+
+<h3 style="font-size:14px;margin:14px 0 6px"><code>ocr_results</code> 单条结构示例</h3>
+<table>
+<tr><th>键</th><th>类型</th><th>说明</th></tr>
+<tr><td><code>doc_type</code></td><td>string</td><td><code>id_card_front</code> | <code>id_card_back</code> | <code>business_license</code></td></tr>
+<tr><td><code>file_id</code></td><td>UUID</td><td>对应 qualification_files 中的附件</td></tr>
+<tr><td><code>confidence</code></td><td>float</td><td>0～1；&lt;0.85 字段标黄须人工确认</td></tr>
+<tr><td><code>mapped_fields</code></td><td>object</td><td>预填映射，如 <code>legal_name</code>、<code>id_no</code>、<code>unified_social_credit_code</code>、<code>legal_rep_name</code></td></tr>
+<tr><td><code>raw</code></td><td>object</td><td>OCR 服务商原始返回（审计用）</td></tr>
+<tr><td><code>recognized_at</code></td><td>timestamp</td><td>识别时间</td></tr>
+</table>
+
+<p class="sub"><b>状态流转</b>：提交 → <code>status=pending</code>，P02 入驻状态 <code>reviewing</code>。<b>通过</b> → INSERT <code>shop_merchant_accounts</code> + 可选首开订阅，申请单 <code>approved</code>。<b>驳回</b> → <code>rejected</code> + 通知 <code>contact_mobile</code>，商家可改材料后<strong>新建申请</strong>或重提（同一 tenant 无 pending 时可再提交）。审核过程写 <a href="#ob-log">入驻审核日志</a>。</p></div>
+
+<div class="block" id="ob-log"><h2><code>shop_onboarding_review_logs</code>（入驻审核日志）</h2>
+<p class="sub">P03 审核面板底部「审核日志」；与 P02-B「操作日志」区分：本表仅记录<strong>申请单生命周期</strong>（提交、OCR、开始审核、通过、驳回、重提），不含商家暂停/订阅等。Phase 1 可与 <code>shop_audit_logs</code> 统一 action 枚举。</p>
+<table>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td>主键</td></tr>
+<tr><td><span class="fk">application_id</span></td><td>UUID</td><td>FK → <code>shop_onboarding_applications.id</code></td></tr>
+<tr><td><span class="fk">tenant_id</span></td><td>UUID</td><td>冗余；便于同 tenant 跨申请单查历史</td></tr>
+<tr><td><b>action</b></td><td>VARCHAR(30)</td><td><code>submitted</code> · <code>ocr_completed</code> · <code>review_started</code> · <code>approved</code> · <code>rejected</code> · <code>resubmitted</code></td></tr>
+<tr><td>summary</td><td>TEXT</td><td>摘要（如驳回原因码、OCR 低置信度字段）</td></tr>
+<tr><td>operator_id</td><td>UUID</td><td>可空；系统动作（OCR）为空</td></tr>
+<tr><td>operator_name</td><td>VARCHAR(100)</td><td>展示用（运营·张三 / 系统 / 商家·张某某）</td></tr>
+<tr><td>meta</td><td>JSONB</td><td>扩展：reject_code、ocr_doc_types、首开 plan_code 等</td></tr>
+<tr><td>created_at</td><td>TIMESTAMPTZ</td><td>发生时间（列表默认倒序）</td></tr>
+</table>
+<p class="sub"><b>API</b>：<code>GET /admin/shop/onboarding/applications/{id}</code> 详情内嵌 <code>review_logs[]</code>；或独立 <code>GET …/applications/{id}/review-logs</code>。</p></div>
+
+<div class="block" id="m"><h2><code>shop_merchant_accounts</code>（商家主体 · 审核通过后创建）</h2>
+<table>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td>商家主体主键（系统内部）</td></tr>
+<tr><td><b>merchant_no</b></td><td>VARCHAR(32)</td><td><span class="uk">UK</span> 商家编码；P03 通过建主体时自动生成；P02/P03 列表主键列、工单引用、导出对账用（<strong>不展示裸 tenant_id</strong>）</td></tr>
+<tr><td><span class="fk">tenant_id</span></td><td>UUID</td><td><span class="uk">UK(tenant_id)</span> 一 tenant 一商家；P03 通过后 INSERT</td></tr>
+<tr><td><span class="fk">onboarding_application_id</span></td><td>UUID</td><td>来源申请单（最近一次通过）</td></tr>
+<tr><td><b>entity_type</b></td><td>VARCHAR(30)</td><td><code>personal</code> · <code>individual_business</code> · <code>enterprise</code></td></tr>
+<tr><td>legal_name</td><td>VARCHAR(200)</td><td>主体名称（执照名/个人姓名）</td></tr>
+<tr><td>display_name</td><td>VARCHAR(200)</td><td>商家展示名（运营列表默认展示）</td></tr>
+<tr><td>id_no</td><td>VARCHAR(18)</td><td>个人身份证号（个人主体）</td></tr>
+<tr><td>unified_social_credit_code</td><td>VARCHAR(18)</td><td>统一社会信用代码（个体/企业）</td></tr>
+<tr><td>legal_rep_name</td><td>VARCHAR(100)</td><td>法人姓名（个体/企业）</td></tr>
+<tr><td>contact_name / contact_mobile</td><td>VARCHAR</td><td>经营联系人（从申请单复制）</td></tr>
+<tr><td>qualification_files</td><td>JSONB</td><td>审核通过时快照（身份证/执照/ICP 等 file_id）</td></tr>
+<tr><td>ocr_results</td><td>JSONB</td><td>审核通过时 OCR 快照（只读归档）</td></tr>
+<tr><td>bank_account_info</td><td>JSONB</td><td>对公账户（企业）</td></tr>
+<tr><td>status</td><td>VARCHAR(20)</td><td><code>active</code> 正常 · <code>suspended</code> 已暂停 · <code>closed</code> 已清退（入驻通过即 active，无 pending）</td></tr>
+<tr><td>onboarding_approved_at</td><td>TIMESTAMPTZ</td><td>主体资质闸通过时间</td></tr>
+<tr><td>fee_tier</td><td>VARCHAR(20)</td><td>展示用费率档（如 <code>2.0%</code>）；权威计费取类目 <code>platform_fee_bps</code>（万分比整数，200=2.0%）</td></tr>
+<tr><td>current_subscription_id</td><td>UUID</td><td>FK 可空 → 主展示用订阅；有效权益由全部 active 订阅合并</td></tr>
+<tr><td><b>account_manager_user_id</b></td><td>UUID</td><td>可空 FK → 平台 User（<strong>商家管家</strong>）；P03 通过可默认=审核人；P02-B 可改派</td></tr>
+<tr><td>created_at / updated_at</td><td>TIMESTAMPTZ</td><td>审计时间</td></tr>
+</table>
+<p class="sub"><b>主体类型</b>决定入驻材料与支付进件路径。旗下可开多 <code>shop_stores</code>（受<strong>合并后</strong>配额限制，见下方叠加规则）。</p></div>
+
+<div class="block" id="prospect"><h2><code>shop_tenant_prospect_assignments</code>（未入驻 tenant · 管家预分配）</h2>
+<table>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td>主键</td></tr>
+<tr><td><span class="fk">tenant_id</span></td><td>UUID</td><td><span class="uk">UK(tenant_id)</span>；须尚无 <code>shop_merchant_accounts</code> 且无 <code>pending</code> 入驻单时可分配</td></tr>
+<tr><td><span class="fk">account_manager_user_id</span></td><td>UUID</td><td>FK → 平台 User（<code>platform_shop_cs</code>）</td></tr>
+<tr><td><span class="fk">assigned_by</span></td><td>UUID</td><td>分配操作人（运营/超管）</td></tr>
+<tr><td>created_at / updated_at</td><td>TIMESTAMPTZ</td><td>审计</td></tr>
+</table>
+<p class="sub"><b>用途</b>：运营在 <a href="06-平台端UI.html#p02e">P02-E</a> 对<strong>未入驻</strong> tenant 预分配管家 → 管家 P02「我的客户」可见 → <a href="06-平台端UI.html#p02a">P02-A</a>「关联租户 ▾」仅可搜到预分配 tenant。<b>P03 通过</b>建 merchant 时：将预分配写入 <code>shop_merchant_accounts.account_manager_user_id</code>（若 merchant 尚无管家），并删除或归档本表记录。<b>改派</b>：在途入驻/续费不取消，见 <a href="06-平台端UI.html#p02e-handover">P02-E 改派归属</a>。</p></div>
+
+<div class="block" id="svc"><h2><code>shop_merchant_service_logs</code>（商家服务记录 · P02-B）</h2>
+<table>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td>主键（系统内部）</td></tr>
+<tr><td><b>log_no</b></td><td>VARCHAR(32)</td><td><span class="uk">UK</span> 服务记录单号；创建时自动生成；<code>renewal_request</code> 在 P11 待办/续费链路中与「申请单号」同义展示</td></tr>
+<tr><td><span class="fk">merchant_id</span></td><td>UUID</td><td>FK → <code>shop_merchant_accounts</code></td></tr>
+<tr><td><span class="fk">tenant_id</span></td><td>UUID</td><td>冗余便于查询</td></tr>
+<tr><td><b>type</b></td><td>VARCHAR(30)</td><td>见下表「服务记录 type」；<strong>人工写跟进</strong>（P02-B-N）与<strong>系统/独立流程</strong>分流</td></tr>
+<tr><td><b>status</b></td><td>VARCHAR(20)</td><td><code>logged</code> 已记录（备注类）· <code>pending</code> 待处理 · <code>processing</code> 处理中 · <code>completed</code> 已完成 · <code>cancelled</code> 已取消</td></tr>
+<tr><td>content</td><td>TEXT</td><td>正文摘要（列表展示截断）</td></tr>
+<tr><td><b>occurred_at</b></td><td>TIMESTAMPTZ</td><td><b>跟进时间</b>：业务上「这件事何时发生」（电话/拜访/提交申请等）；列表排序与展示主时间；写跟进时可补录，默认当前时刻</td></tr>
+<tr><td>payload_json</td><td>JSONB</td><td>续费/加购/换档申请：<code>application_kind</code>（<code>renew_same</code>/<code>stack_addon</code>/<code>replace_upgrade</code>）、<code>purchase_mode</code>、<code>target_plan_code</code>、<code>target_plan_name</code>、<code>catalog_price_cents</code>（标价快照）、<code>quoted_amount_cents</code>（申请金额，≥0 允许 0，可议价）、<code>customer_confirmed</code>；完成后写 <code>related_subscription_id</code></td></tr>
+<tr><td>follow_up_at</td><td>TIMESTAMPTZ</td><td>可空；<b>下次跟进提醒</b>（与 <code>occurred_at</code> 不同）</td></tr>
+<tr><td><span class="fk">operator_user_id</span></td><td>UUID</td><td>平台 User（管家/运营）</td></tr>
+<tr><td>related_onboarding_id</td><td>UUID</td><td>可空；关联入驻申请</td></tr>
+<tr><td>related_subscription_id</td><td>UUID</td><td>可空；P11 结案后回写</td></tr>
+<tr><td>created_at / updated_at</td><td>TIMESTAMPTZ</td><td><b>系统审计</b>：记录创建时间 / 最后编辑时间（状态变更、运营结案等写 <code>updated_at</code>；<strong>不替代</strong> <code>occurred_at</code>）</td></tr>
+</table>
+<p class="sub"><b>续费申请流</b>：管家提交 <code>renewal_request</code>（<code>pending</code>）→ 通知 <code>subscription.manage</code> 运营 → P11 开通成功自动 <code>completed</code> + 写 <code>related_subscription_id</code>。同一商家同时仅允许 1 条 <code>pending</code> 续费申请。Phase 1 商家线下对公/线下已收款后由运营 P11 开通；<strong>商家自助购套餐 Phase 2</strong>。线框见 <a href="06-平台端UI.html#p02b-service">P02-B 服务记录</a> · <a href="06-平台端UI.html#p02b-renewal">P02-B-R 申请续费</a> · <a href="06-平台端UI.html#renewal-payment-flow">续费付费说明</a>。</p>
+<h3 id="enum-service-log-type" style="font-size:14px;margin:14px 0 6px">服务记录 <code>type</code>（权威）</h3>
+<table>
+<tr><th>code</th><th>中文</th><th>写入入口</th><th>默认 status</th></tr>
+<tr><td colspan="4" style="background:#fafafa;font-weight:600" id="enum-service-log-type-manual">人工跟进（P02-B-N 下拉可选）</td></tr>
+<tr><td><code>note</code></td><td>文字备注</td><td>P02-B-N</td><td><code>logged</code></td></tr>
+<tr><td><code>call</code></td><td>电话沟通</td><td>P02-B-N（<strong>默认</strong>）</td><td><code>logged</code></td></tr>
+<tr><td><code>visit</code></td><td>上门拜访</td><td>P02-B-N</td><td><code>logged</code></td></tr>
+<tr><td><code>wechat</code></td><td>微信 / 企微</td><td>P02-B-N</td><td><code>logged</code></td></tr>
+<tr><td><code>video</code></td><td>视频会议</td><td>P02-B-N</td><td><code>logged</code></td></tr>
+<tr><td><code>email</code></td><td>邮件</td><td>P02-B-N</td><td><code>logged</code></td></tr>
+<tr><td><code>training</code></td><td>培训赋能</td><td>P02-B-N</td><td><code>logged</code></td></tr>
+<tr><td><code>complaint</code></td><td>投诉客诉</td><td>P02-B-N</td><td><code>logged</code></td></tr>
+<tr><td><code>onboarding_assist</code></td><td>入驻协助</td><td>P02-B-N 或 P02-A 代建后系统补写</td><td><code>logged</code></td></tr>
+<tr><td><code>other</code></td><td>其他</td><td>P02-B-N</td><td><code>logged</code></td></tr>
+<tr><td colspan="4" style="background:#fafafa;font-weight:600">系统 / 独立流程（不出现在 P02-B-N 下拉）</td></tr>
+<tr><td><code>renewal_request</code></td><td>续费 / 加购 / 换档申请</td><td><a href="06-平台端UI.html#p02b-renewal">P02-B-R</a></td><td><code>pending</code> → <code>completed</code> / <code>cancelled</code></td></tr>
+<tr><td><code>status_change</code></td><td>商家状态变更</td><td>P02-C/D/F 暂停·恢复·清退</td><td><code>logged</code></td></tr>
+</table></div>
+
+<div class="block" id="mtag"><h2>商家标签（<code>shop_merchant_tags</code> + <code>shop_merchant_tag_links</code>）</h2>
+<p class="sub">平台运营为商家打<strong>共享标签</strong>，便于管家分群跟进（如「续费意向」「高价值」「华东区」）。标签全站可见；<strong>打标写操作</strong>须数据范围内（管家仅所辖商家）。线框 <a href="06-平台端UI.html#p02b-tags">P02-B-T</a>。</p>
+<div class="note" style="margin-bottom:10px;font-size:12px;line-height:1.65"><b>与 CRM 客户标签隔离</b>：本模块用 <code>shop_merchant_tags</code>（平台级字典），挂 <code>shop_merchant_accounts</code>（平台视角的入驻商家）。<strong>不复用</strong> CRM 的 <code>tags</code> + <code>entity_tags</code>（<code>entity_type=customer</code>，按企业 <code>tenant_id</code> 隔离）。同一智营 tenant 在 CRM 里可有「高价值」客户标签，在平台端又可单独打「续费意向」商家标签，<strong>互不读写、不同步</strong>。Phase 1 不做双向同步。</div>
+<h3 style="font-size:14px;margin:12px 0 6px"><code>shop_merchant_tags</code>（标签字典 · 平台级）</h3>
+<table>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td>主键</td></tr>
+<tr><td><span class="uk">name</span></td><td>VARCHAR(32)</td><td>标签名；<span class="uk">UK(name)</span>；2～12 字；去首尾空格</td></tr>
+<tr><td>color</td><td>VARCHAR(20)</td><td>展示色 token（如 <code>blue</code>/<code>orange</code>/<code>purple</code>），前端映射 badge</td></tr>
+<tr><td>usage_count</td><td>INT</td><td>冗余：挂接商家数；维护于 link 增删</td></tr>
+<tr><td>is_archived</td><td>BOOL</td><td>归档后不可新挂接；已挂接保留展示</td></tr>
+<tr><td><span class="fk">created_by</span></td><td>UUID</td><td>首次创建人（平台 User）</td></tr>
+<tr><td>created_at / updated_at</td><td>TIMESTAMPTZ</td><td>审计</td></tr>
+</table>
+<h3 style="font-size:14px;margin:12px 0 6px"><code>shop_merchant_tag_links</code>（商家 ↔ 标签）</h3>
+<table>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+<tr><td><span class="fk">merchant_id</span></td><td>UUID</td><td>FK → <code>shop_merchant_accounts</code></td></tr>
+<tr><td><span class="fk">tag_id</span></td><td>UUID</td><td>FK → <code>shop_merchant_tags</code></td></tr>
+<tr><td><span class="uk">UK(merchant_id, tag_id)</span></td><td>—</td><td>同一商家不重复挂同一标签</td></tr>
+<tr><td><span class="fk">tagged_by</span></td><td>UUID</td><td>打标操作人</td></tr>
+<tr><td>created_at</td><td>TIMESTAMPTZ</td><td>打标时间</td></tr>
+</table>
+<p class="sub"><b>规则</b>：单商家最多 <b>20</b> 个标签；打标时<strong>仅运营</strong>（<code>merchant.tag.manage</code>）可 <code>get_or_create</code> 新字典项；管家只能挂接已有标签。列表/高级筛选支持按标签 AND/OR（Phase 1 默认 OR）。删除标签 = 解除 link，不删商家。</p></div>
+
+<div class="block" id="st"><h2><code>shop_stores</code>（店铺）</h2>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span> / <span class="fk">tenant_id</span></td><td>商家下多店；<span class="uk">UK(tenant_id, slug)</span></td></tr>
+<tr><td><b>store_no</b></td><td>VARCHAR(32)</td><td><span class="uk">UK</span> 店铺编码；A17 创建时自动生成；平台 P02 店铺 Tab 展示</td></tr>
+<tr><td>name / slug / logo_url</td><td>店铺名、短码、品牌</td></tr>
+<tr><td>status</td><td>draft|active|paused|closed</td></tr>
+<tr><td>wx_mp_app_id</td><td>可空；买家小程序入口（Phase 1 可共用租户默认）</td></tr>
+<tr><td>default_category_id</td><td>可空；默认平台类目</td></tr>
+</table>
+<p class="sub">商家端 A17 创建/管理；A01–A14 数据均按当前选中 <code>shop_id</code> 过滤。商品、订单、专栏、公域映射挂在店铺下。<b>新建</b>默认 <code>status=draft</code>；开业闸后 <code>active</code>。配额计数见 <a href="01-管理端UI.html#a17-quota">A17 §配额</a>。</p></div>
+
+<div class="block" id="pl"><h2>套餐与订阅（可叠加 · 多 active · 权益合并）</h2>
+
+<h3 style="font-size:14px;margin:12px 0 6px"><code>shop_plan_features</code>（功能字典，平台维护 · P10）</h3>
+<table>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td>主键（系统内部）</td></tr>
+<tr><td><span class="uk">code</span></td><td>VARCHAR(64)</td><td>功能编码；规则启用且未传时自动生成 <code>PF001</code>，亦可手工语义码（如 <code>quota.max_shops</code>）；<strong>创建后不可改</strong></td></tr>
+<tr><td>name</td><td>VARCHAR(100)</td><td>显示名</td></tr>
+<tr><td><b>node_type</b></td><td>VARCHAR(10)</td><td><code>group</code> 功能分组（父节点，仅目录）· <code>leaf</code> 子功能（叶子，可写入套餐 snapshot）</td></tr>
+<tr><td><span class="fk">parent_id</span></td><td>UUID</td><td>可空；指向父分组 <code>node_type=group</code> 的行；<code>group</code> 根节点为 NULL；<code>leaf</code> 建议必填（未分组进「其它」虚拟组）</td></tr>
+<tr><td>sort_order</td><td>INT</td><td>同层排序；列表树与套餐勾选区按此 + 名称排序</td></tr>
+<tr><td><b>category</b></td><td>VARCHAR(20)</td><td>仅 <code>leaf</code>：<code>quota</code> 配额 · <code>usage</code> 用量 · <code>feature</code> 功能/渠道开关；<code>group</code> 为 NULL</td></tr>
+<tr><td><b>value_type</b></td><td>VARCHAR(20)</td><td>数值类型（列表「类型」列）：<code>int</code> 存量 int · <code>usage</code> 周期次数 · <code>bool</code> 开关 · <code>unlimited</code> 不限量（仅 quota 类）</td></tr>
+<tr><td><b>aggregate_mode</b></td><td>VARCHAR(10)</td><td>多订阅叠加：<code>max</code> 取最大 · <code>sum</code> 累加 · <code>any</code> 任一满足（bool 默认）</td></tr>
+<tr><td>usage_period</td><td>VARCHAR(20)</td><td>仅 <code>value_type=usage</code>：<code>daily</code> | <code>monthly</code> | <code>subscription</code></td></tr>
+<tr><td>meter_key</td><td>VARCHAR(64)</td><td>可空；用量埋点键（如 <code>product.review_submit</code>）</td></tr>
+<tr><td>unit</td><td>VARCHAR(20)</td><td>展示单位，默认「次」</td></tr>
+<tr><td>description</td><td>TEXT</td><td>说明（选填）</td></tr>
+<tr><td><b>is_active</b></td><td>BOOLEAN</td><td>默认 <code>true</code>；<code>false</code>=停用（新套餐模板不可勾选；已购 snapshot 不变）</td></tr>
+<tr><td><span class="fk">created_by</span></td><td>UUID</td><td>创建人（平台 User）；列表列「创建人」</td></tr>
+<tr><td>created_at</td><td>TIMESTAMPTZ</td><td>创建时间</td></tr>
+<tr><td><span class="fk">updated_by</span></td><td>UUID</td><td>最后修改人</td></tr>
+<tr><td>updated_at</td><td>TIMESTAMPTZ</td><td>最后修改时间</td></tr>
+</table>
+<p class="sub"><b>分组树</b>（参考小鹅通套餐「按模块折叠勾选」）：<code>group</code> 不入套餐 JSON，仅组织展示；套餐模板/P11 只保存 <code>leaf</code> 的 <code>code→value</code>。API <code>GET …/feature-dictionary?tree=1</code> 返回嵌套；勾选区父节点提供<strong>全选/半选</strong>本组叶子。</p>
+<table style="margin-top:8px">
+<tr><th>code</th><th>node_type</th><th>parent</th><th>category</th><th>value_type</th></tr>
+<tr><td><code>group.shop</code></td><td>group</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td><code>quota.max_shops</code></td><td>leaf</td><td>group.shop</td><td>quota</td><td>int</td></tr>
+<tr><td><code>quota.max_products</code></td><td>leaf</td><td>group.shop</td><td>quota</td><td>int</td></tr>
+<tr><td><code>group.ops</code></td><td>group</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td><code>usage.product_review_submit</code></td><td>leaf</td><td>group.ops</td><td>usage</td><td>usage</td></tr>
+<tr><td><code>usage.sms_claim_send</code></td><td>leaf</td><td>group.ops</td><td>usage</td><td>usage</td></tr>
+<tr><td><code>group.channel</code></td><td>group</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td><code>channel.doudian</code></td><td>leaf</td><td>group.channel</td><td>feature</td><td>bool</td></tr>
+<tr><td><code>feature.invoice</code></td><td>leaf</td><td>group.channel</td><td>feature</td><td>bool</td></tr>
+</table>
+<table style="margin-top:8px">
+<tr><th>code 示例</th><th>category</th><th>value_type（UI 类型）</th><th>aggregate_mode</th><th>usage_period</th></tr>
+<tr><td><code>quota.max_shops</code></td><td>quota</td><td>int · 存量 int</td><td>max</td><td>—</td></tr>
+<tr><td><code>quota.max_products</code></td><td>quota</td><td>int</td><td>sum</td><td>—</td></tr>
+<tr><td><code>usage.product_review_submit</code></td><td>usage</td><td>usage · 周期次数</td><td>sum</td><td>daily</td></tr>
+<tr><td><code>usage.sms_claim_send</code></td><td>usage</td><td>usage</td><td>sum</td><td>monthly</td></tr>
+<tr><td><code>channel.doudian</code></td><td>feature</td><td>bool · 开关</td><td>any</td><td>—</td></tr>
+<tr><td><code>feature.invoice</code></td><td>feature</td><td>bool · 开关</td><td>any</td><td>—</td></tr>
+</table>
+<p class="sub"><b>类型级联</b>：<code>value_type=usage</code> → 必填 <code>usage_period</code> + <code>meter_key</code>；<code>bool</code> → 合并方式锁定 <code>any</code>；<code>unlimited</code> → 隐藏数值输入。商家可同时持有<strong>多条 active 订阅</strong>……</p>
+
+<h3 style="font-size:14px;margin:12px 0 6px"><code>shop_merchant_feature_usage</code>（用量计数）</h3>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span> / <span class="fk">tenant_id</span> / feature_code</td><td><span class="uk">UK(tenant_id, feature_code, period_key)</span></td></tr>
+<tr><td>period_key</td><td>计数窗口：<code>daily</code>→<code>2026-08-05</code>；<code>monthly</code>→<code>2026-08</code>（<b>tenant 级</b>，多套餐共享）</td></tr>
+<tr><td>used_count</td><td>本窗口已用次数（INT，默认 0）</td></tr>
+<tr><td>updated_at</td><td>最后写入时间</td></tr>
+</table>
+<p class="sub">用量上限取自<strong>合并后</strong>的 <code>usage_limits</code>，不是单条订阅。计数仍按 tenant 维度一条 <code>used_count</code>（多套餐共享同一计数池）。</p>
+
+<h3 id="usage-concurrency" style="font-size:14px;margin:12px 0 6px">用量并发控制（#12）</h3>
+<table>
+<tr><th>场景</th><th>策略</th></tr>
+<tr><td><code>shop_merchant_feature_usage</code> 周期次数 +1</td><td>单 SQL 原子 <code>UPDATE … SET used_count=used_count+1 WHERE used_count &lt; limit</code>；uk 冲突则 INSERT</td></tr>
+<tr><td>提审/短信等 F9 预检</td><td>先 merge 算 limit，再原子占用；业务失败补偿 -1</td></tr>
+<tr><td><code>max_products</code> / <code>max_stores</code> 存量配额</td><td>事务内 <code>COUNT(*)</code> + 插入（<code>max_stores</code>：<code>status ≠ 'closed'</code>）；或 <code>shop_stores.version</code> 乐观锁</td></tr>
+<tr><td>预约 <code>booked_count</code></td><td>条件更新 <code>WHERE booked_count &lt; capacity</code>（F4 已有）</td></tr>
+</table>
+
+<h3 style="font-size:14px;margin:12px 0 6px"><code>shop_subscription_plans</code>（套餐模板，P10 配置）</h3>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td>code / name / sort_order</td><td><code>code</code>：<span class="uk">UK</span> 套餐业务码（创建后只读）；<code>name</code>：<span class="uk">UK</span> 显示名（全局唯一，P11 下拉不混淆）；<code>sort_order</code>：INT，列表与换档顺序；新建默认 <code>同 scope max+10</code>（主套餐按 <code>replace_group</code>、加购包按 <code>plan_type=addon</code>；首条默认 10）</td></tr>
+<tr><td>is_public</td><td>是否对商家展示可购</td></tr>
+<tr><td><b>stackable</b></td><td>是否允许与其他 active 订阅并存（加购包=true；同档主套餐互斥可=false）</td></tr>
+<tr><td><b>replace_group</b></td><td>可空；同组内「升级/换档」走 replace 互斥，新订旧订 superseded（如 main: free/basic/flagship）</td></tr>
+<tr><td>billing_period</td><td>monthly|yearly|custom_days</td></tr>
+<tr><td>price_cents</td><td>标价（0=免费）</td></tr>
+<tr><td>quotas / features / usage_limits</td><td>JSONB，写入各功能项数值</td></tr>
+<tr><td>allowed_entity_types</td><td>数组</td></tr>
+</table>
+
+<h3 style="font-size:14px;margin:12px 0 6px"><code>shop_merchant_subscriptions</code>（商家已购 · 可多条 active）</h3>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span> / <span class="fk">tenant_id</span> / <span class="fk">plan_id</span></td><td>一条记录 = 一次购买/赠送/换档</td></tr>
+<tr><td><b>subscription_no</b></td><td>VARCHAR(32)</td><td><span class="uk">UK</span> 开通/订阅单号；P11 确认开通时生成；P02-B 权益 Tab、财务对账展示</td></tr>
+<tr><td>status</td><td>pending|active|expired|cancelled|superseded</td></tr>
+<tr><td><b>effective_at</b> / <b>expires_at</b></td><td><b>TIMESTAMPTZ</b>；见下方「生效时间精度」；UI/API Phase 1 仅传 <code>date</code></td></tr>
+<tr><td><b>paid_at</b></td><td><b>TIMESTAMPTZ</b>，可空；<strong>Phase 2</strong> 商家自助在线支付成功时刻；Phase 1 人工开通可为空（以运营确认日归一化）</td></tr>
+<tr><td><b>purchase_mode</b></td><td><code>stack</code> 叠加（默认，与现有 active 并存）| <code>replace</code> 换档（同 <code>replace_group</code> 内旧条 superseded）</td></tr>
+<tr><td>source</td><td>purchase|trial|manual|upgrade|renew|addon</td></tr>
+<tr><td>previous_subscription_id</td><td><code>replace</code> 时链路上一条</td></tr>
+<tr><td>plan_snapshot</td><td>JSONB 下单快照（quotas、features、usage_limits）</td></tr>
+<tr><td><b>catalog_price_cents</b></td><td>开通时 P10 标价快照（分）；0=免费</td></tr>
+<tr><td><b>paid_amount_cents</b></td><td>与客户约定/财务确认的实收金额（分）；≥0 允许 0（赠送/免费续期等，须备注）；人工开通/换档/加购留痕</td></tr>
+<tr><td>operator_id / remark</td><td>P11 人工操作审计（备注建议写到账方式）</td></tr>
+</table>
+<p class="sub"><b>叠加</b>：INSERT 新条 active，旧条保持 active（如基础版 + 短信加购包）。<b>换档/升级</b>：<code>purchase_mode=replace</code>，同 <code>replace_group</code> 内旧订阅 superseded。<b>到期</b>：单条 expired 后重算合并权益；全部到期则回落免费版策略。合并算法见 F8。</p>
+
+<h4 id="subscription-dates" style="font-size:13px;margin:10px 0 6px">生效时间精度（Phase 1 → Phase 2）</h4>
+<table>
+<tr><th>层级</th><th>Phase 1</th><th>Phase 2 自助购（规划）</th></tr>
+<tr><td><b>UI</b>（P02-B / P11）</td><td>日期选择器 <code>YYYY-MM-DD</code>；<strong>不展示时分秒</strong></td><td>商家 A18 仍主要展示「权益至」<b>自然日</b>；订单详情可展示支付时刻</td></tr>
+<tr><td><b>API</b></td><td><code>effective_at</code> / <code>expires_at</code> 类型 <code>date</code></td><td>可增套餐订单 <code>paid_at</code>（精确）；订阅起止仍可传 <code>date</code>，由服务端按规则归一化</td></tr>
+<tr><td><b>库表</b></td><td colspan="2"><code>effective_at</code> / <code>expires_at</code> / <code>paid_at</code> 一律 <b>TIMESTAMPTZ</b>（禁止用 <code>DATE</code> 列，避免 Phase 2 迁表）</td></tr>
+</table>
+<p class="sub"><b>服务端归一化</b>（业务时区默认东八区 <code>Asia/Shanghai</code>）：API 传入 <code>date</code> 后写入库前转换——<code>effective_at</code> → 当日 <code>00:00:00</code>；<code>expires_at</code>（止日 inclusive）→ 存为<strong>止日次日 <code>00:00:00</code> 作为 exclusive 上界</strong>（例：UI <code>2027-03-01</code> → 库 <code>2027-03-02T00:00:00+08:00</code>）。<b>生效判定</b>：<code>effective_at ≤ now &lt; expires_at</code>（与 F8 一致）。<b>续费衔接</b>：新条生效起（date）= 旧条止日 + 1 自然日。<b>周期用量</b>（每日提审 / 每月短信）按<strong>自然日 / 自然月</strong>重置，与支付秒数无关。<b>Phase 2 折算</b>：剩余天数金额折算用 <code>paid_at</code> 与旧 <code>expires_at</code> 的精确时间差计算；折算后的新订阅起止仍可归一到自然日展示。</p>
+
+<h3 style="font-size:14px;margin:12px 0 6px">合并权益示例</h3>
+<table style="margin-top:8px">
+<tr><th>场景</th><th>active 订阅</th><th>quota.max_products</th><th>usage 每日提审</th><th>抖店</th></tr>
+<tr><td>仅免费版</td><td>free</td><td>20</td><td>3（sum）</td><td>—</td></tr>
+<tr><td>基础版 + 商品加购包 +20</td><td>basic + addon_products_20</td><td>200+20=<b>220</b>（sum）</td><td>20</td><td>✓</td></tr>
+<tr><td>基础版 换档 旗舰版</td><td>flagship（basic superseded）</td><td>∞（max）</td><td>不限</td><td>✓</td></tr>
+<tr><td>基础版 + 提审加购 +10/日</td><td>basic + addon_review_10</td><td>200</td><td>20+10=<b>30</b>（sum）</td><td>✓</td></tr>
+</table></div>
+
+<div class="block" id="p"><h2><code>shop_products</code></h2>
+<table>
+<tr><th>字段</th><th>类型</th><th>约束</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td>PK</td><td></td></tr>
+<tr><td><span class="fk">tenant_id</span></td><td>UUID</td><td>FK IDX</td><td>商家隔离</td></tr>
+<tr><td><span class="fk">shop_id</span></td><td>UUID</td><td>FK IDX</td><td>所属店铺</td></tr>
+<tr><td>type</td><td>VARCHAR(20)</td><td>N</td><td>course|digital|service</td></tr>
+<tr><td>name</td><td>VARCHAR(200)</td><td>N</td><td></td></tr>
+<tr><td>subtitle / cover_url</td><td>VARCHAR</td><td>Y</td><td></td></tr>
+<tr><td>price / line_price</td><td>NUMERIC(12,2)</td><td>价≥0</td><td></td></tr>
+<tr><td>status</td><td>VARCHAR(20)</td><td></td><td>draft|pending_review|rejected|approved|on_sale|off_sale</td></tr>
+<tr><td>category_id</td><td>UUID</td><td>FK 可空</td><td>平台类目（P04）</td></tr>
+<tr><td>ref_type / ref_id</td><td></td><td></td><td>column|digital_package|service_offer</td></tr>
+<tr><td>last_review_id</td><td>UUID</td><td>FK 可空</td><td>最近一次审核记录</td></tr>
+<tr><td>compliance_flags</td><td>JSONB</td><td>{}</td><td>机审命中标签、敏感词等</td></tr>
+<tr><td>source_campaign_content_id</td><td>UUID</td><td>可空</td><td>创作顾问导入来源（Phase 2+）</td></tr>
+<tr><td>refund_policy</td><td>VARCHAR(30)</td><td></td><td>always_allow|before_fulfill|manual_only</td></tr>
+<tr><td>sales_count</td><td>INT</td><td>0</td><td></td></tr>
+<tr><td>extra</td><td>JSONB</td><td>{}</td><td>trial 等</td></tr>
+<tr><td>created_at/updated_at/deleted_at</td><td>TIMESTAMPTZ</td><td></td><td></td></tr>
+</table></div>
+
+<div class="block" id="c"><h2><code>shop_columns</code> / <code>shop_lessons</code></h2>
+<p class="sub">含 <code>shop_id</code>；专栏/课时归属店铺。<strong>Phase 1 无专栏嵌套</strong>：<code>shop_columns</code> 无 <code>parent_column_id</code>；课类商品通过 <code>shop_products.ref_type=column</code> 指向<strong>一个</strong>专栏；专栏下仅挂课时。允许多个商品引用同一专栏。详见 <a href="01-管理端UI.html#a03-column-ref">A03 专栏关联规则</a>。</p>
+<table>
+<tr><th>表.字段</th><th>类型</th><th>说明</th></tr>
+<tr><td>columns: title, status, lesson_count</td><td></td><td>draft|published|off_sale；<strong>无 parent 字段</strong></td></tr>
+</table>
+<p class="sub" style="margin-top:8px"><b>专栏状态机</b>（<code>shop_columns.status</code>）：</p>
+<table style="margin-top:4px">
+<tr><th>流转</th><th>操作</th><th>效果</th></tr>
+<tr><td><code>draft</code> → <code>published</code></td><td>A04 <b>发布</b></td><td>≥1 已发布课时；进入 A03 关联下拉；≠ 商品上架</td></tr>
+<tr><td><code>published</code> → <code>off_sale</code></td><td>A04 <b>下架</b></td><td>不可新挂商品；已有引用保留；已购可学；A05 只读；Phase 1 不可再发布</td></tr>
+<tr><td><code>draft</code> → 删除</td><td>A04 删除</td><td>软删；须引用商品数 = 0</td></tr>
+</table>
+<p class="sub" style="margin-top:8px"><code>off_sale</code> 与 <code>shop_products.status</code> 同名不同表。详表见 <a href="01-管理端UI.html#a04-publish-vs-off-sale">A04 发布 vs 下架</a> · PRD §7.2 A04。</p>
+<table>
+<tr><th>表.字段</th><th>类型</th><th>说明</th></tr>
+<tr><td>lessons: <span class="fk">column_id</span>, title, sort_order</td><td></td><td></td></tr>
+<tr><td>media_type / media_provider / media_id</td><td></td><td>video|article（Phase 1）；audio Phase 2；云点播 <code>vod</code></td></tr>
+<tr><td>media_status</td><td></td><td>uploading|transcoding|ready|failed（视频）</td></tr>
+<tr><td>duration_sec</td><td></td><td>视频时长；≤10800（180min）</td></tr>
+<tr><td>is_trial / trial_seconds / content_body</td><td></td><td>试看仅 video；<code>trial_seconds</code> 可空（整节=取 duration_sec）；默认 180；图文正文 HTML/MD</td></tr>
+<tr><td>status</td><td></td><td>draft|published|off_sale（下架≠回草稿）</td></tr>
+</table></div>
+
+<div class="block" id="d"><h2>数字资料 packages / assets</h2>
+<p class="sub">含 <code>shop_id</code>；<code>deliver_mode</code>=download|online_view；max_downloads 可空；assets: file_url, mime, sort_order, <code>previewable</code>（由扩展名推导：pdf/doc/docx=true，zip=false）</p>
+<table>
+<tr><th>表.字段</th><th>说明</th></tr>
+<tr><td>packages: title, status, deliver_mode</td><td><code>draft</code>|<code>published</code>|<code>off_sale</code>（与专栏三态一致）</td></tr>
+<tr><td>assets: previewable</td><td>只读派生；<code>online_view</code> 发布时须 ≥1 条 <code>previewable=true</code>（见 <a href="01-管理端UI.html#a06-deliver-mode">A06 交付方式校验</a>）</td></tr>
+</table>
+<p class="sub" style="margin-top:8px"><b>资料包状态机</b>（<code>shop_digital_packages.status</code>）：</p>
+<table>
+<tr><th>迁移</th><th>操作</th><th>影响</th></tr>
+<tr><td><code>draft</code> → <code>published</code></td><td>A06 <b>发布</b></td><td>≥1 文件；A03 可关联</td></tr>
+<tr><td><code>published</code> → <code>off_sale</code></td><td>A06 <b>下架</b></td><td>不可新挂商品；已购 M09 可下载；A06-edit 只读；Phase 1 不可再发布</td></tr>
+<tr><td><code>draft</code> → 删除</td><td>A06 删除</td><td>软删；须引用商品数 = 0</td></tr>
+</table>
+<p class="sub" style="margin-top:8px">语义对齐 <a href="01-管理端UI.html#a04-publish-vs-off-sale">A04 专栏发布 vs 下架</a> · <a href="01-管理端UI.html#a06-publish-vs-off-sale">A06 资料包</a>。</p></div>
+
+<div class="block" id="s"><h2>服务 offers / slots / bookings / redemptions</h2>
+<p class="sub">含 <code>shop_id</code>。</p>
+<table>
+<tr><th>表</th><th>关键字段</th></tr>
+<tr><td>offers</td><td>title, <code>status</code> draft|published|off_sale；mode booking|times_card；total_times；valid_days</td></tr>
+<tr><td>shop_service_slots</td><td>start_at/end_at；capacity；booked_count（条件更新防超卖）</td></tr>
+<tr><td>bookings</td><td>checkin_code <span class="uk">UK</span>；status booked|checked_in|completed|cancelled；<code>cancel_reason</code> buyer_cancel|expired_unredeemed|slot_closed|entitlement_revoked（仅 cancelled 时有值）</td></tr>
+<tr><td>redemptions</td><td>entitlement_id；booking_id 可空；operator_user_id</td></tr>
+</table>
+<p class="sub" style="margin-top:8px"><b>服务状态机</b>（<code>shop_service_offers.status</code>）：</p>
+<table>
+<tr><th>迁移</th><th>操作</th><th>影响</th></tr>
+<tr><td><code>draft</code> → <code>published</code></td><td>A07 <b>发布</b></td><td>预约须 ≥1 未来开放时段；次数卡须次数/有效期；A03 可关联</td></tr>
+<tr><td><code>published</code> → <code>off_sale</code></td><td>A07 <b>下架</b></td><td>不可新挂商品；已购 M10/A08 保留；不可新约；A07-edit 只读；Phase 1 不可再发布</td></tr>
+<tr><td><code>draft</code> → 删除</td><td>A07 删除</td><td>软删；须引用商品数 = 0</td></tr>
+</table>
+<p class="sub" style="margin-top:8px">语义对齐 <a href="01-管理端UI.html#a04-publish-vs-off-sale">A04 专栏</a> · <a href="01-管理端UI.html#a07-publish-vs-off-sale">A07 服务</a>。</p></div>
+
+<div class="block" id="b"><h2><code>shop_buyers</code>（买家身份 · 跨端归一）</h2>
+<table>
+<tr><th>字段</th><th>类型</th><th>约束</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td>PK</td><td></td></tr>
+<tr><td><span class="fk">tenant_id</span></td><td>UUID</td><td>FK IDX</td><td>商家维度隔离</td></tr>
+<tr><td>mobile</td><td>VARCHAR(11)</td><td><span class="uk">UK(tenant_id, mobile)</span> 可空</td><td>公域领权 / 绑手机；<strong>归一主键</strong>；库内可加密列 <code>mobile_enc</code></td></tr>
+<tr><td>wx_openid</td><td>VARCHAR(64)</td><td><span class="uk">UK(tenant_id, wx_openid)</span> 可空</td><td>私域小程序 openid（PRD/API 字段名，勿改为 <code>wx_open_id</code>）</td></tr>
+<tr><td>dy_open_id</td><td>VARCHAR(64)</td><td>可空</td><td>链路②课程库 open_id；登录后合并到 <code>wx_openid</code> 或 <code>mobile</code></td></tr>
+<tr><td>merged_into_id</td><td>UUID</td><td>FK 可空</td><td>重复 buyer 人工合并指向；Phase 1 仅日志告警</td></tr>
+<tr><td>status</td><td>VARCHAR(20)</td><td></td><td>active|blocked</td></tr>
+<tr><td>first_purchase_at</td><td>TIMESTAMPTZ</td><td>可空</td><td>首单时间（CRM 事件用，不建 Contact）</td></tr>
+<tr><td>created_at / updated_at</td><td>TIMESTAMPTZ</td><td></td><td></td></tr>
+</table>
+<p class="sub">买家在<strong>商家（tenant）</strong>维度统一；跨店购买用 <code>shop_orders.shop_id</code> 区分来源。<strong>归一策略</strong>：领权按 mobile 查/建 → 绑定 openid；小程序登录按 openid 查/建 → M04 补 mobile。禁止 FK 到 <code>contacts</code>。详见 PRD <a href="PRD-内容获客商城-phase1.md#32-买家身份解析跨端归一--i1">§3.2</a>。</p></div>
+
+<div class="block" id="o"><h2><code>shop_orders</code> / <code>shop_order_items</code></h2>
+<p class="sub">含 <code>shop_id</code>；结算与看板按店铺聚合，商家级报表可 sum 全店。行项目见独立表 <code>shop_order_items</code>（F1 同事务写入）。</p>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td>order_no <span class="uk">UK</span></td><td>业务单号</td></tr>
+<tr><td>buyer_id 可空</td><td>未领权公域单</td></tr>
+<tr><td>status</td><td><code>pending_payment</code> · <code>paid</code> · <code>claim_pending</code> · <code>refunding</code> · <code>refunded</code> · <code>partial_refunded</code> · <code>closed</code>（枚举见 <a href="#enum-master">§枚举总表</a>；变迁图见 <a href="03-数据流.html#o1">O1 订单状态机</a>；Phase 1 私域不出现 <code>partial_refunded</code>）</td></tr>
+<tr><td>channel</td><td><code>wx_mp</code> · <code>doudian</code> · <code>dy_knowledge</code> · <code>manual</code></td></tr>
+<tr><td>external_order_no</td><td><span class="uk">UK(channel, external_order_no)</span> 可空；公域幂等</td></tr>
+<tr><td>client_token</td><td>防重复下单</td></tr>
+<tr><td><span class="fk">last_operator_user_id</span></td><td>UUID 可空 → <code>users</code>；退款/关单等经手人；供 <code>shop.order.list_own</code> 过滤</td></tr>
+<tr><td>amount_cents / paid_at / closed_at</td><td>金额与关键时点（TIMESTAMPTZ）</td></tr>
+<tr><td>close_reason_code / close_reason_text</td><td>关单原因：<code>payment_timeout</code>（系统超时）· <code>buyer_abandon</code> · <code>wrong_order</code> · <code>merchant_cancel</code> · <code>other</code>；人工关单经 A09-A 写入</td></tr>
+<tr><td><span class="fk">closed_by_user_id</span></td><td>可空；人工关单操作人；系统超时为 null</td></tr>
+</table>
+<h3 style="font-size:14px;margin:12px 0 6px"><code>shop_order_items</code></h3>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span> / <span class="fk">order_id</span> / <span class="fk">tenant_id</span></td><td>一单可多行；Phase 1 默认 qty=1</td></tr>
+<tr><td><span class="fk">product_id</span></td><td>FK 可空；下架后保留快照</td></tr>
+<tr><td>title_snapshot / price_cents</td><td>下单时商品名与单价快照</td></tr>
+<tr><td>qty</td><td>INT，默认 1</td></tr>
+<tr><td>ref_type / ref_id</td><td>关联内容引用（column|digital_package|service_offer）</td></tr>
+<tr><td>product_snapshot</td><td>JSONB 可空；封面/类型等冗余</td></tr>
+</table>
+<p class="sub"><span class="uk">UK(order_id, line_no)</span> 或 Phase 1 简化为每单 1 行。<code>shop_entitlements</code> 以 <code>order_item_id</code> 防双开（见 <a href="#e">§entitlements</a>）。</p></div>
+
+<div class="block" id="pay"><h2>payments / refunds</h2>
+<table>
+<tr><th>表</th><th>关键</th></tr>
+<tr><td>payments</td><td>notify_id <span class="uk">UK 幂等</span>；transaction_id；raw_notify</td></tr>
+<tr><td>refunds</td><td>refund_no UK；<code>amount_cents</code>；<code>status</code> processing|succeeded|failed；<code>is_partial</code>；entitlement_revoked_at</td></tr>
+</table></div>
+
+<div class="block" id="e"><h2><code>shop_entitlements</code> + enrollment/progress</h2>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td><span class="uk">UK(order_item_id)</span></td><td>防双开</td></tr>
+<tr><td>status</td><td>pending|active|expired|revoked|consumed</td></tr>
+<tr><td>times_total / times_used</td><td>次数卡</td></tr>
+<tr><td>enrollments</td><td>buyer+column+entitlement</td></tr>
+<tr><td>lesson_progress</td><td>UK(enrollment,lesson)；position_sec</td></tr>
+</table></div>
+
+<div class="block" id="cl"><h2><code>shop_claim_tokens</code></h2>
+<p class="sub">token UK；expires_at；claimed_at；claimed_buyer_id；sms_status</p></div>
+
+<div class="block" id="i"><h2><code>shop_invoice_requests</code></h2>
+<p class="sub">title_type personal|company；tax_no；email；amount；status <code>submitted</code>→<code>issued</code>|<code>rejected</code>（<b>三态</b>；<code>processing</code> 已废止）；invoice_no；remark（开具选填）；needs_red_flush</p></div>
+
+
+<div class="block" id="p04-cat"><h2><code>shop_platform_categories</code>（平台类目 · P04）</h2>
+<p class="sub">平台级类目树；费率与分账规则挂接；商品 <code>category_id</code> 引用。UI <a href="06-平台端UI.html#p04">P04</a> · API §8.14.2 · 编码规则 <a href="#p04-code-rule">shop_platform_number_rules</a>。</p>
+<table>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td></td></tr>
+<tr><td><span class="fk">parent_id</span></td><td>UUID</td><td>可空；根类目为 NULL</td></tr>
+<tr><td>name</td><td>VARCHAR(100)</td><td>显示名</td></tr>
+<tr><td>code</td><td>VARCHAR(64)</td><td><span class="uk">UK</span> 全局唯一业务编码；创建后不可改</td></tr>
+<tr><td>code_source</td><td>VARCHAR(10)</td><td><code>auto</code>（按规则生成）| <code>manual</code>（手工录入，仅规则关闭或超管兜底时）</td></tr>
+<tr><td>platform_fee_bps</td><td>INT</td><td>平台费率，万分比（200 = 2.0%）</td></tr>
+<tr><td><span class="fk">settlement_rule_id</span></td><td>UUID</td><td>分账规则模板</td></tr>
+<tr><td>required_qualifications</td><td>JSONB</td><td>需资质码数组，如 <code>["school_license","icp"]</code></td></tr>
+<tr><td>status</td><td>VARCHAR(20)</td><td><code>enabled</code> | <code>blocked</code></td></tr>
+<tr><td>sort_order</td><td>INT</td><td>同级排序</td></tr>
+<tr><td>description</td><td>TEXT</td><td>可空</td></tr>
+<tr><td>created_at / updated_at</td><td>TIMESTAMPTZ</td><td></td></tr>
+<tr><td>created_by / updated_by</td><td>UUID</td><td>运营账号（审计）</td></tr>
+</table>
+<p class="sub" style="margin-top:8px"><b>编码生成</b>：规则 <code>enabled=true</code> 且新增时未传 <code>code</code> → 调用 <code>generate_platform_number(entity_type=shop_category, parent_id)</code>；有父类目且 <code>inherit_parent_code=true</code> 时有效前缀 = <code>{parent.code}.</code> + 规则段。落库前校验 <code>code</code> 全局唯一。</p>
+</div>
+
+<div class="block" id="p04-code-rule"><h2 id="platform-code-rule"><code>shop_platform_number_rules</code> / <code>shop_platform_number_counters</code>（平台业务编码 · P08-F）</h2>
+<p class="sub">对齐 CRM <code>entity_number_rules</code>（<code>apps/api/app/services/crm/number_service.py</code>），<strong>平台单例</strong>（无 <code>tenant_id</code>）。<b>原则</b>：UUID 仅后台关联；运营列表、详情标题、导出、工单沟通一律展示<strong>业务编码</strong>。集中配置入口 <a href="06-平台端UI.html#p08f">P08-F 编码规则</a>；类目「继承父 code」专项说明见 <a href="06-平台端UI.html#p04e">P04-E</a>。</p>
+<h3 style="font-size:14px;margin:14px 0 6px">Phase 1 内置实体与默认种子</h3>
+<table>
+<tr><th>entity_type</th><th>中文</th><th>落库字段</th><th>表</th><th>默认 prefix</th><th>date</th><th>seq</th><th>reset</th><th>生成时机</th></tr>
+<tr><td><code>shop_merchant</code></td><td>商家（入驻主体）</td><td><code>merchant_no</code></td><td><code>shop_merchant_accounts</code></td><td>SH</td><td>%Y%m%d</td><td>4</td><td>once</td><td>P03 审核通过建 merchant</td></tr>
+<tr><td><code>shop_onboarding</code></td><td>入驻申请单</td><td><code>application_no</code></td><td><code>shop_onboarding_applications</code></td><td>OB</td><td>%Y%m%d</td><td>4</td><td>daily</td><td>提交申请 <code>pending</code></td></tr>
+<tr><td><code>renewal_application</code></td><td>续费/加购/换档申请</td><td><code>log_no</code></td><td><code>shop_merchant_service_logs</code></td><td>RF</td><td>%Y%m%d</td><td>4</td><td>daily</td><td>P02-B-R 提交 <code>renewal_request</code></td></tr>
+<tr><td><code>service_log</code></td><td>其它服务记录</td><td><code>log_no</code></td><td>同上（非 renewal 类型）</td><td>SV</td><td>%Y%m%d</td><td>4</td><td>daily</td><td>P02-B-N 写跟进等</td></tr>
+<tr><td><code>shop_category</code></td><td>平台类目</td><td><code>code</code></td><td><code>shop_platform_categories</code></td><td>cat.</td><td>—</td><td>3</td><td>once</td><td>P04 新增；可继承父 <code>code</code></td></tr>
+<tr><td><code>shop_plan</code></td><td>套餐模板</td><td><code>code</code></td><td><code>shop_subscription_plans</code></td><td>PL</td><td>—</td><td>3</td><td>once</td><td>P10 新建；未传 code 时自动；可选手工语义码</td></tr>
+<tr><td><code>shop_plan_feature</code></td><td>功能字典项</td><td><code>code</code></td><td><code>shop_plan_features</code></td><td>PF</td><td>—</td><td>3</td><td>once</td><td>P10 字典新建</td></tr>
+<tr><td><code>shop_subscription</code></td><td>订阅/开通单</td><td><code>subscription_no</code></td><td><code>shop_merchant_subscriptions</code></td><td>DY</td><td>%Y%m%d</td><td>4</td><td>daily</td><td>P11 确认开通（前缀 <code>DY</code>=订阅单，与渠道 <code>dy_knowledge</code> 无关）</td></tr>
+<tr><td><code>settlement_batch</code></td><td>清结算批次</td><td><code>batch_no</code></td><td><code>shop_settlement_batches</code></td><td>JS</td><td>%G%V</td><td>4</td><td>weekly</td><td>F10 周关账出批</td></tr>
+<tr><td><code>shop_store</code></td><td>店铺</td><td><code>store_no</code></td><td><code>shop_stores</code></td><td>DP</td><td>—</td><td>4</td><td>once</td><td>A17 创建店铺</td></tr>
+<tr><td><code>moderation_case</code></td><td>违规稽查工单</td><td><code>case_no</code></td><td><code>shop_moderation_cases</code></td><td>WG</td><td>%Y%m%d</td><td>4</td><td>daily</td><td>F6/F7/举报/投诉等触发入库；P07 处置</td></tr>
+</table>
+<p class="sub" style="margin-top:6px"><b>示例</b>：<code>SH202608100001</code> 商家 · <code>OB202608100012</code> 入驻申请 · <code>RF202608100003</code> 续费申请 · <code>PL003</code> 套餐 · <code>DY202608100008</code> 开通单 · <code>JS2026310001</code> 结算批次（ISO 年周 + 全局流水；商家见列表列，不嵌入编号）。</p>
+<h3 style="font-size:14px;margin:14px 0 6px"><code>shop_platform_number_rules</code></h3>
+<table>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td></td></tr>
+<tr><td>entity_type</td><td>VARCHAR(32)</td><td><span class="uk">UK</span>；默认 <code>shop_category</code></td></tr>
+<tr><td>prefix</td><td>VARCHAR(20)</td><td>默认 <code>cat.</code></td></tr>
+<tr><td>suffix</td><td>VARCHAR(20)</td><td>可空</td></tr>
+<tr><td>date_format</td><td>VARCHAR(20)</td><td>Python strftime；空串表示不含日期段</td></tr>
+<tr><td>seq_width</td><td>INT</td><td>序号宽度 1–8；默认 3</td></tr>
+<tr><td>reset_period</td><td>VARCHAR(10)</td><td><code>once</code>|<code>daily</code>|<code>weekly</code>|<code>monthly</code>|<code>yearly</code></td></tr>
+<tr><td>inherit_parent_code</td><td>BOOLEAN</td><td>默认 <code>true</code>：子类目在父 <code>code</code> 后接 <code>.</code> 再拼序号段；根类目用 <code>prefix</code> 起头</td></tr>
+<tr><td>separator</td><td>VARCHAR(4)</td><td>父子连接符；默认 <code>.</code></td></tr>
+<tr><td>enabled</td><td>BOOLEAN</td><td><code>false</code> 时新增须手工传 <code>code</code></td></tr>
+<tr><td>updated_at</td><td>TIMESTAMPTZ</td><td></td></tr>
+<tr><td>updated_by</td><td>UUID</td><td>最后修改人</td></tr>
+</table>
+<h3 style="font-size:14px;margin:14px 0 6px"><code>shop_platform_number_counters</code></h3>
+<table>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td></td></tr>
+<tr><td>entity_type</td><td>VARCHAR(32)</td><td></td></tr>
+<tr><td>scope_key</td><td>VARCHAR(128)</td><td>计数作用域：<code>inherit_parent_code=true</code> 时为父类目 <code>code</code>（根为 <code>__root__</code>）；否则与 CRM 一致为 <code>period_key</code></td></tr>
+<tr><td>period_key</td><td>VARCHAR(20)</td><td>重置周期键（<code>once</code> 时为空串）</td></tr>
+<tr><td>seq</td><td>BIGINT</td><td>当前序号；生成时行锁自增</td></tr>
+</table>
+<p class="sub" style="margin-top:8px"><b>服务</b>：<code>platform_number_service.generate_platform_number(db, entity_type, **scope)</code> — 与 CRM <code>generate_number</code> 同构；<code>shop_category</code> 额外参数 <code>parent_id</code> 驱动 <code>inherit_parent_code</code>。<b>展示规范</b>：列表默认列放业务编码；UUID 仅「高级列设置」或技术排障；搜索框支持按编码模糊查。</p>
+</div>
+
+<div class="block" id="settle"><h2><code>shop_settlement_batches</code> / <code>shop_settlement_items</code>（清结算 · P05）</h2>
+<p class="sub">平台→商家结算台账。生成逻辑见 <a href="03-数据流.html#f10">F10</a> · 业务规则 <a href="06-平台端UI.html#p05-settlement-rules">06 §结算规则</a> · API §8.14.3 · UI <a href="06-平台端UI.html#p05">P05</a>。</p>
+<h3 style="font-size:14px;margin:14px 0 6px"><code>shop_settlement_batches</code></h3>
+<table>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td>批次主键</td></tr>
+<tr><td><span class="fk">tenant_id</span></td><td>UUID</td><td>商家</td></tr>
+<tr><td><span class="fk">shop_id</span></td><td>UUID</td><td>店铺（单店批次；多店商家可拆批）</td></tr>
+<tr><td>batch_no</td><td>VARCHAR(32)</td><td><span class="uk">UK</span> 业务批次号；F10 定时任务生成时 <code>generate_platform_number(settlement_batch)</code></td></tr>
+<tr><td>period_start / period_end</td><td>DATE</td><td>出账周期（Phase 1 默认<strong>自然周</strong>；日跑入池、周关账出批）</td></tr>
+<tr><td>gross_amount_cents</td><td>BIGINT</td><td>订单毛收入合计</td></tr>
+<tr><td>platform_fee_cents</td><td>BIGINT</td><td>平台服务费/类目抽成</td></tr>
+<tr><td>refund_reversal_cents</td><td>BIGINT</td><td>退款冲正（负向合计的绝对值）</td></tr>
+<tr><td>opening_balance_cents</td><td>BIGINT</td><td>上期结转抵扣（≤0）；关账时汇总同 <code>tenant_id</code>+<code>shop_id</code> 全部 <code>status=carried_forward</code> 批次的 <code>net_amount_cents</code> 之和</td></tr>
+<tr><td>period_net_cents</td><td>BIGINT</td><td>本期净额（不含结转）= gross − fee − reversal</td></tr>
+<tr><td>net_amount_cents</td><td>BIGINT</td><td>应结净额 = <code>period_net_cents</code> + <code>opening_balance_cents</code>（分；可为负）</td></tr>
+<tr><td>status</td><td>VARCHAR(24)</td><td><code>pending</code> · <code>paid</code> · <code>payment_failed</code> · <code>closed</code> · <code>carried_forward</code> · <code>offset_settled</code>（见下表）</td></tr>
+<tr><td>paid_at</td><td>TIMESTAMPTZ</td><td>确认打款时间（仅 <code>paid</code>）</td></tr>
+<tr><td>transfer_voucher_url</td><td>TEXT</td><td>打款凭证（P05-B 上传）</td></tr>
+<tr><td>operator_id</td><td>UUID</td><td>确认打款运营</td></tr>
+<tr><td>fail_reason</td><td>TEXT</td><td>打款失败原因</td></tr>
+<tr><td><span class="fk">offset_by_batch_id</span></td><td>UUID</td><td>可空；<code>carried_forward</code> → <code>offset_settled</code> 时指向<strong>吸收结转</strong>且已 <code>paid</code> 的批次 id</td></tr>
+<tr><td>offset_settled_at</td><td>TIMESTAMPTZ</td><td>结转被抵扣完成时间（与吸收批次 <code>paid_at</code> 同事务写入）</td></tr>
+<tr><td>created_at / updated_at</td><td>TIMESTAMPTZ</td><td></td></tr>
+</table>
+<h3 style="font-size:14px;margin:14px 0 6px">批次状态（<code>shop_settlement_batches.status</code>）</h3>
+<table>
+<tr><th>status</th><th>触发</th><th>含义</th></tr>
+<tr><td><code>pending</code></td><td>关账 <code>net_amount_cents&gt;0</code></td><td>待财务打款</td></tr>
+<tr><td><code>paid</code></td><td>P05-B 确认打款成功</td><td>已打款；回写订单 <code>settled_at</code>；触发结转批次状态同步（见下）</td></tr>
+<tr><td><code>payment_failed</code></td><td>打款失败</td><td>可 P05-C 重试</td></tr>
+<tr><td><code>closed</code></td><td>关账 <code>net_amount_cents=0</code></td><td>已关账·无需打款；P05 可见，仅详情</td></tr>
+<tr><td><code>carried_forward</code></td><td>关账 <code>net_amount_cents&lt;0</code></td><td>已关账·负额结转下期；P05 可见，应结显示负数</td></tr>
+<tr><td><code>offset_settled</code></td><td>吸收批次 <code>paid</code> 且本批曾参与其 <code>opening_balance</code></td><td>结转已抵扣；只读详情，可链到吸收批次</td></tr>
+</table>
+<p class="sub" style="margin-top:8px"><b>结转同步</b>：批次 B 确认 <code>paid</code> 且 <code>opening_balance_cents&lt;0</code> 时，同事务 UPDATE 所有被计入 B 的 <code>carried_forward</code> 批次 → <code>offset_settled</code>，写 <code>offset_by_batch_id=B.id</code>、<code>offset_settled_at</code>。</p>
+<h3 style="font-size:14px;margin:14px 0 6px"><code>shop_settlement_items</code></h3>
+<table>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td></td></tr>
+<tr><td><span class="fk">batch_id</span></td><td>UUID</td><td>→ batches</td></tr>
+<tr><td>item_type</td><td>VARCHAR(24)</td><td><code>order_income</code> · <code>refund_reversal</code> · <code>period_carry_in</code>（上期结转抵扣行，负额）· <code>adjustment</code>（预留）</td></tr>
+<tr><td><span class="fk">order_id</span></td><td>UUID</td><td>可空（调整/结转行）</td></tr>
+<tr><td><span class="fk">refund_id</span></td><td>UUID</td><td>冲正行关联退款</td></tr>
+<tr><td><span class="fk">source_batch_id</span></td><td>UUID</td><td>可空；<code>period_carry_in</code> 行指向被抵扣的 <code>carried_forward</code> 批次</td></tr>
+<tr><td>amount_cents</td><td>BIGINT</td><td>正=收入；负=冲正</td></tr>
+<tr><td>fee_cents</td><td>BIGINT</td><td>该行分摊服务费</td></tr>
+<tr><td>note</td><td>TEXT</td><td>备注</td></tr>
+</table>
+<p class="sub"><code>shop_orders.settled_at</code>：批次关账（<code>paid</code> / <code>closed</code> / <code>carried_forward</code> / <code>offset_settled</code>）后回写，防重复入批。退款在批次生成后发生 → 进入<strong>下一周期</strong>冲正明细。</p></div>
+
+<div class="block" id="moderate"><h2><code>shop_moderation_cases</code>（违规稽查 · P07）</h2>
+<p class="sub">事后稽查工单队列。入库逻辑 <a href="03-数据流.html#f12">F12</a> · 业务规则 <a href="06-平台端UI.html#p07-moderation-rules">06 §稽查规则</a> · API §8.14.4。<strong>非</strong>抖店订单/退款 Webhook 入单（订单走 <a href="03-数据流.html#f3">F3</a>/<a href="03-数据流.html#f2">F2</a>）。</p>
+<table>
+<tr><th>字段</th><th>类型</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td></td></tr>
+<tr><td>case_no</td><td>VARCHAR(32)</td><td><span class="uk">UK</span>；<code>generate_platform_number(moderation_case)</code>，例 <code>WG202608070015</code></td></tr>
+<tr><td><span class="fk">tenant_id</span></td><td>UUID</td><td>涉事商家</td></tr>
+<tr><td><span class="fk">shop_id</span></td><td>UUID</td><td>可空；多店时定位店铺</td></tr>
+<tr><td>case_type</td><td>VARCHAR(24)</td><td><code>sensitive_word</code> · <code>product_violation</code> · <code>buyer_complaint</code> · <code>user_report</code> · <code>external_audit</code> · <code>manual</code></td></tr>
+<tr><td>object_type</td><td>VARCHAR(20)</td><td><code>product</code> · <code>order</code> · <code>merchant</code> · <code>buyer</code></td></tr>
+<tr><td>object_ref</td><td>VARCHAR(256)</td><td>列表「对象」展示（商品名/订单号等）</td></tr>
+<tr><td><span class="fk">product_id</span> / <span class="fk">order_id</span></td><td>UUID</td><td>可空；关联实体</td></tr>
+<tr><td>source</td><td>VARCHAR(32)</td><td>入库来源：<code>f6_auto</code> · <code>f7_callback</code> · <code>service_log</code> · <code>ops_manual</code> · <code>buyer_report</code> 等</td></tr>
+<tr><td>source_ref_id</td><td>UUID</td><td>可空；如 <code>shop_product_reviews.id</code>、服务记录 id</td></tr>
+<tr><td>status</td><td>VARCHAR(20)</td><td><code>pending</code> · <code>processing</code> · <code>closed</code></td></tr>
+<tr><td><span class="fk">assignee_id</span></td><td>UUID</td><td>处理人；接单或下架时写入</td></tr>
+<tr><td>reported_at</td><td>TIMESTAMPTZ</td><td>上报时间（列表默认列）</td></tr>
+<tr><td>resolution</td><td>VARCHAR(32)</td><td>结案结果：已下架/已警告/误报无责/其他</td></tr>
+<tr><td>conclusion</td><td>TEXT</td><td>结案说明（≥4 字）</td></tr>
+<tr><td>force_off_at</td><td>TIMESTAMPTZ</td><td>可空；执行强制下架时间（统计「本月强制下架」）</td></tr>
+<tr><td>attachments_json</td><td>JSONB</td><td>截图、快照等</td></tr>
+<tr><td>closed_at</td><td>TIMESTAMPTZ</td><td>结案时间</td></tr>
+<tr><td>created_at / updated_at</td><td>TIMESTAMPTZ</td><td></td></tr>
+</table>
+<p class="sub"><b>汇总指标</b>：<code>open_count</code> = <code>pending</code>+<code>processing</code>，与 P01 <code>open_moderation_cases</code>、P07 顶栏前两卡同源。</p></div>
+
+<div class="block" id="ch"><h2>公域对接 · 租户级与店铺级</h2>
+
+<h3 style="font-size:14px;margin:12px 0 6px"><code>shop_merchant_channel_prefs</code>（租户级 · A14-D-T）</h3>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td><span class="fk">tenant_id</span></td><td><span class="uk">UK</span> · 每租户一行</td></tr>
+<tr><td>link_mode</td><td><code>doudian_pay_claim</code>（链路①）· <code>miniapp_in_app_pay</code>（链路②）</td></tr>
+<tr><td>path_type</td><td><code>A</code> · <code>B</code>；须与 P06 全局一致</td></tr>
+<tr><td>webhook_verified_at</td><td>可空；步骤 5 验通时间</td></tr>
+</table>
+<p class="sub">维护角色：企业管理员 · 权限 <code>shop.channel.write</code> · API <code>PUT /shop/channel/preferences</code>。</p>
+
+<h3 style="font-size:14px;margin:12px 0 6px"><code>shop_store_channel_bindings</code>（店铺级 · A14-D-S）</h3>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span> / <span class="fk">tenant_id</span> / <span class="fk">shop_id</span></td><td><span class="uk">UK(shop_id)</span> · 每分店一行</td></tr>
+<tr><td>external_shop_id</td><td>抖店/课程库外部店铺 ID</td></tr>
+<tr><td>bind_status</td><td><code>pending</code> · <code>active</code> · <code>revoked</code></td></tr>
+<tr><td>last_sync_at</td><td>可空</td></tr>
+</table>
+<p class="sub">维护角色：企业管理员 · 权限 <code>shop.channel.write</code> · 入口 <a href="01-管理端UI.html#a23">A23 设置</a>。API <code>POST /shop/channel/external-shops/bind</code>。</p>
+
+<h3 style="font-size:14px;margin:12px 0 6px"><code>shop_channel_listings</code>（商品映射 · 店铺级 · A14-A）</h3>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td>channel / path_type</td><td>doudian|dy_knowledge；A|B</td></tr>
+<tr><td>external_product_id</td><td><span class="uk">UK(shop_id,channel,external_product_id)</span></td></tr>
+<tr><td>listing_status</td><td>pending|mapped|paused|blocked</td></tr>
+<tr><td>external_audit_status</td><td>none|submitted|approved|rejected（公域侧审核）</td></tr>
+<tr><td>mount_blocked_reason</td><td>可空；未过商品审核 / 类目禁售 / 平台强制下架等</td></tr>
+</table>
+<p class="sub">前置条件：关联 <code>shop_products.status ∈ {approved, on_sale}</code> 且 <code>last_review_id</code> 对应人审通过；否则禁止创建/恢复映射。</p>
+
+<h3 style="font-size:14px;margin:12px 0 6px"><code>shop_channel_audit_logs</code>（同步/回调/状态日志 · A14-C）</h3>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span> / <span class="fk">listing_id</span> / <span class="fk">tenant_id</span> / <span class="fk">shop_id</span></td><td>映射维度；Webhook 拒单可关联 listing 或仅 shop+channel</td></tr>
+<tr><td><b>event_type</b></td><td>VARCHAR(40)：<code>mapping_created</code> · <code>sync_*</code> · <code>external_audit_*</code> · <code>webhook_*</code> · <code>listing_paused</code> · <code>listing_resumed</code> 等（见 <a href="01-管理端UI.html#a14c">A14-C 日志类型表</a>）</td></tr>
+<tr><td>summary</td><td>展示用短文案（列表「摘要」列）</td></tr>
+<tr><td>payload_json</td><td>可空；抖店错误码、外部单号、驳回码等</td></tr>
+<tr><td><span class="fk">operator_user_id</span></td><td>可空；商家操作有值；Webhook/系统回调为 null</td></tr>
+<tr><td>created_at</td><td>TIMESTAMPTZ</td></tr>
+</table>
+<p class="sub">商家 UI：<code>GET /shop/channel/listings/{id}/audit-log</code> 按 listing 分页；默认近 30 天。与平台 P06 连通性测试日志分表。</p></div>
+
+<div class="block" id="rev"><h2><code>shop_product_reviews</code></h2>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span> / <span class="fk">product_id</span> / <span class="fk">tenant_id</span></td><td>每次提交审核一条记录</td></tr>
+<tr><td>snapshot_json</td><td>提交时商品快照（名称/封面/价格/关联内容摘要）</td></tr>
+<tr><td>auto_result</td><td>pass|flag|reject（机审）</td></tr>
+<tr><td>auto_flags</td><td>JSONB 机审明细数组；元素：<code>rule</code> · <code>level</code> · <code>field</code> · <code>snippet</code> · <code>message</code> · <code>dict_version</code>。规则码见 <a href="03-数据流.html#f6-auto-rules">F6 §机审规则</a></td></tr>
+<tr><td>manual_result</td><td>pending|approved|rejected（人审）</td></tr>
+<tr><td>reject_reason / reviewer_id / reviewed_at</td><td>人审驳回与操作人</td></tr>
+<tr><td>submitted_by / submitted_at</td><td>商家提交人</td></tr>
+</table>
+<p class="sub">状态机：<code>draft</code> → 提交 → <code>pending_review</code> + INSERT review；人审通过 → <code>approved</code>（可上架）；驳回 → <code>rejected</code>；<code>approved</code> → 商家上架 → <code>on_sale</code>；下架 → <code>off_sale</code>（保留 approved，可再上架）。Mx 公域首单<strong>不允许跳过人审</strong>。机审×人审流程图 <a href="03-数据流.html#f6-flow">F6</a> · <a href="06-平台端UI.html#p09-auto-manual-flow">P09</a>。</p></div>
+
+<div class="block" id="set"><h2><code>shop_tenant_settings</code> / <code>shop_store_settings</code></h2>
+<p class="sub"><code>shop_tenant_settings</code> UK(tenant_id)：<code>wx_sub_mch_id</code>、<code>onboarding_status</code>、<code>payment_onboarding_snapshot_json</code>、<code>sms_signature_id</code> / <code>claim_template_id</code>（平台 <a href="06-平台端UI.html#p12">P12 短信管理</a> 分配，商家只读）、<code>claim_landing_base</code>、<code>claim_expire_days</code>、短信用量等。<code>shop_sms_delivery_logs</code>：每次下发记录（用途/模板/手机脱敏/状态/供应商 BizId/关联订单）；平台 <a href="06-平台端UI.html#p12-logs">P12 发送记录</a> 可查。<code>platform_sms_signatures</code> · <code>platform_sms_templates</code>：平台维护。<code>platform_channel_credentials</code>：抖店 · 微信服务商 · <strong>sms_aliyun</strong>。</p></div>
+
+<div class="block" id="ssm"><h2><code>shop_store_memberships</code>（店员单店范围 · 可选）</h2>
+<p class="sub">企业 <code>admin</code> / 全店 <code>shop_admin</code> 可不建行（隐含全店）。<code>shop_clerk</code> 等须限店时写入本表。API：<a href="PRD-内容获客商城-phase1.md#281-成员与店铺范围-apia16-a">§2.8.1</a> · UI：<a href="01-管理端UI.html#a16a">A16-A</a>。</p>
+<table>
+<tr><th>字段</th><th>类型</th><th>约束</th><th>说明</th></tr>
+<tr><td><span class="pk">id</span></td><td>UUID</td><td>PK</td><td></td></tr>
+<tr><td><span class="fk">tenant_id</span></td><td>UUID</td><td>FK IDX</td><td>冗余便于查询</td></tr>
+<tr><td><span class="fk">user_id</span></td><td>UUID</td><td>FK</td><td>→ <code>users</code></td></tr>
+<tr><td><span class="fk">shop_id</span></td><td>UUID</td><td>FK</td><td>→ <code>shop_stores</code></td></tr>
+<tr><td><span class="fk">role_id</span></td><td>UUID</td><td>FK</td><td>→ 租户 <code>roles</code>（内置 shop_*）</td></tr>
+<tr><td>created_at</td><td>TIMESTAMPTZ</td><td></td><td></td></tr>
+</table>
+<p class="sub"><span class="uk">UK(user_id, shop_id, role_id)</span> 或 Phase 1 简化为 <span class="uk">UK(user_id, tenant_id)</span>（一人一商城角色 + 多行表店）。<b>Phase 1 推荐</b>：每用户一条 <code>memberships</code> 角色 + 本表仅 <code>shop_clerk</code> 填单店。</p></div>
+
+<div class="block" id="roles"><h2>角色与权限（无独立表）</h2>
+<p class="sub">复用租户 <code>roles</code> / <code>role_permissions</code> / <code>memberships</code>。单店店员见上表 <a href="#ssm">shop_store_memberships</a>。企业 <code>admin</code> 管全商家所有店；<code>shop_admin</code> 可限单店。内置角色：<code>shop_admin</code>、<code>shop_content</code>、<code>shop_support</code>、<code>shop_clerk</code>。</p>
+<p class="sub">详见 <a href="05-角色权限.html">05-角色权限.html</a>。</p></div>
+
+<div class="block" id="select-spec"><h2>下拉 / 选择控件规格（权威枚举）</h2>
+<p class="sub">凡 HTML 线框中的 ▾ / <code>&lt;select&gt;</code> / Tab 视图 / 单选组，须在线框外补「下拉/选择规格表」。规范见 <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">PRD写作规范 §2.5.9</a>。各页增量控件见对应 UI 文件内表 + 下表分端索引。</p>
+<div class="nav" style="margin-bottom:10px">
+<a href="#select-common">§通用</a><a href="#enum-master">§枚举总表</a><a href="#webhook-urls">§Webhook URL</a><a href="#select-admin">商家端 A</a><a href="#select-buyer">买家端 M</a><a href="#select-platform">平台端 P</a>
+</div>
+
+<h3 id="select-common" style="font-size:14px;margin:16px 0 8px">§通用（全端复用）</h3>
+<table>
+<tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>落库 / API</th></tr>
+<tr><td><b>每页条数</b>（主列表）</td><td>单选</td><td><code>10</code> · <code>20</code> · <code>50</code> · <code>100</code></td><td>默认 <code>20</code>；切换回第 1 页</td><td>query <code>page_size</code></td></tr>
+<tr><td><b>每页条数</b>（看板内嵌表）</td><td>单选</td><td><code>5</code> · <code>10</code> · <code>20</code></td><td>默认 <code>10</code></td><td>query <code>page_size</code></td></tr>
+<tr><td><b>主体类型</b> <code>entity_type</code></td><td>单选</td><td><code>personal</code> 个人 · <code>individual_business</code> 个体工商户 · <code>enterprise</code> 企业</td><td>切换栏位显隐矩阵；草稿保留</td><td><code>shop_onboarding_applications.entity_type</code></td></tr>
+<tr><td><b>商家入驻状态</b></td><td>单选</td><td><code>active</code> · <code>suspended</code> · <code>closed</code> · <code>reviewing</code> · <code>not_onboarded</code></td><td>列表筛选 / 行内操作显隐</td><td><code>shop_merchant_accounts.status</code> + 申请单态</td></tr>
+<tr><td><b>套餐健康度</b></td><td>单选</td><td><code>active</code> · <code>expiring_soon</code>（≤30天）· <code>expired</code></td><td>与入驻状态独立</td><td>派生自主订阅 <code>expires_at</code></td></tr>
+<tr><td><b>店铺生命周期</b></td><td>单选</td><td><code>draft</code> · <code>active</code> · <code>paused</code> · <code>closed</code></td><td>列表筛选；商家全局暂停时营业店强制 <code>paused</code></td><td><code>shop_stores.status</code></td></tr>
+<tr><td><b>商品状态</b></td><td>单选</td><td><code>draft</code> · <code>pending_review</code> · <code>approved</code> · <code>on_sale</code> · <code>off_sale</code> · <code>rejected</code></td><td>状态机见 <a href="#rev">shop_product_reviews</a></td><td><code>shop_products.status</code></td></tr>
+<tr><td><b>商品类型</b></td><td>单选</td><td><code>course</code> · <code>digital</code> · <code>service</code></td><td>决定关联内容区</td><td><code>shop_products.type</code> · API <code>type</code></td></tr>
+<tr><td><b>订单状态</b></td><td>单选</td><td><code>pending_payment</code> · <code>paid</code> · <code>claim_pending</code> · <code>refunding</code> · <code>refunded</code> · <code>partial_refunded</code> · <code>closed</code></td><td>Tab/筛选</td><td><code>shop_orders.status</code></td></tr>
+<tr><td><b>订单渠道</b></td><td>单选</td><td><code>wx_mp</code> · <code>doudian</code> · <code>dy_knowledge</code> · <code>manual</code></td><td>—</td><td><code>shop_orders.channel</code></td></tr>
+<tr><td><b>权益状态</b></td><td>单选</td><td><code>pending</code> · <code>active</code> · <code>expired</code> · <code>revoked</code> · <code>consumed</code></td><td>待生效 · 生效中 · 已过期 · 已撤销 · 已用尽</td><td><code>shop_entitlements.status</code></td></tr>
+<tr><td id="refund_policy-cascade"><b>退款策略</b></td><td>单选</td><td><code>always_allow</code> · <code>before_fulfill</code> · <code>manual_only</code></td><td>A03 按商品类型展示文案；A19/P09 用通用文案；落库仅存枚举（见 <a href="#refund_policy">§通用</a>）</td><td><code>refund_policy</code> · <code>default_refund_policy</code></td></tr>
+<tr><td><b>当前店铺切换</b>（商家顶栏）</td><td>单选</td><td><code>GET /shop/stores</code> 当前 tenant 可访问店铺</td><td>切换刷新 <code>shop_id</code> 上下文</td><td>session <code>current_shop_id</code></td></tr>
+<tr><td><b>导出范围</b> ▾</td><td>单选</td><td>当前筛选结果 · 选中行</td><td>异步导出任务</td><td><code>POST …/export</code></td></tr>
+</table>
+
+<h3 id="select-admin" style="font-size:14px;margin:16px 0 8px">商家端 · 分页索引（详表在 <a href="01-管理端UI.html">01-管理端UI.html</a> 各页末）</h3>
+<p class="sub">A01 时间范围 Chip · A02 类型/状态/公域 · A03 关联专栏/退款策略 · A04–A07 内容筛选 · A09–A13 订单/买家/权益/开票 · A14 公域映射 · A16 角色绑定 · A17 店铺 · A19 退款默认 · A20 主体类型。无下拉：A00/A08/A21/A22。</p>
+
+<h3 id="select-buyer" style="font-size:14px;margin:16px 0 8px">买家端 · 分页索引（详表在 <a href="02-买家端UI.html">02-买家端UI.html</a> 各页末）</h3>
+<p class="sub">M02 排序/类型 Chip/底栏 Tab · M06 类型 Chip · M08 倍速 · M10 时段单选 · M11 订单 Tab · M13 抬头类型。无下拉：M00/M01/M14。</p>
+
+<h3 id="select-platform" style="font-size:14px;margin:16px 0 8px">平台端 · 分页索引（详表在 <a href="06-平台端UI.html">06-平台端UI.html</a> 各页末）</h3>
+<p class="sub">P02 快捷 Tab/标签/高级筛选/分配管家 · P03 审核/首开套餐 · P10 套餐字典 · P11 订阅开通 · P07/P09 工单与审核 · P08 角色绑定。无下拉：P00/P01（仅指标卡）。</p>
+
+<h3 id="select-p02e" style="font-size:14px;margin:12px 0 6px">样例 · P02-E 新管家</h3>
+<table>
+<tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>落库 / API</th></tr>
+<tr><td><b>新管家</b></td><td><b>单选</b></td><td><code>GET /admin/platform-users?platform_shop_role=platform_shop_cs&amp;status=enabled</code></td><td>仅启用且绑定商家管家角色的平台账号；≠ 当前管家</td><td><code>shop_merchant_accounts.account_manager_user_id</code></td></tr>
+</table>
+<p class="sub"><b>批量分配</b>：一次为 ≤50 家商家指定<strong>同一个</strong>管家（非一家多管家）。</p>
+
+<h3 id="select-cascade" style="font-size:14px;margin:20px 0 8px">§级联关系总表（Phase 1）</h3>
+<p class="sub">下拉规格表「级联」列摘要；<code>否</code> = 同屏多筛选独立 AND、互不清空选项。</p>
+<table>
+<tr><th>链路 ID</th><th>父控件</th><th>子控件 / 影响面</th><th>触发规则</th></tr>
+<tr><td><b>C01</b></td><td>主体类型 <code>entity_type</code></td><td>入驻栏位 / 资质材料区</td><td>父变更→显隐矩阵切换；已填草稿保留不丢（P02-A · A20 · P03）</td></tr>
+<tr><td><b>C02</b></td><td>关联租户 <code>tenant_id</code></td><td>企业名称 / 信用代码只读预填</td><td>选 tenant 后带出智营企业信息（P02-A）；<strong>管家</strong>选项集=预分配 tenant only</td></tr>
+<tr><td><b>C03</b></td><td>申请单 <code>entity_type</code></td><td>首开套餐 / P11 可选套餐</td><td>过滤 <code>allowed_entity_types</code>（P03-B · P11）</td></tr>
+<tr><td><b>C04</b></td><td>商品类型 <code>type</code></td><td>关联专栏 ▾ · 关联资料包 ▾ · 关联服务 ▾</td><td>三选一显隐：<code>course</code>→专栏 · <code>digital</code>→资料包 · <code>service</code>→服务；各须已发布且有效（A03）</td></tr>
+<tr><td><b>C05</b></td><td>服务模式</td><td>时段表 / 批量生成</td><td><code>booking</code> 显时段；<code>times_card</code> 隐（A07）</td></tr>
+<tr><td><b>C06</b></td><td>本地商品 → 对接路径 → 外部店铺</td><td>公域新建映射三步（A14-A 步1）；步2 抖店类目依赖商品平台类目</td><td>步1 三级顺序级联，父变清空子项；改步1 回退并清空步2/3</td></tr>
+<tr><td><b>C07</b></td><td>当前套餐态（只读）</td><td>续费申请类型</td><td>已到期禁 stack；无付费史禁续费/加购（P02-B-R）</td></tr>
+<tr><td><b>C08</b></td><td>申请类型</td><td>目标套餐 ▾ · 标价 · 应付金额</td><td>父变更→重算可选套餐+默认金额（P02-B-R · P11）</td></tr>
+<tr id="select-cascade-c09"><td><b>C09</b></td><td>开通方式 stack/replace（P11-A）</td><td>目标套餐 ▾</td><td><code>stack</code>→加购 <code>stackable=true</code> 或首开主套餐；<code>replace</code>→同 <code>replace_group</code> 更高档主套餐（<a href="06-平台端UI.html#p11a">P11-A</a>）</td></tr>
+<tr><td><b>C15</b></td><td>加购包 ▾（P11-A 叠加）</td><td>套餐标价 · 加购金额 · 合并预览</td><td>选中 P10 加购模板 → 标价=<code>price_cents</code>；金额默认=标价；预览=merge 模拟（<a href="06-平台端UI.html#p11a-stack">P11-A 叠加加购</a>）</td></tr>
+<tr><td><b>C16</b></td><td>目标套餐 ▾（P11-B 换档）</td><td>套餐标价 · 换档金额 · 合并预览</td><td>选中 P10 更高档主套餐 → 标价=<code>price_cents</code>；金额默认=标价；预览=replace merge 模拟（<a href="06-平台端UI.html#p11b">P11-B 换档</a>）</td></tr>
+<tr id="select-cascade-c17"><td><b>C17</b></td><td>目标套餐 ▾（P11-A 通用）</td><td>套餐标价 · 应付金额</td><td>选中 P10 模板 → 标价=<code>price_cents</code>；金额默认=标价（<a href="06-平台端UI.html#p11a">P11-A 人工开通</a>）</td></tr>
+<tr><td><b>C18</b></td><td>申请类型（P11-A 处理续费）</td><td>落点面板 · 预填字段集</td><td><code>renew_same</code>→本页；<code>stack_addon</code>→<a href="06-平台端UI.html#p11a-stack">叠加加购</a>；<code>replace_upgrade</code>→<a href="06-平台端UI.html#p11b">换档</a>（字段只读）</td></tr>
+<tr><td><b>C19</b></td><td>订阅行（P11-C 续费）</td><td>套餐标价 · 续费金额</td><td>行内锁定 <code>subscription_id</code> → 标价取自模板/快照；金额默认=标价（<a href="06-平台端UI.html#p11c">P11-C</a>）</td></tr>
+<tr><td><b>C10</b></td><td>套餐类型 main/addon</td><td>stackable · replace_group 字段</td><td>编辑模板时联动（P10）</td></tr>
+<tr><td><b>C11</b></td><td>抬头类型</td><td>税号栏</td><td>企业→显且必填税号（M13）</td></tr>
+<tr><td><b>C12</b></td><td>绑定角色</td><td>店铺范围多选</td><td><code>shop_clerk</code> 建议/限制单店（A16-A）</td></tr>
+<tr><td><b>C13</b></td><td>当前店铺 ▾</td><td>商家端全页数据</td><td>切换 shop_id 刷新列表/看板（A01–A23 顶栏）</td></tr>
+<tr><td><b>C14</b></td><td>P01 指标卡</td><td>P02 快捷 Tab</td><td>下钻带 <code>tab</code> 预设（导航级联，非表单）</td></tr>
+<tr><td><b>—</b></td><td colspan="3">列表多筛选（类型+状态+渠道、P02 高级筛选六字段等）均为<strong>独立 AND</strong>，级联列写「否」</td></tr>
+</table>
+
+<h3 id="enum-master" style="font-size:14px;margin:24px 0 8px">§枚举总表（Phase 1 权威）</h3>
+<p class="sub">下拉规格、状态矩阵、API 校验<strong>唯一枚举源</strong>。新增枚举须同步本表 + 各 UI 页末「下拉/选择规格」+ PRD §8 字段说明。</p>
+<table>
+<tr><th>枚举名</th><th>取值（code）</th><th>中文 / 说明</th><th>落库表.字段</th></tr>
+<tr><td><code>entity_type</code></td><td><code>personal</code> · <code>individual_business</code> · <code>enterprise</code></td><td>个人 · 个体 · 企业</td><td><code>shop_onboarding_applications.entity_type</code></td></tr>
+<tr><td>入驻申请状态</td><td><code>pending</code> · <code>approved</code> · <code>rejected</code></td><td>待审 · 已通过 · 已驳回</td><td><code>shop_onboarding_applications.status</code></td></tr>
+<tr><td>入驻发起方</td><td><code>merchant_self</code> · <code>ops_assisted</code></td><td>商家自申 · 运营代建</td><td><code>initiator</code></td></tr>
+<tr><td>商家入驻状态（列表）</td><td><code>active</code> · <code>suspended</code> · <code>closed</code> · <code>reviewing</code> · <code>not_onboarded</code></td><td>正常 · 暂停 · 清退 · 审核中 · 未入驻</td><td>派生 + <code>shop_merchant_accounts.status</code></td></tr>
+<tr><td>套餐健康度</td><td><code>active</code> · <code>expiring_soon</code> · <code>expired</code></td><td>生效 · 即将到期(≤30d) · 已到期</td><td>派生自主订阅</td></tr>
+<tr><td>店铺生命周期</td><td><code>draft</code> · <code>active</code> · <code>paused</code> · <code>closed</code></td><td>草稿 · 营业中 · 已暂停 · 已关闭</td><td><code>shop_stores.status</code></td></tr>
+<tr><td>商品状态</td><td><code>draft</code> · <code>pending_review</code> · <code>approved</code> · <code>on_sale</code> · <code>off_sale</code> · <code>rejected</code></td><td>草稿 · 审核中 · 已通过 · 在售 · 已下架 · 已驳回</td><td><code>shop_products.status</code></td></tr>
+<tr><td>商品类型</td><td><code>course</code> · <code>digital</code> · <code>service</code></td><td>课程 · 资料 · 服务</td><td><code>shop_products.type</code> · API <code>type</code></td></tr>
+<tr><td>课时状态</td><td><code>draft</code> · <code>published</code> · <code>off_sale</code></td><td>草稿 · 已发布 · 已下架</td><td><code>shop_lessons.status</code></td></tr>
+<tr><td>订单状态</td><td><code>pending_payment</code> · <code>paid</code> · <code>claim_pending</code> · <code>refunding</code> · <code>refunded</code> · <code>partial_refunded</code> · <code>closed</code></td><td>待付款 · 已付款 · 待领权 · 退款中 · 已退款 · 部分退款 · 已关闭</td><td><code>shop_orders.status</code> · <a href="03-数据流.html#o1">O1 状态机</a></td></tr>
+<tr><td>订单渠道</td><td><code>wx_mp</code> · <code>doudian</code> · <code>dy_knowledge</code> · <code>manual</code></td><td>微信私域小程序 · 抖店 · 课程库/小程序 · 人工录单</td><td><code>shop_orders.channel</code></td></tr>
+<tr><td>权益状态</td><td><code>pending</code> · <code>active</code> · <code>expired</code> · <code>revoked</code> · <code>consumed</code></td><td>待生效 · 生效 · 已过期 · 已撤销 · 已用尽</td><td><code>shop_entitlements.status</code></td></tr>
+<tr id="refund_policy"><td>退款策略</td><td><code>always_allow</code> · <code>before_fulfill</code> · <code>manual_only</code></td><td>随时可退 · 履约前可退（A19/P09 通用；服务 A03 展示「未使用可退」，同 <code>before_fulfill</code>）· 仅人工</td><td><code>refund_policy</code> · <code>default_refund_policy</code></td></tr>
+<tr><td>公域对接路径</td><td><code>A</code> · <code>B</code></td><td>平台官方店 · 商家交付店</td><td><code>shop_channel_listings.path_type</code></td></tr>
+<tr><td>公域渠道</td><td><code>doudian</code> · <code>dy_knowledge</code></td><td>抖店 · 抖音课程库/小程序</td><td><code>shop_channel_listings.channel</code></td></tr>
+<tr><td>映射状态</td><td><code>pending</code> · <code>mapped</code> · <code>paused</code> · <code>blocked</code></td><td>提审中/未挂载 · 已挂载 · 暂停同步 · 已阻断</td><td><code>shop_channel_listings.listing_status</code>（UI「未挂载」= <code>pending</code> 或无 listing 行）</td></tr>
+<tr><td>外部审核</td><td><code>none</code> · <code>submitted</code> · <code>approved</code> · <code>rejected</code></td><td>未提交 · 已提交外部 · 外部通过 · 外部驳回</td><td><code>shop_channel_listings.external_audit_status</code></td></tr>
+<tr><td>开票申请</td><td><code>submitted</code> · <code>issued</code> · <code>rejected</code></td><td>待处理 · 已开票 · 已驳回</td><td><code>shop_invoice_requests.status</code>（<code>processing</code> 废止）</td></tr>
+<tr><td>订阅来源</td><td><code>purchase</code> · <code>trial</code> · <code>manual</code> · <code>upgrade</code> · <code>renew</code> · <code>addon</code></td><td>购买 · 试用 · 人工 · 升级 · 续费 · 加购</td><td><code>shop_merchant_subscriptions.source</code></td></tr>
+<tr><td>抬头类型</td><td><code>personal</code> · <code>company</code></td><td>个人 · 企业</td><td><code>title_type</code></td></tr>
+<tr><td>机审结果</td><td><code>pass</code> · <code>flag</code> · <code>reject</code></td><td>通过 · 标记 · 拒绝</td><td>商品审核 <code>auto_result</code></td></tr>
+<tr><td>清退原因码</td><td><code>violation</code> · <code>contract_end</code> · <code>merchant_request</code> · <code>fraud</code> · <code>other</code></td><td>违规 · 合同到期 · 商家申请 · 欺诈 · 其它</td><td>P02-F · §8.4</td></tr>
+<tr id="enum-onboarding-reject-code"><td><b>入驻驳回原因码</b></td><td colspan="3">P03 驳回子 Tab · <code>shop_onboarding_applications.reject_code</code> · API <code>GET /admin/shop/onboarding/reject-reasons</code>（📋）或前端常量表</td></tr>
+<tr><td colspan="4" style="background:#fafafa;font-size:12px;padding:8px 12px"><b>材料证照</b></td></tr>
+<tr><td></td><td><code>incomplete_docs</code> · <code>illegible_docs</code> · <code>expired_docs</code> · <code>need_supplement</code></td><td>资质材料不全 · 证照影像不清 · 证照过期/失效 · 需补充材料（通用补件）</td><td>缺件/模糊/过期/其他补件场景</td></tr>
+<tr><td colspan="4" style="background:#fafafa;font-size:12px;padding:8px 12px"><b>主体与人员</b></td></tr>
+<tr><td></td><td><code>entity_mismatch</code> · <code>wrong_entity_type</code> · <code>legal_rep_mismatch</code></td><td>主体与证照信息不符 · 主体类型选错 · 法人/负责人信息不符</td><td>企业/个人、名称、统一社会信用代码等</td></tr>
+<tr><td colspan="4" style="background:#fafafa;font-size:12px;padding:8px 12px"><b>联系与进件</b></td></tr>
+<tr><td></td><td><code>contact_invalid</code> · <code>payment_incomplete</code> · <code>payment_mismatch</code></td><td>联系人信息无效 · 支付进件信息不全 · 结算信息与主体不一致</td><td>手机无法联系、缺结算账户等</td></tr>
+<tr><td colspan="4" style="background:#fafafa;font-size:12px;padding:8px 12px"><b>平台规则</b></td></tr>
+<tr><td></td><td><code>duplicate_application</code> · <code>policy_not_met</code> · <code>category_blocked</code> · <code>risk_control</code></td><td>重复申请 · 不符合入驻政策 · 经营类目禁入 · 风控审核未通过</td><td>重复 tenant、政策/类目/风控</td></tr>
+<tr><td colspan="4" style="background:#fafafa;font-size:12px;padding:8px 12px"><b>其他</b></td></tr>
+<tr><td></td><td><code>other</code></td><td>其他</td><td>须配合 <code>reject_reason</code> ≥4 字说明</td></tr>
+<tr><td>店铺成员范围</td><td><code>all</code> · <code>selected</code></td><td>全店 · 指定店</td><td><code>store_scope</code></td></tr>
+<tr><td id="enum-service-log-type-row">服务记录 type（人工）</td><td><code>note</code> · <code>call</code> · <code>visit</code> · <code>wechat</code> · <code>video</code> · <code>email</code> · <code>training</code> · <code>complaint</code> · <code>onboarding_assist</code> · <code>other</code></td><td>文字备注 · 电话 · 拜访 · 微信/企微 · 视频会议 · 邮件 · 培训赋能 · 投诉客诉 · 入驻协助 · 其他</td><td><code>shop_merchant_service_logs.type</code> · <a href="#enum-service-log-type">§svc 详表</a></td></tr>
+<tr><td>服务记录 type（系统）</td><td><code>renewal_request</code> · <code>status_change</code></td><td>续费申请 · 状态变更</td><td>同上</td></tr>
+<tr><td id="enum-renewal-application-kind">续费申请类型</td><td><code>renew_same</code> · <code>stack_addon</code> · <code>replace_upgrade</code></td><td>续费同档 · 叠加加购 · 主套餐升级</td><td><code>shop_merchant_service_logs.payload_json.application_kind</code> · <a href="06-平台端UI.html#p02b-renewal">P02-B-R</a></td></tr>
+</table>
+
+<h3 id="webhook-urls" style="font-size:14px;margin:24px 0 8px">§Webhook 与回调 URL 总表（消歧义）</h3>
+<p class="sub"><b>权威路由</b>以 PRD <a href="PRD-内容获客商城-phase1.md#811-公域对接与-webhooka14--p06--f3--f7">§8.11</a> · <code>/integrations/*</code> 为准。UI 线框内展示 URL 须与本表一致（勿使用历史别名 <code>/shop/callbacks/*</code>）。</p>
+<table>
+<tr><th>名称</th><th>权威路径（相对 API 根）</th><th>完整示例</th><th>鉴权</th><th>配置/展示位置</th><th>说明</th></tr>
+<tr><td>微信支付结果通知</td><td><code>POST /integrations/wechat-pay/notify</code></td><td><code>https://api.xxx/integrations/wechat-pay/notify</code></td><td>微信签名校验</td><td><a href="06-平台端UI.html#p06-wechat-pay">P06</a> 只读复制</td><td>私域支付 F1 · 无 JWT · 商家 A15 不可见</td></tr>
+<tr><td>抖店订单/退款 Webhook</td><td><code>POST /integrations/doudian/webhook</code></td><td><code>https://api.xxx/integrations/doudian/webhook</code></td><td>抖店 sign</td><td>P06 全局 · A14 向导展示</td><td>链路 ① · F3</td></tr>
+<tr><td>课程库/小程序交易 Webhook</td><td><code>POST /integrations/dy-knowledge/webhook</code></td><td><code>https://api.xxx/integrations/dy-knowledge/webhook</code></td><td>开放平台签名</td><td>P06</td><td>链路 ② · F3b · §8.11.2</td></tr>
+<tr><td>领权落地页（非 Webhook）</td><td><code>GET /mp/shop/claim/{token}</code></td><td><code>https://shop.xxx.com/mp/claim/{token}</code></td><td>token 一次性</td><td>A15 领权域名 · P12 短信模板</td><td>M14 · 短链拼 <code>claim_landing_base</code></td></tr>
+<tr><td>微信退款结果（若有）</td><td><code>POST /integrations/wechat-refund/notify</code></td><td><code>https://api.xxx/integrations/wechat-refund/notify</code></td><td>微信签名</td><td><a href="06-平台端UI.html#p06-wechat-pay">P06</a> 只读复制</td><td>F2 关权益 · 与支付 notify 同服务商证书</td></tr>
+</table>
+<p class="sub" style="margin-top:8px"><b>已废弃别名</b>（文档/旧线框勿再使用）：<code>/shop/callbacks/doudian</code>、<code>/shop/payments/wechat/notify</code> → 统一为上表路径。</p>
+</div>
+</div></body></html>

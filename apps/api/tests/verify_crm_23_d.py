@@ -9,7 +9,7 @@
   H  回款计划 + 实际回款 + 确认 + 冲销
   路径 商机 -> 报价 -> 订单、商机 -> 合同 -> 订单（合同重复生成订单）
 
-详见 docs/v0.7-crm-deal执行计划.md §Phase D-H。
+详见 docs/02-执行计划/v0.7-crm-deal执行计划.md §Phase D-H。
 """
 from __future__ import annotations
 

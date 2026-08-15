@@ -143,6 +143,40 @@ def ensure_crm_test_users(db: Session, admin_user_phone: str = ADMIN_PHONE) -> d
             elif not profile.primary_territory_id:
                 profile.primary_territory_id = default_tid
 
+    # SQLite 下 role_id 连字符/hex 不一致时，relationship 加载不到 delete。把已有行改成与 role 相同的格式。
+    from sqlalchemy import text as sql_text
+
+    from app.models import TenantRolePermission
+
+    sales_a_user = db.query(User).filter(User.phone == SALES_A_PHONE).first()
+    sales_m = get_membership(db, sales_a_user.id, tenant_id) if sales_a_user else None
+    if sales_m and sales_m.role:
+        canon = sales_m.role.permissions[0].role_id if sales_m.role.permissions else sales_m.role.id
+        hex_id = str(canon).replace("-", "").lower()
+        db.execute(
+            sql_text(
+                """
+                DELETE FROM tenant_role_permissions
+                WHERE permission_code = 'crm.lead.delete'
+                  AND lower(replace(cast(role_id as text), '-', '')) = :hex_id
+                  AND replace(cast(role_id as text), '-', '') = cast(role_id as text)
+                """
+            ),
+            {"hex_id": hex_id},
+        )
+        n = db.execute(
+            sql_text(
+                """
+                SELECT COUNT(*) FROM tenant_role_permissions
+                WHERE permission_code = 'crm.lead.delete'
+                  AND lower(replace(cast(role_id as text), '-', '')) = :hex_id
+                """
+            ),
+            {"hex_id": hex_id},
+        ).scalar()
+        if not n:
+            db.add(TenantRolePermission(role_id=canon, permission_code="crm.lead.delete"))
+
     db.commit()
     reset_test_client()
     return out

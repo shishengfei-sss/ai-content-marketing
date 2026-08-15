@@ -9,7 +9,7 @@ API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
 from tests.alembic_head import is_at_expected_head
-from tests.http_client import _get_test_client, check, req
+from tests.http_client import _get_test_client, check, req, run_nested_m0_m8
 
 
 def main() -> int:
@@ -27,8 +27,7 @@ def main() -> int:
     r = _get_test_client().get("/api/v1/agent/health")
     results.append(check("VA0-2 agent health", r.status_code == 200 and r.json().get("status") == "ok"))
 
-    proc2 = subprocess.run([sys.executable, "-B", "tests/run_m0_m8.py"], cwd=API_ROOT)
-    results.append(check("VA0-3 run_m0_m8", proc2.returncode == 0))
+    results.append(run_nested_m0_m8("VA0-3 run_m0_m8"))
 
     openapi = _get_test_client().get("/openapi.json").json()
     paths = openapi.get("paths", {})

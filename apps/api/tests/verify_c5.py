@@ -15,7 +15,7 @@ from app.models import Content
 from app.services.agent.supervisor_service import assert_agent_may_run_tool, decide_after_compliance
 from fastapi import HTTPException
 from tests.alembic_head import is_at_expected_head
-from tests.http_client import _get_test_client, check, req, ensure_fake_platform
+from tests.http_client import _get_test_client, check, req, ensure_fake_platform, run_nested_script
 
 
 def login(phone: str, password: str) -> str:
@@ -195,10 +195,8 @@ def main() -> int:
         )
     )
 
-    proc1 = subprocess.run([sys.executable, "-B", "tests/verify_c1.py"], cwd=API_ROOT)
-    proc4 = subprocess.run([sys.executable, "-B", "tests/verify_c4.py"], cwd=API_ROOT)
-    results.append(check("VC5-5 verify_c1 回归", proc1.returncode == 0))
-    results.append(check("VC5-5 verify_c4 回归", proc4.returncode == 0))
+    results.append(run_nested_script("VC5-5 verify_c1 回归", "verify_c1.py"))
+    results.append(run_nested_script("VC5-5 verify_c4 回归", "verify_c4.py"))
 
     passed = all(results)
     print("\n=== C5", "全部通过" if passed else "存在失败", "===")

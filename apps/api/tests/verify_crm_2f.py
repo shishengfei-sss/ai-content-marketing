@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CRM-2f 验收：§3.18.2 缺口收尾（docs/v0.5-crm-2f执行计划.md）。"""
+"""CRM-2f 验收：§3.18.2 缺口收尾（docs/02-执行计划/v0.5-crm-2f执行计划.md）。"""
 from __future__ import annotations
 
 import sys
@@ -299,7 +299,11 @@ def step_2f_8(results: list[bool]) -> None:
     """H5 列表视图切换。"""
     api = _read(MP_SRC / "utils" / "api.js")
     leads = _read(MP_SRC / "pages" / "crm" / "leads.vue")
-    customers = _read(MP_SRC / "pages" / "crm" / "customers.vue")
+    customers = (
+        _read(MP_SRC / "pages" / "crm" / "customers.vue")
+        + _read(MP_SRC / "components" / "crm" / "CrmEntityListPage.vue")
+        + _read(MP_SRC / "composables" / "useCrmEntityListPage.js")
+    )
     results.append(check("V2f-8-1 listViews", "listViews" in api, "api.js"))
     results.append(check("V2f-8-2 leads view_id", "view_id" in leads or "listViews" in leads, "leads.vue"))
     results.append(check("V2f-8-3 customers view_id", "view_id" in customers or "listViews" in customers, "customers.vue"))

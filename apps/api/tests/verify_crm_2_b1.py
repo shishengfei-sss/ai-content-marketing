@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """CRM-2 Phase B-1 验收：deal_service CRUD + 阶段推进 + 关闭 + 转订单 + 阶段日志。
 
-详见 docs/v0.7-crm-deal执行计划.md §Phase B。
+详见 docs/02-执行计划/v0.7-crm-deal执行计划.md §Phase B。
 """
 from __future__ import annotations
 
