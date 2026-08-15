@@ -93,9 +93,9 @@ def upgrade() -> None:
                 "date_format": s[2],
                 "seq_width": s[3],
                 "reset_period": s[4],
-                "inherit_parent_code": 1 if s[5] else 0,
+                "inherit_parent_code": bool(s[5]),
                 "separator": s[6],
-                "enabled": 1 if s[7] else 0,
+                "enabled": bool(s[7]),
                 "now": now,
             },
         )
