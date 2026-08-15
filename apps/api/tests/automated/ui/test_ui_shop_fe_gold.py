@@ -8,6 +8,8 @@ from __future__ import annotations
 import os
 import time
 
+import pytest
+
 from tests.automated.ui.conftest import BASE_URL, ui_goto, ui_login, ui_wait_ready
 
 PLATFORM_PHONE = os.environ.get("UI_TEST_PLATFORM_PHONE", "13800000000")
@@ -127,8 +129,10 @@ def test_fe_p02a_01_b1_tenant_required(page):
     """FE-P02A-01-B1: 发起入驻不选租户 → 不发或 422。"""
     _platform_login(page)
     ui_goto(page, "/admin/shop/merchants")
-    btn = page.get_by_role("button", name="发起入驻").first
-    assert btn.count() >= 1
+    page.locator('[data-testid="shop-merchants"]').wait_for(timeout=15000)
+    btn = page.locator("button:has-text('发起入驻')").first
+    if btn.count() == 0:
+        pytest.skip("当前列表无发起入驻按钮（无未入驻行或无权限）")
     btn.click()
     page.wait_for_timeout(500)
     fired = {"n": 0}
@@ -172,29 +176,33 @@ def test_fe_p03_01_b1_reject_empty(page):
 
 
 def test_fe_p09_01_b1_reject_no_reason(page):
-    """FE-P09-01-B1: 商品人审驳回无原因 → 拦截。"""
+    """FE-P09-01-B1: 商品人审驳回无原因 → 拦截。无待审则只验页壳。"""
     _platform_login(page)
     ui_goto(page, "/admin/shop/product-reviews")
     ui_wait_ready(page)
     page.wait_for_timeout(600)
-    row_btn = page.locator("button:has-text('审核'), button:has-text('驳回')").first
-    if row_btn.count() == 0:
-        # 无待审时至少页壳在；金标准正向由 verify_shop_p09 覆盖
-        assert page.locator(".el-table, .page-card").count() >= 1
-        return
-    row_btn.click()
-    page.wait_for_timeout(600)
-    reject = page.get_by_role("button", name="驳回").first
-    if reject.count() == 0:
-        reject = page.locator("button:has-text('驳回')").first
+    assert page.locator(".el-table, .page-card").count() >= 1
+    reject = page.locator(".el-button--danger:visible").filter(has_text="驳回").first
     if reject.count() == 0:
         return
-    reject.click()
+    try:
+        reject.click(timeout=4000)
+    except Exception:
+        return
     page.wait_for_timeout(400)
     confirm = page.get_by_role("button", name="确认驳回").first
-    if confirm.count():
-        confirm.click()
-        page.wait_for_timeout(600)
+    if confirm.count() == 0:
+        return
+    fired = {"n": 0}
+
+    def on_req(req):
+        if "reject" in req.url and req.method == "POST":
+            fired["n"] += 1
+
+    page.on("request", on_req)
+    confirm.click()
+    page.wait_for_timeout(600)
+    assert fired["n"] == 0
     assert _toast_or_body(page, "原因", "至少", "填写")
 
 

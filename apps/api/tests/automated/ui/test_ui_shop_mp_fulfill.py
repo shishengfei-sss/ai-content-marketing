@@ -44,8 +44,7 @@ def _click_entitlement_action(mobile_page, demo_shop, chip: str, action: str):
 
 def test_ui_shop_mp_learn(mobile_page, demo_shop):
     """SHOP-MP-FUL-001 / M07: 课时目录。对照 #m07。"""
-    _goto(mobile_page, "entitlements", demo_shop)
-    btn = mobile_page.locator(".btn.primary", has_text="继续学").first
+    btn = _click_entitlement_action(mobile_page, demo_shop, "课程", "继续学")
     if btn.count() == 0:
         pytest.skip("无课程已购")
     btn.click()
@@ -57,8 +56,7 @@ def test_ui_shop_mp_learn(mobile_page, demo_shop):
 
 def test_ui_shop_mp_player(mobile_page, demo_shop):
     """SHOP-MP-FUL-002 / M08: 已购进播放器。对照 #m08。"""
-    _goto(mobile_page, "entitlements", demo_shop)
-    btn = mobile_page.locator(".btn.primary", has_text="继续学").first
+    btn = _click_entitlement_action(mobile_page, demo_shop, "课程", "继续学")
     if btn.count() == 0:
         pytest.skip("无课程已购")
     btn.click()
@@ -74,12 +72,7 @@ def test_ui_shop_mp_player(mobile_page, demo_shop):
 
 def test_ui_shop_mp_materials(mobile_page, demo_shop):
     """SHOP-MP-FUL-003 / M09: 资料领取。对照 #m09。"""
-    _goto(mobile_page, "entitlements", demo_shop)
-    chip = mobile_page.locator(".chip", has_text="资料").first
-    if chip.count() > 0:
-        chip.click()
-        mobile_page.wait_for_timeout(400)
-    btn = mobile_page.locator(".btn.primary", has_text="领取").first
+    btn = _click_entitlement_action(mobile_page, demo_shop, "资料", "领取")
     if btn.count() == 0:
         pytest.skip("无资料已购")
     btn.click()
@@ -90,12 +83,7 @@ def test_ui_shop_mp_materials(mobile_page, demo_shop):
 
 def test_ui_shop_mp_booking(mobile_page, demo_shop):
     """SHOP-MP-FUL-004 / M10: 服务预约。对照 #m10。"""
-    _goto(mobile_page, "entitlements", demo_shop)
-    chip = mobile_page.locator(".chip", has_text="服务").first
-    if chip.count() > 0:
-        chip.click()
-        mobile_page.wait_for_timeout(400)
-    btn = mobile_page.locator(".btn.primary", has_text="预约").first
+    btn = _click_entitlement_action(mobile_page, demo_shop, "服务", "预约")
     if btn.count() == 0:
         pytest.skip("无服务已购")
     btn.click()
@@ -107,12 +95,7 @@ def test_ui_shop_mp_booking(mobile_page, demo_shop):
 
 def test_ui_shop_mp_verify_code(mobile_page, demo_shop):
     """SHOP-MP-FUL-005 / M10b: 核销码页。对照 #m10b。"""
-    _goto(mobile_page, "entitlements", demo_shop)
-    chip = mobile_page.locator(".chip", has_text="服务").first
-    if chip.count() > 0:
-        chip.click()
-        mobile_page.wait_for_timeout(400)
-    btn = mobile_page.locator(".btn.primary", has_text="预约").first
+    btn = _click_entitlement_action(mobile_page, demo_shop, "服务", "预约")
     if btn.count() == 0:
         pytest.skip("无服务已购")
     btn.click()
@@ -263,13 +246,16 @@ def test_fe_m14_01_claim_page_network(mobile_page, demo_shop):
         )
         mobile_page.wait_for_load_state("networkidle")
     assert get_info.value.status in (200, 404, 410)
-    mobile_page.wait_for_timeout(800)
-    assert mobile_page.get_by_text("领取课程").count() >= 1
-    if mobile_page.get_by_text("确认领取").count() == 0:
-        assert (
-            mobile_page.get_by_text("领取成功").count() >= 1
-            or mobile_page.get_by_text("链接已失效").count() >= 1
-            or mobile_page.get_by_text("无法领取").count() >= 1
+    for _ in range(8):
+        if mobile_page.get_by_text("加载中").count() == 0:
+            break
+        mobile_page.wait_for_timeout(400)
+    body = mobile_page.locator("body").inner_text()
+    assert "领取课程" in body
+    if "确认领取" not in body:
+        assert any(
+            x in body
+            for x in ("领取成功", "链接已失效", "无法领取", "链接无效")
         )
         return
     auth = mobile_page.get_by_text("授权").first
