@@ -41,7 +41,7 @@ from app.services.admin_tenant_service import (
     list_tenants_admin,
     transfer_tenant_admin,
 )
-from app.services.crypto import decrypt_api_key, encrypt_api_key, mask_api_key
+from app.services.crypto import decrypt_api_key, decrypt_api_key_or_empty, encrypt_api_key, mask_api_key
 from app.services.llm.base import LLMMessage
 from app.services.llm.factory import get_provider
 from app.services.platform_llm_service import (
@@ -601,7 +601,7 @@ def delete_platform_knowledge(
 
 
 def _platform_llm_out(row: PlatformLLMConfig) -> PlatformLLMSettingsOut:
-    key = decrypt_api_key(row.api_key_encrypted) if row.api_key_encrypted else ""
+    key = decrypt_api_key_or_empty(row.api_key_encrypted) if row.api_key_encrypted else ""
     return PlatformLLMSettingsOut(
         provider=row.provider,
         base_url=row.base_url,

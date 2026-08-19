@@ -4,7 +4,7 @@
 #   powershell -ExecutionPolicy Bypass -File scripts/prepare-shop-demo-remote.ps1 -SshUser admin -ResetDemo
 param(
     [string]$DemoHost = "192.168.20.201",
-    [string]$SshUser = "root",
+    [string]$SshUser = "shengfei",
     [string]$RemoteApiDir = "/opt/shengfei/apps/api",
     [string]$RemoteScript = "/opt/shengfei/ai-content-marketing/scripts/prepare-shop-demo-server.sh",
     [switch]$ResetDemo,

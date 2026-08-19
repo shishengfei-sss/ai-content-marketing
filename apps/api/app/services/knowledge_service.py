@@ -99,15 +99,18 @@ def _store_chunk_embedding(db: Session, chunk: KnowledgeChunk, vec: list[float])
     attributes.set_committed_value(chunk, "embedding_json", emb)
     if not _pgvector_available(db):
         return
+    savepoint = db.begin_nested()
     try:
         db.execute(
             text(
-                "UPDATE knowledge_chunks SET embedding = :vec::vector "
+                "UPDATE knowledge_chunks SET embedding = CAST(:vec AS vector) "
                 "WHERE CAST(id AS TEXT) = :rid OR CAST(id AS TEXT) = :hex"
             ),
             {"vec": vector_to_pg_literal(vec), **_chunk_id_params(chunk.id)},
         )
+        savepoint.commit()
     except Exception:
+        savepoint.rollback()
         logger.warning("pgvector store skipped for chunk %s", chunk.id, exc_info=True)
 
 
@@ -229,7 +232,7 @@ def _pgvector_search_scope(
             WHERE scope = 'tenant'
               AND tenant_id = :tenant_id
               AND embedding IS NOT NULL
-            ORDER BY embedding <=> :qvec::vector
+            ORDER BY embedding <=> CAST(:qvec AS vector)
             LIMIT :lim
             """
         )
@@ -245,7 +248,7 @@ def _pgvector_search_scope(
             WHERE industry_code IN ('marketing', 'universal')
               AND scope = 'platform'
               AND embedding IS NOT NULL
-            ORDER BY embedding <=> :qvec::vector
+            ORDER BY embedding <=> CAST(:qvec AS vector)
             LIMIT :lim
             """
         )

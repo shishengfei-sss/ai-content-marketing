@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import LLMConfig, PlatformLLMConfig, TenantLLMUsage
-from app.services.crypto import decrypt_api_key
+from app.services.crypto import decrypt_api_key_or_empty
 
 REAL_PLATFORM_PROVIDERS = frozenset({"deepseek", "openai_compatible", "dashscope"})
 
@@ -142,7 +142,7 @@ def consume_platform_quota(db: Session, tenant_id: UUID) -> None:
 
 def resolve_platform_api_key(platform: PlatformLLMConfig) -> str:
     if platform.api_key_encrypted:
-        key = decrypt_api_key(platform.api_key_encrypted)
+        key = decrypt_api_key_or_empty(platform.api_key_encrypted)
         if key and key not in ("fake-key", "fake"):
             return key
     if settings.DEEPSEEK_API_KEY:

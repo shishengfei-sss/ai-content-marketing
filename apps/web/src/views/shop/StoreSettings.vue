@@ -9,6 +9,7 @@ import { ElMessage } from 'element-plus'
 import api from '../../api/client'
 import ShopSettingsNav from '../../components/shop/ShopSettingsNav.vue'
 import { useCurrentShop } from '../../composables/useCurrentShop'
+import { authShopFileUrl } from '../../utils/shopContentUrl'
 
 const route = useRoute()
 const { currentId } = useCurrentShop()
@@ -193,7 +194,7 @@ watch(currentId, () => {
                 :disabled="logoUploading"
                 @click="logoInput?.click()"
               >
-                <img v-if="form.logo_url" :src="form.logo_url" alt="Logo" />
+                <img v-if="form.logo_url" :src="authShopFileUrl(form.logo_url)" alt="Logo" />
                 <span v-else>上传</span>
               </button>
               <div>

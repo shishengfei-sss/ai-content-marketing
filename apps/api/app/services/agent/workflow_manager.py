@@ -324,6 +324,7 @@ async def _run_tool_step(
     try:
         result = await execute_tool(tool_ctx, step.tool_name, args)
     except HTTPException as exc:
+        db.rollback()
         step.status = "failed"
         step.error_message = str(exc.detail)
         step.finished_at = datetime.now(timezone.utc)
@@ -333,6 +334,7 @@ async def _run_tool_step(
         db.commit()
         return {}
     except Exception as exc:
+        db.rollback()
         step.status = "failed"
         step.error_message = str(exc)
         step.finished_at = datetime.now(timezone.utc)

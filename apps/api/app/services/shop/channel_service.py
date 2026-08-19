@@ -46,7 +46,7 @@ from app.schemas.shop_platform import (
     ShopExportTaskOut,
 )
 from app.services.shop.order_service import _activate_entitlement_for_order, _gen_order_no, _now
-from app.services.shop.buyer_service import is_claim_stub_openid
+from app.services.shop.buyer_service import is_claim_stub_openid, is_demo_rebind_openid
 
 
 COMBO_CHANNEL = {"1A": "douyin", "1B": "douyin", "2A": "course_lib", "2B": "course_lib"}
@@ -1805,7 +1805,7 @@ def confirm_claim(db: Session, token: str, buyer: ShopBuyer) -> ClaimConfirmResp
     if buyer.mobile and buyer.mobile != row.buyer_mobile:
         raise HTTPException(status_code=409, detail="当前账号已绑定其他手机号")
     if mobile_buyer and mobile_buyer.wx_openid and mobile_buyer.wx_openid != buyer.wx_openid:
-        if is_claim_stub_openid(mobile_buyer.wx_openid):
+        if is_demo_rebind_openid(mobile_buyer.wx_openid):
             mobile_buyer.wx_openid = None
         else:
             raise HTTPException(status_code=409, detail="该手机号已绑定其他微信账号")

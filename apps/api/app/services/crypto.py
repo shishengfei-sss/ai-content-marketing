@@ -6,7 +6,7 @@
 import base64
 import hashlib
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 from app.config import settings
 
@@ -28,6 +28,16 @@ def decrypt_api_key(encrypted: str) -> str:
     if not encrypted:
         return ""
     return _fernet().decrypt(encrypted.encode()).decode()
+
+
+def decrypt_api_key_or_empty(encrypted: str) -> str:
+    """解密失败（密钥轮换/脏数据）时返回空串，便于页面加载并重新保存 Key。"""
+    if not encrypted:
+        return ""
+    try:
+        return decrypt_api_key(encrypted)
+    except InvalidToken:
+        return ""
 
 
 def mask_api_key(key: str) -> str:

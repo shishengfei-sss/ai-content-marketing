@@ -30,6 +30,12 @@ def is_claim_stub_openid(openid: str | None) -> bool:
     return bool(o and o.startswith("claim_"))
 
 
+def is_demo_rebind_openid(openid: str | None) -> bool:
+    """演示/领权临时 openid（demo_buyer_paid、claim_*），领权绑手机时可合并。"""
+    o = (openid or "").strip()
+    return is_claim_stub_openid(o) or o.startswith("demo_")
+
+
 def buyer_out(b: ShopBuyer) -> BuyerOut:
     return BuyerOut(
         id=b.id,
@@ -140,7 +146,7 @@ def bind_mobile(db: Session, buyer: ShopBuyer, mobile: str) -> ShopBuyer:
             and existing.wx_openid
             and openid_to_transfer != existing.wx_openid
         ):
-            if is_claim_stub_openid(existing.wx_openid):
+            if is_demo_rebind_openid(existing.wx_openid):
                 buyer.wx_openid = None
                 db.flush()
                 existing.wx_openid = openid_to_transfer
