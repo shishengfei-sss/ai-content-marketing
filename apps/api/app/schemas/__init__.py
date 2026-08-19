@@ -495,18 +495,18 @@ class AdminMembershipBrief(BaseModel):
 class AdminTenantAdminSummary(BaseModel):
     user_id: UUID
     phone: str | None = None
-    display_name: str
+    display_name: str = ""
 
 
 class AdminTenantOut(BaseModel):
     id: UUID
     name: str
     credit_code: str | None = None
-    industry_code: str
-    member_count: int
-    admin_summaries: list[AdminTenantAdminSummary]
-    quota_used: int
-    quota_limit: int
+    industry_code: str = "finance"
+    member_count: int = 0
+    admin_summaries: list[AdminTenantAdminSummary] = []
+    quota_used: int = 0
+    quota_limit: int = 0
     created_at: datetime
 
 

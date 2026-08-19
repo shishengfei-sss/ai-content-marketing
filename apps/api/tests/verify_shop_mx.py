@@ -283,6 +283,27 @@ def main() -> int:
         )
     )
 
+    db = SessionLocal()
+    try:
+        from app.models.shop import ShopBuyer
+        from app.services.shop.channel_service import get_pending_claim_for_buyer
+
+        pending_buyer = (
+            db.query(ShopBuyer)
+            .filter(ShopBuyer.mobile == mobile)
+            .order_by(ShopBuyer.created_at.desc())
+            .first()
+        )
+        pending = get_pending_claim_for_buyer(db, pending_buyer) if pending_buyer else None
+        pending_ok = bool(pending and pending.token == claim_token)
+        pending_msg = pending.token if pending else "no pending"
+    except Exception as exc:
+        pending_ok = False
+        pending_msg = str(exc)
+    finally:
+        db.close()
+    results.append(check("MX-05c 领权兑换找回 pending", pending_ok, pending_msg))
+
     buyer = _buyer_login(tenant_id, f"mx_{uuid.uuid4().hex[:10]}")
     # confirm_claim 会把购买手机号挂到当前 openid（与 M14「授权后确认」等价的 API 落点）
     code, claimed = req("POST", f"/mp/shop/claim/{claim_token}", token=buyer)

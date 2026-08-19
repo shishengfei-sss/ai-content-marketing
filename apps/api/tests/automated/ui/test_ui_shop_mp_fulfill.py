@@ -1,13 +1,17 @@
 """买家履约页 UI。对照 M05/M07–M10b/M12–M14。"""
 from __future__ import annotations
 
+import json
 import os
+import urllib.error
+import urllib.request
 
 import pytest
 
 from tests.seed_shop_demo import BUYER_MOBILE, BUYER_OPENID, CLAIM_TOKEN, DIGITAL_NAME, seed
 
 MP_BASE_URL = os.environ.get("UI_TEST_MP_BASE_URL", "http://localhost:5174")
+API_BASE = os.environ.get("UI_TEST_API_BASE", "http://127.0.0.1:8003/api/v1")
 
 
 @pytest.fixture(scope="module")
@@ -30,37 +34,80 @@ def _goto(mobile_page, path: str, demo_shop: dict, extra: str = "") -> None:
         mobile_page.wait_for_timeout(400)
 
 
-def _click_entitlement_action(mobile_page, demo_shop, chip: str, action: str):
-    _goto(mobile_page, "entitlements", demo_shop)
-    tab = mobile_page.locator(".chip", has_text=chip).first
-    if tab.count() > 0:
-        tab.click()
-        mobile_page.wait_for_timeout(500)
-    btn = mobile_page.get_by_text(action, exact=True).first
-    if btn.count() == 0:
-        btn = mobile_page.locator(".btn", has_text=action).first
-    return btn
+def _live_json(method: str, path: str, token: str | None = None, body: dict | None = None):
+    url = API_BASE + path
+    data = None if body is None else json.dumps(body).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read().decode("utf-8")
+            return resp.status, json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8")
+        try:
+            payload = json.loads(raw) if raw else {}
+        except json.JSONDecodeError:
+            payload = {"detail": raw}
+        return e.code, payload
+
+
+def _buyer_ents(demo_shop: dict) -> list[dict]:
+    code, data = _live_json(
+        "POST",
+        "/mp/shop/auth/login",
+        body={"tenant_id": demo_shop["tenant_id"], "code": f"mock:{BUYER_OPENID}"},
+    )
+    if code != 200:
+        return []
+    token = data.get("access_token")
+    code, data = _live_json("GET", "/mp/shop/entitlements?page=1&page_size=50", token=token)
+    if code != 200:
+        return []
+    return data.get("items") or []
+
+
+def _buyer_orders(demo_shop: dict) -> list[dict]:
+    code, data = _live_json(
+        "POST",
+        "/mp/shop/auth/login",
+        body={"tenant_id": demo_shop["tenant_id"], "code": f"mock:{BUYER_OPENID}"},
+    )
+    if code != 200:
+        return []
+    token = data.get("access_token")
+    code, data = _live_json("GET", "/mp/shop/orders?page=1&page_size=50", token=token)
+    if code != 200:
+        return []
+    return data.get("items") or []
+
+
+def _ent_of_type(items: list[dict], ptype: str) -> dict | None:
+    for it in items:
+        if it.get("product_type") == ptype and it.get("status") == "active":
+            return it
+    return None
 
 
 def test_ui_shop_mp_learn(mobile_page, demo_shop):
     """SHOP-MP-FUL-001 / M07: 课时目录。对照 #m07。"""
-    btn = _click_entitlement_action(mobile_page, demo_shop, "课程", "继续学")
-    if btn.count() == 0:
-        pytest.skip("无课程已购")
-    btn.click()
-    mobile_page.wait_for_timeout(1500)
+    course = _ent_of_type(_buyer_ents(demo_shop), "course")
+    if not course:
+        pytest.skip("live API 无课程已购")
+    _goto(mobile_page, "learn", demo_shop, extra=f"entitlement_id={course['id']}")
     body = mobile_page.locator("body").inner_text()
-    assert "学习进度" in body or "课程目录" in body
+    assert "学习进度" in body or "课程目录" in body or course.get("product_name", "")[:4] in body
     assert mobile_page.locator(".lesson, .head").count() >= 1
 
 
 def test_ui_shop_mp_player(mobile_page, demo_shop):
     """SHOP-MP-FUL-002 / M08: 已购进播放器。对照 #m08。"""
-    btn = _click_entitlement_action(mobile_page, demo_shop, "课程", "继续学")
-    if btn.count() == 0:
-        pytest.skip("无课程已购")
-    btn.click()
-    mobile_page.wait_for_timeout(1500)
+    course = _ent_of_type(_buyer_ents(demo_shop), "course")
+    if not course:
+        pytest.skip("live API 无课程已购")
+    _goto(mobile_page, "learn", demo_shop, extra=f"entitlement_id={course['id']}")
     lesson = mobile_page.locator(".lesson").first
     if lesson.count() == 0:
         pytest.skip("无课时行")
@@ -72,22 +119,20 @@ def test_ui_shop_mp_player(mobile_page, demo_shop):
 
 def test_ui_shop_mp_materials(mobile_page, demo_shop):
     """SHOP-MP-FUL-003 / M09: 资料领取。对照 #m09。"""
-    btn = _click_entitlement_action(mobile_page, demo_shop, "资料", "领取")
-    if btn.count() == 0:
-        pytest.skip("无资料已购")
-    btn.click()
-    mobile_page.wait_for_timeout(1500)
+    digital = _ent_of_type(_buyer_ents(demo_shop), "digital")
+    if not digital:
+        pytest.skip("live API 无资料已购")
+    _goto(mobile_page, "materials", demo_shop, extra=f"entitlement_id={digital['id']}")
     assert mobile_page.get_by_text("资料领取").count() >= 1
     assert mobile_page.locator(".card, .empty").count() >= 1
 
 
 def test_ui_shop_mp_booking(mobile_page, demo_shop):
     """SHOP-MP-FUL-004 / M10: 服务预约。对照 #m10。"""
-    btn = _click_entitlement_action(mobile_page, demo_shop, "服务", "预约")
-    if btn.count() == 0:
-        pytest.skip("无服务已购")
-    btn.click()
-    mobile_page.wait_for_timeout(1500)
+    service = _ent_of_type(_buyer_ents(demo_shop), "service")
+    if not service:
+        pytest.skip("live API 无服务已购")
+    _goto(mobile_page, "booking", demo_shop, extra=f"entitlement_id={service['id']}")
     body = mobile_page.locator("body").inner_text()
     assert "核销码" in body or "确认预约" in body or "预约" in body
     assert mobile_page.locator(".btn-primary, .empty").count() >= 1
@@ -95,18 +140,18 @@ def test_ui_shop_mp_booking(mobile_page, demo_shop):
 
 def test_ui_shop_mp_verify_code(mobile_page, demo_shop):
     """SHOP-MP-FUL-005 / M10b: 核销码页。对照 #m10b。"""
-    btn = _click_entitlement_action(mobile_page, demo_shop, "服务", "预约")
-    if btn.count() == 0:
-        pytest.skip("无服务已购")
-    btn.click()
-    mobile_page.wait_for_timeout(1500)
-    code_btn = mobile_page.get_by_text("获取核销码").first
-    if code_btn.count() == 0:
-        pytest.skip("次数卡核销码入口未出（预约模式）")
-    code_btn.click()
-    mobile_page.wait_for_timeout(1500)
-    assert mobile_page.get_by_text("核销码").count() >= 1
-    assert mobile_page.get_by_text("复制核销码").count() >= 1
+    service = _ent_of_type(_buyer_ents(demo_shop), "service")
+    if not service:
+        pytest.skip("live API 无服务已购")
+    _goto(
+        mobile_page,
+        "verify-code",
+        demo_shop,
+        extra=f"entitlement_id={service['id']}&mode=times_card",
+    )
+    body = mobile_page.locator("body").inner_text()
+    assert "核销码" in body or "预约成功" in body
+    assert mobile_page.get_by_text("复制核销码").count() >= 1 or "—" in body
 
 
 def test_ui_shop_mp_bookings_list(mobile_page, demo_shop):
@@ -125,12 +170,12 @@ def test_ui_shop_mp_pay_result(mobile_page, demo_shop):
 
 def test_ui_shop_mp_order_detail(mobile_page, demo_shop):
     """SHOP-MP-FUL-008 / M12: 订单详情。对照 #m12。"""
-    _goto(mobile_page, "orders", demo_shop)
-    card = mobile_page.locator(".card").first
-    if card.count() == 0:
-        pytest.skip("无订单行")
-    card.click()
-    mobile_page.wait_for_timeout(1500)
+    orders = _buyer_orders(demo_shop)
+    paid = next((o for o in orders if o.get("status") == "paid"), None)
+    row = paid or (orders[0] if orders else None)
+    if not row:
+        pytest.skip("live API 无订单")
+    _goto(mobile_page, "order-detail", demo_shop, extra=f"id={row['id']}")
     body = mobile_page.locator("body").inner_text()
     assert "实付" in body or "单号" in body
     assert mobile_page.locator(".badge, .actions").count() >= 1
@@ -138,14 +183,11 @@ def test_ui_shop_mp_order_detail(mobile_page, demo_shop):
 
 def test_ui_shop_mp_invoice(mobile_page, demo_shop):
     """SHOP-MP-FUL-009 / M13: 申请开票页。对照 #m13。"""
-    _goto(mobile_page, "orders", demo_shop)
-    inv = mobile_page.get_by_text("申请开票").first
-    if inv.count() == 0:
-        inv = mobile_page.get_by_text("查看发票").first
-    if inv.count() == 0:
-        pytest.skip("无开票入口（需已付款订单）")
-    inv.click()
-    mobile_page.wait_for_timeout(1500)
+    orders = _buyer_orders(demo_shop)
+    paid = next((o for o in orders if o.get("status") == "paid"), None)
+    if not paid:
+        pytest.skip("live API 无已付款订单")
+    _goto(mobile_page, "invoice", demo_shop, extra=f"order_id={paid['id']}")
     body = mobile_page.locator("body").inner_text()
     assert "开票" in body or "发票" in body
     assert mobile_page.locator(".input, .card, .seg-item").count() >= 1

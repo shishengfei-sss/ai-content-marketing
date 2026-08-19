@@ -1,7 +1,7 @@
 """02 联测金标准 FE-*：页面操作 → Network → UI。
 
 对照 docs/05-测试与验收/测试用例/内容获客商城-phase1/02-前后端联测金标准.md
-A20 材料上传主路径仍以 verify_shop_m0f.py 为准；本文件覆盖可点写操作与边界拦截。
+本文件覆盖登录/边界拦截；写库主路径见 test_ui_shop_fe_gold_write.py。
 """
 from __future__ import annotations
 
@@ -132,7 +132,9 @@ def test_fe_p02a_01_b1_tenant_required(page):
     page.locator('[data-testid="shop-merchants"]').wait_for(timeout=15000)
     btn = page.locator("button:has-text('发起入驻')").first
     if btn.count() == 0:
-        pytest.skip("当前列表无发起入驻按钮（无未入驻行或无权限）")
+        btn = page.locator("button:has-text('帮客户开通商城')").first
+    if btn.count() == 0:
+        pytest.skip("当前列表无发起入驻/帮客户开通入口（无权限）")
     btn.click()
     page.wait_for_timeout(500)
     fired = {"n": 0}

@@ -1,6 +1,7 @@
 """从上传文件提取纯文本（知识库 / 通用）。"""
 from __future__ import annotations
 
+import html as html_module
 import io
 from pathlib import Path
 
@@ -68,3 +69,47 @@ def _extract_docx(data: bytes) -> str:
             if cells:
                 parts.append("\t".join(cells))
     return "\n".join(parts)
+
+
+def docx_to_preview_html(data: bytes) -> str:
+    """将 docx 转为简单 HTML，供管理端/商家端在线预览。"""
+    try:
+        from docx import Document
+    except ImportError as e:
+        raise ValueError("服务器未安装 python-docx，无法预览 DOCX") from e
+    doc = Document(io.BytesIO(data))
+    parts: list[str] = []
+    for p in doc.paragraphs:
+        text = html_module.escape(p.text or "")
+        if not text.strip():
+            continue
+        style = str(getattr(p.style, "name", "") or "")
+        if "Heading" in style or style.startswith("标题"):
+            level = 2
+            if "1" in style:
+                level = 1
+            elif "3" in style:
+                level = 3
+            parts.append(f"<h{level}>{text}</h{level}>")
+        else:
+            parts.append(f"<p>{text}</p>")
+    for table in doc.tables:
+        parts.append('<table class="doc-table">')
+        for row in table.rows:
+            parts.append("<tr>")
+            for cell in row.cells:
+                parts.append(f"<td>{html_module.escape(cell.text or '')}</td>")
+            parts.append("</tr>")
+        parts.append("</table>")
+    body = "".join(parts) if parts else "<p>（文档无文本内容）</p>"
+    return (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+        "<style>"
+        "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
+        "padding:20px 24px;line-height:1.7;color:#1e293b;max-width:920px;margin:0 auto}"
+        "h1,h2,h3{margin:1em 0 .5em}p{margin:.5em 0}"
+        ".doc-table{border-collapse:collapse;margin:12px 0;width:100%}"
+        ".doc-table td{border:1px solid #e2e8f0;padding:6px 10px;vertical-align:top}"
+        "</style></head><body>"
+        f"{body}</body></html>"
+    )

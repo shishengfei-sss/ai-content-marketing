@@ -110,10 +110,19 @@ const showShopBanner = computed(() => {
     shopOnboardingState.value === 'reviewing'
   )
 })
-const shopBannerText = computed(() => {
-  if (shopOnboardingState.value === 'rejected') return '入驻申请已驳回，请修改资料后重提'
-  if (shopOnboardingState.value === 'reviewing') return '内容获客商城入驻审核中'
-  return '开通内容获客商城，提交主体资质由平台审核（注册 ≠ 入驻）'
+const shopBannerTitle = computed(() => {
+  if (shopOnboardingState.value === 'rejected') return '入驻申请未通过'
+  if (shopOnboardingState.value === 'reviewing') return '入驻申请审核中'
+  return '开通内容获客商城'
+})
+const shopBannerDesc = computed(() => {
+  if (shopOnboardingState.value === 'rejected') {
+    return '请根据驳回原因修改资料后重新提交，审核通过即可开始经营。'
+  }
+  if (shopOnboardingState.value === 'reviewing') {
+    return '平台正在审核您的主体资质，通过后将自动开通商城经营功能。'
+  }
+  return '提交主体资质并通过平台审核后，即可开通商城并开始线上经营。'
 })
 
 function onPinnedChanged() {
@@ -139,27 +148,56 @@ function itemVisible(item, permissions) {
   return hasPermission(permissions, item.permission)
 }
 
+/** 智营 CRM / 工作台：企业管理员始终可见；其余按权限码 */
+function crmItemVisible(item, permissions) {
+  if (auth.isTenantAdmin) return true
+  return itemVisible(item, permissions)
+}
+
 const menuItems = computed(() => {
   const p = auth.permissions
   if (auth.isShopClerk) {
     return NAV_MENUS.filter((menu) => menu.key === 'shop-verifications')
   }
-  return NAV_MENUS.map((menu) => {
+
+  const crmMenus = []
+  const shopChildren = []
+  let onboardingMenu = null
+
+  for (const menu of NAV_MENUS) {
     if (menu.shopOnboardingEntry) {
-      if (shopOnboardingState.value === 'onboarded') return null
-      return menu
+      if (shopOnboardingState.value !== 'onboarded') onboardingMenu = menu
+      continue
     }
     if (menu.shopEntitlementsEntry) {
-      if (shopOnboardingState.value !== 'onboarded') return null
-      return menu
+      if (shopOnboardingState.value !== 'onboarded') continue
+      if (!itemVisible(menu, p)) continue
+      shopChildren.push({
+        path: menu.path,
+        title: menu.title,
+        icon: menu.icon,
+      })
+      continue
     }
     if (!menu.children) {
-      return itemVisible(menu, p) ? menu : null
+      if (crmItemVisible(menu, p)) crmMenus.push(menu)
+      continue
     }
-    const children = menu.children.filter((item) => itemVisible(item, p))
-    if (!children.length) return null
-    return { ...menu, children }
-  }).filter(Boolean)
+    const children = menu.children.filter((item) => crmItemVisible(item, p))
+    if (children.length) crmMenus.push({ ...menu, children })
+  }
+
+  const result = [...crmMenus]
+  if (onboardingMenu) result.push(onboardingMenu)
+  if (shopChildren.length) {
+    result.push({
+      key: 'shop-group',
+      title: '内容获客商城',
+      icon: 'ShoppingBag',
+      children: shopChildren,
+    })
+  }
+  return result
 })
 
 function hasPinnedChildren(item) {
@@ -185,6 +223,12 @@ const activeMenu = computed(() => {
 /** 当前路由所属分组/钉选子菜单默认展开 */
 const defaultOpeneds = computed(() => {
   const open = []
+  if (
+    route.path.startsWith('/shop') &&
+    !route.path.startsWith('/shop/onboarding')
+  ) {
+    open.push('shop-group')
+  }
   for (const menu of menuItems.value) {
     if (!menu.children) continue
     const activeChild = menu.children.find((c) => pathMatchesItem(c.path))
@@ -391,7 +435,10 @@ const avatarChar = computed(() => displayName.value.charAt(0))
           class="shop-onboarding-banner"
           :class="{ 'is-reviewing': shopOnboardingState === 'reviewing' }"
         >
-          <span>{{ shopBannerText }}</span>
+          <div class="shop-onboarding-banner__text">
+            <div class="shop-onboarding-banner__title">{{ shopBannerTitle }}</div>
+            <div class="shop-onboarding-banner__desc">{{ shopBannerDesc }}</div>
+          </div>
           <el-button
             v-if="shopOnboardingState !== 'reviewing'"
             size="small"
@@ -625,6 +672,21 @@ const avatarChar = computed(() => displayName.value.charAt(0))
   border: 1px solid #b3d8ff;
   color: #1d39c4;
   font-size: 14px;
+}
+
+.shop-onboarding-banner__title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.shop-onboarding-banner__desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #4b5b76;
+}
+
+.shop-onboarding-banner.is-reviewing .shop-onboarding-banner__desc {
+  color: #8c6d1f;
 }
 
 .shop-onboarding-banner.is-reviewing {

@@ -42,7 +42,9 @@ def list_members(
 
 @router.get("/candidates")
 def list_candidates(
-    ctx: TenantContext = Depends(require_permission("shop.role.manage")),
+    ctx: TenantContext = Depends(
+        require_permission("shop.role.manage", forbidden_detail="无角色管理权限")
+    ),
     db: Session = Depends(get_db),
 ):
     return {"items": svc.list_assignable_users(db, ctx)}
@@ -51,7 +53,9 @@ def list_candidates(
 @router.post("")
 def assign_member(
     body: AssignMemberRequest,
-    ctx: TenantContext = Depends(require_permission("shop.role.manage")),
+    ctx: TenantContext = Depends(
+        require_permission("shop.role.manage", forbidden_detail="无角色管理权限")
+    ),
     db: Session = Depends(get_db),
 ):
     return svc.assign_member(
@@ -68,7 +72,9 @@ def assign_member(
 def update_member(
     user_id: UUID,
     body: UpdateMemberRequest,
-    ctx: TenantContext = Depends(require_permission("shop.role.manage")),
+    ctx: TenantContext = Depends(
+        require_permission("shop.role.manage", forbidden_detail="无角色管理权限")
+    ),
     db: Session = Depends(get_db),
 ):
     return svc.update_member(
@@ -84,7 +90,9 @@ def update_member(
 @router.delete("/{user_id}")
 def remove_member(
     user_id: UUID,
-    ctx: TenantContext = Depends(require_permission("shop.role.manage")),
+    ctx: TenantContext = Depends(
+        require_permission("shop.role.manage", forbidden_detail="无角色管理权限")
+    ),
     db: Session = Depends(get_db),
 ):
     return svc.remove_member(db, ctx, user_id)

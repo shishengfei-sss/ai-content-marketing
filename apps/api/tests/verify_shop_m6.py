@@ -383,8 +383,8 @@ def main() -> int:
     )
     results.append(
         check(
-            "VM6-3 次数耗尽 expired",
-            code == 200 and v3.get("remaining_count") == 0 and v3.get("entitlement_status") == "expired",
+            "VM6-3 次数耗尽 consumed",
+            code == 200 and v3.get("remaining_count") == 0 and v3.get("entitlement_status") == "consumed",
             f"{code} {v3}",
         )
     )

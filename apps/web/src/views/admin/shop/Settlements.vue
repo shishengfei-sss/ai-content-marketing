@@ -8,8 +8,11 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '../../../api/client'
+import CrmColumnSettingsDialog from '../../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../../composables/useListColumnSettings'
 import { formatDateTime } from '../../../utils/datetime'
 import ShopMaterialUpload from '../../../components/shop/ShopMaterialUpload.vue'
+import { SHOP_EXPORT_COLUMN_MODE_LABELS } from '../../../utils/shopExport'
 
 const COLUMN_KEY = 'shop-settlement-list-columns'
 const ALL_COLUMNS = [
@@ -33,7 +36,7 @@ const loading = ref(false)
 const exporting = ref(false)
 const exportDialog = ref(false)
 const exportTask = ref(null)
-const exportScope = ref('当前筛选')
+const exportScope = ref(SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns)
 const items = ref([])
 const total = ref(0)
 const stats = ref({})
@@ -47,9 +50,14 @@ const advPeriodStart = ref('')
 const advPeriodEnd = ref('')
 const sortBy = ref('generated_at')
 const sortDir = ref('desc')
-const columnDialogVisible = ref(false)
-const columnDraft = ref([])
-const visibleKeys = ref(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key))
+const {
+  visibleKeys,
+  columnDialogVisible,
+  columnDraft,
+  openColumnSettings,
+  saveColumnSettings,
+  isColVisible,
+} = useListColumnSettings(ALL_COLUMNS, COLUMN_KEY)
 
 const detail = ref(null)
 const detailVisible = ref(false)
@@ -75,10 +83,6 @@ const STATUS_TAG = {
   closed: 'info',
   carried_forward: 'warning',
   offset_settled: 'info',
-}
-
-function isColVisible(key) {
-  return visibleKeys.value.includes(key)
 }
 
 function fmtMoney(cents) {
@@ -252,7 +256,7 @@ async function exportList(mode) {
     }
     const { data } = await adminApi.createShopSettlementExport(body)
     exportTask.value = data
-    exportScope.value = mode === 'columns' ? '列配置' : '当前筛选'
+    exportScope.value = mode === 'columns' ? SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns : SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns
     exportDialog.value = true
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
@@ -345,27 +349,7 @@ const retryTitle = computed(() =>
   detail.value?.batch_no ? `重试打款「${detail.value.batch_no}」？` : '重试打款',
 )
 
-function openColumnDialog() {
-  columnDraft.value = ALL_COLUMNS.map((c) => ({
-    ...c,
-    visible: visibleKeys.value.includes(c.key),
-  }))
-  columnDialogVisible.value = true
-}
-
-function saveColumns() {
-  visibleKeys.value = columnDraft.value.filter((c) => c.visible || c.locked).map((c) => c.key)
-  localStorage.setItem(COLUMN_KEY, JSON.stringify(visibleKeys.value))
-  columnDialogVisible.value = false
-}
-
 onMounted(() => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(COLUMN_KEY) || 'null')
-    if (Array.isArray(saved) && saved.length) visibleKeys.value = saved
-  } catch {
-    /* ignore */
-  }
   const st = String(route.query.status || '')
   if (st === 'pending' || st === 'payment_failed') viewTab.value = 'todo'
   else if (TABS.some((t) => t.name === st)) viewTab.value = st
@@ -442,12 +426,12 @@ watch(pageSize, () => {
           <el-button :loading="exporting">导出 ▾</el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="current">当前筛选</el-dropdown-item>
-              <el-dropdown-item command="columns">列配置</el-dropdown-item>
+              <el-dropdown-item command="current">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns }}</el-dropdown-item>
+              <el-dropdown-item command="columns">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button @click="openColumnDialog">列设置</el-button>
+        <el-button @click="openColumnSettings">列设置</el-button>
       </div>
     </div>
     <div v-if="advExpanded" class="adv">
@@ -471,52 +455,53 @@ watch(pageSize, () => {
     </div>
 
     <el-table v-loading="loading" :data="items" border stripe size="small">
-      <el-table-column v-if="isColVisible('batch_no')" min-width="140">
+      <template v-for="colKey in visibleKeys" :key="colKey">
+      <el-table-column v-if="colKey === 'batch_no'" min-width="140">
         <template #header>
           <span class="th-sort" @click="toggleSort('batch_no')">结算批次 {{ sortIcon('batch_no') }}</span>
         </template>
         <template #default="{ row }">{{ row.batch_no }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('merchant_name')" prop="merchant_name" label="商家" min-width="140" />
-      <el-table-column v-if="isColVisible('period')" label="周期" width="120">
+      <el-table-column v-if="colKey === 'merchant_name'" prop="merchant_name" label="商家" min-width="140" />
+      <el-table-column v-if="colKey === 'period'" label="周期" width="120">
         <template #default="{ row }">{{ fmtPeriod(row) }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('gross')" width="120" align="right">
+      <el-table-column v-if="colKey === 'gross'" width="120" align="right">
         <template #header>
           <span class="th-sort" @click="toggleSort('gross_amount_cents')">成交额 {{ sortIcon('gross_amount_cents') }}</span>
         </template>
         <template #default="{ row }">{{ fmtMoney(row.gross_amount_cents) }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('fee')" label="平台抽成" width="110" align="right">
+      <el-table-column v-if="colKey === 'fee'" label="平台抽成" width="110" align="right">
         <template #default="{ row }">{{ fmtMoney(row.platform_fee_cents) }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('reversal')" label="退款冲正" width="110" align="right">
+      <el-table-column v-if="colKey === 'reversal'" label="退款冲正" width="110" align="right">
         <template #default="{ row }">{{ fmtReversal(row.refund_reversal_cents) }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('opening')" label="上期结转" width="110" align="right">
+      <el-table-column v-if="colKey === 'opening'" label="上期结转" width="110" align="right">
         <template #default="{ row }">{{ row.opening_balance_cents ? fmtMoney(row.opening_balance_cents) : '—' }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('net')" label="应结" width="120" align="right">
+      <el-table-column v-if="colKey === 'net'" label="应结" width="120" align="right">
         <template #default="{ row }">
           <span :class="{ 'net-neg': row.net_amount_cents < 0 }">{{ fmtMoney(row.net_amount_cents) }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('generated_at')" width="160">
+      <el-table-column v-if="colKey === 'generated_at'" width="160">
         <template #header>
           <span class="th-sort" @click="toggleSort('generated_at')">生成时间 {{ sortIcon('generated_at') }}</span>
         </template>
         <template #default="{ row }">{{ formatDateTime(row.generated_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('status')" label="状态" width="100">
+      <el-table-column v-if="colKey === 'status'" label="状态" width="100">
         <template #default="{ row }">
           <el-tag size="small" :type="STATUS_TAG[row.status] || 'info'">{{ row.status_label }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('paid_at')" label="打款时间" width="160">
+      <el-table-column v-if="colKey === 'paid_at'" label="打款时间" width="160">
         <template #default="{ row }">{{ formatDateTime(row.paid_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('operator_name')" prop="operator_name" label="打款人" width="110" />
-      <el-table-column v-if="isColVisible('ops')" label="操作" width="200" fixed="right">
+      <el-table-column v-if="colKey === 'operator_name'" prop="operator_name" label="打款人" width="110" />
+      <el-table-column v-if="colKey === 'ops'" label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openDetail(row)">详情</el-button>
           <el-button v-if="row.status === 'pending'" link type="primary" @click="openConfirm(row)">确认打款</el-button>
@@ -524,16 +509,16 @@ watch(pageSize, () => {
           <el-button v-if="row.status === 'payment_failed'" link type="primary" @click="openRetry(row)">重试</el-button>
         </template>
       </el-table-column>
+      </template>
     </el-table>
 
     <div class="pager">
-      <span>共 {{ total }} 条</span>
       <el-pagination
         v-model:current-page="page"
         v-model:page-size="pageSize"
         :total="total"
         :page-sizes="[10, 20, 50, 100]"
-        layout="sizes, prev, pager, next"
+        layout="total, sizes, prev, pager, next"
         @current-change="load"
       />
     </div>
@@ -666,15 +651,11 @@ watch(pageSize, () => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="columnDialogVisible" title="列设置" width="360px">
-      <div v-for="col in columnDraft" :key="col.key" class="column-item">
-        <el-checkbox v-model="col.visible" :disabled="col.locked">{{ col.label }}</el-checkbox>
-      </div>
-      <template #footer>
-        <el-button @click="columnDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveColumns">确定</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="columnDialogVisible"
+      v-model:columns="columnDraft"
+      @save="saveColumnSettings"
+    />
 
     <el-dialog v-model="exportDialog" title="导出任务" width="420px">
       <el-form v-if="exportTask" label-width="100px">
@@ -698,7 +679,7 @@ watch(pageSize, () => {
 .toolbar-right { margin-left: auto; display: flex; gap: 8px; }
 .adv { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
 .adv-hint-inline { font-size: 12px; color: var(--color-text-secondary); }
-.pager { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+.pager { margin-top: 12px; }
 .th-sort { cursor: pointer; user-select: none; }
 .net-neg { color: #cf1322; }
 .detail-hd { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }

@@ -240,11 +240,10 @@ PANEL_SPECS: dict[str, list[Row] | None] = {
     "p11d": None,
     "p11e": None,
     "p08-admin-users": [
-        r("平台角色 ▾", "单选", "user / platform_admin", "行内", api="role"),
-        r("获客商城角色 ▾", "单选", "空 / platform_shop_*", "仅 platform_admin", api="platform_shop_role"),
+        r("账号角色 ▾", "单选", "普通用户/超管/日常运营/管家/财务", "行内即时保存", api="role+platform_shop_role"),
         r("状态 ▾", "单选", "启用/禁用", "全局", api="is_active"),
     ],
-    "p08b": [r("角色 ▾", "单选", "P08 内置角色", "编辑绑定", api="platform_shop_role")],
+    "p08b": [r("账号角色", "只读", "列表已选岗位", "本抽屉不改角色", api="展示用")],
     "p08c": [
         r("选择用户 ▾", "单选", "User 搜索", "—", api="user_id"),
         r("角色 ▾", "单选", "P08 内置角色", "—", api="platform_shop_role"),

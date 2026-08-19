@@ -24,6 +24,12 @@ def mask_mobile(mobile: str | None) -> str | None:
     return "***"
 
 
+def is_claim_stub_openid(openid: str | None) -> bool:
+    """领权页 H5/Mock 会话 openid（mock:claim_xxx → claim_xxx）。"""
+    o = (openid or "").strip()
+    return bool(o and o.startswith("claim_"))
+
+
 def buyer_out(b: ShopBuyer) -> BuyerOut:
     return BuyerOut(
         id=b.id,
@@ -74,6 +80,42 @@ def login_or_create(db: Session, tenant_id: UUID, code: str) -> tuple[str, ShopB
     return token, buyer
 
 
+def reassign_buyer_owned_rows(db: Session, from_buyer_id: UUID, to_buyer_id: UUID) -> None:
+    """合并买家前把订单/权益/履约记录挂到目标买家，避免核销码孤儿。"""
+    if from_buyer_id == to_buyer_id:
+        return
+    from app.models.shop import (
+        ShopBooking,
+        ShopClaimToken,
+        ShopDigitalDownload,
+        ShopEnrollment,
+        ShopEntitlement,
+        ShopInvoiceRequest,
+        ShopLessonProgress,
+        ShopOrder,
+        ShopVerification,
+    )
+
+    for model, col in (
+        (ShopOrder, ShopOrder.buyer_id),
+        (ShopEntitlement, ShopEntitlement.buyer_id),
+        (ShopBooking, ShopBooking.buyer_id),
+        (ShopVerification, ShopVerification.buyer_id),
+        (ShopLessonProgress, ShopLessonProgress.buyer_id),
+        (ShopEnrollment, ShopEnrollment.buyer_id),
+        (ShopDigitalDownload, ShopDigitalDownload.buyer_id),
+        (ShopInvoiceRequest, ShopInvoiceRequest.buyer_id),
+    ):
+        db.query(model).filter(uuid_eq(col, from_buyer_id)).update({col: to_buyer_id}, synchronize_session=False)
+    db.query(ShopOrder).filter(uuid_eq(ShopOrder.claimed_buyer_id, from_buyer_id)).update(
+        {ShopOrder.claimed_buyer_id: to_buyer_id}, synchronize_session=False
+    )
+    db.query(ShopClaimToken).filter(uuid_eq(ShopClaimToken.claimed_buyer_id, from_buyer_id)).update(
+        {ShopClaimToken.claimed_buyer_id: to_buyer_id}, synchronize_session=False
+    )
+    db.flush()
+
+
 def bind_mobile(db: Session, buyer: ShopBuyer, mobile: str) -> ShopBuyer:
     if not mobile or len(mobile) != 11 or not mobile.isdigit():
         raise HTTPException(status_code=422, detail="手机号须为 11 位数字")
@@ -88,11 +130,23 @@ def bind_mobile(db: Session, buyer: ShopBuyer, mobile: str) -> ShopBuyer:
     )
     if existing:
         # 合并：把当前 openid 并到已有 mobile 买家，删除空壳
-        if buyer.wx_openid and not existing.wx_openid:
-            existing.wx_openid = buyer.wx_openid
-        elif buyer.wx_openid and existing.wx_openid and buyer.wx_openid != existing.wx_openid:
-            # 已有 openid：保留 existing，当前 buyer 若无订单可删；简化为报错引导
-            raise HTTPException(status_code=409, detail="该手机号已绑定其他微信账号")
+        openid_to_transfer = buyer.wx_openid
+        if openid_to_transfer and not existing.wx_openid:
+            buyer.wx_openid = None
+            db.flush()
+            existing.wx_openid = openid_to_transfer
+        elif (
+            openid_to_transfer
+            and existing.wx_openid
+            and openid_to_transfer != existing.wx_openid
+        ):
+            if is_claim_stub_openid(existing.wx_openid):
+                buyer.wx_openid = None
+                db.flush()
+                existing.wx_openid = openid_to_transfer
+            else:
+                raise HTTPException(status_code=409, detail="该手机号已绑定其他微信账号")
+        reassign_buyer_owned_rows(db, buyer.id, existing.id)
         db.delete(buyer)
         db.commit()
         db.refresh(existing)

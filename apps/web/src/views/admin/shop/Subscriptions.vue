@@ -9,8 +9,11 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '../../../api/client'
+import CrmColumnSettingsDialog from '../../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../../composables/useListColumnSettings'
 import { useAuthStore } from '../../../stores/auth'
 import { formatDateTime } from '../../../utils/datetime'
+import { SHOP_EXPORT_COLUMN_MODE_LABELS } from '../../../utils/shopExport'
 
 const COLUMN_KEY = 'shop-subscription-list-columns'
 const ALL_COLUMNS = [
@@ -37,7 +40,7 @@ const loading = ref(false)
 const exporting = ref(false)
 const exportDialog = ref(false)
 const exportTask = ref(null)
-const exportScope = ref('当前筛选')
+const exportScope = ref(SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns)
 const items = ref([])
 const total = ref(0)
 const page = ref(1)
@@ -53,11 +56,17 @@ const plans = ref([])
 const merchants = ref([])
 const todos = ref([])
 const todoCollapsed = ref(false)
-const columnDialogVisible = ref(false)
-const columnDraft = ref([])
-const visibleKeys = ref(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key))
+const {
+  visibleKeys,
+  columnDialogVisible,
+  columnDraft,
+  openColumnSettings,
+  saveColumnSettings,
+  isColVisible,
+} = useListColumnSettings(ALL_COLUMNS, COLUMN_KEY)
 
 const openVisible = ref(false)
+const openModeLocked = ref(false)
 const replaceVisible = ref(false)
 const renewVisible = ref(false)
 const cancelVisible = ref(false)
@@ -101,10 +110,6 @@ const STATUS_TAG = {
   expired: 'info',
   cancelled: 'info',
   superseded: 'info',
-}
-
-function isColVisible(key) {
-  return visibleKeys.value.includes(key)
 }
 
 function centsToYuan(c) {
@@ -240,7 +245,7 @@ async function exportList(mode) {
     }
     const { data } = await adminApi.createShopSubscriptionExport(body)
     exportTask.value = data
-    exportScope.value = mode === 'columns' ? '列配置' : '当前筛选'
+    exportScope.value = mode === 'columns' ? SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns : SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns
     exportDialog.value = true
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
@@ -263,8 +268,13 @@ function goMerchant(row) {
   if (row?.tenant_id) router.push(`/admin/shop/merchants/${row.tenant_id}`)
 }
 
+function inferPlanType(row) {
+  if (row?.plan_type) return row.plan_type
+  return row?.purchase_mode === 'stack' ? 'addon' : 'main'
+}
+
 function showReplace(row) {
-  return canManage.value && row.status === 'active' && row.plan_type === 'main' && !row.has_pending_renewal
+  return canManage.value && row.status === 'active' && inferPlanType(row) === 'main' && !row.has_pending_renewal
 }
 function showProcess(row) {
   return canManage.value && row.has_pending_renewal
@@ -273,10 +283,10 @@ function showRenew(row) {
   if (!canManage.value) return false
   if (row.has_pending_renewal) return false
   if (row.status === 'expired') return true
-  return row.plan_type === 'addon' && row.status === 'active'
+  return inferPlanType(row) === 'addon' && row.status === 'active'
 }
 function showCancelAddon(row) {
-  return canManage.value && row.plan_type === 'addon' && row.status === 'active'
+  return canManage.value && inferPlanType(row) === 'addon' && row.status === 'active'
 }
 
 function resetOpen() {
@@ -288,6 +298,7 @@ function resetOpen() {
   openForm.expires_at = addDays(todayStr(), 364)
   openForm.remark = ''
   openPreview.value = ''
+  openModeLocked.value = false
 }
 
 async function loadMergePreview(tenantId, planCode, mode) {
@@ -317,6 +328,86 @@ watch(
 function openCreate() {
   resetOpen()
   openVisible.value = true
+}
+
+const openDialogTitle = computed(() => {
+  if (openModeLocked.value && openForm.purchase_mode === 'stack') {
+    const name = merchants.value.find((m) => m.tenant_id === openForm.tenant_id)?.display_name
+    return name ? `叠加加购 · ${name}` : '叠加加购'
+  }
+  return '人工开通'
+})
+
+async function findSubscriptionRow({ subscriptionId, tenantId, planType, status } = {}) {
+  const match = (it) => {
+    if (planType && inferPlanType(it) !== planType) return false
+    if (status && it.status !== status) return false
+    return true
+  }
+  if (subscriptionId) {
+    const hit = items.value.find((it) => String(it.id) === String(subscriptionId))
+    if (hit && match(hit)) return hit
+    try {
+      const { data } = await adminApi.getShopSubscription(subscriptionId)
+      return match(data) ? data : null
+    } catch {
+      return null
+    }
+  }
+  if (!tenantId) return null
+  const local = items.value.find((it) => String(it.tenant_id) === String(tenantId) && match(it))
+  if (local) return local
+  try {
+    const { data } = await adminApi.listShopSubscriptions({ tenant_id: tenantId, page_size: 100 })
+    const subs = data.items || []
+    return subs.find((it) => match(it)) || null
+  } catch {
+    return null
+  }
+}
+
+async function applyRouteQuery() {
+  const { q, tenant_id: tenantId, action, subscription_id: subscriptionId } = route.query
+  if (q) searchQ.value = String(q)
+  if (!action) return
+
+  const tid = tenantId ? String(tenantId) : ''
+  const subId = subscriptionId ? String(subscriptionId) : ''
+
+  if (action === 'stack') {
+    resetOpen()
+    openForm.purchase_mode = 'stack'
+    openModeLocked.value = true
+    if (tid) openForm.tenant_id = tid
+    openVisible.value = true
+    return
+  }
+
+  let row = null
+  if (action === 'replace') {
+    row = await findSubscriptionRow({
+      subscriptionId: subId,
+      tenantId: tid,
+      planType: 'main',
+      status: 'active',
+    })
+    if (!row) {
+      ElMessage.warning('未找到可换档的主套餐订阅')
+      return
+    }
+    openReplace(row)
+    return
+  }
+
+  row = await findSubscriptionRow({ subscriptionId: subId, tenantId: tid })
+  if (!row) {
+    ElMessage.warning('未找到对应订阅，请从列表操作')
+    return
+  }
+
+  if (action === 'renew') openRenew(row)
+  else if (action === 'cancel') openCancelAddon(row)
+  else if (action === 'detail') await openDetail(row)
 }
 
 async function submitOpen() {
@@ -618,30 +709,11 @@ async function submitCancelReq() {
   }
 }
 
-function openColumnDialog() {
-  columnDraft.value = ALL_COLUMNS.map((c) => ({
-    ...c,
-    visible: visibleKeys.value.includes(c.key),
-  }))
-  columnDialogVisible.value = true
-}
-
-function saveColumns() {
-  visibleKeys.value = columnDraft.value.filter((c) => c.visible || c.locked).map((c) => c.key)
-  localStorage.setItem(COLUMN_KEY, JSON.stringify(visibleKeys.value))
-  columnDialogVisible.value = false
-}
-
 onMounted(async () => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(COLUMN_KEY) || 'null')
-    if (Array.isArray(saved) && saved.length) visibleKeys.value = saved
-  } catch {
-    /* ignore */
-  }
   if (route.query.todo === 'renewal' || route.query.view === 'renewal') viewSel.value = 'renewal'
   if (route.query.status) filterStatus.value = String(route.query.status)
   if (route.query.plan_code) filterPlan.value = String(route.query.plan_code)
+  if (route.query.q) searchQ.value = String(route.query.q)
   const [mres, pres] = await Promise.all([
     adminApi.listShopMerchants({ page_size: 100, onboarding_status: 'active' }),
     adminApi.listShopPlanTemplates({ published: true, page_size: 50 }),
@@ -649,12 +721,22 @@ onMounted(async () => {
   merchants.value = (mres.data.items || []).filter((m) => m.merchant_id)
   plans.value = pres.data.items || []
   await Promise.all([load(), loadTodos()])
+  await applyRouteQuery()
 })
 
 watch(pageSize, () => {
   page.value = 1
   load()
 })
+
+watch(
+  () => `${route.path}|${route.query.action}|${route.query.subscription_id}|${route.query.tenant_id}`,
+  async () => {
+    if (route.path !== '/admin/shop/subscriptions') return
+    if (!route.query.action) return
+    await applyRouteQuery()
+  },
+)
 </script>
 
 <template>
@@ -715,25 +797,26 @@ watch(pageSize, () => {
           <el-button :loading="exporting">导出 ▾</el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="current">当前筛选</el-dropdown-item>
-              <el-dropdown-item command="columns">列配置</el-dropdown-item>
+              <el-dropdown-item command="current">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns }}</el-dropdown-item>
+              <el-dropdown-item command="columns">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button @click="openColumnDialog">列设置</el-button>
+        <el-button @click="openColumnSettings">列设置</el-button>
         <el-button v-if="canManage" type="primary" @click="openCreate">人工开通（主套餐/叠加）</el-button>
       </div>
     </div>
     <p v-if="advExpanded" class="adv-hint">可按订阅单号/商家名搜索，状态与套餐筛选可叠加；视图「待处理续费」仅列出有申请的订阅。</p>
 
     <el-table v-loading="loading" :data="items" border stripe size="small" :row-class-name="({ row }) => (row.display_status === 'expiring_soon' ? 'row-warn' : '')">
-      <el-table-column v-if="isColVisible('subscription_no')" min-width="150">
+      <template v-for="colKey in visibleKeys" :key="colKey">
+      <el-table-column v-if="colKey === 'subscription_no'" min-width="150">
         <template #header>
           <span class="th-sort" @click="toggleSort('subscription_no')">开通单号 {{ sortIcon('subscription_no') }}</span>
         </template>
         <template #default="{ row }">{{ row.subscription_no }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('merchant_name')" min-width="140">
+      <el-table-column v-if="colKey === 'merchant_name'" min-width="140">
         <template #header>
           <span class="th-sort" @click="toggleSort('merchant')">商家 {{ sortIcon('merchant') }}</span>
         </template>
@@ -742,17 +825,17 @@ watch(pageSize, () => {
           <el-tag v-if="row.has_pending_renewal" size="small" type="warning" style="margin-left: 4px">续费申请</el-tag>
         </template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('plan_name')" prop="plan_name" label="套餐" min-width="120" />
-      <el-table-column v-if="isColVisible('plan_type')" label="订阅类型" width="100">
+      <el-table-column v-if="colKey === 'plan_name'" prop="plan_name" label="套餐" min-width="120" />
+      <el-table-column v-if="colKey === 'plan_type'" label="订阅类型" width="100">
         <template #default="{ row }">{{ row.plan_type_label }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('effective_at')" width="120">
+      <el-table-column v-if="colKey === 'effective_at'" width="120">
         <template #header>
           <span class="th-sort" @click="toggleSort('effective_at')">生效起 {{ sortIcon('effective_at') }}</span>
         </template>
         <template #default="{ row }">{{ row.effective_at }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('expires_at')" width="120">
+      <el-table-column v-if="colKey === 'expires_at'" width="120">
         <template #header>
           <span class="th-sort" @click="toggleSort('expires_at')">生效止 {{ sortIcon('expires_at') }}</span>
         </template>
@@ -760,29 +843,29 @@ watch(pageSize, () => {
           <span :class="{ 'exp-warn': row.display_status === 'expiring_soon' }">{{ row.expires_at_inclusive }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('created_at')" width="160">
+      <el-table-column v-if="colKey === 'created_at'" width="160">
         <template #header>
           <span class="th-sort" @click="toggleSort('created_at')">开通时间 {{ sortIcon('created_at') }}</span>
         </template>
         <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('operator_name')" label="开通人" width="110">
+      <el-table-column v-if="colKey === 'operator_name'" label="开通人" width="110">
         <template #default="{ row }">{{ row.operator_name || '—' }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('status')" label="状态" width="100">
+      <el-table-column v-if="colKey === 'status'" label="状态" width="100">
         <template #default="{ row }">
           <el-tag size="small" :type="STATUS_TAG[row.display_status] || STATUS_TAG[row.status] || 'info'">
             {{ displayLabel(row) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('tenant_id')" label="租户编号" min-width="160">
+      <el-table-column v-if="colKey === 'tenant_id'" label="租户编号" min-width="160">
         <template #default="{ row }">{{ row.tenant_id }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('snapshot_ver')" label="套餐快照版本" width="120">
+      <el-table-column v-if="colKey === 'snapshot_ver'" label="套餐快照版本" width="120">
         <template #default="{ row }">{{ row.plan_snapshot?.version || row.plan_snapshot?.plan_code || '—' }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('ops')" label="操作" width="200" fixed="right">
+      <el-table-column v-if="colKey === 'ops'" label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button v-if="showProcess(row)" link type="primary" @click="openProcess(row)">处理续费</el-button>
           <el-button v-if="showReplace(row)" link type="primary" @click="openReplace(row)">换档</el-button>
@@ -793,34 +876,34 @@ watch(pageSize, () => {
           <el-button link @click="openDetail(row)">详情</el-button>
         </template>
       </el-table-column>
+      </template>
     </el-table>
 
     <div class="pager">
-      <span>共 {{ total }} 条</span>
       <el-pagination
         v-model:current-page="page"
         v-model:page-size="pageSize"
         :total="total"
         :page-sizes="[10, 20, 50, 100]"
-        layout="sizes, prev, pager, next"
+        layout="total, sizes, prev, pager, next"
         @current-change="load"
       />
     </div>
 
-    <el-dialog v-model="openVisible" title="人工开通" width="520px">
+    <el-dialog v-model="openVisible" :title="openDialogTitle" width="520px">
       <el-form label-width="140px">
         <el-form-item label="商家" required>
-          <el-select v-model="openForm.tenant_id" filterable style="width: 100%">
+          <el-select v-model="openForm.tenant_id" filterable style="width: 100%" :disabled="openModeLocked">
             <el-option v-for="m in merchants" :key="m.tenant_id" :label="m.display_name" :value="m.tenant_id" />
           </el-select>
         </el-form-item>
         <el-form-item label="开通方式" required>
-          <el-radio-group v-model="openForm.purchase_mode">
+          <el-radio-group v-model="openForm.purchase_mode" :disabled="openModeLocked">
             <el-radio value="stack">叠加</el-radio>
             <el-radio value="replace">主套餐</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="选择套餐" required>
+        <el-form-item :label="openForm.purchase_mode === 'stack' ? '加购包' : '选择套餐'" required>
           <el-select v-model="openForm.plan_code" style="width: 100%" @change="onOpenPlanChange">
             <el-option v-for="p in filteredOpenPlans" :key="p.code" :label="p.name" :value="p.code" />
           </el-select>
@@ -828,7 +911,7 @@ watch(pageSize, () => {
         <el-form-item label="套餐标价（只读）">
           ¥{{ centsToYuan(openCatalog?.price_cents) }} / {{ periodLabel(openCatalog?.billing_period) }}
         </el-form-item>
-        <el-form-item label="应付金额" required>
+        <el-form-item :label="openForm.purchase_mode === 'stack' ? '加购金额' : '应付金额'" required>
           <el-input-number v-model="openForm.paid_yuan" :min="0" :precision="2" style="width: 100%" />
         </el-form-item>
         <el-form-item label="生效起" required>
@@ -986,15 +1069,11 @@ watch(pageSize, () => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="columnDialogVisible" title="列设置" width="360px">
-      <div v-for="col in columnDraft" :key="col.key" class="column-item">
-        <el-checkbox v-model="col.visible" :disabled="col.locked">{{ col.label }}</el-checkbox>
-      </div>
-      <template #footer>
-        <el-button @click="columnDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveColumns">确定</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="columnDialogVisible"
+      v-model:columns="columnDraft"
+      @save="saveColumnSettings"
+    />
 
     <el-dialog v-model="exportDialog" title="导出任务" width="420px">
       <el-form v-if="exportTask" label-width="100px">
@@ -1039,7 +1118,7 @@ watch(pageSize, () => {
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
 .toolbar-right { margin-left: auto; display: flex; gap: 8px; }
 .adv-hint { margin: 0 0 8px; font-size: 12px; color: var(--el-text-color-secondary); }
-.pager { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+.pager { margin-top: 12px; }
 .th-sort { cursor: pointer; user-select: none; }
 .exp-warn { color: #cf1322; font-weight: 600; }
 .column-item { margin-bottom: 8px; }

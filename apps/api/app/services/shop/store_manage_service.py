@@ -45,8 +45,8 @@ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,29}$")
 
 # 顶栏「· 管理员」等展示名。对照 #a01 顶栏原文（非表单栏位）。
 _HEADER_ROLE_LABEL = {
-    "admin": "管理员",
-    "shop_admin": "管理员",
+    "admin": "企业管理员",
+    "shop_admin": "店铺管理员",
     "shop_content": "内容运营",
     "shop_support": "客服",
     "shop_clerk": "店员",

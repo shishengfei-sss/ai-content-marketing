@@ -6,6 +6,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -89,6 +90,57 @@ def get_buyer_preview(
     _: User = Depends(require_platform_shop_permission("platform.shop.product.review")),
 ):
     return product_service.buyer_preview(db, review_id)
+
+
+@router.get("/{review_id}/snapshot-cover")
+def get_snapshot_cover(
+    review_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_platform_shop_permission("platform.shop.product.review")),
+):
+    return product_service.review_snapshot_cover(db, review_id)
+
+
+@router.get("/{review_id}/lessons/{lesson_id}")
+def get_review_lesson(
+    review_id: UUID,
+    lesson_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_platform_shop_permission("platform.shop.product.review")),
+):
+    return product_service.review_lesson_detail(db, review_id, lesson_id)
+
+
+@router.get("/{review_id}/lessons/{lesson_id}/media")
+def get_review_lesson_media(
+    review_id: UUID,
+    lesson_id: UUID,
+    download: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_platform_shop_permission("platform.shop.product.review")),
+):
+    return product_service.review_lesson_media(db, review_id, lesson_id, download=download)
+
+
+@router.get("/{review_id}/ref-assets/{file_id}")
+def get_review_ref_asset(
+    review_id: UUID,
+    file_id: str,
+    download: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_platform_shop_permission("platform.shop.product.review")),
+):
+    return product_service.review_ref_asset(db, review_id, file_id, download=download)
+
+
+@router.get("/{review_id}/ref-assets/{file_id}/html-preview", response_class=HTMLResponse)
+def get_review_ref_asset_html_preview(
+    review_id: UUID,
+    file_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_platform_shop_permission("platform.shop.product.review")),
+):
+    return product_service.review_ref_asset_html_preview(db, review_id, file_id)
 
 
 @router.post("/{review_id}/approve", response_model=ProductReviewOut)

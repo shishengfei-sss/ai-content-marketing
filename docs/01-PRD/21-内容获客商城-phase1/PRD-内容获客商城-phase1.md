@@ -1915,16 +1915,16 @@ H5 线框与 Web 字段一致；注解同样放在线框外。
 
 | 主站 `/admin/users` 行操作 | 说明 | 落点 |
 |----------------------------|------|------|
-| 设 `platform_admin` | 进门禁 | 行内下拉 · PATCH `/admin/users/{id}` |
-| **编辑商城权限** | 绑角色 + 微调 `platform.shop.*` | **P08-B** 抽屉 |
+| 设账号角色 | 五档：普通用户 / 平台超管 / 日常运营 / 商家管家 / 财务结算 | 行内下拉 · PATCH `role` + `platform_shop_role` |
+| **编辑商城权限** | 岗位只读 + 微调 `platform.shop.*` | **P08-B** 抽屉 |
 | 全局禁用 | `is_active=false` | 状态开关（全站失效） |
 | 重置密码 / 删除 | 同 FR-ADMIN-USER | 主站现有操作 |
 
 **内容获客侧栏 Tab**：角色（[P08-A](./06-平台端UI.html#p08a)）| **编码规则**（[P08-F](./06-平台端UI.html#p08f)，`platform.user.manage`；对齐 CRM「设置 → 编号规则」）。
 
-**点击校验**：编辑商城权限须目标为 `platform_admin` 且 enabled；不可自授超管独有码；禁用不可禁自己。权限 `platform.user.manage`。
+**点击校验**：编辑商城权限须目标为平台岗位（非普通用户）且 enabled；超管抽屉只读不可微调；不可自授超管独有码；禁用不可禁自己。权限 `platform.user.manage`。
 
-**抽屉 P08-B**：从主站行内打开；选角色填充默认勾选 → 可减权限 → 保存审计。详见 [06#p08b](./06-平台端UI.html#p08b)。
+**抽屉 P08-B**：从主站行内打开；账号角色只读 → 可减权限 → 保存审计。改角色在列表完成。详见 [06#p08b](./06-平台端UI.html#p08b)。
 
 #### P10 套餐配置（功能字典 / 套餐模板 · 双 Tab）
 
@@ -4210,7 +4210,7 @@ notify 固定 `/integrations/wechat-pay/notify`。
 | 能力 | 路径 / 说明 |
 |------|-------------|
 | **运营账号 + 商城角色 + 权限微调** | 智营主站 `GET/PATCH /admin/users` · UI `/admin/users`（`AdminUsers.vue`）· 线框 [P08-AU](./06-平台端UI.html#p08-admin-users) · 权限 **`platform.user.manage`** |
-| 编辑商城权限抽屉 | 主站行内「编辑商城权限」→ [P08-B](./06-平台端UI.html#p08b)；body 含 `platform_shop_role` · `platform_shop_permissions[]` |
+| 编辑商城权限抽屉 | 主站行内「编辑商城权限」→ [P08-B](./06-平台端UI.html#p08b)；角色只读；body 含 `platform_shop_permissions[]` |
 | **平台业务编码规则** | `GET /admin/shop/number-rules` · `PUT …` · UI 内容获客「角色与编码」Tab [P08-F](./06-平台端UI.html#p08f) |
 | 商城内置角色（只读说明） | [P08-A](./06-平台端UI.html#p08a)；catalog `GET /admin/shop/permissions/catalog` 返回 `roles` |
 | 绑定数据 | `users.platform_shop_role` + 用户级商城权限集（见 `permissions.py` 默认 + 微调） |

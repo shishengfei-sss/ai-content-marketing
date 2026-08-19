@@ -926,6 +926,8 @@ class ProductReviewOut(BaseModel):
     paid_order_count: int = 0
     first_public_domain: bool = False
     audit_log: list = Field(default_factory=list)
+    cover_preview_url: str | None = None
+    ref_summary: dict | None = None
 
 
 class ProductReviewListResponse(BaseModel):
@@ -1138,6 +1140,7 @@ class OrderOut(BaseModel):
     entitlement_status: str | None = None
     entitlement_expires_at: datetime | None = None
     claim_status: str | None = None
+    claim_token: str | None = None
     timeline: list[OrderTimelineItem] = Field(default_factory=list)
 
 
@@ -1217,6 +1220,11 @@ class EntitlementOut(BaseModel):
     buyer_mobile_masked: str | None = None
     order_no: str | None = None
     shop_name: str | None = None
+    has_learning_progress: bool | None = None
+    learning_progress_pct: int | None = None
+    learned_lesson_count: int | None = None
+    total_lesson_count: int | None = None
+    cover_url: str | None = None
 
 
 class EntitlementListResponse(BaseModel):
@@ -1531,6 +1539,7 @@ class LessonCreateRequest(BaseModel):
     media_type: str = Field(default="video", pattern="^(video|audio|article)$")
     media_id: str | None = Field(default=None, max_length=64)
     media_url: str | None = Field(default=None, max_length=500)
+    content_body: str | None = Field(default=None, max_length=50000)
     duration_sec: int = Field(default=0, ge=0, le=86400)
     is_trial: bool = False
     trial_seconds: int | None = Field(default=None, ge=1, le=3600)
@@ -1542,6 +1551,7 @@ class LessonPatchRequest(BaseModel):
     media_type: str | None = Field(default=None, pattern="^(video|audio|article)$")
     media_id: str | None = Field(default=None, max_length=64)
     media_url: str | None = Field(default=None, max_length=500)
+    content_body: str | None = Field(default=None, max_length=50000)
     duration_sec: int | None = Field(default=None, ge=0, le=86400)
     is_trial: bool | None = None
     trial_seconds: int | None = Field(default=None, ge=1, le=3600)
@@ -1555,6 +1565,7 @@ class LessonOut(BaseModel):
     media_type: str
     media_id: str | None = None
     media_url: str | None = None
+    content_body: str | None = None
     duration_sec: int = 0
     is_trial: bool = False
     trial_seconds: int | None = None
@@ -1895,6 +1906,7 @@ class LessonItemOut(BaseModel):
     position_sec: int = 0
     locked: bool = False
     media_url: str | None = None
+    media_type: str | None = None
 
 
 class CourseOutlineOut(BaseModel):
@@ -1962,6 +1974,24 @@ class ChannelSettingOut(BaseModel):
     config_state: str = "draft"
     config_state_label: str = "未配置"
     combo_label: str = "链路① · 路径A"
+    demo_tools_enabled: bool = False
+
+
+class ChannelDemoOrderRequest(BaseModel):
+    buyer_mobile: str | None = Field(default=None, pattern=r"^1\d{10}$")
+
+
+class ChannelDemoOrderOut(BaseModel):
+    status: str
+    order_id: str | None = None
+    order_status: str | None = None
+    claim_token: str | None = None
+    claim_url: str | None = None
+    orders_path: str = "/shop/orders"
+    buyer_mobile: str | None = None
+    external_order_no: str | None = None
+    product_name: str | None = None
+    message: str | None = None
 
 
 class ChannelSettingSaveRequest(BaseModel):
@@ -2129,6 +2159,7 @@ class ClaimInfoOut(BaseModel):
     token: str
     status: str
     tenant_id: UUID | None = None
+    shop_id: UUID | None = None
     product_name: str | None = None
     mobile_tail: str | None = None
     mobile_masked: str | None = None
@@ -2228,6 +2259,14 @@ class MpStoreBriefOut(BaseModel):
     status: str
     merchant_status: str
     intro: str | None = None
+    service_phone: str | None = None
+
+
+class MpStoreResolveOut(BaseModel):
+    shop_id: UUID
+    tenant_id: UUID
+    name: str
+    status: str
 
 
 class MpStoreProductCard(BaseModel):

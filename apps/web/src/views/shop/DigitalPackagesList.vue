@@ -5,22 +5,23 @@
  * 缺口：导出完成站内信本批不接；已下架资料包再发布本批不接。
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '../../api/client'
+import { submitShopExport, SHOP_EXPORT_COLUMN_MODE_LABELS } from '../../utils/shopExport'
 import { useCurrentShop } from '../../composables/useCurrentShop'
 import { useAuthStore } from '../../stores/auth'
 import { hasPermission } from '../../config/permissions'
+import CrmColumnSettingsDialog from '../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../composables/useListColumnSettings'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const { currentId } = useCurrentShop()
 const canWrite = computed(() => hasPermission(auth.permissions || [], 'shop.content.write'))
 const loading = ref(false)
 const exporting = ref(false)
-const exportDialog = ref(false)
-const exportTask = ref(null)
-const exportScope = ref('当前筛选')
 const creating = ref(false)
 const items = ref([])
 const total = ref(0)
@@ -40,23 +41,21 @@ const query = reactive({ page: 1, page_size: 20, status: '', q: '' })
 const COL_STORAGE = 'shop.a06.packages'
 const ALL_COLS = [
   { key: 'title', label: '标题', locked: true, defaultOn: true },
-  { key: 'deliver_mode', label: '交付方式', locked: false, defaultOn: true },
-  { key: 'file_count', label: '文件数', locked: true, defaultOn: true },
-  { key: 'ref_product_count', label: '引用商品', locked: true, defaultOn: true },
-  { key: 'status', label: '状态', locked: true, defaultOn: true },
-  { key: 'updated_at', label: '更新时间', locked: true, defaultOn: true },
+  { key: 'deliver_mode', label: '交付方式', defaultOn: true },
+  { key: 'file_count', label: '文件数', defaultOn: true },
+  { key: 'ref_product_count', label: '引用商品', defaultOn: true },
+  { key: 'status', label: '状态', defaultOn: true },
+  { key: 'updated_at', label: '更新时间', defaultOn: true },
   { key: 'ops', label: '操作', locked: true, defaultOn: true },
 ]
-function loadColPrefs() {
-  try {
-    const raw = localStorage.getItem(COL_STORAGE)
-    if (raw) return JSON.parse(raw)
-  } catch { /* ignore */ }
-  return Object.fromEntries(ALL_COLS.map((c) => [c.key, c.defaultOn]))
-}
-const colVisible = reactive(loadColPrefs())
-const colDialog = ref(false)
-const colDraft = reactive({ ...colVisible })
+const {
+  visibleKeys,
+  columnDialogVisible: colDialog,
+  columnDraft,
+  openColumnSettings,
+  saveColumnSettings,
+  isColVisible,
+} = useListColumnSettings(ALL_COLS, COL_STORAGE)
 const STATUS_LABEL = { draft: '草稿', published: '已发布', off_sale: '已下架' }
 const DELIVER_LABEL = { download: '下载', online_view: '在线查看' }
 const STATUS_TABS = [
@@ -65,8 +64,6 @@ const STATUS_TABS = [
   { key: 'published', label: '已发布' },
   { key: 'off_sale', label: '已下架' },
 ]
-const visibleCols = computed(() => ALL_COLS.filter((c) => colVisible[c.key] || c.locked))
-
 function listParams() {
   return {
     page: query.page,
@@ -192,14 +189,8 @@ function goView(row) {
 function goEdit(row) {
   router.push({ name: 'ShopDigitalPackageEdit', params: { id: row.id }, query: { mode: 'edit' } })
 }
-function saveCols() {
-  Object.assign(colVisible, colDraft)
-  localStorage.setItem(COL_STORAGE, JSON.stringify(colVisible))
-  colDialog.value = false
-}
-
 function visibleExportColumns() {
-  return ALL_COLS.filter((c) => c.key !== 'ops' && colVisible[c.key]).map((c) => c.key)
+  return visibleKeys.value.filter((k) => k !== 'ops')
 }
 
 async function exportCsv(mode) {
@@ -211,10 +202,13 @@ async function exportCsv(mode) {
     if (mode === 'columns') {
       body.columns = visibleExportColumns()
     }
-    const { data } = await api.post('/api/v1/shop/digital-packages/export', body)
-    exportTask.value = data
-    exportScope.value = mode === 'columns' ? '列配置' : '当前筛选'
-    exportDialog.value = true
+    await submitShopExport(
+      '/api/v1/shop/digital-packages/export',
+      body,
+      '/api/v1/shop/digital-packages/export-tasks',
+      'shop-digital-packages.csv',
+      total.value,
+    )
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
   } finally {
@@ -222,30 +216,16 @@ async function exportCsv(mode) {
   }
 }
 
-async function downloadExportFile() {
-  if (!exportTask.value?.id) return
-  try {
-    const res = await api.get(`/api/v1/shop/digital-packages/export-tasks/${exportTask.value.id}/file`, {
-      responseType: 'blob',
-    })
-    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = exportTask.value.file_name || 'shop-digital-packages.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    ElMessage.error(e.message || '下载失败')
-  }
-}
 
 watch(currentId, () => {
   query.page = 1
   load()
 })
 
-onMounted(load)
+onMounted(() => {
+  if (route.query.status) query.status = String(route.query.status)
+  load()
+})
 </script>
 
 <template>
@@ -290,28 +270,29 @@ onMounted(load)
           <el-button :loading="exporting">导出 ▾</el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="current">当前筛选</el-dropdown-item>
-              <el-dropdown-item command="columns">列配置</el-dropdown-item>
+              <el-dropdown-item command="current">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns }}</el-dropdown-item>
+              <el-dropdown-item command="columns">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button @click="colDialog = true">列设置</el-button>
+        <el-button @click="openColumnSettings">列设置</el-button>
         <el-button v-if="canWrite" type="primary" @click="openCreate">+ 新建资料包</el-button>
       </div>
     </div>
 
     <el-table :data="items" border stripe size="small" style="margin-top: 12px">
-      <el-table-column v-if="visibleCols.some((c) => c.key === 'title')" prop="title" label="标题" min-width="160" />
-      <el-table-column v-if="visibleCols.some((c) => c.key === 'deliver_mode')" label="交付方式" width="110">
+      <template v-for="colKey in visibleKeys" :key="colKey">
+      <el-table-column v-if="colKey === 'title'" prop="title" label="标题" min-width="160" />
+      <el-table-column v-if="colKey === 'deliver_mode'" label="交付方式" width="110">
         <template #default="{ row }">{{ DELIVER_LABEL[row.deliver_mode] || row.deliver_mode }}</template>
       </el-table-column>
-      <el-table-column v-if="visibleCols.some((c) => c.key === 'file_count')" prop="file_count" label="文件数" width="90" />
-      <el-table-column v-if="visibleCols.some((c) => c.key === 'ref_product_count')" prop="ref_product_count" label="引用商品" width="100" />
-      <el-table-column v-if="visibleCols.some((c) => c.key === 'status')" label="状态" width="100">
+      <el-table-column v-if="colKey === 'file_count'" prop="file_count" label="文件数" width="90" />
+      <el-table-column v-if="colKey === 'ref_product_count'" prop="ref_product_count" label="引用商品" width="100" />
+      <el-table-column v-if="colKey === 'status'" label="状态" width="100">
         <template #default="{ row }">{{ STATUS_LABEL[row.status] || row.status }}</template>
       </el-table-column>
-      <el-table-column v-if="visibleCols.some((c) => c.key === 'updated_at')" prop="updated_at" label="更新时间" min-width="160" />
-      <el-table-column v-if="visibleCols.some((c) => c.key === 'ops')" label="操作" width="240" fixed="right">
+      <el-table-column v-if="colKey === 'updated_at'" prop="updated_at" label="更新时间" min-width="160" />
+      <el-table-column v-if="colKey === 'ops'" label="操作" width="240" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="goView(row)">查看</el-button>
           <el-button
@@ -341,6 +322,7 @@ onMounted(load)
           >删除</el-button>
         </template>
       </el-table-column>
+      </template>
     </el-table>
     <div class="pager">
       <el-pagination
@@ -432,29 +414,11 @@ onMounted(load)
       </template>
     </el-dialog>
 
-    <el-dialog v-model="colDialog" title="列设置" width="360px">
-      <el-checkbox v-for="c in ALL_COLS" :key="c.key" v-model="colDraft[c.key]" :disabled="c.locked" style="display: block; margin: 6px 0">
-        {{ c.label }}
-      </el-checkbox>
-      <template #footer>
-        <el-button @click="colDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveCols">确定</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="exportDialog" title="导出任务" width="420px">
-      <el-form v-if="exportTask" label-width="100px">
-        <el-form-item label="范围">{{ exportScope }}</el-form-item>
-        <el-form-item label="条数">{{ exportTask.row_count ?? 0 }} 条</el-form-item>
-        <el-form-item label="状态">{{ exportTask.status === 'done' ? '已完成' : (exportTask.status || '—') }}</el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button type="primary" :disabled="exportTask?.status !== 'done'" @click="downloadExportFile">
-          下载
-        </el-button>
-        <el-button @click="exportDialog = false">关闭</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="colDialog"
+      v-model:columns="columnDraft"
+      @save="() => { saveColumnSettings(); ElMessage.success('列设置已保存') }"
+    />
   </div>
 </template>
 

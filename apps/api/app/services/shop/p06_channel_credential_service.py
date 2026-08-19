@@ -23,6 +23,27 @@ def _now() -> datetime:
     return datetime.now(TZ_SH)
 
 
+def _as_dict(value) -> dict:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return dict(parsed) if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _iso(value) -> str | None:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    text = str(value).strip()
+    return text or None
+
+
 def _get_row(db: Session, channel: str) -> PlatformChannelCredential | None:
     return (
         db.query(PlatformChannelCredential)
@@ -104,8 +125,8 @@ def channel_config(db: Session, base_url: str) -> dict:
     base = (base_url or "").rstrip("/")
     doudian = _get_row(db, CHANNEL_DOUDIAN)
     wechat = _get_row(db, CHANNEL_WECHAT)
-    d_pub = dict((doudian.public_json if doudian else None) or {})
-    w_pub = dict((wechat.public_json if wechat else None) or {})
+    d_pub = _as_dict(doudian.public_json if doudian else None)
+    w_pub = _as_dict(wechat.public_json if wechat else None)
     d_ok = bool(_secrets(doudian).get("app_secret"))
     w_ok = bool(_secrets(wechat).get("api_v3_key") and w_pub.get("cert_serial"))
     return {
@@ -121,11 +142,11 @@ def channel_config(db: Session, base_url: str) -> dict:
         "doudian": {
             "configured": d_ok,
             "app_key_masked": d_pub.get("app_key_masked") or "",
-            "updated_at": doudian.updated_at.isoformat() if doudian and doudian.updated_at else None,
+            "updated_at": _iso(doudian.updated_at) if doudian else None,
             "updated_by_name": d_pub.get("updated_by_name"),
-            "last_tested_at": doudian.last_tested_at.isoformat() if doudian and doudian.last_tested_at else None,
+            "last_tested_at": _iso(doudian.last_tested_at) if doudian else None,
             "last_test_ok": doudian.last_test_ok if doudian else None,
-            "grace_until": doudian.grace_until.isoformat() if doudian and doudian.grace_until else None,
+            "grace_until": _iso(doudian.grace_until) if doudian else None,
         },
         "wechat_pay": {
             "configured": w_ok,
@@ -134,11 +155,11 @@ def channel_config(db: Session, base_url: str) -> dict:
             "cert_serial": w_pub.get("cert_serial") or "",
             "cert_expires": w_pub.get("cert_expires") or "",
             "platform_pub_configured": bool(w_pub.get("platform_pub")),
-            "updated_at": wechat.updated_at.isoformat() if wechat and wechat.updated_at else None,
+            "updated_at": _iso(wechat.updated_at) if wechat else None,
             "updated_by_name": w_pub.get("updated_by_name"),
-            "last_tested_at": wechat.last_tested_at.isoformat() if wechat and wechat.last_tested_at else None,
+            "last_tested_at": _iso(wechat.last_tested_at) if wechat else None,
             "last_test_ok": wechat.last_test_ok if wechat else None,
-            "grace_until": wechat.grace_until.isoformat() if wechat and wechat.grace_until else None,
+            "grace_until": _iso(wechat.grace_until) if wechat else None,
         },
     }
 
@@ -166,7 +187,7 @@ def save_doudian(db: Session, user: User, *, app_key: str, app_secret: str | Non
         raise HTTPException(status_code=422, detail="AppKey 格式错误")
     secrets["app_key"] = key
     _write_secrets(row, secrets)
-    pub = dict(row.public_json or {})
+    pub = _as_dict(row.public_json)
     pub.update(
         {
             "app_key_masked": _mask_tail(key),
@@ -191,7 +212,7 @@ def rotate_doudian(db: Session, user: User, *, app_secret: str, base_url: str = 
     _write_secrets(row, secrets)
     row.prev_secret_enc = old
     row.grace_until = _now() + timedelta(hours=GRACE_HOURS)
-    pub = dict(row.public_json or {})
+    pub = _as_dict(row.public_json)
     pub["updated_by_name"] = _operator_name(user)
     row.public_json = pub
     row.updated_by = user.id
@@ -239,7 +260,7 @@ def save_wechat(
         raise HTTPException(status_code=422, detail="v3 密钥长度须 32 位")
     pem = (cert_pem or "").strip()
     key = (cert_key or "").strip()
-    pub = dict(row.public_json or {})
+    pub = _as_dict(row.public_json)
     if pem or key:
         if not pem or not key:
             raise HTTPException(status_code=422, detail="证书解析失败")
@@ -285,7 +306,7 @@ def rotate_wechat_cert(db: Session, user: User, *, cert_pem: str, cert_key: str,
     _write_secrets(row, secrets)
     row.prev_secret_enc = old
     row.grace_until = _now() + timedelta(hours=GRACE_HOURS)
-    pub = dict(row.public_json or {})
+    pub = _as_dict(row.public_json)
     pub["cert_serial"] = serial
     pub["cert_expires"] = expires
     pub["updated_by_name"] = _operator_name(user)
@@ -306,7 +327,7 @@ def rotate_wechat_v3(db: Session, user: User, *, api_v3_key: str, base_url: str 
     _write_secrets(row, secrets)
     row.prev_secret_enc = old
     row.grace_until = _now() + timedelta(hours=GRACE_HOURS)
-    pub = dict(row.public_json or {})
+    pub = _as_dict(row.public_json)
     pub["updated_by_name"] = _operator_name(user)
     row.public_json = pub
     row.updated_by = user.id
@@ -317,7 +338,7 @@ def rotate_wechat_v3(db: Session, user: User, *, api_v3_key: str, base_url: str 
 def test_wechat(db: Session, user: User, *, base_url: str = "") -> dict:
     row = _require_channel_perm_configured(_get_row(db, CHANNEL_WECHAT), "请先保存配置")
     secrets = _secrets(row)
-    pub = dict(row.public_json or {})
+    pub = _as_dict(row.public_json)
     ok = bool(secrets.get("api_v3_key") and secrets.get("mch_id") and pub.get("cert_serial"))
     row.last_tested_at = _now()
     row.last_test_ok = ok

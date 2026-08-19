@@ -308,6 +308,22 @@ def main() -> int:
                 f"{code} {rejected}",
             )
         )
+        code, resub = req(
+            "POST",
+            f"/admin/shop/sms/signatures/{pending_id}/resubmit",
+            token=admin,
+            body={"content": "【修改后】", "remark": "已补材料"},
+        )
+        results.append(
+            check(
+                "VP12-8d 驳回后修改重新提交",
+                code == 200
+                and resub.get("status") == "pending"
+                and resub.get("content") == "【修改后】"
+                and resub.get("remark") == "已补材料",
+                f"{code} {resub}",
+            )
+        )
     else:
         results.append(
             check(
@@ -318,6 +334,7 @@ def main() -> int:
         )
         results.append(check("VP12-8b 驳回原因过短", False, "no pending"))
         results.append(check("VP12-8c 签名驳回", False, "no pending"))
+        results.append(check("VP12-8d 驳回后修改重新提交", False, "no pending"))
 
     code, assigned = req(
         "POST",

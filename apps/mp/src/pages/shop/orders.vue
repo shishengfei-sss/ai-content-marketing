@@ -39,6 +39,33 @@ function fmtMoney(cents) {
   return `¥${((cents || 0) / 100).toFixed(2)}`
 }
 
+function typeLabel(t) {
+  return { course: '课程', digital: '资料', service: '服务' }[t] || '商品'
+}
+
+function typeChar(t) {
+  return typeLabel(t).slice(0, 1)
+}
+
+function statusClass(st) {
+  if (st === 'pending_payment') return 'st-warn'
+  if (st === 'paid' || st === 'claim_pending') return 'st-ok'
+  if (st === 'refunding') return 'st-muted'
+  if (st === 'refunded' || st === 'closed') return 'st-off'
+  return 'st-muted'
+}
+
+function shortNo(no) {
+  const s = String(no || '')
+  if (s.length <= 14) return s
+  return `${s.slice(0, 6)}…${s.slice(-6)}`
+}
+
+function fmtTime(v) {
+  if (!v) return ''
+  return String(v).replace('T', ' ').slice(0, 16)
+}
+
 async function load() {
   loading.value = true
   try {
@@ -143,10 +170,8 @@ onShow(load)
 
 <template>
   <view class="page">
-    <view class="head">
-      <text class="title">我的订单</text>
-      <text class="sub">查售后 · 退款 · 开票</text>
-    </view>
+    <text class="sr-only">我的订单</text>
+    <view class="hint">查售后 · 退款 · 开票</view>
 
     <view class="tabs">
       <view
@@ -161,14 +186,36 @@ onShow(load)
     </view>
 
     <view v-if="loading" class="empty">加载中…</view>
-    <view v-else-if="!list.length" class="empty">暂无订单</view>
+    <view v-else-if="!list.length" class="empty">
+      <view class="empty-ico">🧾</view>
+      <text class="empty-title">暂无订单</text>
+      <text class="empty-sub">购买后可在此查售后、退款与开票</text>
+    </view>
     <view v-else class="list">
-      <view v-for="row in list" :key="row.id" class="card" @click="goDetail(row)">
+      <view
+        v-for="row in list"
+        :key="row.id"
+        class="card"
+        :class="{ dim: row.status === 'closed' }"
+        @click="goDetail(row)"
+      >
         <view class="top">
-          <text class="no">订单 {{ row.order_no }}</text>
-          <text class="st">{{ STATUS_LABEL[row.status] || row.status }}</text>
+          <text class="no">订单 {{ shortNo(row.order_no) }}</text>
+          <text class="st" :class="statusClass(row.status)">
+            {{ STATUS_LABEL[row.status] || row.status }}
+          </text>
         </view>
-        <text class="name">{{ row.product_name || '商品' }} · {{ fmtMoney(row.amount_cents) }}</text>
+        <view class="body">
+          <view class="thumb" :class="row.type || 'course'">{{ typeChar(row.type) }}</view>
+          <view class="info">
+            <text class="name">{{ row.product_name || '商品' }}</text>
+            <view class="meta">
+              <text class="tag">{{ typeLabel(row.type) }}</text>
+              <text v-if="fmtTime(row.created_at)" class="time">{{ fmtTime(row.created_at) }}</text>
+            </view>
+          </view>
+          <text class="price">{{ fmtMoney(row.amount_cents) }}</text>
+        </view>
         <view class="actions" @click.stop>
           <template v-if="row.status === 'pending_payment'">
             <button class="btn ghost" size="mini" :disabled="busyId === row.id" @click="cancel(row)">
@@ -187,7 +234,6 @@ onShow(load)
           <template v-else-if="row.status === 'refunding' || row.status === 'refunded'">
             <button class="btn ghost" size="mini" @click="goRefundProgress(row)">查看进度</button>
           </template>
-          <!-- 已关闭 / 待领权：仅进详情 -->
         </view>
       </view>
     </view>
@@ -197,97 +243,206 @@ onShow(load)
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #f5f7fb;
-  padding: 16px;
-  padding-bottom: 40px;
+  background: #f3f5f9;
+  padding: 12px 14px 40px;
+  box-sizing: border-box;
+  position: relative;
 }
-.head {
-  margin-bottom: 12px;
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }
-.title {
-  display: block;
-  font-size: 20px;
-  font-weight: 700;
-  color: #0f172a;
-}
-.sub {
-  display: block;
-  margin-top: 4px;
+.hint {
   font-size: 12px;
   color: #64748b;
+  margin: 2px 4px 10px;
 }
 .tabs {
   display: flex;
-  gap: 0;
+  padding: 4px;
   background: #fff;
-  border-radius: 10px;
+  border-radius: 12px;
   margin-bottom: 12px;
-  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 .tab {
   flex: 1;
   text-align: center;
-  padding: 10px 0;
+  padding: 8px 0;
   font-size: 13px;
   color: #64748b;
+  border-radius: 8px;
 }
 .tab.on {
   color: #1677ff;
   font-weight: 700;
-  background: #e6f4ff;
+  background: #e8f3ff;
 }
 .list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 .card {
   background: #fff;
-  border-radius: 12px;
-  padding: 12px;
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+.card.dim {
+  opacity: 0.72;
 }
 .top {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.no {
   font-size: 12px;
-  color: #64748b;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .st {
-  font-weight: 600;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.st-warn {
+  background: #fffbeb;
+  color: #d97706;
+}
+.st-ok {
+  background: #ecfdf5;
+  color: #059669;
+}
+.st-muted {
+  background: #f1f5f9;
+  color: #475569;
+}
+.st-off {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+.body {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+}
+.thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  flex-shrink: 0;
+  background: #e8f3ff;
+  color: #1677ff;
+}
+.thumb.digital {
+  background: #fff7e6;
+  color: #d48806;
+}
+.thumb.service {
+  background: #ecfdf5;
+  color: #059669;
+}
+.info {
+  flex: 1;
+  min-width: 0;
 }
 .name {
   display: block;
-  margin: 10px 0 12px;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 15px;
   color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.tag {
+  font-size: 11px;
+  color: #1677ff;
+  background: #e8f3ff;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.time {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.price {
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #e11d48;
+  padding-top: 2px;
 }
 .actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
 }
 .btn {
   margin: 0;
   border: none;
-  border-radius: 8px;
+  border-radius: 999px;
   font-size: 12px;
+  padding: 0 14px;
+  height: 30px;
+  line-height: 30px;
 }
 .btn.primary {
   background: #1677ff;
   color: #fff;
 }
 .btn.danger {
-  background: #fff1f0;
-  color: #cf1322;
+  background: #fff1f2;
+  color: #e11d48;
 }
 .btn.ghost {
-  background: #f1f5f9;
+  background: #f8fafc;
   color: #334155;
+  border: 1px solid #e2e8f0;
 }
 .empty {
   text-align: center;
   color: #94a3b8;
-  margin-top: 40px;
+  margin-top: 56px;
+}
+.empty-ico {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+.empty-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #64748b;
+}
+.empty-sub {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
 }
 </style>

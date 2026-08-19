@@ -7,6 +7,16 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api/client'
 import ShopSettingsNav from '../../components/shop/ShopSettingsNav.vue'
+import { useAuthStore } from '../../stores/auth'
+import {
+  resolveRoleShopPermissions,
+  roleCapabilitySummary,
+  SHOP_MATRIX_GROUPS,
+  shopPermissionLabel,
+} from '../../config/shopPermissionMatrix'
+
+const auth = useAuthStore()
+const canManageRoles = computed(() => auth.hasPermission('shop.role.manage'))
 
 const loading = ref(false)
 const roles = ref([])
@@ -26,6 +36,17 @@ const form = reactive({
 })
 
 const selectedRole = computed(() => roles.value.find((r) => r.code === selectedCode.value) || null)
+const roleShopPermissions = computed(() => resolveRoleShopPermissions(selectedRole.value))
+const matrixGroups = computed(() =>
+  SHOP_MATRIX_GROUPS.map((group) => ({
+    ...group,
+    items: group.codes.map((code) => ({
+      code,
+      label: shopPermissionLabel(code),
+      granted: roleShopPermissions.value.has(code),
+    })),
+  })).filter((group) => group.items.length),
+)
 const filteredMembers = computed(() =>
   members.value.filter((m) => m.role_code === selectedCode.value)
 )
@@ -91,6 +112,10 @@ async function toggleRole(enable) {
 }
 
 async function openAssign(prefillRole) {
+  if (!canManageRoles.value) {
+    ElMessage.warning('无角色管理权限，请联系企业管理员')
+    return
+  }
   form.user_id = null
   form.role_code = prefillRole || selectedCode.value || 'shop_content'
   form.store_scope = form.role_code === 'shop_clerk' ? 'selected' : 'all'
@@ -181,11 +206,7 @@ async function removeMember(row) {
 }
 
 function permSummary(role) {
-  if (!role?.permissions?.length) return '—'
-  if (role.permissions.includes('*')) return '全部 shop.* + 角色管理'
-  const n = role.permissions.length
-  const sample = role.permissions.slice(0, 6).join(' · ')
-  return n > 6 ? `${sample} … 共 ${n} 项` : sample
+  return roleCapabilitySummary(role)
 }
 
 onMounted(load)
@@ -198,10 +219,19 @@ onMounted(load)
         <div class="crumb">设置 / <b>角色与成员</b></div>
         <h3>角色与成员</h3>
       </div>
-      <el-button type="primary" @click="openAssign()">+ 分配成员</el-button>
+      <el-button v-if="canManageRoles" type="primary" @click="openAssign()">+ 分配成员</el-button>
     </div>
 
     <ShopSettingsNav current="roles" />
+
+    <el-alert
+      v-if="!canManageRoles"
+      type="info"
+      :closable="false"
+      show-icon
+      title="当前账号仅可查看成员与权限矩阵；分配成员、换绑、启用/禁用角色需企业管理员权限。"
+      style="margin-bottom: 10px"
+    />
 
     <el-alert
       type="warning"
@@ -256,7 +286,7 @@ onMounted(load)
           </div>
           <div v-if="selectedRole" class="role-actions">
             角色：{{ selectedRole.name }}
-            <template v-if="selectedRole.can_disable">
+            <template v-if="selectedRole.can_disable && canManageRoles">
               ·
               <el-button
                 v-if="selectedRole.enabled"
@@ -289,7 +319,7 @@ onMounted(load)
                 }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="140" fixed="right">
+            <el-table-column v-if="canManageRoles" label="操作" width="140" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click="changeRole(row)">换角色</el-button>
                 <el-button link type="danger" @click="removeMember(row)">移除</el-button>
@@ -299,18 +329,25 @@ onMounted(load)
         </template>
 
         <div v-else class="matrix">
-          <p class="hint">只读展示该角色对各 shop.* 的权限；Phase 1 不可编辑勾选。</p>
-          <div class="perm-grid">
-            <el-tag
-              v-for="p in selectedRole?.permissions || []"
-              :key="p"
-              size="small"
-              effect="plain"
-              style="margin: 0 6px 6px 0"
-            >
-              {{ p }}
-            </el-tag>
-            <span v-if="!(selectedRole?.permissions || []).length">—</span>
+          <p class="hint">
+            只读展示该角色在商城侧的能力；Phase 1 不可编辑勾选。图例：
+            <span class="perm-yes">✓</span> 有权限
+            <span class="perm-no">—</span> 无权限
+          </p>
+          <div v-for="group in matrixGroups" :key="group.title" class="matrix-group">
+            <div class="matrix-group__title">{{ group.title }}</div>
+            <table class="matrix-table">
+              <tbody>
+                <tr v-for="item in group.items" :key="item.code">
+                  <td class="matrix-table__label">{{ item.label }}</td>
+                  <td class="matrix-table__state">
+                    <span :class="item.granted ? 'perm-yes' : 'perm-no'">
+                      {{ item.granted ? '✓' : '—' }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -495,6 +532,39 @@ onMounted(load)
   padding: 10px;
   border: 1px dashed var(--el-border-color);
   border-radius: 8px;
+}
+.matrix-group + .matrix-group {
+  margin-top: 12px;
+}
+.matrix-group__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 6px;
+}
+.matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.matrix-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--el-border-color-extra-light);
+}
+.matrix-table__label {
+  color: #334155;
+}
+.matrix-table__state {
+  width: 56px;
+  text-align: center;
+}
+.perm-yes {
+  color: #389e0d;
+  font-weight: 700;
+}
+.perm-no {
+  color: #bfbfbf;
+  font-weight: 600;
 }
 code {
   font-size: 11px;

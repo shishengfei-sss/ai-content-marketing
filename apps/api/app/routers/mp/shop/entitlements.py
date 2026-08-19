@@ -5,6 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -52,6 +53,28 @@ def course_outline(
     db: Session = Depends(get_db),
 ):
     return content_fulfillment_service.get_course_outline(db, bctx.buyer, entitlement_id)
+
+
+@router.get("/{entitlement_id}/lessons/{lesson_id}/media")
+def lesson_media(
+    entitlement_id: UUID,
+    lesson_id: UUID,
+    bctx: BuyerContext = Depends(get_buyer_context),
+    db: Session = Depends(get_db),
+):
+    path, media_type, filename = content_fulfillment_service.stream_lesson_media(
+        db, bctx.buyer, entitlement_id, lesson_id
+    )
+    return FileResponse(path, filename=filename, media_type=_media_mime(media_type, filename))
+
+
+def _media_mime(media_type: str, filename: str) -> str:
+    name = (filename or "").lower()
+    if media_type == "audio" or name.endswith((".mp3", ".m4a", ".wav", ".aac")):
+        return "audio/mpeg"
+    if name.endswith(".webm"):
+        return "video/webm"
+    return "video/mp4"
 
 
 @router.get("/{entitlement_id}/materials", response_model=MaterialsOut)

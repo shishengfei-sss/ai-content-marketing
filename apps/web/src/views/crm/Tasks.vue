@@ -614,8 +614,6 @@ onMounted(async () => {
             清空条件
           </el-button>
         </div>
-
-        <span class="tasks-toolbar__count">共 {{ total }} 条</span>
       </div>
     </div>
 
@@ -1179,13 +1177,6 @@ onMounted(async () => {
   border-color: var(--el-color-danger);
   background: var(--el-color-danger-light-9);
   color: var(--el-color-danger);
-}
-
-.tasks-toolbar__count {
-  flex-shrink: 0;
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
 }
 
 .tasks-table__title {

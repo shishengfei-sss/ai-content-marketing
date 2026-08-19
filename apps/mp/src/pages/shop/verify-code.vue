@@ -4,18 +4,19 @@
  */
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { ensureShopBuyerSession, getShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
+import { ensureShopBuyerSession, getShopBuyerTenantId, setShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
 
 const code = ref('')
 const productName = ref('')
 const slotText = ref('')
 const mode = ref('booking')
 const loading = ref(true)
+const openidHint = ref('')
 
 async function load(entitlementId) {
   loading.value = true
   try {
-    await ensureShopBuyerSession(getShopBuyerTenantId())
+    await ensureShopBuyerSession(getShopBuyerTenantId(), openidHint.value || undefined)
     const data = await shopBuyerApi.listEntitlements({ page: 1, page_size: 50 })
     const ent = (data.items || []).find((i) => i.id === entitlementId)
     if (!ent?.verify_code) throw new Error('暂无核销码')
@@ -47,6 +48,9 @@ function goEntitlements() {
 onLoad((q) => {
   mode.value = q?.mode === 'times_card' ? 'times_card' : 'booking'
   slotText.value = q?.slot ? decodeURIComponent(q.slot) : ''
+  const tid = (q?.tenant_id || '').trim()
+  if (tid) setShopBuyerTenantId(tid)
+  openidHint.value = (q?.openid || '').trim()
   const eid = (q?.entitlement_id || '').trim()
   if (eid) load(eid)
   else {

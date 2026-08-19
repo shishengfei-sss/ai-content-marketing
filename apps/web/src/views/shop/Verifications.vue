@@ -7,9 +7,12 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../../api/client'
+import { submitShopExport, SHOP_EXPORT_SCOPE_LABELS } from '../../utils/shopExport'
 import { useCurrentShop } from '../../composables/useCurrentShop'
 import { useAuthStore } from '../../stores/auth'
 import { hasPermission } from '../../config/permissions'
+import CrmColumnSettingsDialog from '../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../composables/useListColumnSettings'
 
 const { currentId } = useCurrentShop()
 const auth = useAuthStore()
@@ -25,8 +28,6 @@ const codeInputs = ref([])
 
 const loading = ref(false)
 const exporting = ref(false)
-const exportDialog = ref(false)
-const exportTask = ref(null)
 const records = ref([])
 const total = ref(0)
 const operators = ref([])
@@ -42,32 +43,28 @@ const query = reactive({
 const COL_STORAGE = 'shop.a08.columns'
 const ALL_COLS = [
   { key: 'created_at', label: '核销时间', locked: true, defaultOn: true },
-  { key: 'verify_code', label: '核销码', locked: true, defaultOn: true },
-  { key: 'buyer', label: '买家', locked: true, defaultOn: true },
-  { key: 'product_name', label: '商品', locked: true, defaultOn: true },
-  { key: 'booking_slot', label: '预约时段', locked: true, defaultOn: true },
-  { key: 'operator_name', label: '操作人', locked: true, defaultOn: true },
-  { key: 'deducted_count', label: '扣次', locked: false, defaultOn: false },
+  { key: 'verify_code', label: '核销码', defaultOn: true },
+  { key: 'buyer', label: '买家', defaultOn: true },
+  { key: 'product_name', label: '商品', defaultOn: true },
+  { key: 'booking_slot', label: '预约时段', defaultOn: true },
+  { key: 'operator_name', label: '操作人', defaultOn: true },
+  { key: 'deducted_count', label: '扣次', defaultOn: false },
   { key: 'ops', label: '操作', locked: true, defaultOn: true },
 ]
+const {
+  visibleKeys,
+  columnDialogVisible: colDialog,
+  columnDraft,
+  openColumnSettings,
+  saveColumnSettings,
+  isColVisible,
+} = useListColumnSettings(ALL_COLS, COL_STORAGE)
 const DATE_CHIPS = [
   { key: 'today', label: '今日' },
   { key: '7d', label: '近7天' },
   { key: '30d', label: '近30天' },
   { key: 'custom', label: '自定义' },
 ]
-function loadColPrefs() {
-  try {
-    const raw = localStorage.getItem(COL_STORAGE)
-    if (raw) return JSON.parse(raw)
-  } catch {
-    /* ignore */
-  }
-  return Object.fromEntries(ALL_COLS.map((c) => [c.key, c.defaultOn]))
-}
-const colVisible = reactive(loadColPrefs())
-const colDialog = ref(false)
-const colDraft = reactive({ ...colVisible })
 const detailVisible = ref(false)
 const detail = ref(null)
 
@@ -213,9 +210,13 @@ async function loadOperators() {
 async function exportCsv() {
   exporting.value = true
   try {
-    const { data } = await api.post('/api/v1/shop/verifications/export', listParams())
-    exportTask.value = data
-    exportDialog.value = true
+    await submitShopExport(
+      '/api/v1/shop/verifications/export',
+      listParams(),
+      '/api/v1/shop/verifications/export-tasks',
+      'verifications.csv',
+      total.value,
+    )
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
   } finally {
@@ -223,33 +224,7 @@ async function exportCsv() {
   }
 }
 
-async function downloadExportFile() {
-  if (!exportTask.value?.id) return
-  try {
-    const res = await api.get(`/api/v1/shop/verifications/export-tasks/${exportTask.value.id}/file`, {
-      responseType: 'blob',
-    })
-    const blob = new Blob([res.data], { type: 'text/csv; charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = exportTask.value.file_name || 'verifications.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    ElMessage.error(e.message || '下载失败')
-  }
-}
 
-function openColSettings() {
-  Object.assign(colDraft, colVisible)
-  colDialog.value = true
-}
-function saveCols() {
-  Object.assign(colVisible, colDraft)
-  localStorage.setItem(COL_STORAGE, JSON.stringify({ ...colVisible }))
-  colDialog.value = false
-}
 function fmtTime(v) {
   if (!v) return '—'
   return String(v).replace('T', ' ').slice(0, 16)
@@ -420,30 +395,32 @@ onMounted(() => {
             <el-button :loading="exporting">导出 ▾</el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="current">当前筛选</el-dropdown-item>
+                <el-dropdown-item command="current">{{ SHOP_EXPORT_SCOPE_LABELS.filtered }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <el-button @click="openColSettings">列设置</el-button>
+          <el-button @click="openColumnSettings">列设置</el-button>
         </div>
       </div>
       <el-table :data="records" border stripe size="small" style="margin-top: 12px">
-        <el-table-column v-if="colVisible.created_at" label="核销时间" width="150">
+        <template v-for="colKey in visibleKeys" :key="colKey">
+        <el-table-column v-if="colKey === 'created_at'" label="核销时间" width="150">
           <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
         </el-table-column>
-        <el-table-column v-if="colVisible.verify_code" prop="verify_code" label="核销码" width="100" />
-        <el-table-column v-if="colVisible.buyer" prop="buyer_mobile_masked" label="买家" width="120" />
-        <el-table-column v-if="colVisible.product_name" prop="product_name" label="商品" min-width="140" />
-        <el-table-column v-if="colVisible.booking_slot" prop="booking_slot" label="预约时段" min-width="160" />
-        <el-table-column v-if="colVisible.operator_name" prop="operator_name" label="操作人" width="100" />
-        <el-table-column v-if="colVisible.deducted_count" label="扣次" width="90">
+        <el-table-column v-if="colKey === 'verify_code'" prop="verify_code" label="核销码" width="100" />
+        <el-table-column v-if="colKey === 'buyer'" prop="buyer_mobile_masked" label="买家" width="120" />
+        <el-table-column v-if="colKey === 'product_name'" prop="product_name" label="商品" min-width="140" />
+        <el-table-column v-if="colKey === 'booking_slot'" prop="booking_slot" label="预约时段" min-width="160" />
+        <el-table-column v-if="colKey === 'operator_name'" prop="operator_name" label="操作人" width="100" />
+        <el-table-column v-if="colKey === 'deducted_count'" label="扣次" width="90">
           <template #default="{ row }">{{ deductText(row) }}</template>
         </el-table-column>
-        <el-table-column v-if="colVisible.ops" label="操作" width="80" fixed="right">
+        <el-table-column v-if="colKey === 'ops'" label="操作" width="80" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDetail(row)">查看</el-button>
           </template>
         </el-table-column>
+        </template>
       </el-table>
       <div class="pager">
         <el-pagination
@@ -458,35 +435,12 @@ onMounted(() => {
       </div>
     </div>
 
-    <el-dialog v-model="exportDialog" title="导出任务" width="420px">
-      <el-form v-if="exportTask" label-width="100px">
-        <el-form-item label="范围">当前筛选</el-form-item>
-        <el-form-item label="条数">{{ exportTask.row_count ?? 0 }} 条</el-form-item>
-        <el-form-item label="状态">{{ exportTask.status === 'done' ? '已完成' : (exportTask.status || '—') }}</el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button type="primary" :disabled="exportTask?.status !== 'done'" @click="downloadExportFile">
-          下载
-        </el-button>
-        <el-button @click="exportDialog = false">关闭</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="colDialog"
+      v-model:columns="columnDraft"
+      @save="() => { saveColumnSettings(); ElMessage.success('列设置已保存') }"
+    />
 
-    <el-dialog v-model="colDialog" title="列设置" width="360px">
-      <el-checkbox
-        v-for="c in ALL_COLS"
-        :key="c.key"
-        v-model="colDraft[c.key]"
-        :disabled="c.locked"
-        style="display: block; margin: 6px 0"
-      >
-        {{ c.label }}
-      </el-checkbox>
-      <template #footer>
-        <el-button @click="colDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveCols">保存</el-button>
-      </template>
-    </el-dialog>
 
     <el-drawer v-model="detailVisible" size="420px">
       <template #header>

@@ -6,10 +6,13 @@ import { computed, ref } from 'vue'
 import { onLoad, onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app'
 import {
   ensureShopBuyerSession,
+  ensureShopNavContext,
   getShopBuyerTenantId,
+  setShopBuyerShopId,
   setShopBuyerTenantId,
   shopBuyerApi,
 } from '@/utils/shopApi'
+import ShopTabBar from '@/components/ShopTabBar.vue'
 
 const shopId = ref('')
 const tenantId = ref('')
@@ -68,6 +71,12 @@ async function fetchPage(nextPage, { append }) {
 }
 
 async function load() {
+  const ctx = await ensureShopNavContext({
+    shopId: shopId.value,
+    tenantId: tenantId.value,
+  })
+  shopId.value = ctx.shopId
+  tenantId.value = ctx.tenantId
   if (!shopId.value) {
     error.value = '缺少店铺标识'
     return
@@ -129,23 +138,12 @@ function goProduct(row) {
   })
 }
 
-function goEntitlements() {
-  const tid = tenantId.value || getShopBuyerTenantId()
-  uni.navigateTo({
-    url: `/pages/shop/entitlements?tenant_id=${tid}${openidHint.value ? `&openid=${openidHint.value}` : ''}`,
-  })
-}
-
-function goOrders() {
-  const tid = tenantId.value || getShopBuyerTenantId()
-  uni.navigateTo({ url: `/pages/shop/orders?tenant_id=${tid}` })
-}
-
 onLoad((q) => {
   shopId.value = (q?.shop_id || '').trim()
   tenantId.value = (q?.tenant_id || '').trim()
   openidHint.value = (q?.openid || '').trim()
   if (tenantId.value) setShopBuyerTenantId(tenantId.value)
+  if (shopId.value) setShopBuyerShopId(shopId.value)
 })
 
 onShow(() => {
@@ -212,6 +210,7 @@ onReachBottom(() => {
     <view v-if="loading && !products.length" class="hint">加载中…</view>
     <view v-else-if="error" class="error">{{ error }}</view>
     <view v-else-if="!products.length" class="empty">
+      <view class="empty-ico">📭</view>
       <view class="empty-title">暂无在售内容</view>
       <view class="empty-sub">店铺正在筹备，稍后再来看看</view>
       <button class="search-btn" size="mini" @click="load">刷新看看</button>
@@ -228,6 +227,7 @@ onReachBottom(() => {
         <view class="cover">
           <image v-if="row.cover_url" :src="row.cover_url" mode="aspectFill" class="cover-img" />
           <view v-else class="cover-placeholder">{{ typeLabel(row.type) }}</view>
+          <text class="type-tag" :class="row.type">{{ typeLabel(row.type) }}</text>
         </view>
         <view class="info">
           <view class="name">{{ row.name }}</view>
@@ -245,28 +245,30 @@ onReachBottom(() => {
     </view>
     <view v-else-if="products.length && !hasMore" class="more muted">没有更多了</view>
 
-    <view class="bottom-nav">
-      <view class="nav-item active">首页</view>
-      <view class="nav-item" @click="goEntitlements">已购</view>
-      <view class="nav-item" @click="goOrders">订单</view>
-    </view>
+    <ShopTabBar
+      active="home"
+      :shop-id="shopId"
+      :tenant-id="tenantId || getShopBuyerTenantId()"
+      :openid="openidHint"
+    />
   </view>
 </template>
 
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: #f3f5f9;
   padding-bottom: 72px;
 }
 .hero {
-  background: linear-gradient(135deg, #1677ff, #69b1ff);
+  background: linear-gradient(135deg, #1677ff 0%, #4096ff 55%, #69b1ff 100%);
   color: #fff;
-  padding: 20px 16px 16px;
+  padding: 22px 16px 18px;
 }
 .hero-name {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
 }
 .hero-intro {
   margin-top: 6px;
@@ -278,18 +280,23 @@ onReachBottom(() => {
   gap: 8px;
   padding: 12px 16px;
   background: #fff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
 }
 .search-input {
   flex: 1;
   height: 36px;
-  padding: 0 12px;
-  background: #f5f7fa;
+  padding: 0 14px;
+  background: #f3f5f9;
   border-radius: 18px;
   font-size: 14px;
 }
 .search-btn {
   background: #1677ff;
   color: #fff;
+  border-radius: 999px;
+  padding: 0 14px;
+  height: 36px;
+  line-height: 36px;
 }
 .type-tabs,
 .sort-tabs {
@@ -314,7 +321,8 @@ onReachBottom(() => {
 .type-tab.active,
 .sort-tab.active {
   color: #1677ff;
-  background: #e6f4ff;
+  background: #e8f3ff;
+  font-weight: 700;
 }
 .hint,
 .error,
@@ -323,6 +331,10 @@ onReachBottom(() => {
   padding: 24px;
   color: #94a3b8;
   font-size: 14px;
+}
+.empty-ico {
+  font-size: 36px;
+  margin-bottom: 8px;
 }
 .empty-title {
   color: #334155;
@@ -347,19 +359,22 @@ onReachBottom(() => {
   display: flex;
   gap: 12px;
   background: #fff;
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
 }
 .product-card.gray {
   opacity: 0.45;
   filter: grayscale(0.85);
 }
 .cover {
-  width: 96px;
-  height: 72px;
-  border-radius: 8px;
+  width: 104px;
+  height: 78px;
+  border-radius: 12px;
   overflow: hidden;
   flex-shrink: 0;
+  position: relative;
+  background: #eef2f6;
 }
 .cover-img {
   width: 100%;
@@ -368,21 +383,42 @@ onReachBottom(() => {
 .cover-placeholder {
   width: 100%;
   height: 100%;
-  background: #e2e8f0;
+  background: linear-gradient(135deg, #e8f3ff, #f1f5f9);
   color: #64748b;
   font-size: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+.type-tag {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(22, 119, 255, 0.92);
+  color: #fff;
+}
+.type-tag.digital {
+  background: rgba(212, 136, 6, 0.92);
+}
+.type-tag.service {
+  background: rgba(5, 150, 105, 0.92);
+}
 .info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .name {
   font-size: 15px;
-  font-weight: 500;
-  color: #1e293b;
+  font-weight: 700;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .subtitle,
 .meta {
@@ -394,12 +430,13 @@ onReachBottom(() => {
   white-space: nowrap;
 }
 .price-row {
-  margin-top: 8px;
+  margin-top: auto;
+  padding-top: 8px;
 }
 .price {
-  color: #cf1322;
-  font-size: 16px;
-  font-weight: 600;
+  color: #e11d48;
+  font-size: 17px;
+  font-weight: 800;
 }
 .line-price {
   margin-left: 6px;
@@ -415,27 +452,5 @@ onReachBottom(() => {
 }
 .more.muted {
   color: #94a3b8;
-}
-.bottom-nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 56px;
-  display: flex;
-  background: #fff;
-  border-top: 1px solid #e2e8f0;
-}
-.nav-item {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  color: #64748b;
-}
-.nav-item.active {
-  color: #1677ff;
-  font-weight: 500;
 }
 </style>

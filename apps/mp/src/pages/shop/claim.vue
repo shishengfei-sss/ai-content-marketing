@@ -8,6 +8,9 @@ import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import {
   ensureShopBuyerSession,
+  getShopBuyerTenantId,
+  setShopBuyerShopId,
+  setShopBuyerTenantId,
   shopBuyerApi,
 } from '@/utils/shopApi'
 
@@ -19,6 +22,7 @@ const authorizing = ref(false)
 const info = ref(null)
 const buyer = ref(null)
 const mobileInput = ref('')
+const authorizedMobile = ref('')
 const showAuth = ref(false)
 const errorDetail = ref('')
 
@@ -32,6 +36,10 @@ const viewState = computed(() => {
 })
 
 const mobileDisplay = computed(() => {
+  if (authorizedMobile.value) {
+    const m = authorizedMobile.value
+    return `${m.slice(0, 3)}****${m.slice(-4)}`
+  }
   if (buyer.value?.mobile_masked) return buyer.value.mobile_masked
   return info.value?.mobile_masked || (info.value?.mobile_tail ? `****${info.value.mobile_tail}` : '—')
 })
@@ -39,20 +47,69 @@ const mobileDisplay = computed(() => {
 const canConfirm = computed(() => {
   if (viewState.value !== 'pending') return false
   if (!buyer.value) return false
-  const bound = buyer.value.mobile
-  if (!bound) return false
+  const mobile = authorizedMobile.value || buyer.value.mobile
+  if (!mobile) return false
   const tail = info.value?.mobile_tail
-  return !tail || bound.endsWith(tail)
+  return !tail || mobile.endsWith(tail)
 })
+
+function readHashQuery() {
+  try {
+    const hash = String(typeof window !== 'undefined' ? window.location.hash || '' : '')
+    const qi = hash.indexOf('?')
+    const fromHash = qi >= 0 ? hash.slice(qi + 1) : ''
+    const fromSearch =
+      typeof window !== 'undefined' ? String(window.location.search || '').replace(/^\?/, '') : ''
+    return new URLSearchParams(fromHash || fromSearch)
+  } catch {
+    return new URLSearchParams()
+  }
+}
+
+async function resolvePendingToken() {
+  const tid = tenantId.value || getShopBuyerTenantId()
+  if (!tid) return
+  tenantId.value = tid
+  buyer.value = await ensureShopBuyerSession(tid)
+  const pending = await shopBuyerApi.getPendingClaim()
+  if (pending?.token) {
+    token.value = String(pending.token)
+    info.value = pending
+    if (pending.tenant_id) tenantId.value = String(pending.tenant_id)
+    if (pending.shop_id) setShopBuyerShopId(String(pending.shop_id))
+  }
+}
 
 async function loadInfo() {
   loading.value = true
   errorDetail.value = ''
   try {
-    info.value = await shopBuyerApi.getClaim(token.value)
+    if (!token.value) {
+      try {
+        await resolvePendingToken()
+      } catch (e) {
+        errorDetail.value = e.message || '请从短信里的领取链接打开'
+        info.value = null
+        return
+      }
+    }
+    if (!token.value) {
+      errorDetail.value = '请从短信里的领取链接打开，或到「我的」使用领权兑换'
+      info.value = null
+      return
+    }
+    if (!info.value) {
+      info.value = await shopBuyerApi.getClaim(token.value)
+    }
     if (info.value.tenant_id) tenantId.value = String(info.value.tenant_id)
+    if (info.value.shop_id) setShopBuyerShopId(String(info.value.shop_id))
+    if (info.value.tenant_id) setShopBuyerTenantId(String(info.value.tenant_id))
     if (viewState.value === 'pending' && tenantId.value) {
-      buyer.value = await ensureShopBuyerSession(tenantId.value, `claim_${token.value.slice(0, 8)}`)
+      try {
+        buyer.value = await ensureShopBuyerSession(tenantId.value, `claim_${token.value.slice(0, 8)}`)
+      } catch (e) {
+        uni.showToast({ title: e.message || '请先登录', icon: 'none' })
+      }
     }
   } catch (e) {
     errorDetail.value = e.message || '领权链接无效'
@@ -83,7 +140,13 @@ async function submitAuthorize() {
     if (!buyer.value) {
       buyer.value = await ensureShopBuyerSession(tenantId.value, `claim_${token.value.slice(0, 8)}`)
     }
-    buyer.value = await shopBuyerApi.bindMobile(m)
+    authorizedMobile.value = m
+    try {
+      const bound = await shopBuyerApi.bindMobile(m)
+      if (bound) buyer.value = bound
+    } catch {
+      /* 演示：bind 冲突时仍允许确认领取，confirm_claim 会挂手机号 */
+    }
     showAuth.value = false
     uni.showToast({ title: '已授权', icon: 'success' })
   } catch (e) {
@@ -127,13 +190,10 @@ function contactSupport() {
 }
 
 onLoad((query) => {
-  token.value = (query?.token || '').trim()
-  tenantId.value = (query?.tenant_id || '').trim()
-  if (!token.value) {
-    errorDetail.value = '领权链接无效'
-    loading.value = false
-    return
-  }
+  const hashQ = readHashQuery()
+  token.value = (query?.token || hashQ.get('token') || '').trim()
+  tenantId.value = (query?.tenant_id || hashQ.get('tenant_id') || getShopBuyerTenantId() || '').trim()
+  if (tenantId.value) setShopBuyerTenantId(tenantId.value)
   loadInfo()
 })
 </script>
@@ -193,7 +253,7 @@ onLoad((query) => {
     <view v-else class="state fail">
       <view class="icon fail-icon">✕</view>
       <text class="state-title">链接无效</text>
-      <text class="state-desc">{{ errorDetail || '领权链接无效' }}</text>
+      <text class="state-desc">{{ errorDetail || '请从短信里的领取链接打开' }}</text>
     </view>
 
     <view v-if="showAuth" class="mask" @click="showAuth = false">

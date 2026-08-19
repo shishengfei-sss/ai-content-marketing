@@ -4,13 +4,14 @@
  */
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { ensureShopBuyerSession, getShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
+import { ensureShopBuyerSession, getShopBuyerTenantId, setShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
 
 const entitlementId = ref('')
 const loading = ref(true)
 const data = ref(null)
 const previewUrl = ref('')
 const previewName = ref('')
+const openidHint = ref('')
 
 const revoked = computed(() => data.value && data.value.entitlement_status !== 'active')
 
@@ -23,7 +24,7 @@ function fmtSize(n) {
 async function load() {
   loading.value = true
   try {
-    await ensureShopBuyerSession(getShopBuyerTenantId())
+    await ensureShopBuyerSession(getShopBuyerTenantId(), openidHint.value || undefined)
     data.value = await shopBuyerApi.getMaterials(entitlementId.value)
     if (data.value.entitlement_status === 'revoked') {
       uni.showToast({ title: '权限已关闭', icon: 'none' })
@@ -76,6 +77,9 @@ function closePreview() {
 
 onLoad((q) => {
   entitlementId.value = (q?.entitlement_id || '').trim()
+  const tid = (q?.tenant_id || '').trim()
+  if (tid) setShopBuyerTenantId(tid)
+  openidHint.value = (q?.openid || '').trim()
   if (entitlementId.value) load()
 })
 </script>
@@ -145,7 +149,7 @@ onLoad((q) => {
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #f5f7fb;
+  background: #f3f5f9;
   padding: 16px;
 }
 .head {
@@ -154,7 +158,7 @@ onLoad((q) => {
 .title {
   display: block;
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 800;
 }
 .sub {
   display: block;
@@ -169,13 +173,14 @@ onLoad((q) => {
 }
 .card {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 12px;
   margin-bottom: 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
 }
 .name {
   display: block;
@@ -201,7 +206,7 @@ onLoad((q) => {
   background: #fff;
   border: 1px solid #cbd5e1;
   color: #334155;
-  border-radius: 8px;
+  border-radius: 999px;
 }
 .btn.primary {
   background: #1677ff;

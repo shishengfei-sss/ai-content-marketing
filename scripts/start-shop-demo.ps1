@@ -3,7 +3,8 @@
 param(
     [switch]$ResetDemo,
     [switch]$StartApi,
-    [switch]$FullVolume
+    [switch]$FullVolume,
+    [switch]$DemoServer
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,6 +14,13 @@ $py = Join-Path $api ".venv\Scripts\python.exe"
 
 if (-not (Test-Path $py)) {
     Write-Error "未找到 $py 。请先在 apps/api 创建 .venv 并安装依赖。"
+}
+
+if ($DemoServer) {
+    $env:SHOP_DEMO_ENV = "demo201"
+    $env:SHOP_DEMO_H5_ORIGIN = "http://192.168.20.201:8089"
+    $env:SHOP_DEMO_WEB_ORIGIN = "http://192.168.20.201:8088"
+    Write-Host "演示机链接模式：H5 $env:SHOP_DEMO_H5_ORIGIN · Web $env:SHOP_DEMO_WEB_ORIGIN"
 }
 
 Write-Host "== 1/3 alembic upgrade head =="

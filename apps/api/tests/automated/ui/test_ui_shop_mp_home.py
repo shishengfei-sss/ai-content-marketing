@@ -67,3 +67,22 @@ def test_ui_shop_mp_home_sort(mobile_page, demo_shop):
     mobile_page.locator(".sort-tab", has_text="销量").first.click()
     mobile_page.wait_for_timeout(800)
     assert mobile_page.locator(".product-card, .empty").count() >= 1
+
+
+def test_ui_shop_mp_home_tabbar_mine(mobile_page, demo_shop):
+    """SHOP-MP-HOME-005: 底栏为首页/已购/我的。对照 #m02 #m15"""
+    from tests.seed_shop_demo import BUYER_OPENID
+
+    mobile_page.goto(
+        f"{MP_BASE_URL}/#/pages/shop/home"
+        f"?shop_id={demo_shop['shop_id']}&tenant_id={demo_shop['tenant_id']}&openid={BUYER_OPENID}"
+    )
+    mobile_page.wait_for_timeout(1500)
+    nav = mobile_page.locator(".bottom-nav")
+    assert nav.get_by_text("首页").count() >= 1
+    assert nav.get_by_text("已购").count() >= 1
+    assert nav.get_by_text("我的").count() >= 1
+    nav.get_by_text("我的").click()
+    mobile_page.wait_for_timeout(1200)
+    assert mobile_page.get_by_text("我的订单").count() >= 1
+    assert mobile_page.get_by_text("已购内容").count() >= 1

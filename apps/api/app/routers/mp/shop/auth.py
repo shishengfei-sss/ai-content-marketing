@@ -13,6 +13,7 @@ from app.schemas.shop_platform import (
     BuyerLoginResponse,
     BuyerOut,
 )
+from app.services.auth_service import create_access_token
 from app.services.shop import buyer_service
 
 router = APIRouter(prefix="/auth", tags=["mp-shop-auth"])
@@ -24,14 +25,22 @@ def login(body: BuyerLoginRequest, db: Session = Depends(get_db)):
     return BuyerLoginResponse(access_token=token, buyer=buyer_service.buyer_out(buyer))
 
 
-@router.post("/bind", response_model=BuyerOut)
+@router.post("/bind", response_model=BuyerLoginResponse)
 def bind_mobile(
     body: BuyerBindMobileRequest,
     bctx: BuyerContext = Depends(get_buyer_context),
     db: Session = Depends(get_db),
 ):
     buyer = buyer_service.bind_mobile(db, bctx.buyer, body.mobile)
-    return buyer_service.buyer_out(buyer)
+    token = create_access_token(
+        str(buyer.id),
+        extra={
+            "typ": "shop_buyer",
+            "tenant_id": str(buyer.tenant_id),
+            "buyer_id": str(buyer.id),
+        },
+    )
+    return BuyerLoginResponse(access_token=token, buyer=buyer_service.buyer_out(buyer))
 
 
 @router.get("/me", response_model=BuyerOut)

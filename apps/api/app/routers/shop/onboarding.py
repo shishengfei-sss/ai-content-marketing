@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -111,6 +112,26 @@ async def merchant_onboarding_upload_file(
         doc_type=doc_type,
         size=len(content),
     )
+
+
+@router.get("/files/{file_id}")
+def merchant_download_onboarding_file(
+    file_id: str,
+    ctx: TenantContext = Depends(get_tenant_context),
+):
+    """商家查看已上传入驻材料（审核中只读预览）。"""
+    path = assert_onboarding_file_owned(ctx.tenant_id, file_id)
+    name = path.name.split("_", 1)[-1] if "_" in path.name else path.name
+    suffix = path.suffix.lower()
+    media = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".pdf": "application/pdf",
+    }.get(suffix, "application/octet-stream")
+    return FileResponse(path, filename=name, media_type=media)
 
 
 @router.post("/ocr", response_model=OnboardingOcrResponse)

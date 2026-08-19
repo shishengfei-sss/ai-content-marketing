@@ -9,6 +9,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '../../api/client'
+import { submitShopExport } from '../../utils/shopExport'
 import OrderActionDialogs from '../../components/shop/OrderActionDialogs.vue'
 import { hasPermission } from '../../config/permissions'
 import { useAuthStore } from '../../stores/auth'
@@ -28,8 +29,6 @@ const orders = ref([])
 const orderTotal = ref(0)
 const customRange = ref([])
 const resumeDismissed = ref(localStorage.getItem(RESUME_DISMISS_KEY) === '1')
-const exportDialog = ref(false)
-const exportTask = ref(null)
 
 const RANGE_BTNS = [
   { key: 'today', label: '今日' },
@@ -185,31 +184,18 @@ function dismissResume() {
 
 async function exportBacklog() {
   try {
-    const { data } = await api.post('/api/v1/shop/orders/export', { status: 'claim_pending' })
-    exportTask.value = data
-    exportDialog.value = true
+    await submitShopExport(
+      '/api/v1/shop/orders/export',
+      { status: 'claim_pending' },
+      '/api/v1/shop/orders/export-tasks',
+      'shop-backlog.csv',
+      resume.value?.pending_order_count,
+    )
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
   }
 }
 
-async function downloadBacklogFile() {
-  if (!exportTask.value?.id) return
-  try {
-    const res = await api.get(`/api/v1/shop/orders/export-tasks/${exportTask.value.id}/file`, {
-      responseType: 'blob',
-    })
-    const blob = new Blob([res.data], { type: 'text/csv; charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = exportTask.value.file_name || 'shop-backlog.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    ElMessage.error(e.message || '下载失败')
-  }
-}
 
 onMounted(loadAll)
 </script>
@@ -445,20 +431,6 @@ onMounted(loadAll)
         />
       </div>
     </div>
-
-    <el-dialog v-model="exportDialog" title="导出任务" width="420px">
-      <el-form v-if="exportTask" label-width="100px">
-        <el-form-item label="范围">待领权公域单</el-form-item>
-        <el-form-item label="条数">{{ exportTask.row_count ?? 0 }} 条</el-form-item>
-        <el-form-item label="状态">{{ exportTask.status === 'done' ? '已完成' : (exportTask.status || '—') }}</el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button type="primary" :disabled="exportTask?.status !== 'done'" @click="downloadBacklogFile">
-          下载
-        </el-button>
-        <el-button @click="exportDialog = false">关闭</el-button>
-      </template>
-    </el-dialog>
 
     <OrderActionDialogs ref="actionDialogs" @done="loadOrders" />
   </div>

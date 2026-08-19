@@ -7,7 +7,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import String, cast, or_
+from sqlalchemy import String, and_, cast, or_
 from sqlalchemy.orm import Session
 
 from app.database import uuid_eq
@@ -144,6 +144,7 @@ def _order_out(
         shop_name=shop.name if shop else None,
         created_at=o.created_at,
         updated_at=o.updated_at,
+        claim_token=o.claim_token if o.status == "claim_pending" else None,
     )
     if with_detail:
         out.entitlement_id = entitlement.id if entitlement else None
@@ -161,6 +162,117 @@ def _buyers_map(db: Session, buyer_ids: set) -> dict:
     return {b.id: b for b in rows}
 
 
+def display_entitlement_status(e: ShopEntitlement | None) -> str | None:
+    """次数用尽 → consumed（已用尽）；expired 仅表示到期未续。对照 04 权益状态。"""
+    if e is None:
+        return None
+    if (
+        e.remaining_count is not None
+        and int(e.remaining_count) <= 0
+        and (e.status or "") in ("active", "expired", "consumed")
+    ):
+        return "consumed"
+    return e.status
+
+
+def _buyer_from_cache(db: Session, buyer_id, cache: dict) -> ShopBuyer | None:
+    if not buyer_id:
+        return None
+    if buyer_id in cache:
+        return cache[buyer_id]
+    row = db.query(ShopBuyer).filter(uuid_eq(ShopBuyer.id, buyer_id)).first()
+    cache[buyer_id] = row
+    return row
+
+
+def resolve_entitlement_buyer(
+    db: Session,
+    e: ShopEntitlement,
+    order: ShopOrder | None = None,
+    cache: dict | None = None,
+) -> ShopBuyer | None:
+    """权益 buyer_id 可能指向领权合并时已删档案，回退订单归属买家 / 手机号。"""
+    cache = cache if cache is not None else {}
+    found = _buyer_from_cache(db, e.buyer_id, cache)
+    if found:
+        return found
+    if order is None and e.order_id:
+        order = db.query(ShopOrder).filter(uuid_eq(ShopOrder.id, e.order_id)).first()
+    if order:
+        for bid in (order.claimed_buyer_id, order.buyer_id):
+            found = _buyer_from_cache(db, bid, cache)
+            if found:
+                return found
+        if order.buyer_mobile_snapshot:
+            by_mobile = (
+                db.query(ShopBuyer)
+                .filter(
+                    uuid_eq(ShopBuyer.tenant_id, e.tenant_id),
+                    ShopBuyer.mobile == order.buyer_mobile_snapshot,
+                )
+                .first()
+            )
+            if by_mobile:
+                cache[by_mobile.id] = by_mobile
+                return by_mobile
+    return None
+
+
+def heal_entitlement_row(db: Session, e: ShopEntitlement, buyer: ShopBuyer | None) -> bool:
+    """次数用尽落 consumed；空买家档案改挂到仍存在的买家。"""
+    changed = False
+    if display_entitlement_status(e) == "consumed" and e.status != "consumed":
+        e.status = "consumed"
+        changed = True
+    if buyer and e.buyer_id != buyer.id:
+        if _buyer_from_cache(db, e.buyer_id, {}) is None:
+            e.buyer_id = buyer.id
+            changed = True
+    return changed
+
+
+def buyer_order_clause(buyer: ShopBuyer):
+    """领权合并后订单可能仍挂已删 buyer_id，按领取者 / 手机快照认领。"""
+    conds = [
+        uuid_eq(ShopOrder.buyer_id, buyer.id),
+        uuid_eq(ShopOrder.claimed_buyer_id, buyer.id),
+    ]
+    if buyer.mobile:
+        conds.append(ShopOrder.buyer_mobile_snapshot == buyer.mobile)
+    return and_(uuid_eq(ShopOrder.tenant_id, buyer.tenant_id), or_(*conds))
+
+
+def heal_order_buyer_row(db: Session, order: ShopOrder, buyer: ShopBuyer | None) -> bool:
+    if not buyer or not order:
+        return False
+    changed = False
+    if _buyer_from_cache(db, order.buyer_id, {}) is None:
+        order.buyer_id = buyer.id
+        changed = True
+    if order.claimed_buyer_id and _buyer_from_cache(db, order.claimed_buyer_id, {}) is None:
+        order.claimed_buyer_id = buyer.id
+        changed = True
+    elif not order.claimed_buyer_id and changed:
+        order.claimed_buyer_id = buyer.id
+    return changed
+
+
+def get_order_for_buyer(
+    db: Session, buyer: ShopBuyer, order_id: UUID, *, commit_heal: bool = True
+) -> ShopOrder:
+    o = (
+        db.query(ShopOrder)
+        .filter(uuid_eq(ShopOrder.id, order_id), buyer_order_clause(buyer))
+        .first()
+    )
+    if not o:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    if heal_order_buyer_row(db, o, buyer) and commit_heal:
+        db.commit()
+        db.refresh(o)
+    return o
+
+
 def _entitlement_out(
     e: ShopEntitlement,
     product: ShopProduct | None = None,
@@ -169,10 +281,19 @@ def _entitlement_out(
     buyer: ShopBuyer | None = None,
     order: ShopOrder | None = None,
     shop: ShopStore | None = None,
+    has_learning_progress: bool | None = None,
+    learning_progress_pct: int | None = None,
+    learned_lesson_count: int | None = None,
+    total_lesson_count: int | None = None,
 ) -> EntitlementOut:
+    from app.services.shop.storefront_service import public_cover_url
+
     service_offer_id = None
     if product and product.ref_type == "service_offer" and product.ref_id:
         service_offer_id = product.ref_id
+    mobile = (buyer.mobile if buyer and buyer.mobile else None) or (
+        order.buyer_mobile_snapshot if order else None
+    )
     return EntitlementOut(
         id=e.id,
         tenant_id=e.tenant_id,
@@ -180,7 +301,7 @@ def _entitlement_out(
         order_id=e.order_id,
         product_id=e.product_id,
         shop_id=e.shop_id,
-        status=e.status,
+        status=display_entitlement_status(e),
         activated_at=e.activated_at,
         revoked_at=e.revoked_at,
         revoke_reason=e.revoke_reason,
@@ -194,9 +315,14 @@ def _entitlement_out(
         service_mode=service_mode,
         created_at=e.created_at,
         buyer_nickname=buyer.nickname if buyer else None,
-        buyer_mobile_masked=mask_mobile(buyer.mobile) if buyer else None,
+        buyer_mobile_masked=mask_mobile(mobile),
         order_no=order.order_no if order else None,
         shop_name=shop.name if shop else None,
+        has_learning_progress=has_learning_progress,
+        learning_progress_pct=learning_progress_pct,
+        learned_lesson_count=learned_lesson_count,
+        total_lesson_count=total_lesson_count,
+        cover_url=public_cover_url(e.shop_id, product.cover_url) if product and product.cover_url else None,
     )
 
 
@@ -542,13 +668,7 @@ def apply_payment_notify(
 
 def query_and_sync_payment(db: Session, buyer: ShopBuyer, order_id: UUID) -> OrderOut:
     """主动查单兜底：pending → paid。"""
-    order = (
-        db.query(ShopOrder)
-        .filter(uuid_eq(ShopOrder.id, order_id), uuid_eq(ShopOrder.buyer_id, buyer.id))
-        .first()
-    )
-    if not order:
-        raise HTTPException(status_code=404, detail="订单不存在")
+    order = get_order_for_buyer(db, buyer, order_id, commit_heal=False)
     if order.status == "paid":
         return _order_out(order)
     if order.status != "pending_payment":
@@ -896,7 +1016,7 @@ def list_buyer_orders(
     page_size: int,
     status: str | None = None,
 ) -> tuple[list[OrderOut], int]:
-    query = db.query(ShopOrder).filter(uuid_eq(ShopOrder.buyer_id, buyer.id))
+    query = db.query(ShopOrder).filter(buyer_order_clause(buyer))
     if status:
         # M11 Tab「退款」= 退款中 + 已退款
         if status == "refund":
@@ -910,6 +1030,12 @@ def list_buyer_orders(
         .limit(page_size)
         .all()
     )
+    healed = False
+    for o in rows:
+        if heal_order_buyer_row(db, o, buyer):
+            healed = True
+    if healed:
+        db.commit()
     return [_order_out(o, buyer=buyer) for o in rows], total
 
 
@@ -1008,13 +1134,7 @@ def resend_claim_notify(db: Session, ctx: TenantContext, order_id: UUID, remark:
 
 
 def get_buyer_order(db: Session, buyer: ShopBuyer, order_id: UUID) -> OrderOut:
-    o = (
-        db.query(ShopOrder)
-        .filter(uuid_eq(ShopOrder.id, order_id), uuid_eq(ShopOrder.buyer_id, buyer.id))
-        .first()
-    )
-    if not o:
-        raise HTTPException(status_code=404, detail="订单不存在")
+    o = get_order_for_buyer(db, buyer, order_id)
     ent = (
         db.query(ShopEntitlement)
         .filter(uuid_eq(ShopEntitlement.order_id, o.id))
@@ -1025,13 +1145,7 @@ def get_buyer_order(db: Session, buyer: ShopBuyer, order_id: UUID) -> OrderOut:
 
 def buyer_cancel_order(db: Session, buyer: ShopBuyer, order_id: UUID) -> OrderOut:
     """M12-B：买家取消待付款订单。"""
-    o = (
-        db.query(ShopOrder)
-        .filter(uuid_eq(ShopOrder.id, order_id), uuid_eq(ShopOrder.buyer_id, buyer.id))
-        .first()
-    )
-    if not o:
-        raise HTTPException(status_code=404, detail="订单不存在")
+    o = get_order_for_buyer(db, buyer, order_id, commit_heal=False)
     if o.status != "pending_payment":
         raise HTTPException(status_code=422, detail="仅待付款可取消")
     o.status = "closed"
@@ -1045,13 +1159,7 @@ def buyer_continue_pay(db: Session, buyer: ShopBuyer, order_id: UUID) -> CreateO
     """M11/M12 去支付：待付款单续拉预支付；stub 模式直接完成支付便于联调。"""
     from app.services.shop.wechat_pay_service import stub_sign
 
-    o = (
-        db.query(ShopOrder)
-        .filter(uuid_eq(ShopOrder.id, order_id), uuid_eq(ShopOrder.buyer_id, buyer.id))
-        .first()
-    )
-    if not o:
-        raise HTTPException(status_code=404, detail="订单不存在")
+    o = get_order_for_buyer(db, buyer, order_id, commit_heal=False)
     if o.status == "closed":
         raise HTTPException(status_code=422, detail="订单已关闭")
     if o.status != "pending_payment":
@@ -1142,13 +1250,7 @@ def buyer_continue_pay(db: Session, buyer: ShopBuyer, order_id: UUID) -> CreateO
 def list_buyer_order_refunds(
     db: Session, buyer: ShopBuyer, order_id: UUID
 ) -> list[RefundOut]:
-    o = (
-        db.query(ShopOrder)
-        .filter(uuid_eq(ShopOrder.id, order_id), uuid_eq(ShopOrder.buyer_id, buyer.id))
-        .first()
-    )
-    if not o:
-        raise HTTPException(status_code=404, detail="订单不存在")
+    o = get_order_for_buyer(db, buyer, order_id)
     rows = (
         db.query(ShopRefund)
         .filter(uuid_eq(ShopRefund.order_id, o.id))
@@ -1286,13 +1388,7 @@ def merchant_refund(
 
 
 def buyer_refund(db: Session, buyer: ShopBuyer, order_id: UUID, body: OrderRefundRequest) -> RefundOut:
-    o = (
-        db.query(ShopOrder)
-        .filter(uuid_eq(ShopOrder.id, order_id), uuid_eq(ShopOrder.buyer_id, buyer.id))
-        .first()
-    )
-    if not o:
-        raise HTTPException(status_code=404, detail="订单不存在")
+    o = get_order_for_buyer(db, buyer, order_id, commit_heal=False)
     snap = o.product_snapshot_json or {}
     policy = snap.get("refund_policy") or "before_fulfill"
     if policy == "manual_only":
@@ -1338,11 +1434,18 @@ def entitlement_status_counts(
     if shop_id:
         base = base.filter(uuid_eq(ShopEntitlement.shop_id, shop_id))
     counts = {"all": base.count()}
-    for st in ("pending", "revoked", "expired"):
+    for st in ("pending", "revoked"):
         counts[st] = base.filter(ShopEntitlement.status == st).count()
+    counts["expired"] = base.filter(
+        ShopEntitlement.status == "expired",
+        _not_consumed(),
+    ).count()
     counts["consumed"] = base.filter(
-        ShopEntitlement.status == "active",
-        ShopEntitlement.remaining_count == 0,
+        ShopEntitlement.status != "revoked",
+        or_(
+            ShopEntitlement.status == "consumed",
+            ShopEntitlement.remaining_count == 0,
+        ),
     ).count()
     counts["active"] = base.filter(
         ShopEntitlement.status == "active",
@@ -1374,11 +1477,16 @@ def list_entitlements_merchant(
         query = query.filter(uuid_eq(ShopEntitlement.buyer_id, buyer_id))
     if status_filter == "consumed":
         query = query.filter(
-            ShopEntitlement.status == "active",
-            ShopEntitlement.remaining_count == 0,
+            ShopEntitlement.status != "revoked",
+            or_(
+                ShopEntitlement.status == "consumed",
+                ShopEntitlement.remaining_count == 0,
+            ),
         )
     elif status_filter == "active":
         query = query.filter(ShopEntitlement.status == "active", _not_consumed())
+    elif status_filter == "expired":
+        query = query.filter(ShopEntitlement.status == "expired", _not_consumed())
     elif status_filter:
         query = query.filter(ShopEntitlement.status == status_filter)
     if activated_from is not None:
@@ -1414,7 +1522,10 @@ def list_entitlements_merchant(
             db.query(ShopOrder.id)
             .filter(
                 uuid_eq(ShopOrder.tenant_id, ctx.tenant_id),
-                ShopOrder.order_no.contains(qq),
+                or_(
+                    ShopOrder.order_no.contains(qq),
+                    ShopOrder.buyer_mobile_snapshot.contains(qq),
+                ),
             )
             .all()
         )
@@ -1436,20 +1547,36 @@ def list_entitlements_merchant(
         p.id: p
         for p in db.query(ShopProduct).filter(ShopProduct.id.in_(list(pids))).all()
     } if pids else {}
-    buyers = _buyers_map(db, {e.buyer_id for e in rows})
     orders = {
         o.id: o
         for o in db.query(ShopOrder).filter(ShopOrder.id.in_([e.order_id for e in rows])).all()
     } if rows else {}
+    extra_buyer_ids = {e.buyer_id for e in rows}
+    for o in orders.values():
+        extra_buyer_ids.add(o.buyer_id)
+        if o.claimed_buyer_id:
+            extra_buyer_ids.add(o.claimed_buyer_id)
+    buyers = _buyers_map(db, extra_buyer_ids)
     shops = {
         s.id: s
         for s in db.query(ShopStore).filter(ShopStore.id.in_({e.shop_id for e in rows})).all()
     } if rows else {}
+    cache = dict(buyers)
+    healed = False
+    resolved: dict = {}
+    for e in rows:
+        order = orders.get(e.order_id)
+        buyer = resolve_entitlement_buyer(db, e, order, cache)
+        resolved[e.id] = buyer
+        if heal_entitlement_row(db, e, buyer):
+            healed = True
+    if healed:
+        db.commit()
     items = [
         _entitlement_out(
             e,
             products.get(e.product_id),
-            buyer=buyers.get(e.buyer_id),
+            buyer=resolved.get(e.id),
             order=orders.get(e.order_id),
             shop=shops.get(e.shop_id),
         )
@@ -1501,7 +1628,9 @@ def export_entitlements_csv(
     for r in items:
         st = (
             "已用尽"
-            if r.status == "active" and r.remaining_count == 0
+            if r.status == "consumed"
+            or (r.status == "active" and r.remaining_count == 0)
+            or (r.status == "expired" and r.remaining_count == 0)
             else status_label.get(r.status, r.status or "")
         )
         times = (
@@ -1592,8 +1721,11 @@ def get_entitlement_merchant(
     if not e:
         raise HTTPException(status_code=404, detail="权益不存在")
     product = db.query(ShopProduct).filter(uuid_eq(ShopProduct.id, e.product_id)).first()
-    buyer = db.query(ShopBuyer).filter(uuid_eq(ShopBuyer.id, e.buyer_id)).first()
     order = db.query(ShopOrder).filter(uuid_eq(ShopOrder.id, e.order_id)).first()
+    buyer = resolve_entitlement_buyer(db, e, order)
+    if heal_entitlement_row(db, e, buyer):
+        db.commit()
+        db.refresh(e)
     shop = db.query(ShopStore).filter(uuid_eq(ShopStore.id, e.shop_id)).first()
     mode = None
     if product and product.ref_type == "service_offer" and product.ref_id:
@@ -1613,10 +1745,27 @@ def get_entitlement_merchant(
 def list_entitlements_buyer(
     db: Session, buyer: ShopBuyer, *, page: int, page_size: int
 ) -> tuple[list[EntitlementOut], int]:
-    query = db.query(ShopEntitlement).filter(uuid_eq(ShopEntitlement.buyer_id, buyer.id))
-    total = query.count()
+    from sqlalchemy import or_
+
+    if buyer.mobile:
+        base = (
+            db.query(ShopEntitlement)
+            .join(ShopOrder, ShopOrder.id == ShopEntitlement.order_id)
+            .filter(uuid_eq(ShopEntitlement.tenant_id, buyer.tenant_id))
+            .filter(
+                or_(
+                    uuid_eq(ShopEntitlement.buyer_id, buyer.id),
+                    ShopOrder.buyer_mobile_snapshot == buyer.mobile,
+                    uuid_eq(ShopOrder.claimed_buyer_id, buyer.id),
+                )
+            )
+            .distinct()
+        )
+    else:
+        base = db.query(ShopEntitlement).filter(uuid_eq(ShopEntitlement.buyer_id, buyer.id))
+    total = base.count()
     rows = (
-        query.order_by(ShopEntitlement.created_at.desc())
+        base.order_by(ShopEntitlement.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
@@ -1627,6 +1776,7 @@ def list_entitlements_buyer(
         for p in db.query(ShopProduct).filter(ShopProduct.id.in_(list(pids))).all()
     } if pids else {}
     from app.models.shop import ShopServiceOffer
+    from app.services.shop.content_fulfillment_service import batch_summarize_course_progress
 
     offer_ids = {
         p.ref_id
@@ -1637,11 +1787,28 @@ def list_entitlements_buyer(
         o.id: o.mode
         for o in db.query(ShopServiceOffer).filter(ShopServiceOffer.id.in_(list(offer_ids))).all()
     } if offer_ids else {}
+    course_pairs = [
+        (e, products[e.product_id])
+        for e in rows
+        if (p := products.get(e.product_id)) is not None and p.type == "course"
+    ]
+    progress_map = batch_summarize_course_progress(db, course_pairs)
     out = []
     for e in rows:
         p = products.get(e.product_id)
         mode = modes.get(p.ref_id) if p and p.ref_type == "service_offer" and p.ref_id else None
-        out.append(_entitlement_out(e, p, service_mode=mode))
+        summary = progress_map.get(e.id) if p and p.type == "course" else None
+        out.append(
+            _entitlement_out(
+                e,
+                p,
+                service_mode=mode,
+                has_learning_progress=summary.get("has_learning_progress") if summary else None,
+                learning_progress_pct=summary.get("learning_progress_pct") if summary else None,
+                learned_lesson_count=summary.get("learned_lesson_count") if summary else None,
+                total_lesson_count=summary.get("total_lesson_count") if summary else None,
+            )
+        )
     return out, total
 
 
@@ -1654,6 +1821,10 @@ def assert_entitlement_active(db: Session, entitlement_id: UUID, buyer_id: UUID 
         raise HTTPException(status_code=404, detail="权益不存在")
     if e.status == "revoked":
         raise HTTPException(status_code=403, detail="权益已撤销")
+    if e.status == "consumed" or (
+        e.remaining_count is not None and int(e.remaining_count) <= 0 and e.status != "revoked"
+    ):
+        raise HTTPException(status_code=403, detail="次数已用尽")
     if e.status == "expired":
         raise HTTPException(status_code=403, detail="权益已过期")
     if e.status != "active":

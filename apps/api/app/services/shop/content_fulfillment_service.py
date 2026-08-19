@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -159,6 +160,99 @@ def _resolve_files(db: Session, product: ShopProduct) -> tuple[str, int | None, 
     return deliver_mode, max_downloads if max_downloads is not None else 10, _default_files(product)
 
 
+def batch_summarize_course_progress(
+    db: Session,
+    pairs: list[tuple[ShopEntitlement, ShopProduct]],
+) -> dict[UUID, dict[str, int | bool]]:
+    """已购列表批量汇总课程进度（与 M07 目录页口径一致）。"""
+    if not pairs:
+        return {}
+    ent_ids = [ent.id for ent, _ in pairs]
+    progress_rows = (
+        db.query(ShopLessonProgress)
+        .filter(ShopLessonProgress.entitlement_id.in_(ent_ids))
+        .all()
+    )
+    prog_by_ent: dict[UUID, list[ShopLessonProgress]] = {}
+    for row in progress_rows:
+        prog_by_ent.setdefault(row.entitlement_id, []).append(row)
+
+    out: dict[UUID, dict[str, int | bool]] = {}
+    for ent, product in pairs:
+        _course_id, lessons = _resolve_lessons(db, product)
+        prog_map = {str(r.lesson_id): r for r in prog_by_ent.get(ent.id, [])}
+        done = 0
+        started = False
+        for les in lessons:
+            pr = prog_map.get(str(les["id"]))
+            pct = int(pr.progress_pct) if pr else 0
+            pos = int(pr.position_sec) if pr else 0
+            if pct >= 100:
+                done += 1
+            if pct > 0 or pos > 0 or (pr and pr.last_learned_at):
+                started = True
+        total = len(lessons)
+        overall = int(round(100 * done / total)) if total else 0
+        out[ent.id] = {
+            "learning_progress_pct": overall,
+            "learned_lesson_count": done,
+            "total_lesson_count": total,
+            "has_learning_progress": started,
+        }
+    return out
+
+
+def _lesson_play_url(entitlement_id: UUID, lesson_id: UUID) -> str:
+    return f"/api/v1/mp/shop/entitlements/{entitlement_id}/lessons/{lesson_id}/media"
+
+
+def _lesson_has_streamable_media(les: dict) -> bool:
+    media_id = les.get("media_id")
+    media_url = les.get("media_url") or ""
+    if media_id:
+        return True
+    return bool(media_url) and "example.com/mock" not in media_url
+
+
+def stream_lesson_media(
+    db: Session,
+    buyer: ShopBuyer,
+    entitlement_id: UUID,
+    lesson_id: UUID,
+) -> tuple[Path, str, str]:
+    """校验权益后返回课时媒体文件路径、媒体类型、下载文件名。"""
+    from app.models.shop import ShopLesson
+    from app.services.shop import content_cms_service
+
+    ent = _entitlement_or_404(db, buyer, entitlement_id)
+    product = db.query(ShopProduct).filter(uuid_eq(ShopProduct.id, ent.product_id)).first()
+    if not product or product.type != "course":
+        raise HTTPException(status_code=422, detail="非课程权益")
+    _course_id, lessons = _resolve_lessons(db, product)
+    les = next((x for x in lessons if str(x["id"]) == str(lesson_id)), None)
+    if not les:
+        raise HTTPException(status_code=404, detail="课时不存在")
+    locked = ent.status != "active" and not les.get("is_trial")
+    if locked:
+        raise HTTPException(status_code=403, detail="购买后可学习")
+
+    media_type = les.get("media_type") or "video"
+    file_id = les.get("media_id")
+    if not file_id:
+        row = db.query(ShopLesson).filter(uuid_eq(ShopLesson.id, lesson_id)).first()
+        if row:
+            media_type = row.media_type or media_type
+            file_id = str(row.media_id) if row.media_id else None
+    if not file_id:
+        raise HTTPException(status_code=404, detail="该课时暂无可播放媒体")
+
+    path = content_cms_service.resolve_content_file_path(ent.tenant_id, file_id)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="媒体文件不存在")
+    filename = path.name.split("_", 1)[-1]
+    return Path(path), media_type, filename
+
+
 def get_course_outline(db: Session, buyer: ShopBuyer, entitlement_id: UUID) -> CourseOutlineOut:
     ent = _entitlement_or_404(db, buyer, entitlement_id)
     if ent.status not in ("active", "expired", "revoked"):
@@ -192,6 +286,12 @@ def get_course_outline(db: Session, buyer: ShopBuyer, entitlement_id: UUID) -> C
             status = "todo"
         # 有权看全部；revoked/expired 前端禁用（仍返回目录）
         locked = ent.status != "active" and not les.get("is_trial")
+        can_play = ent.status == "active" or les.get("is_trial")
+        play_url = (
+            _lesson_play_url(ent.id, UUID(str(les["id"])))
+            if can_play and _lesson_has_streamable_media(les)
+            else None
+        )
         items.append(
             LessonItemOut(
                 id=UUID(str(les["id"])),
@@ -204,7 +304,8 @@ def get_course_outline(db: Session, buyer: ShopBuyer, entitlement_id: UUID) -> C
                 progress_pct=pct,
                 position_sec=pos,
                 locked=locked,
-                media_url=les.get("media_url") if ent.status == "active" or les.get("is_trial") else None,
+                media_url=play_url,
+                media_type=les.get("media_type"),
             )
         )
 

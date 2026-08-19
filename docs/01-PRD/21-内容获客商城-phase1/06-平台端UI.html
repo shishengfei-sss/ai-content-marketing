@@ -5184,7 +5184,7 @@ a.perm-link:hover code{text-decoration:underline;color:#0958d9}
 <div class="doc">
   <h2>P08 商城角色与编码 <span class="tag tag-r">P0</span></h2>
   <p class="sub"><b>运营账号与商城权限</b>已合并至智营主站 <code>/admin/users</code>（<code>AdminUsers.vue</code>，见 <a href="#p08-admin-users">P08-AU</a>），<strong>不在内容获客模块重复维护</strong>。本页仅保留：① 内置<strong>角色定义</strong>（只读）② <strong>编码规则</strong>。矩阵见 <a href="05-角色权限.html#platform">05-角色权限</a>。</p>
-  <div class="note note-b" style="margin-bottom:12px"><b>分工</b>：主站 <code>/admin/users</code> = 账号生命周期 + <code>platform_admin</code> + <code>platform_shop_role</code> + 商城权限微调；内容获客侧栏「<b>角色与编码</b>」= 角色说明 Tab + 编码规则 Tab。类目运营从 <a href="#p04">P04</a>「编码规则 ↗」可跳转 <a href="#p08f">P08-F</a>。</div>
+  <div class="note note-b" style="margin-bottom:12px"><b>分工</b>：主站 <code>/admin/users</code> = 账号生命周期 + <b>账号角色</b>（五档）+ 商城权限微调；内容获客侧栏「<b>角色与编码</b>」= 角色说明 Tab + 编码规则 Tab。类目运营从 <a href="#p04">P04</a>「编码规则 ↗」可跳转 <a href="#p08f">P08-F</a>。</div>
 
   <div class="pdoc-tabs" data-group="p08" role="tablist" aria-label="P08 子页面">
     <button type="button" class="on" data-pdoc="p08-admin-users">P08-AU 主站账号（合并）</button>
@@ -5195,7 +5195,7 @@ a.perm-link:hover code{text-decoration:underline;color:#0958d9}
 
   <div id="p08-admin-users" class="pdoc-panel on" data-group="p08">
   <div class="inner-h3" id="p08-admin-users">P08-AU · 主站账号管理（<code>/admin/users</code> · 合并入口）</div>
-  <p class="sub">实现文件 <code>apps/web/src/views/admin/AdminUsers.vue</code>。菜单：<code>/admin</code> 顶栏 → <b>账号管理</b>。权限 <code>platform.user.manage</code>（全局，非 <code>platform.shop.*</code>）。</p>
+  <p class="sub">实现文件 <code>apps/web/src/views/admin/AdminUsers.vue</code>。菜单：<code>/admin</code> 顶栏 → <b>账号管理</b>。权限 <code>platform.user.manage</code>（全局，非 <code>platform.shop.*</code>）。<b>账号角色</b>五档合一，不再拆「平台角色 / 获客商城角色」。</p>
 
   <div class="shell" style="margin-top:8px">
     <div class="side" style="min-width:160px">
@@ -5204,7 +5204,7 @@ a.perm-link:hover code{text-decoration:underline;color:#0958d9}
       <div class="nav"><span class="d"></span>企业管理</div>
       <div class="nav on"><span class="d"></span>账号管理</div>
       <div class="nav"><span class="d"></span>内容获客</div>
-      <div style="padding:8px 12px;font-size:11px;color:#94a3b8;line-height:1.6">侧栏高亮「账号管理」；商城子角色在本页维护</div>
+      <div style="padding:8px 12px;font-size:11px;color:#94a3b8;line-height:1.6">侧栏高亮「账号管理」；账号角色在本页维护</div>
     </div>
     <div class="main">
       <div class="top"><span><b>智营获客</b> · 平台后台</span><span>platform_admin</span></div>
@@ -5213,8 +5213,7 @@ a.perm-link:hover code{text-decoration:underline;color:#0958d9}
         <div class="crm-toolbar" style="margin:0 0 10px;padding:0;border:0;background:transparent">
           <div class="crm-toolbar-left">
             <span class="inp">手机号 / 昵称 / 租户名</span>
-            <span class="sel">平台角色 ▾</span>
-            <span class="sel">获客商城角色 ▾</span>
+            <span class="sel">账号角色 ▾</span>
             <span class="sel">状态 ▾</span>
             <span class="btn-f">查询</span>
           </div>
@@ -5222,26 +5221,23 @@ a.perm-link:hover code{text-decoration:underline;color:#0958d9}
         <div class="tbl-wrap">
           <table class="tbl" style="font-size:12px">
             <tr>
-              <th>手机号</th><th>昵称</th><th>所属公司</th><th>平台角色</th>
-              <th>获客商城角色</th><th>状态</th><th>注册时间</th><th>操作</th>
+              <th>手机号</th><th>昵称</th><th>所属公司</th><th>账号角色</th>
+              <th>状态</th><th>注册时间</th><th>操作</th>
             </tr>
             <tr>
               <td>138****0001</td><td>张运营</td><td>—</td>
-              <td><span class="badge b-b">平台管理员</span></td>
-              <td><span class="badge b-gy">（未绑 · 等同超管）</span></td>
+              <td><span class="badge b-b">平台超管</span></td>
               <td><span class="badge b-g">启用</span></td><td>2026-01-10</td>
               <td>重置密码 · <span class="btn">编辑商城权限</span> · 删除</td>
             </tr>
             <tr>
               <td>138****0002</td><td>王日常</td><td>—</td>
-              <td><span class="badge b-b">平台管理员</span></td>
               <td><span class="badge b-b">日常运营</span></td>
               <td><span class="badge b-g">启用</span></td><td>2026-04-12</td>
               <td>重置密码 · <span class="btn btn-p" style="padding:2px 8px">编辑商城权限</span> · 删除</td>
             </tr>
             <tr>
               <td>138****0003</td><td>李管家</td><td>—</td>
-              <td><span class="badge b-b">平台管理员</span></td>
               <td><span class="badge b-b">商家管家</span></td>
               <td><span class="badge b-g">启用</span></td><td>2026-05-01</td>
               <td>重置密码 · <span class="btn">编辑商城权限</span> · 删除</td>
@@ -5249,7 +5245,6 @@ a.perm-link:hover code{text-decoration:underline;color:#0958d9}
             <tr>
               <td>138****0099</td><td>普通销售</td><td>演示公司 · 销售</td>
               <td><span class="badge b-gy">普通用户</span></td>
-              <td>—</td>
               <td><span class="badge b-g">启用</span></td><td>2025-11-20</td>
               <td>重置密码 · 删除</td>
             </tr>
@@ -5259,13 +5254,13 @@ a.perm-link:hover code{text-decoration:underline;color:#0958d9}
     </div>
   </div>
 
-  <div class="note" style="margin-top:12px;font-size:12px;line-height:1.7"><b>列规则</b>：① <code>platform_admin</code> 且 <code>platform_shop_role</code> 为空 → 视为平台超管，拥有全部 <code>platform.shop.*</code>。② 仅 <code>platform_admin</code> 行展示「获客商城角色」列与「编辑商城权限」。③ 普通 <code>user</code> 无商城入口，列显示「—」。④ 全局禁用 = 状态开关 <code>is_active=false</code>（全站不可登录）。⑤ 仅收回商城 = 清空商城角色或打开 <a href="#p08b">P08-B</a> 取消全部勾选。</div>
+  <div class="note" style="margin-top:12px;font-size:12px;line-height:1.7"><b>列规则</b>：① <b>账号角色</b>五档合一：普通用户 / 平台超管 / 日常运营 / 商家管家 / 财务结算。落库：普通用户 = <code>users.role=user</code>；后四档 = <code>role=platform_admin</code> + <code>platform_shop_role</code>（超管为空，拥有全部 <code>platform.shop.*</code>）。② 行内下拉即时保存；改角色按目标岗位默认权限重置微调集，升超管/降普通用户须确认。③ 仅非普通用户且 enabled 展示「编辑商城权限」；超管抽屉只读展示全量权限，不可单项收回。④ 普通用户无商城入口。⑤ 全局禁用 = 状态开关 <code>is_active=false</code>（全站不可登录）。⑥ 收回商城 = 改为普通用户，或改为其他岗位。</div>
 
   <h3 style="margin-top:16px">点击校验（主站账号管理）</h3>
   <table class="meta matrix">
     <tr><th>操作</th><th>前置校验</th><th>失败提示</th><th>成功落点</th></tr>
-    <tr><td><b>设 platform_admin</b></td><td><code>platform.user.manage</code></td><td>「无账号管理权限」</td><td>行内下拉；PATCH <code>/admin/users/{id}</code></td></tr>
-    <tr><td><b>编辑商城权限</b></td><td>① 同上 ② 目标 <code>role=platform_admin</code> ③ 目标 enabled</td><td>「仅平台管理员可绑定商城角色」</td><td><b><a href="#p08b">P08-B</a></b> 抽屉；写 <code>platform_shop_role</code> + 权限集</td></tr>
+    <tr><td><b>设账号角色</b></td><td><code>platform.user.manage</code></td><td>「无账号管理权限」</td><td>行内「账号角色」下拉；PATCH <code>role</code> + <code>platform_shop_role</code>（超管/降级须确认）</td></tr>
+    <tr><td><b>编辑商城权限</b></td><td>① 同上 ② 目标非普通用户 ③ 目标 enabled ④ 非超管才可保存微调</td><td>「仅平台岗位账号可编辑商城权限」</td><td><b><a href="#p08b">P08-B</a></b> 抽屉；角色只读；写 <code>platform_shop_permissions[]</code></td></tr>
     <tr><td><b>全局禁用</b></td><td>① 同上 ② 非当前登录账号</td><td>「不可禁用自己」</td><td>状态开关；写 <code>is_active=false</code></td></tr>
     <tr><td><b>重置密码</b></td><td><code>platform.user.manage</code></td><td>—</td><td>弹窗；POST reset-password</td></tr>
   </table>
@@ -5273,16 +5268,15 @@ a.perm-link:hover code{text-decoration:underline;color:#0958d9}
   <h4 id="p08-admin-users-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格（主站账号管理）</h4>
   <table class="meta matrix" style="margin-bottom:8px">
   <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
-  <tr><td>平台角色 ▾</td><td>单选</td><td>user / platform_admin</td><td>行内即时保存</td><td>→ 是否展示商城列</td><td><code>users.role</code></td></tr>
-  <tr><td>获客商城角色 ▾</td><td>单选</td><td>空 / platform_shop_ops / platform_shop_cs / platform_shop_finance</td><td>仅 platform_admin；空=超管全权限</td><td>打开 P08-B 预填默认</td><td><code>platform_shop_role</code></td></tr>
+  <tr><td>账号角色 ▾</td><td>单选</td><td>普通用户 / 平台超管 / 日常运营 / 商家管家 / 财务结算</td><td>行内即时保存；改角色重置微调集</td><td>→ 是否展示「编辑商城权限」</td><td><code>users.role</code> + <code>platform_shop_role</code></td></tr>
   <tr><td>状态 ▾</td><td>单选</td><td>启用 / 禁用</td><td>全局</td><td>—</td><td><code>is_active</code></td></tr>
   </table>
-  <div class="op" style="font-size:12px;margin-top:8px">实现对照 <code>AdminUsers.vue</code> · API <code>PATCH /admin/users/{id}</code> body 扩展 <code>platform_shop_role</code> · <code>platform_shop_permissions[]</code>（微调后有效集）</div>
+  <div class="op" style="font-size:12px;margin-top:8px">实现对照 <code>AdminUsers.vue</code> · 改角色 PATCH <code>role</code> + <code>platform_shop_role</code>（重置微调集）；P08-B 仅 PATCH <code>platform_shop_permissions[]</code></div>
   </div>
 
   <div id="p08a" class="pdoc-panel" data-group="p08">
   <div class="inner-h3">P08-A · 内置角色（内容获客侧栏 Tab「角色」）</div>
-  <p class="sub">内置 <b>4</b> 个角色；Phase 1 只读展示默认权限矩阵；绑定时微调在 <a href="#p08-admin-users">主站账号管理</a> → <a href="#p08b">P08-B</a>。<strong>商家管家</strong>（<code>platform_shop_cs</code>）仅看所辖客户。详见 PRD <a href="PRD-内容获客商城-phase1.md#242-商家管家platform_shop_cs">§2.4.2</a>。</p>
+  <p class="sub">内置 <b>4</b> 个角色；Phase 1 只读展示默认权限矩阵；<strong>改账号角色</strong>在 <a href="#p08-admin-users">主站账号管理</a>列表；<strong>权限微调</strong>在 <a href="#p08b">P08-B</a>。<strong>商家管家</strong>（<code>platform_shop_cs</code>）仅看所辖客户。详见 PRD <a href="PRD-内容获客商城-phase1.md#242-商家管家platform_shop_cs">§2.4.2</a>。</p>
   <div class="shell" style="margin-top:8px">
     <div class="side">
       <div class="brand">平台运营</div>
@@ -5364,13 +5358,11 @@ a.perm-link:hover code{text-decoration:underline;color:#0958d9}
   <div class="inner-h3">P08-B · 编辑商城权限（抽屉 · 从 <a href="#p08-admin-users">/admin/users</a> 行内打开）</div>
   <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
     <div style="flex:1;min-width:280px;border:1px solid var(--color-border);border-radius:8px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,.08);padding:14px">
-      <div style="font-weight:700;margin-bottom:10px">编辑权限 · 王日常</div>
+      <div style="font-weight:700;margin-bottom:10px">编辑商城权限 · 王日常</div>
       <div class="form" style="display:block">
         <div class="field" style="margin-bottom:10px"><label>账号</label><div class="val">dayops@zhiying.ai（只读）</div></div>
-        <div class="field" style="margin-bottom:10px"><label>角色 <span class="req">*</span></label>
-          <div class="val"><span class="sel" style="display:inline-block">日常运营 (platform_shop_ops) ▾</span></div>
-        </div>
-        <div style="font-size:12px;color:#666;margin:8px 0">在角色默认权限上微调（取消勾选即收回）：</div>
+        <div class="field" style="margin-bottom:10px"><label>账号角色</label><div class="val"><span class="badge b-b">日常运营</span>（只读）</div></div>
+        <div style="font-size:12px;color:#666;margin:8px 0">在该角色默认权限上微调（取消勾选即收回）。改角色请在列表「账号角色」中选择。</div>
         <div style="font-size:12px;line-height:2;max-height:160px;overflow:auto;border:1px solid #f0f0f0;border-radius:6px;padding:8px">
           <div>☑ merchant.read　☑ approve　☑ merchant.manage</div>
           <div>☑ plan.manage　☑ subscription.manage　☑ product.review</div>
@@ -5382,8 +5374,8 @@ a.perm-link:hover code{text-decoration:underline;color:#0958d9}
       </div>
     </div>
     <div style="flex:1;min-width:240px;font-size:13px;color:#475569;line-height:1.7">
-      <div class="op"><b>操作规则</b>：选角色先填充默认勾选 → 可减不可加超管独有码（如 <code>platform.user.manage</code> 仅超管可授）。保存写审计日志。<br><b>入口</b>：主站 <code>/admin/users</code> 行内「编辑商城权限」；须目标已为 <code>platform_admin</code>。</div>
-      <div class="op"><b>与主站关系</b>：账号列表、全局启用/禁用、重置密码均在主站完成；本抽屉仅写 <code>platform_shop_role</code> 与商城权限集。</div>
+      <div class="op"><b>操作规则</b>：改账号角色在主站列表行内完成（按岗位默认权限重置）。本抽屉角色只读，仅可减默认权限（不可加超管独有码）。超管打开本抽屉为只读全量权限，不可单项收回。保存写审计日志。<br><b>入口</b>：主站 <code>/admin/users</code> 行内「编辑商城权限」；须目标已为平台岗位（非普通用户）且 enabled。</div>
+      <div class="op"><b>与主站关系</b>：账号列表、账号角色、全局启用/禁用、重置密码均在主站完成；本抽屉仅写商城权限微调集 <code>platform_shop_permissions[]</code>。</div>
     </div>
   </div>
 
@@ -5391,7 +5383,7 @@ a.perm-link:hover code{text-decoration:underline;color:#0958d9}
   <h4 id="p08b-select-spec" style="font-size:13px;margin:16px 0 8px">下拉/选择规格</h4>
   <table class="meta matrix" style="margin-bottom:8px">
   <tr><th>控件</th><th>单选/多选</th><th>枚举 / 来源</th><th>取值逻辑</th><th>级联</th><th>落库 / API</th></tr>
-  <tr><td>角色 ▾</td><td>单选</td><td>P08 内置角色</td><td>编辑绑定</td><td>—</td><td>platform_shop_role</td></tr>
+  <tr><td>账号角色</td><td>只读</td><td>列表已选岗位</td><td>本抽屉不改角色</td><td>—</td><td>展示用</td></tr>
   </table>
   <div class="op" style="font-size:12px;margin-top:8px">通用枚举 <a href="04-数据模型.html#select-common">04 §通用</a> · 级联 <a href="04-数据模型.html#select-cascade">04 §级联</a> · <a href="../../00-总览/PRD写作规范.md#259-下拉与选择控件规格">§2.5.9</a></div>
   </div>

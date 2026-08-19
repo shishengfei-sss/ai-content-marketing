@@ -9,16 +9,17 @@ import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '../../api/client'
+import { submitShopExport, SHOP_EXPORT_SCOPE_LABELS } from '../../utils/shopExport'
 import { useCurrentShop } from '../../composables/useCurrentShop'
 import ShopMaterialUpload from '../../components/shop/ShopMaterialUpload.vue'
+import CrmColumnSettingsDialog from '../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../composables/useListColumnSettings'
 
 const route = useRoute()
 const { currentId } = useCurrentShop()
 
 const loading = ref(false)
 const exporting = ref(false)
-const exportDialog = ref(false)
-const exportTask = ref(null)
 const items = ref([])
 const total = ref(0)
 const statusCounts = ref({})
@@ -50,29 +51,25 @@ const COL_STORAGE = 'shop.a13.columns'
 const ALL_COLS = [
   { key: 'order_no', label: '订单', locked: true, defaultOn: true },
   { key: 'title', label: '抬头', locked: true, defaultOn: true },
-  { key: 'title_type', label: '类型', locked: true, defaultOn: true },
-  { key: 'tax_no', label: '税号', locked: true, defaultOn: true },
-  { key: 'email', label: '邮箱', locked: true, defaultOn: true },
-  { key: 'amount', label: '金额', locked: true, defaultOn: true },
-  { key: 'created_at', label: '申请时间', locked: true, defaultOn: true },
-  { key: 'status', label: '状态', locked: true, defaultOn: true },
-  { key: 'operator_name', label: '处理人', locked: false, defaultOn: false },
-  { key: 'issued_at', label: '开具时间', locked: false, defaultOn: false },
-  { key: 'invoice_no', label: '发票号码', locked: false, defaultOn: false },
+  { key: 'title_type', label: '类型', defaultOn: true },
+  { key: 'tax_no', label: '税号', defaultOn: true },
+  { key: 'email', label: '邮箱', defaultOn: true },
+  { key: 'amount', label: '金额', defaultOn: true },
+  { key: 'created_at', label: '申请时间', defaultOn: true },
+  { key: 'status', label: '状态', defaultOn: true },
+  { key: 'operator_name', label: '处理人', defaultOn: false },
+  { key: 'issued_at', label: '开具时间', defaultOn: false },
+  { key: 'invoice_no', label: '发票号码', defaultOn: false },
   { key: 'ops', label: '操作', locked: true, defaultOn: true },
 ]
-function loadColPrefs() {
-  try {
-    const raw = localStorage.getItem(COL_STORAGE)
-    if (raw) return JSON.parse(raw)
-  } catch {
-    /* ignore */
-  }
-  return Object.fromEntries(ALL_COLS.map((c) => [c.key, c.defaultOn]))
-}
-const colVisible = reactive(loadColPrefs())
-const colDialog = ref(false)
-const colDraft = reactive({ ...colVisible })
+const {
+  visibleKeys,
+  columnDialogVisible: colDialog,
+  columnDraft,
+  openColumnSettings,
+  saveColumnSettings,
+  isColVisible,
+} = useListColumnSettings(ALL_COLS, COL_STORAGE)
 
 const STATUS_LABEL = { submitted: '待处理', pending: '待处理', issued: '已开票', rejected: '已驳回' }
 const TABS = [
@@ -239,9 +236,13 @@ async function openDetail(row) {
 async function exportCsv() {
   exporting.value = true
   try {
-    const { data } = await api.post('/api/v1/shop/invoices/export', listParams())
-    exportTask.value = data
-    exportDialog.value = true
+    await submitShopExport(
+      '/api/v1/shop/invoices/export',
+      listParams(),
+      '/api/v1/shop/invoices/export-tasks',
+      'invoices.csv',
+      total.value,
+    )
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
   } finally {
@@ -249,33 +250,6 @@ async function exportCsv() {
   }
 }
 
-async function downloadExportFile() {
-  if (!exportTask.value?.id) return
-  try {
-    const res = await api.get(`/api/v1/shop/invoices/export-tasks/${exportTask.value.id}/file`, {
-      responseType: 'blob',
-    })
-    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = exportTask.value.file_name || 'invoices.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    ElMessage.error(e.message || '下载失败')
-  }
-}
-
-function openColSettings() {
-  Object.assign(colDraft, colVisible)
-  colDialog.value = true
-}
-function saveCols() {
-  Object.assign(colVisible, colDraft)
-  localStorage.setItem(COL_STORAGE, JSON.stringify({ ...colVisible }))
-  colDialog.value = false
-}
 
 watch(currentId, () => {
   query.page = 1
@@ -341,11 +315,11 @@ onMounted(async () => {
           <el-button :loading="exporting">导出 ▾</el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="current">当前筛选</el-dropdown-item>
+              <el-dropdown-item command="current">{{ SHOP_EXPORT_SCOPE_LABELS.filtered }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button @click="openColSettings">列设置</el-button>
+        <el-button @click="openColumnSettings">列设置</el-button>
       </div>
     </div>
 
@@ -380,37 +354,38 @@ onMounted(async () => {
     </div>
 
     <el-table :data="items" border stripe size="small" style="margin-top: 12px">
-      <el-table-column v-if="colVisible.order_no" prop="order_no" label="订单" min-width="140" />
-      <el-table-column v-if="colVisible.title" prop="title" label="抬头" min-width="120" />
-      <el-table-column v-if="colVisible.title_type" label="类型" width="80">
+      <template v-for="colKey in visibleKeys" :key="colKey">
+      <el-table-column v-if="colKey === 'order_no'" prop="order_no" label="订单" min-width="140" />
+      <el-table-column v-if="colKey === 'title'" prop="title" label="抬头" min-width="120" />
+      <el-table-column v-if="colKey === 'title_type'" label="类型" width="80">
         <template #default="{ row }">{{ titleTypeText(row) }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.tax_no" prop="tax_no" label="税号" width="160">
+      <el-table-column v-if="colKey === 'tax_no'" prop="tax_no" label="税号" width="160">
         <template #default="{ row }">{{ row.tax_no || '—' }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.email" prop="email" label="邮箱" min-width="120">
+      <el-table-column v-if="colKey === 'email'" prop="email" label="邮箱" min-width="120">
         <template #default="{ row }">{{ row.email || '—' }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.amount" label="金额" width="100">
+      <el-table-column v-if="colKey === 'amount'" label="金额" width="100">
         <template #default="{ row }">{{ fmtMoney(row.amount_cents) }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.created_at" label="申请时间" width="140">
+      <el-table-column v-if="colKey === 'created_at'" label="申请时间" width="140">
         <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.status" label="状态" width="110">
+      <el-table-column v-if="colKey === 'status'" label="状态" width="110">
         <template #default="{ row }">
           {{ STATUS_LABEL[row.status] || row.status }}
           <el-tag v-if="row.needs_red_flush" type="danger" size="small" style="margin-left: 4px">待红冲</el-tag>
         </template>
       </el-table-column>
-      <el-table-column v-if="colVisible.operator_name" label="处理人" width="110">
+      <el-table-column v-if="colKey === 'operator_name'" label="处理人" width="110">
         <template #default="{ row }">{{ row.operator_name || '—' }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.issued_at" label="开具时间" width="140">
+      <el-table-column v-if="colKey === 'issued_at'" label="开具时间" width="140">
         <template #default="{ row }">{{ fmtTime(row.issued_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.invoice_no" prop="invoice_no" label="发票号码" width="120" />
-      <el-table-column v-if="colVisible.ops" label="操作" width="140" fixed="right">
+      <el-table-column v-if="colKey === 'invoice_no'" prop="invoice_no" label="发票号码" width="120" />
+      <el-table-column v-if="colKey === 'ops'" label="操作" width="140" fixed="right">
         <template #default="{ row }">
           <template v-if="row.status === 'submitted' || row.status === 'pending'">
             <el-button link type="primary" @click="openIssue(row)">开具</el-button>
@@ -419,6 +394,7 @@ onMounted(async () => {
           <el-button v-else link type="primary" @click="openDetail(row)">查看</el-button>
         </template>
       </el-table-column>
+      </template>
     </el-table>
 
     <div class="pager">
@@ -559,35 +535,12 @@ onMounted(async () => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="exportDialog" title="导出任务" width="420px">
-      <el-form v-if="exportTask" label-width="100px">
-        <el-form-item label="范围">当前筛选</el-form-item>
-        <el-form-item label="条数">{{ exportTask.row_count ?? 0 }} 条</el-form-item>
-        <el-form-item label="状态">{{ exportTask.status === 'done' ? '已完成' : (exportTask.status || '—') }}</el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button type="primary" :disabled="exportTask?.status !== 'done'" @click="downloadExportFile">
-          下载
-        </el-button>
-        <el-button @click="exportDialog = false">关闭</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="colDialog"
+      v-model:columns="columnDraft"
+      @save="() => { saveColumnSettings(); ElMessage.success('列设置已保存') }"
+    />
 
-    <el-dialog v-model="colDialog" title="列设置" width="360px">
-      <el-checkbox
-        v-for="c in ALL_COLS"
-        :key="c.key"
-        v-model="colDraft[c.key]"
-        :disabled="c.locked"
-        style="display: block; margin: 6px 0"
-      >
-        {{ c.label }}
-      </el-checkbox>
-      <template #footer>
-        <el-button @click="colDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveCols">保存</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 

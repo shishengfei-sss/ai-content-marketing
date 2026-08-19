@@ -5,7 +5,7 @@
  */
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { ensureShopBuyerSession, getShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
+import { ensureShopBuyerSession, getShopBuyerTenantId, setShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
 
 const entitlementId = ref('')
 const ent = ref(null)
@@ -16,6 +16,7 @@ const selected = ref(null) // { slot_id?, date, slot }
 const mode = ref('times_card')
 const apiSlots = ref([])
 const useApiSlots = ref(false)
+const openidHint = ref('')
 
 const FALLBACK_SLOTS = ['10:00-11:00', '14:00-15:00', '16:00-17:00']
 
@@ -71,13 +72,33 @@ const remainingText = computed(() => {
   return rem != null ? `剩余 ${rem} 次` : '服务预约'
 })
 
+const expireText = computed(() => {
+  const raw = ent.value?.expires_at
+  if (!raw) return ''
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return String(raw).slice(0, 10)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+})
+
+const timesCardLines = computed(() => {
+  const total = ent.value?.total_count
+  const rem = ent.value?.remaining_count
+  const lines = []
+  if (total != null || rem != null) {
+    lines.push(`共 ${total ?? '—'} 次 · 剩余 ${rem ?? '—'} 次`)
+  }
+  if (expireText.value) lines.push(`有效期至 ${expireText.value}`)
+  lines.push('到店出示核销码，店员核销后扣 1 次')
+  return lines
+})
+
 const showSlotPicker = computed(() => mode.value === 'booking' || !ent.value?.service_offer_id)
 
 async function load() {
   loading.value = true
   try {
     const tid = getShopBuyerTenantId()
-    await ensureShopBuyerSession(tid)
+    await ensureShopBuyerSession(tid, openidHint.value || undefined)
     const data = await shopBuyerApi.listEntitlements({ page: 1, page_size: 50 })
     ent.value = (data.items || []).find((i) => i.id === entitlementId.value) || null
     if (!ent.value) throw new Error('权益不存在')
@@ -142,7 +163,7 @@ async function confirmBooking() {
   }
 }
 
-function getCodeOnly() {
+async function getCodeOnly() {
   if (ent.value?.remaining_count != null && ent.value.remaining_count <= 0) {
     uni.showToast({ title: '剩余次数不足', icon: 'none' })
     return
@@ -151,9 +172,17 @@ function getCodeOnly() {
     uni.showToast({ title: '暂无核销码', icon: 'none' })
     return
   }
-  uni.navigateTo({
-    url: `/pages/shop/verify-code?entitlement_id=${entitlementId.value}&mode=times_card`,
-  })
+  submitting.value = true
+  try {
+    const booking = await shopBuyerApi.createBooking({ entitlement_id: entitlementId.value })
+    uni.navigateTo({
+      url: `/pages/shop/verify-code?entitlement_id=${entitlementId.value}&booking_id=${booking.id}&mode=times_card`,
+    })
+  } catch (e) {
+    uni.showToast({ title: e.message || '获取核销码失败', icon: 'none' })
+  } finally {
+    submitting.value = false
+  }
 }
 
 function goMyBookings() {
@@ -162,6 +191,9 @@ function goMyBookings() {
 
 onLoad((q) => {
   entitlementId.value = (q?.entitlement_id || '').trim()
+  const tid = (q?.tenant_id || '').trim()
+  if (tid) setShopBuyerTenantId(tid)
+  openidHint.value = (q?.openid || '').trim()
   if (!entitlementId.value) {
     uni.showToast({ title: '缺少权益', icon: 'none' })
     return
@@ -182,12 +214,8 @@ onLoad((q) => {
     <template v-else-if="ent">
       <view v-if="mode === 'times_card'" class="info-card">
         <text class="info-title">权益说明</text>
-        <text class="info-body">
-          共 {{ ent.total_count ?? '—' }} 次 · 剩余 {{ ent.remaining_count ?? '—' }} 次
-          {'\n'}到店出示核销码，店员核销后扣 1 次
-          {'\n'}无需选择时段也可直接获取核销码
-        </text>
-        <button class="btn-primary" @click="getCodeOnly">获取核销码</button>
+        <text v-for="(line, idx) in timesCardLines" :key="idx" class="info-line">{{ line }}</text>
+        <text class="info-hint">无需选择时段 · 获取码后到店核销</text>
       </view>
 
       <template v-if="showSlotPicker && mode === 'booking'">
@@ -223,6 +251,7 @@ onLoad((q) => {
 
       <view v-else-if="mode === 'times_card'" class="footer">
         <button class="btn-ghost" @click="goMyBookings">我的预约</button>
+        <button class="btn-primary" @click="getCodeOnly">获取核销码</button>
       </view>
     </template>
   </view>
@@ -231,7 +260,7 @@ onLoad((q) => {
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #f5f7fb;
+  background: #f3f5f9;
   padding: 16px 16px 100px;
   box-sizing: border-box;
 }
@@ -259,15 +288,19 @@ onLoad((q) => {
 .info-title {
   display: block;
   font-weight: 700;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
-.info-body {
+.info-line {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: #64748b;
-  line-height: 1.6;
-  white-space: pre-line;
-  margin-bottom: 12px;
+  line-height: 1.7;
+}
+.info-hint {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #94a3b8;
 }
 .section-title {
   font-size: 13px;
@@ -322,14 +355,14 @@ onLoad((q) => {
   background: #1677ff;
   color: #fff;
   border: none;
-  border-radius: 10px;
-  font-weight: 600;
+  border-radius: 999px;
+  font-weight: 700;
 }
 .btn-ghost {
   background: #fff;
   color: #334155;
   border: 1px solid #cbd5e1;
-  border-radius: 10px;
+  border-radius: 999px;
 }
 .empty {
   text-align: center;

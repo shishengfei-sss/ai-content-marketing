@@ -5,14 +5,20 @@
  */
 import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
+import ShopTabBar from '@/components/ShopTabBar.vue'
 import {
   ensureShopBuyerSession,
+  ensureShopNavContext,
+  getShopBuyerShopId,
   getShopBuyerTenantId,
+  setShopBuyerShopId,
   setShopBuyerTenantId,
   shopBuyerApi,
 } from '@/utils/shopApi'
 
 const openidHint = ref('')
+const shopId = ref('')
+const tenantId = ref('')
 
 const loading = ref(false)
 const items = ref([])
@@ -35,8 +41,27 @@ function typeLabel(t) {
   return { course: '课程', digital: '资料', service: '服务' }[t] || t || '—'
 }
 
+function courseStarted(row) {
+  return row.product_type === 'course' && row.has_learning_progress === true
+}
+
+function courseProgressText(row) {
+  const total = row.total_lesson_count
+  if (row.product_type !== 'course' || total == null) return ''
+  const pct = row.learning_progress_pct ?? 0
+  const done = row.learned_lesson_count ?? 0
+  return `学习进度 ${pct}% · ${done}/${total} 讲`
+}
+
+function isConsumed(row) {
+  if (row.status === 'consumed') return true
+  if (row.status === 'revoked') return false
+  return row.remaining_count != null && row.remaining_count <= 0
+}
+
 function subText(row) {
   if (row.status === 'revoked') return '权限已关闭'
+  if (isConsumed(row)) return '次数已用尽'
   if (row.status === 'expired') return '权益已过期'
   if (row.product_type === 'service') {
     const rem = row.remaining_count
@@ -45,19 +70,22 @@ function subText(row) {
     return '服务权益'
   }
   if (row.product_type === 'digital') return '资料可领取'
-  return '可继续学习'
+  const progress = courseProgressText(row)
+  if (progress) return progress
+  return courseStarted(row) ? '可继续学习' : '待开始学习'
 }
 
 function actionLabel(row) {
   if (row.status === 'revoked') return '已关闭'
+  if (isConsumed(row)) return '已用尽'
   if (row.status === 'expired') return '已过期'
   if (row.product_type === 'service') return '预约'
   if (row.product_type === 'digital') return '领取'
-  return '继续学'
+  return courseStarted(row) ? '继续学' : '去学习'
 }
 
 function isDisabled(row) {
-  return row.status !== 'active'
+  return row.status !== 'active' || isConsumed(row)
 }
 
 async function load() {
@@ -84,6 +112,10 @@ async function load() {
 function onAction(row) {
   if (row.status === 'revoked') {
     uni.showToast({ title: '权限已关闭，如有疑问联系客服', icon: 'none' })
+    return
+  }
+  if (isConsumed(row)) {
+    uni.showToast({ title: '次数已用尽', icon: 'none' })
     return
   }
   if (row.status === 'expired') {
@@ -115,10 +147,14 @@ function goBookings() {
   uni.navigateTo({ url: '/pages/shop/bookings' })
 }
 
-onLoad((query) => {
+onLoad(async (query) => {
+  shopId.value = (query?.shop_id || '').trim()
   const tid = (query?.tenant_id || '').trim()
-  if (tid) setShopBuyerTenantId(tid)
+  tenantId.value = tid
   openidHint.value = (query?.openid || '').trim()
+  const ctx = await ensureShopNavContext({ shopId: shopId.value, tenantId: tenantId.value })
+  shopId.value = ctx.shopId
+  tenantId.value = ctx.tenantId
 })
 onShow(load)
 </script>
@@ -150,6 +186,7 @@ onShow(load)
     <view v-if="loading" class="empty">加载中…</view>
     <view v-else-if="error" class="empty">{{ error }}</view>
     <view v-else-if="!filtered.length" class="empty">
+      <text class="empty-ico">📚</text>
       <text class="empty-title">还没有已购内容</text>
       <text class="empty-sub">购买后即可在此学习</text>
     </view>
@@ -161,13 +198,28 @@ onShow(load)
         :class="{ disabled: isDisabled(row) }"
       >
         <view class="thumb" :class="row.product_type || 'course'">
-          {{ typeLabel(row.product_type).slice(0, 1) }}
+          <image
+            v-if="row.cover_url"
+            :src="row.cover_url"
+            mode="aspectFill"
+            class="thumb-img"
+          />
+          <text v-else>{{ typeLabel(row.product_type).slice(0, 1) }}</text>
         </view>
         <view class="body">
           <text class="name">{{ row.product_name || '商品' }}</text>
-          <text class="meta" :class="{ danger: row.status === 'revoked', warn: row.status === 'expired' }">
+          <text class="meta" :class="{ danger: row.status === 'revoked', warn: isConsumed(row) || row.status === 'expired' }">
             {{ subText(row) }}
           </text>
+          <view
+            v-if="row.product_type === 'course' && row.total_lesson_count"
+            class="prog-bar"
+          >
+            <view
+              class="prog-bar-i"
+              :style="{ width: `${row.learning_progress_pct || 0}%` }"
+            />
+          </view>
         </view>
         <button
           class="btn"
@@ -180,14 +232,21 @@ onShow(load)
         </button>
       </view>
     </view>
+
+    <ShopTabBar
+      active="ents"
+      :shop-id="shopId"
+      :tenant-id="tenantId || getShopBuyerTenantId()"
+      :openid="openidHint"
+    />
   </view>
 </template>
 
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #f5f7fb;
-  padding: 16px;
+  background: #f3f5f9;
+  padding: 16px 16px 72px;
   box-sizing: border-box;
 }
 .head {
@@ -196,7 +255,7 @@ onShow(load)
 .title {
   display: block;
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 800;
   color: #0f172a;
 }
 .sub {
@@ -220,10 +279,10 @@ onShow(load)
   border: 1px solid #e2e8f0;
 }
 .chip.on {
-  background: #e6f4ff;
+  background: #e8f3ff;
   color: #1677ff;
   border-color: #91caff;
-  font-weight: 600;
+  font-weight: 700;
 }
 .links {
   display: flex;
@@ -240,6 +299,11 @@ onShow(load)
   color: #94a3b8;
   margin-top: 48px;
   font-size: 14px;
+}
+.empty-ico {
+  display: block;
+  font-size: 36px;
+  margin-bottom: 8px;
 }
 .empty-title {
   display: block;
@@ -258,11 +322,12 @@ onShow(load)
 }
 .card {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 12px;
   display: flex;
   align-items: center;
   gap: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
 }
 .card.disabled {
   opacity: 0.55;
@@ -270,7 +335,7 @@ onShow(load)
 .thumb {
   width: 48px;
   height: 48px;
-  border-radius: 10px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -278,13 +343,18 @@ onShow(load)
   color: #0369a1;
   background: #e0f2fe;
   flex-shrink: 0;
+  overflow: hidden;
+}
+.thumb-img {
+  width: 100%;
+  height: 100%;
 }
 .thumb.digital {
-  background: #fef3c7;
+  background: #fff7e6;
   color: #b45309;
 }
 .thumb.service {
-  background: #dcfce7;
+  background: #ecfdf5;
   color: #15803d;
 }
 .body {
@@ -294,7 +364,7 @@ onShow(load)
 .name {
   display: block;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   color: #0f172a;
 }
 .meta {
@@ -309,14 +379,29 @@ onShow(load)
 .meta.warn {
   color: #b45309;
 }
+.prog-bar {
+  margin-top: 6px;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.prog-bar-i {
+  height: 100%;
+  background: #1677ff;
+  border-radius: 2px;
+}
 .btn {
   flex-shrink: 0;
   margin: 0;
   background: #f1f5f9;
   color: #64748b;
   border: none;
-  border-radius: 8px;
+  border-radius: 999px;
   font-size: 12px;
+  padding: 0 12px;
+  height: 30px;
+  line-height: 30px;
 }
 .btn.primary {
   background: #1677ff;

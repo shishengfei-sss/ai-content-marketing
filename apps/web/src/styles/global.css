@@ -57,8 +57,16 @@ a {
 
 .pager {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 12px;
   margin-top: 16px;
+}
+
+.pager-total {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+  white-space: nowrap;
 }
 
 .page-title {

@@ -5,10 +5,12 @@
  * 缺口：驳回/下架站内信未接通；机审 reject 提审时自动出队（对照 F6 可免人审）；
  * 是否首单公域按有无公域映射近似；关联内容为快照摘要。
  */
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '../../../api/client'
+import CrmColumnSettingsDialog from '../../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../../composables/useListColumnSettings'
 import { useAuthStore } from '../../../stores/auth'
 import { formatDateTime } from '../../../utils/datetime'
 
@@ -21,6 +23,7 @@ const canForceOff = computed(() => auth.hasPlatformShopPermission('platform.shop
 const PENDING_COLS = [
   { key: 'product_name', label: '商品', locked: true, defaultVisible: true },
   { key: 'merchant_name', label: '商家', locked: true, defaultVisible: true },
+  { key: 'shop_name', label: '店铺', defaultVisible: true },
   { key: 'product_type', label: '类型', defaultVisible: true },
   { key: 'auto_result', label: '机审', defaultVisible: true },
   { key: 'submitted_at', label: '提交时间', defaultVisible: true },
@@ -31,6 +34,7 @@ const PENDING_COLS = [
 const REVIEWED_COLS = [
   { key: 'product_name', label: '商品', locked: true, defaultVisible: true },
   { key: 'merchant_name', label: '商家', locked: true, defaultVisible: true },
+  { key: 'shop_name', label: '店铺', defaultVisible: true },
   { key: 'product_type', label: '类型', defaultVisible: true },
   { key: 'manual_result', label: '审出结果', defaultVisible: true },
   { key: 'reviewed_at', label: '审出时间', defaultVisible: true },
@@ -60,25 +64,55 @@ const planLabel = ref('')
 const firstPublic = ref('')
 const sortBy = ref('submitted_at')
 const sortDir = ref('desc')
-const colDialog = ref(false)
-const colDraft = ref([])
-const pendingVisible = ref(PENDING_COLS.filter((c) => c.defaultVisible).map((c) => c.key))
-const reviewedVisible = ref(REVIEWED_COLS.filter((c) => c.defaultVisible).map((c) => c.key))
+const {
+  visibleKeys: pendingVisibleKeys,
+  columnDialogVisible: pendingColDialog,
+  columnDraft: pendingColDraft,
+  openColumnSettings: openPendingCol,
+  saveColumnSettings: savePendingCol,
+  isColVisible: isPendingCol,
+} = useListColumnSettings(PENDING_COLS, 'shop-product-review-pending-columns')
+const {
+  visibleKeys: reviewedVisibleKeys,
+  columnDialogVisible: reviewedColDialog,
+  columnDraft: reviewedColDraft,
+  openColumnSettings: openReviewedCol,
+  saveColumnSettings: saveReviewedCol,
+  isColVisible: isReviewedCol,
+} = useListColumnSettings(REVIEWED_COLS, 'shop-product-review-reviewed-columns')
 
 const selected = ref(null)
+const reviewDrawer = ref(false)
 const panelTab = ref('snapshot')
 const note = ref('')
 const rejectDlg = ref(false)
 const rejectForm = reactive({ reject_code: '', reject_reason: '' })
 const offDlg = ref(false)
 const offReason = ref('')
-const viewDlg = ref(false)
-const viewRow = ref(null)
+const coverBlobUrl = ref('')
+const lessonPreviewDlg = reactive({ visible: false, title: '', content: '' })
+const refPreviewDlg = reactive({ visible: false, title: '', html: '' })
+const coverPreviewDlg = reactive({ visible: false })
+
+const AUTO_RULE_ROWS = [
+  ['sensitive_word', '敏感词库'],
+  ['exaggerated_claim', '夸大承诺'],
+  ['prohibited_category', '禁售类目'],
+  ['category_qualification', '类目资质'],
+  ['media_compliance', '封面素材'],
+  ['external_link', '外链引流'],
+]
 
 const TYPE_LABEL = { course: '课程', digital: '资料', service: '服务' }
 const AUTO_LABEL = { pass: '通过', flag: '标黄', reject: '拒绝' }
 const AUTO_TAG = { pass: 'success', flag: 'warning', reject: 'danger' }
 const MANUAL_LABEL = { pending: '待审', approved: '已通过', rejected: '已驳回' }
+const REJECT_CODE_LABEL = {
+  sensitive: '敏感内容',
+  qualification: '资质不符',
+  false_ad: '虚假宣传',
+  other: '其他',
+}
 const MANUAL_TAG = { pending: 'warning', approved: 'success', rejected: 'danger' }
 const ENTITY_LABEL = { personal: '个人', individual_business: '个体', enterprise: '企业' }
 const REFUND_LABEL = {
@@ -95,10 +129,13 @@ const RULE_LABEL = {
   external_link: '外链引流',
 }
 
-const cols = computed(() => (tab.value === 'reviewed' ? REVIEWED_COLS : PENDING_COLS))
-const visibleKeys = computed(() => (tab.value === 'reviewed' ? reviewedVisible.value : pendingVisible.value))
+const visibleKeys = computed(() => (tab.value === 'reviewed' ? reviewedVisibleKeys.value : pendingVisibleKeys.value))
 function isCol(key) {
-  return visibleKeys.value.includes(key)
+  return tab.value === 'reviewed' ? isReviewedCol(key) : isPendingCol(key)
+}
+function openCol() {
+  if (tab.value === 'reviewed') openReviewedCol()
+  else openPendingCol()
 }
 
 function centsYuan(cents) {
@@ -116,6 +153,187 @@ function refundText(row) {
 }
 function snap(row) {
   return row?.snapshot_json || {}
+}
+function refSummary(row) {
+  return row?.ref_summary || null
+}
+function autoDetailRows(row) {
+  if (!row) return []
+  const flags = row.auto_flags || []
+  const hitByRule = Object.fromEntries(flags.filter((f) => f.rule).map((f) => [f.rule, f]))
+  const rows = []
+  for (const [key, label] of AUTO_RULE_ROWS) {
+    const hit = hitByRule[key]
+    if (hit) {
+      rows.push({
+        rule_label: label,
+        level: hit.level || row.auto_result,
+        snippet: hit.snippet || '—',
+        message: hit.message || '—',
+      })
+    } else if (row.auto_result === 'pass') {
+      rows.push({ rule_label: label, level: 'pass', snippet: '—', message: '未命中' })
+    }
+  }
+  for (const hit of flags) {
+    if (hit.rule && !AUTO_RULE_ROWS.some(([k]) => k === hit.rule)) {
+      rows.push({
+        rule_label: RULE_LABEL[hit.rule] || hit.rule,
+        level: hit.level || row.auto_result,
+        snippet: hit.snippet || '—',
+        message: hit.message || '—',
+      })
+    }
+  }
+  if (!rows.length && row.auto_result === 'pass') {
+    rows.push({
+      rule_label: '综合结论',
+      level: 'pass',
+      snippet: '—',
+      message: '机审通过，未命中敏感词/夸大承诺等规则',
+    })
+  }
+  return rows
+}
+
+function revokeCoverBlob() {
+  if (coverBlobUrl.value) {
+    URL.revokeObjectURL(coverBlobUrl.value)
+    coverBlobUrl.value = ''
+  }
+}
+async function loadCoverBlob(reviewId) {
+  revokeCoverBlob()
+  if (!reviewId) return
+  try {
+    const { data } = await adminApi.getShopProductReviewCover(reviewId)
+    if (data instanceof Blob) coverBlobUrl.value = URL.createObjectURL(data)
+  } catch {
+    coverBlobUrl.value = ''
+  }
+}
+function coverDisplayUrl(row) {
+  if (coverBlobUrl.value && selected.value?.id === row?.id) return coverBlobUrl.value
+  return row?.cover_preview_url || snap(row).cover_url || ''
+}
+
+function openCoverPreview() {
+  if (!coverDisplayUrl(selected.value)) return
+  coverPreviewDlg.visible = true
+}
+
+function setReviewQuery(id) {
+  const q = { ...route.query }
+  if (id) q.review_id = String(id)
+  else delete q.review_id
+  router.replace({ query: q })
+}
+
+function saveBlob(blob, filename) {
+  const data = blob instanceof Blob ? blob : new Blob([blob])
+  const url = URL.createObjectURL(data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename || 'download'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+async function previewLesson(lesson) {
+  if (!selected.value?.id || !lesson?.id) return
+  if (!lesson.previewable) {
+    ElMessage.warning('该课时尚未上传可预览内容')
+    return
+  }
+  try {
+    const { data } = await adminApi.getShopProductReviewLesson(selected.value.id, lesson.id)
+    if (data.media_type === 'article') {
+      lessonPreviewDlg.title = data.title || lesson.title
+      lessonPreviewDlg.content = data.content_body || ''
+      lessonPreviewDlg.visible = true
+      return
+    }
+    const { data: blob } = await adminApi.getShopProductReviewLessonMedia(selected.value.id, lesson.id)
+    const url = URL.createObjectURL(blob instanceof Blob ? blob : new Blob([blob]))
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 120_000)
+  } catch (e) {
+    ElMessage.error(e.message || '预览失败')
+  }
+}
+
+async function downloadLesson(lesson) {
+  if (!selected.value?.id || !lesson?.id) return
+  if (!lesson.previewable) {
+    ElMessage.warning('该课时尚未上传可下载内容')
+    return
+  }
+  try {
+    const { data: detail } = await adminApi.getShopProductReviewLesson(selected.value.id, lesson.id)
+    if (detail.media_type === 'article') {
+      saveBlob(
+        new Blob([detail.content_body || ''], { type: 'text/plain;charset=utf-8' }),
+        `${detail.title || lesson.title || '课时'}.txt`,
+      )
+      return
+    }
+    const { data: blob } = await adminApi.getShopProductReviewLessonMedia(selected.value.id, lesson.id, {
+      download: true,
+    })
+    saveBlob(blob, lesson.title || '课时媒体')
+  } catch (e) {
+    ElMessage.error(e.message || '下载失败')
+  }
+}
+
+function refFileExt(file) {
+  const n = String(file?.name || '').toLowerCase()
+  const i = n.lastIndexOf('.')
+  return i >= 0 ? n.slice(i) : ''
+}
+
+async function previewRefAsset(file) {
+  if (!selected.value?.id || !file?.file_id) return
+  const ext = refFileExt(file)
+  if (ext === '.zip') {
+    ElMessage.info('zip 请下载后本地解压')
+    return
+  }
+  if (ext === '.doc') {
+    ElMessage.info('旧版 .doc 请下载后用 Word 打开')
+    return
+  }
+  try {
+    if (ext === '.docx') {
+      const { data: html } = await adminApi.getShopProductReviewRefAssetHtmlPreview(
+        selected.value.id,
+        file.file_id,
+      )
+      refPreviewDlg.title = file.name || 'Word 文档'
+      refPreviewDlg.html = html || ''
+      refPreviewDlg.visible = true
+      return
+    }
+    const { data: blob } = await adminApi.getShopProductReviewRefAsset(selected.value.id, file.file_id)
+    const type = ext === '.pdf' ? 'application/pdf' : blob?.type || 'application/octet-stream'
+    const url = URL.createObjectURL(blob instanceof Blob ? blob : new Blob([blob], { type }))
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 120_000)
+  } catch (e) {
+    ElMessage.error(e.message || '预览失败')
+  }
+}
+
+async function downloadRefAsset(file) {
+  if (!selected.value?.id || !file?.file_id) return
+  try {
+    const { data: blob } = await adminApi.getShopProductReviewRefAsset(selected.value.id, file.file_id, {
+      download: true,
+    })
+    saveBlob(blob, file.name || '资料文件')
+  } catch (e) {
+    ElMessage.error(e.message || '下载失败')
+  }
 }
 
 function listParams() {
@@ -163,17 +381,6 @@ async function load() {
   }
 }
 
-function openCol() {
-  colDraft.value = cols.value.map((c) => ({ ...c, visible: visibleKeys.value.includes(c.key) }))
-  colDialog.value = true
-}
-function saveCols() {
-  const keys = colDraft.value.filter((c) => c.visible || c.locked).map((c) => c.key)
-  if (tab.value === 'reviewed') reviewedVisible.value = keys
-  else pendingVisible.value = keys
-  colDialog.value = false
-}
-
 function downloadCsv(filename, header, rows) {
   const lines = [header.join(','), ...rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))]
   const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
@@ -188,10 +395,11 @@ function exportList() {
   if (tab.value === 'reviewed') {
     downloadCsv(
       '已审出队.csv',
-      ['商品', '商家', '类型', '审出结果', '审出时间', '在售状态'],
+      ['商品', '商家', '店铺', '类型', '审出结果', '审出时间', '在售状态'],
       items.value.map((r) => [
         r.product_name,
         r.merchant_name,
+        r.shop_name || '—',
         TYPE_LABEL[r.product_type] || r.product_type,
         MANUAL_LABEL[r.manual_result] || r.manual_result,
         formatDateTime(r.reviewed_at),
@@ -201,10 +409,11 @@ function exportList() {
   } else {
     downloadCsv(
       '待审队列.csv',
-      ['商品', '商家', '类型', '机审', '提交时间', '状态'],
+      ['商品', '商家', '店铺', '类型', '机审', '提交时间', '状态'],
       items.value.map((r) => [
         r.product_name,
         r.merchant_name,
+        r.shop_name || '—',
         TYPE_LABEL[r.product_type] || r.product_type,
         AUTO_LABEL[r.auto_result] || r.auto_result,
         formatDateTime(r.submitted_at),
@@ -228,27 +437,46 @@ function sortIcon(prop) {
   return sortDir.value === 'asc' ? '↑' : '↓'
 }
 
-async function selectRow(row) {
+async function selectRow(row, { openDrawer = false } = {}) {
   selected.value = row
   panelTab.value = 'snapshot'
   note.value = row.internal_note || ''
+  if (openDrawer) reviewDrawer.value = true
   try {
     const { data } = await adminApi.getShopProductReview(row.id)
     selected.value = data
+    await loadCoverBlob(data.id)
+  } catch (e) {
+    ElMessage.error(e.message || '加载审核单失败')
+    if (openDrawer) reviewDrawer.value = false
+  }
+}
+
+async function openReviewById(id) {
+  if (!id) return
+  const hit = items.value.find((x) => String(x.id) === String(id))
+  if (hit) {
+    openReview(hit)
+    return
+  }
+  try {
+    const { data } = await adminApi.getShopProductReview(id)
+    await selectRow(data, { openDrawer: true })
+    setReviewQuery(data.id)
   } catch (e) {
     ElMessage.error(e.message || '加载审核单失败')
   }
 }
 
 function openReview(row) {
-  selectRow(row)
+  selectRow(row, { openDrawer: true })
+  setReviewQuery(row.id)
 }
-function openView(row) {
-  viewRow.value = row
-  viewDlg.value = true
-  adminApi.getShopProductReview(row.id).then(({ data }) => {
-    viewRow.value = data
-  })
+function closeReview() {
+  reviewDrawer.value = false
+  selected.value = null
+  revokeCoverBlob()
+  setReviewQuery(null)
 }
 function openReject(row) {
   selected.value = row
@@ -274,7 +502,7 @@ async function doApprove() {
       note: note.value.trim() || undefined,
     })
     ElMessage.success('已通过')
-    selected.value = null
+    closeReview()
     await load()
   } catch (e) {
     ElMessage.error(e.message || '通过失败')
@@ -301,7 +529,7 @@ async function doReject() {
     })
     ElMessage.success('已驳回')
     rejectDlg.value = false
-    selected.value = null
+    closeReview()
     await load()
   } catch (e) {
     ElMessage.error(e.message || '驳回失败')
@@ -331,7 +559,8 @@ async function doForceOff() {
 
 function goMerchant(row) {
   if (!row?.tenant_id) return
-  router.push(`/admin/shop/merchants/${row.tenant_id}`)
+  const href = router.resolve({ path: `/admin/shop/merchants/${row.tenant_id}` }).href
+  window.open(href, '_blank', 'noopener,noreferrer')
 }
 
 function escHtml(s) {
@@ -347,7 +576,11 @@ function escHtml(s) {
 function safeCover(u) {
   const s = String(u || '').trim()
   if (!s) return ''
-  if (s.startsWith('/') && !s.startsWith('//')) return s
+  if (s.startsWith('blob:')) return s
+  if (s.startsWith('/') && !s.startsWith('//')) {
+    const base = import.meta.env.VITE_API_BASE_URL || window.location.origin
+    return `${base.replace(/\/$/, '')}${s}`
+  }
   try {
     const x = new URL(s)
     if (x.protocol === 'http:' || x.protocol === 'https:') return s
@@ -398,14 +631,27 @@ async function previewBuyer() {
     return
   }
   try {
-    const { data } = await adminApi.getShopProductReviewBuyerPreview(selected.value.id)
+    const [{ data }, coverRes] = await Promise.all([
+      adminApi.getShopProductReviewBuyerPreview(selected.value.id),
+      adminApi.getShopProductReviewCover(selected.value.id).catch(() => null),
+    ])
+    let coverSrc = ''
+    if (coverRes?.data instanceof Blob) {
+      coverSrc = URL.createObjectURL(coverRes.data)
+    } else {
+      coverSrc = safeCover(data.cover_url)
+    }
     const w = window.open('', '_blank')
     if (!w) {
       ElMessage.error('请允许弹出窗口以预览买家页')
+      if (coverSrc.startsWith('blob:')) URL.revokeObjectURL(coverSrc)
       return
     }
-    w.document.write(renderBuyerPreviewHtml(data))
+    w.document.write(renderBuyerPreviewHtml({ ...data, cover_url: coverSrc }))
     w.document.close()
+    if (coverSrc.startsWith('blob:')) {
+      setTimeout(() => URL.revokeObjectURL(coverSrc), 60_000)
+    }
   } catch (e) {
     ElMessage.error(e.message || '预览失败')
   }
@@ -424,18 +670,24 @@ function resetAdv() {
 
 watch(tab, () => {
   page.value = 1
-  selected.value = null
+  closeReview()
   sortBy.value = tab.value === 'reviewed' ? 'reviewed_at' : 'submitted_at'
   sortDir.value = 'desc'
   load()
 })
 
-onMounted(() => {
+onMounted(async () => {
   const st = String(route.query.status || '')
   if (st === 'pending_review' || st === 'pending') tab.value = 'pending'
   else if (st === 'flag' || st === 'flagged') tab.value = 'flagged'
   else if (st === 'approved' || st === 'rejected' || st === 'reviewed') tab.value = 'reviewed'
-  load()
+  await load()
+  const rid = route.query.review_id
+  if (rid) await openReviewById(String(rid))
+})
+
+onUnmounted(() => {
+  revokeCoverBlob()
 })
 </script>
 
@@ -497,25 +749,29 @@ onMounted(() => {
       <el-button @click="resetAdv">重置</el-button>
     </div>
 
-    <div class="split" :class="{ 'with-panel': tab !== 'reviewed' && selected }">
+    <div class="split">
       <div class="list">
-        <el-table :data="items" border stripe highlight-current-row @row-click="tab !== 'reviewed' ? selectRow($event) : null">
-          <el-table-column v-if="isCol('product_name')" min-width="180">
+        <el-table :data="items" border stripe highlight-current-row @row-click="openReview">
+          <template v-for="colKey in visibleKeys" :key="colKey">
+          <el-table-column v-if="colKey === 'product_name'" min-width="180">
             <template #header>
               <span class="sortable" @click.stop="toggleSort('product_name')">商品 {{ sortIcon('product_name') }}</span>
             </template>
             <template #default="{ row }">{{ row.product_name }}</template>
           </el-table-column>
-          <el-table-column v-if="isCol('merchant_name')" min-width="140">
+          <el-table-column v-if="colKey === 'merchant_name'" min-width="140">
             <template #header>
               <span class="sortable" @click.stop="toggleSort('merchant_name')">商家 {{ sortIcon('merchant_name') }}</span>
             </template>
             <template #default="{ row }">{{ row.merchant_name || '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="isCol('product_type')" label="类型" width="80">
+          <el-table-column v-if="colKey === 'shop_name'" label="店铺" min-width="120">
+            <template #default="{ row }">{{ row.shop_name || '—' }}</template>
+          </el-table-column>
+          <el-table-column v-if="colKey === 'product_type'" label="类型" width="80">
             <template #default="{ row }">{{ TYPE_LABEL[row.product_type] || row.product_type }}</template>
           </el-table-column>
-          <el-table-column v-if="tab !== 'reviewed' && isCol('auto_result')" width="90">
+          <el-table-column v-if="tab !== 'reviewed' && colKey === 'auto_result'" width="90">
             <template #header>
               <span class="sortable" @click.stop="toggleSort('auto_result')">机审 {{ sortIcon('auto_result') }}</span>
             </template>
@@ -523,43 +779,43 @@ onMounted(() => {
               <el-tag size="small" :type="AUTO_TAG[row.auto_result]">{{ AUTO_LABEL[row.auto_result] || row.auto_result }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="tab !== 'reviewed' && isCol('submitted_at')" width="170">
+          <el-table-column v-if="tab !== 'reviewed' && colKey === 'submitted_at'" width="170">
             <template #header>
               <span class="sortable" @click.stop="toggleSort('submitted_at')">提交时间 {{ sortIcon('submitted_at') }}</span>
             </template>
             <template #default="{ row }">{{ formatDateTime(row.submitted_at) }}</template>
           </el-table-column>
-          <el-table-column v-if="tab !== 'reviewed' && isCol('status')" label="状态" width="90">
+          <el-table-column v-if="tab !== 'reviewed' && colKey === 'status'" label="状态" width="90">
             <template #default="{ row }">
               <el-tag size="small" :type="MANUAL_TAG[row.manual_result]">{{ MANUAL_LABEL[row.manual_result] }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="tab === 'reviewed' && isCol('manual_result')" label="审出结果" width="100">
+          <el-table-column v-if="tab === 'reviewed' && colKey === 'manual_result'" label="审出结果" width="100">
             <template #default="{ row }">
               <el-tag size="small" :type="MANUAL_TAG[row.manual_result]">{{ MANUAL_LABEL[row.manual_result] }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="tab === 'reviewed' && isCol('reviewed_at')" width="170">
+          <el-table-column v-if="tab === 'reviewed' && colKey === 'reviewed_at'" width="170">
             <template #header>
               <span class="sortable" @click.stop="toggleSort('reviewed_at')">审出时间 {{ sortIcon('reviewed_at') }}</span>
             </template>
             <template #default="{ row }">{{ formatDateTime(row.reviewed_at) }}</template>
           </el-table-column>
-          <el-table-column v-if="tab === 'reviewed' && isCol('sale_status')" label="在售状态" width="90">
+          <el-table-column v-if="tab === 'reviewed' && colKey === 'sale_status'" label="在售状态" width="90">
             <template #default="{ row }">{{ saleText(row) }}</template>
           </el-table-column>
-          <el-table-column v-if="isCol('category_path')" label="类目" min-width="140">
+          <el-table-column v-if="colKey === 'category_path'" label="类目" min-width="140">
             <template #default="{ row }">{{ row.category_path || '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="isCol('ops')" label="操作" width="180" fixed="right">
+          <el-table-column v-if="colKey === 'ops'" label="操作" width="180" fixed="right">
             <template #default="{ row }">
               <template v-if="row.manual_result === 'pending'">
                 <el-button v-if="row.auto_result !== 'reject'" link type="primary" @click.stop="openReview(row)">审核</el-button>
-                <el-button v-else link type="primary" @click.stop="openView(row)">查看</el-button>
+                <el-button v-else link type="primary" @click.stop="openReview(row)">查看</el-button>
                 <el-button v-if="canReview && row.auto_result === 'reject'" link type="danger" @click.stop="openReject(row)">驳回</el-button>
               </template>
               <template v-else>
-                <el-button link type="primary" @click.stop="openView(row)">查看</el-button>
+                <el-button link type="primary" @click.stop="openReview(row)">查看</el-button>
                 <el-button
                   v-if="canForceOff && (row.product_status === 'on_sale' || row.paid_order_count > 0)"
                   link
@@ -571,9 +827,12 @@ onMounted(() => {
               </template>
             </template>
           </el-table-column>
+          </template>
         </el-table>
         <div class="pager">
-          <span>共 {{ total }} 条{{ tab === 'pending' ? '（待审）' : tab === 'reviewed' ? '（已审出队）' : '' }}</span>
+          <span class="pager-total">
+            共 {{ total }} 条{{ tab === 'pending' ? '（待审）' : tab === 'reviewed' ? '（已审出队）' : '' }}
+          </span>
           <el-pagination
             v-model:current-page="page"
             v-model:page-size="pageSize"
@@ -586,21 +845,33 @@ onMounted(() => {
           />
         </div>
       </div>
+    </div>
 
-      <aside v-if="tab !== 'reviewed' && selected" class="panel" data-testid="shop-product-review-panel">
+    <el-drawer
+      v-model="reviewDrawer"
+      :title="selected ? `${selected.manual_result === 'pending' ? '审核' : '详情'} · ${selected.product_name}` : '商品审核'"
+      size="640px"
+      direction="rtl"
+      destroy-on-close
+      @close="closeReview"
+    >
+      <aside v-if="selected" class="panel" data-testid="shop-product-review-panel">
         <div class="panel-hd">
-          <div>
-            <b>{{ selected.product_name }}</b>
-            <el-tag size="small" class="ml">{{ MANUAL_LABEL[selected.manual_result] }}</el-tag>
-            <el-tag size="small" :type="AUTO_TAG[selected.auto_result]" class="ml">机审{{ AUTO_LABEL[selected.auto_result] }}</el-tag>
-            <div class="muted">
+          <div class="panel-hd-main">
+            <div class="panel-title-row">
+              <b>{{ selected.product_name }}</b>
+              <el-tag size="small" class="ml">{{ MANUAL_LABEL[selected.manual_result] }}</el-tag>
+              <el-tag size="small" :type="AUTO_TAG[selected.auto_result]" class="ml">机审{{ AUTO_LABEL[selected.auto_result] }}</el-tag>
+            </div>
+            <div class="muted panel-meta">
               审核单 {{ String(selected.id).slice(0, 8) }} · 商品 {{ String(selected.product_id).slice(0, 8) }} ·
-              商家 {{ selected.merchant_name || '—' }} · 提交 {{ formatDateTime(selected.submitted_at) }}
+              商家 {{ selected.merchant_name || '—' }} · 店铺 {{ selected.shop_name || '—' }} ·
+              提交 {{ formatDateTime(selected.submitted_at) }}
               <span v-if="selected.submitted_by_name"> · {{ selected.submitted_by_name }}</span>
             </div>
           </div>
-          <div>
-            <el-button size="small" @click="goMerchant(selected)">↗ 商家</el-button>
+          <div class="panel-hd-actions">
+            <el-button size="small" @click="goMerchant(selected)">↗ 商家（新窗）</el-button>
             <el-button size="small" @click="previewBuyer">预览买家页</el-button>
           </div>
         </div>
@@ -611,34 +882,40 @@ onMounted(() => {
           <el-tab-pane label="审核日志" name="log" />
         </el-tabs>
         <div v-show="panelTab === 'snapshot'" class="panel-body">
-          <div class="cover-row">
-            <img v-if="snap(selected).cover_url" :src="snap(selected).cover_url" class="cover" alt="" />
-            <div v-else class="cover ph">封面</div>
-            <div>
-              <div class="ttl">{{ snap(selected).name || selected.product_name }}</div>
-              <div class="muted">副标题：{{ snap(selected).subtitle || '—' }}</div>
-              <div class="meta">
-                <el-tag size="small">{{ TYPE_LABEL[selected.product_type] || selected.product_type }}</el-tag>
-                <span>类目：{{ selected.category_path || '—' }}</span>
-                <b>{{ centsYuan(snap(selected).price_cents) }}</b>
-              </div>
+          <div class="cover-block">
+            <img
+              v-if="coverDisplayUrl(selected)"
+              :src="coverDisplayUrl(selected)"
+              class="cover"
+              alt="封面"
+              title="点击放大查看"
+              @click="openCoverPreview"
+            />
+            <div v-else class="cover ph">无封面</div>
+            <div v-if="coverDisplayUrl(selected)" class="cover-tip">点击封面可放大查看原图</div>
+          </div>
+          <div class="snap-head">
+            <div class="ttl">{{ snap(selected).name || selected.product_name }}</div>
+            <div class="muted">副标题：{{ snap(selected).subtitle || '—' }}</div>
+            <div class="meta">
+              <el-tag size="small">{{ TYPE_LABEL[selected.product_type] || selected.product_type }}</el-tag>
+              <span>类目：{{ selected.category_path || '—' }}</span>
+              <b>{{ centsYuan(snap(selected).price_cents) }}</b>
             </div>
           </div>
-          <el-descriptions :column="2" border size="small">
-            <el-descriptions-item label="商品 ID（只读）">{{ selected.product_id }}</el-descriptions-item>
-            <el-descriptions-item label="店铺（只读）">{{ selected.shop_name || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="商家套餐（只读）">{{ selected.plan_label || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="主体资质（只读）">
+          <el-descriptions :column="1" border size="small" class="snap-desc">
+            <el-descriptions-item label="商品 ID">{{ selected.product_id }}</el-descriptions-item>
+            <el-descriptions-item label="店铺">{{ selected.shop_name || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="商家套餐">{{ selected.plan_label || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="主体资质">
               {{ selected.entity_status === 'active' ? '已入驻' : selected.entity_status || '—' }}
               {{ ENTITY_LABEL[selected.entity_type] || selected.entity_type || '' }}
             </el-descriptions-item>
-            <el-descriptions-item label="退款策略（只读）">{{ refundText(selected) }}</el-descriptions-item>
-            <el-descriptions-item label="是否首单公域（只读）">
-              {{ selected.first_public_domain ? '是' : '否（Mx 首单须人审通过后才可映射）' }}
+            <el-descriptions-item label="退款策略">{{ refundText(selected) }}</el-descriptions-item>
+            <el-descriptions-item label="是否首单公域">
+              {{ selected.first_public_domain ? '是' : '否（首单须人审通过后才可映射）' }}
             </el-descriptions-item>
-            <el-descriptions-item label="商品简介摘要（只读）" :span="2">
-              {{ snap(selected).intro || '—' }}
-            </el-descriptions-item>
+            <el-descriptions-item label="商品简介">{{ snap(selected).intro || '—' }}</el-descriptions-item>
           </el-descriptions>
           <div class="note">
             <b>机审结论</b>：
@@ -649,41 +926,138 @@ onMounted(() => {
           </div>
           <template v-if="selected.manual_result === 'pending' && canReview">
             <h4>人审操作</h4>
-            <el-form label-width="140px">
+            <el-form label-position="top" class="review-form">
               <el-form-item label="内部备注（选填）">
-                <el-input v-model="note" type="textarea" :rows="2" />
+                <el-input v-model="note" type="textarea" :rows="2" placeholder="机审 flagged 或覆写通过时建议填写" />
               </el-form-item>
-              <el-form-item label="通过后将执行（只读）">
-                商品可上架；若套餐含公域能力，通过后允许映射
-              </el-form-item>
-              <el-form-item label="驳回须填（展开驳回）">原因码 + 说明 ≥4 字；商品从未上架</el-form-item>
+              <p class="review-hint">通过后商品可上架；驳回须填原因码与说明（≥4 字）。</p>
             </el-form>
-            <el-button type="primary" :loading="submitting" @click="doApprove">通过</el-button>
-            <el-button type="danger" plain @click="openReject(selected)">驳回</el-button>
+            <div class="review-actions">
+              <el-button type="primary" :loading="submitting" @click="doApprove">通过</el-button>
+              <el-button type="danger" plain @click="openReject(selected)">驳回</el-button>
+            </div>
+          </template>
+          <template v-else-if="selected.manual_result !== 'pending'">
+            <h4>审出结果</h4>
+            <el-descriptions :column="1" border size="small" class="snap-desc">
+              <el-descriptions-item label="审出结果">
+                <el-tag size="small" :type="MANUAL_TAG[selected.manual_result]">
+                  {{ MANUAL_LABEL[selected.manual_result] }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="审核人">{{ selected.reviewer_name || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="审出时间">{{ formatDateTime(selected.reviewed_at) }}</el-descriptions-item>
+              <el-descriptions-item v-if="selected.manual_result === 'rejected'" label="驳回原因码">
+                {{ REJECT_CODE_LABEL[selected.reject_code] || selected.reject_code || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item v-if="selected.manual_result === 'rejected'" label="驳回说明">
+                {{ selected.reject_reason || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item v-if="selected.internal_note" label="内部备注">
+                {{ selected.internal_note }}
+              </el-descriptions-item>
+            </el-descriptions>
+            <div v-if="canForceOff && (selected.product_status === 'on_sale' || selected.paid_order_count > 0)" class="review-actions">
+              <el-button type="warning" plain @click="openForceOff(selected)">强制下架</el-button>
+            </div>
           </template>
         </div>
         <div v-show="panelTab === 'auto'" class="panel-body">
-          <el-table :data="selected.auto_flags || []" border size="small">
-            <el-table-column label="规则" min-width="120">
-              <template #default="{ row }">{{ RULE_LABEL[row.rule] || row.rule }}</template>
+          <p v-if="selected.auto_result === 'pass'" class="auto-hint">
+            机审通过：下列为规则扫描结果；「未命中」表示该规则未触发，仍须人审确认材料。
+          </p>
+          <el-table :data="autoDetailRows(selected)" border size="small">
+            <el-table-column label="规则" min-width="110">
+              <template #default="{ row }">{{ row.rule_label }}</template>
             </el-table-column>
             <el-table-column label="命中" width="90">
               <template #default="{ row }">
-                <el-tag size="small" :type="AUTO_TAG[row.level] || 'warning'">{{ AUTO_LABEL[row.level] || row.level }}</el-tag>
+                <el-tag size="small" :type="AUTO_TAG[row.level] || 'info'">{{ AUTO_LABEL[row.level] || row.level }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="snippet" label="片段" min-width="140" />
-            <el-table-column label="建议" min-width="140">
+            <el-table-column prop="snippet" label="片段" min-width="120" />
+            <el-table-column label="建议" min-width="120">
               <template #default="{ row }">{{ row.message || '—' }}</template>
             </el-table-column>
           </el-table>
-          <p v-if="!(selected.auto_flags || []).length" class="muted">未命中规则</p>
         </div>
         <div v-show="panelTab === 'refs'" class="panel-body">
-          <div class="note">
-            关联内容摘要（只读）<br />
-            类型 {{ snap(selected).ref_type || '—' }} · 引用 {{ snap(selected).ref_id || '—' }}
-          </div>
+          <template v-if="refSummary(selected)">
+            <div class="ref-summary">
+              <div class="ref-line"><b>{{ refSummary(selected).ref_type_label }}</b>：{{ refSummary(selected).title || '—' }}</div>
+              <div class="muted">{{ refSummary(selected).summary }}</div>
+              <div v-if="refSummary(selected).intro" class="muted">简介：{{ refSummary(selected).intro }}</div>
+            </div>
+            <template v-if="(refSummary(selected).lessons || []).length">
+              <h4 class="sub-h">课时清单（{{ refSummary(selected).lessons.length }}）</h4>
+              <el-table :data="refSummary(selected).lessons" border size="small">
+                <el-table-column label="#" width="48">
+                  <template #default="{ row }">{{ row.sort }}</template>
+                </el-table-column>
+                <el-table-column prop="title" label="课时标题" min-width="140" />
+                <el-table-column label="类型" width="72">
+                  <template #default="{ row }">{{ row.media_type_label || row.media_type }}</template>
+                </el-table-column>
+                <el-table-column label="时长" width="88">
+                  <template #default="{ row }">{{ row.duration_label || '—' }}</template>
+                </el-table-column>
+                <el-table-column label="状态" width="80">
+                  <template #default="{ row }">
+                    <el-tag size="small" :type="row.status === 'published' ? 'success' : 'info'">
+                      {{ row.status_label || row.status }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="试看" width="56">
+                  <template #default="{ row }">{{ row.is_trial ? '是' : '—' }}</template>
+                </el-table-column>
+                <el-table-column label="操作" width="100" fixed="right">
+                  <template #default="{ row }">
+                    <el-button
+                      v-if="row.previewable"
+                      link
+                      type="primary"
+                      size="small"
+                      @click.stop="previewLesson(row)"
+                    >
+                      预览
+                    </el-button>
+                    <el-button
+                      v-if="row.previewable"
+                      link
+                      type="primary"
+                      size="small"
+                      @click.stop="downloadLesson(row)"
+                    >
+                      下载
+                    </el-button>
+                    <span v-if="!row.previewable" class="muted">未上传</span>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </template>
+            <template v-else-if="(refSummary(selected).files || []).length">
+              <h4 class="sub-h">资料文件（{{ refSummary(selected).files.length }}）</h4>
+              <el-table :data="refSummary(selected).files" border size="small">
+                <el-table-column prop="name" label="文件名" min-width="160" />
+                <el-table-column prop="mime" label="类型" width="120" />
+                <el-table-column prop="size_label" label="大小" width="88" />
+                <el-table-column label="可预览" width="72">
+                  <template #default="{ row }">{{ row.previewable ? '是' : '否' }}</template>
+                </el-table-column>
+                <el-table-column label="操作" width="100" fixed="right">
+                  <template #default="{ row }">
+                    <el-button link type="primary" size="small" @click.stop="previewRefAsset(row)">预览</el-button>
+                    <el-button link type="primary" size="small" @click.stop="downloadRefAsset(row)">下载</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </template>
+            <p v-else-if="selected.product_type === 'service'" class="muted">
+              服务定义已关联；具体可约时段请在商家端服务定义中查看。
+            </p>
+          </template>
+          <p v-else class="muted">未关联内容或关联已失效</p>
         </div>
         <div v-show="panelTab === 'log'" class="panel-body">
           <p v-for="(ev, i) in selected.audit_log || []" :key="i" class="tl">
@@ -691,15 +1065,18 @@ onMounted(() => {
           </p>
         </div>
       </aside>
-    </div>
+    </el-drawer>
 
-    <el-dialog v-model="colDialog" title="列设置" width="400px">
-      <el-checkbox v-for="c in colDraft" :key="c.key" v-model="c.visible" :disabled="c.locked">{{ c.label }}</el-checkbox>
-      <template #footer>
-        <el-button @click="colDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveCols">确定</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="pendingColDialog"
+      v-model:columns="pendingColDraft"
+      @save="savePendingCol"
+    />
+    <CrmColumnSettingsDialog
+      v-model:visible="reviewedColDialog"
+      v-model:columns="reviewedColDraft"
+      @save="saveReviewedCol"
+    />
 
     <el-dialog v-model="rejectDlg" :title="`驳回「${selected?.product_name || ''}」？`" width="480px">
       <el-form label-width="100px">
@@ -735,19 +1112,40 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="viewDlg" title="商品审核快照" width="520px">
-      <el-form v-if="viewRow" label-width="140px">
-        <el-form-item label="审核状态（只读）">
-          <el-tag :type="MANUAL_TAG[viewRow.manual_result]">{{ MANUAL_LABEL[viewRow.manual_result] }}</el-tag>
-        </el-form-item>
-        <el-form-item label="商品快照（只读）">
-          {{ viewRow.product_name }} · {{ centsYuan(snap(viewRow).price_cents) }} · 机审{{ AUTO_LABEL[viewRow.auto_result] }}
-        </el-form-item>
-        <el-form-item label="审核人（只读）">{{ viewRow.reviewer_name || '—' }}</el-form-item>
-        <el-form-item label="审出时间（只读）">{{ formatDateTime(viewRow.reviewed_at) }}</el-form-item>
-      </el-form>
+    <el-dialog v-model="lessonPreviewDlg.visible" :title="lessonPreviewDlg.title || '图文课时'" width="560px">
+      <div class="lesson-preview-body">{{ lessonPreviewDlg.content || '（无正文）' }}</div>
       <template #footer>
-        <el-button @click="viewDlg = false">关闭</el-button>
+        <el-button @click="lessonPreviewDlg.visible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="coverPreviewDlg.visible"
+      :title="`${selected?.product_name || '商品'} · 封面`"
+      width="720px"
+      class="cover-preview-dialog"
+      append-to-body
+    >
+      <img
+        v-if="coverDisplayUrl(selected)"
+        :src="coverDisplayUrl(selected)"
+        class="cover-full"
+        alt="封面原图"
+      />
+      <template #footer>
+        <el-button @click="coverPreviewDlg.visible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="refPreviewDlg.visible"
+      :title="refPreviewDlg.title || '文档预览'"
+      width="720px"
+      class="ref-preview-dialog"
+    >
+      <div class="ref-preview-body" v-html="refPreviewDlg.html" />
+      <template #footer>
+        <el-button @click="refPreviewDlg.visible = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>
@@ -778,59 +1176,146 @@ onMounted(() => {
 .split {
   display: block;
 }
-.split.with-panel {
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 16px;
-  align-items: start;
+.list {
+  min-width: 0;
+  overflow-x: auto;
 }
 .pager {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-top: 8px;
-  font-size: 12px;
-  color: #666;
 }
 .panel {
-  border: 1px solid var(--el-border-color);
-  border-radius: 8px;
+  border: none;
+  border-radius: 0;
   background: #fff;
-  max-height: 720px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
+}
+.panel :deep(.el-tabs__header) {
+  margin-bottom: 8px;
 }
 .panel-hd {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--el-border-color);
-  background: #fafafa;
+  gap: 12px;
+  padding: 0 0 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.panel-hd-main {
+  flex: 1;
+  min-width: 0;
+}
+.panel-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.panel-meta {
+  margin-top: 6px;
+  line-height: 1.55;
+}
+.panel-hd-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
 }
 .panel-body {
-  padding: 12px 14px;
-  font-size: 12px;
+  padding: 4px 0 12px;
+  font-size: 13px;
 }
-.cover-row {
-  display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 12px;
+.snap-desc :deep(.el-descriptions__label) {
+  width: 96px;
+}
+.review-form {
+  margin-top: 8px;
+}
+.review-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #666;
+  line-height: 1.55;
+}
+.review-actions {
+  display: flex;
+  gap: 8px;
+}
+.auto-hint,
+.ref-summary {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  background: #f6f8fa;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ref-line {
+  margin-bottom: 4px;
+}
+.sub-h {
+  margin: 12px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.lesson-preview-body {
+  max-height: 60vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  line-height: 1.65;
+  font-size: 13px;
+  color: #333;
+}
+.ref-preview-body {
+  max-height: 60vh;
+  overflow: auto;
+  padding: 4px 8px;
+  background: #fff;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+}
+.cover-block {
   margin-bottom: 12px;
 }
 .cover {
-  width: 72px;
-  height: 72px;
-  object-fit: cover;
-  border-radius: 6px;
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 8px;
   border: 1px solid #eee;
+  background: #f8fafc;
+  cursor: zoom-in;
+  display: block;
+}
+.cover-tip {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: center;
+}
+.snap-head {
+  margin-bottom: 12px;
 }
 .cover.ph {
+  width: 100%;
+  height: 160px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #f5f5f5;
   color: #999;
-  font-size: 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px dashed #e2e8f0;
+}
+.cover-full {
+  display: block;
+  max-width: 100%;
+  max-height: 72vh;
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #f8fafc;
 }
 .ttl {
   font-weight: 600;

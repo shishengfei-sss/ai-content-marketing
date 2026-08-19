@@ -16,6 +16,20 @@ const STATUS_LABEL = {
   cancelled: '已取消',
 }
 
+function isTimesCard(row) {
+  return !row.slot_id && (row.booked_time_slot === '次数卡' || !row.booked_time_slot)
+}
+
+function rowTitle(row) {
+  if (isTimesCard(row)) return row.product_name || '次数卡'
+  return `${row.product_name || '服务'} ${row.booked_date || ''} ${row.booked_time_slot || ''}`.trim()
+}
+
+function statusLabel(row) {
+  if (row.status === 'booked' && isTimesCard(row)) return '待核销'
+  return STATUS_LABEL[row.status] || row.status
+}
+
 const filtered = computed(() => {
   if (tab.value === 'active') return items.value.filter((i) => i.status === 'booked')
   return items.value.filter((i) => i.status !== 'booked')
@@ -78,13 +92,19 @@ onShow(load)
     <view v-else class="list">
       <view v-for="row in filtered" :key="row.id" class="card">
         <view class="row">
-          <text class="name">{{ row.product_name || '服务' }} {{ row.booked_date }} {{ row.booked_time_slot }}</text>
-          <text class="badge">{{ STATUS_LABEL[row.status] || row.status }}</text>
+          <text class="name">{{ rowTitle(row) }}</text>
+          <text class="badge">{{ statusLabel(row) }}</text>
+        </view>
+        <view class="meta">
+          <text v-if="isTimesCard(row)" class="tag">次数卡</text>
+          <text v-else class="tag">预约</text>
+          <text v-if="row.status === 'booked' && row.verify_code">核销码 {{ row.verify_code }}</text>
         </view>
         <view v-if="row.status === 'booked'" class="ops">
           <text class="link" @click="viewCode(row)">查看码</text>
-          <button class="btn" size="mini" @click="cancel(row)">取消预约</button>
+          <button class="btn" size="mini" @click="cancel(row)">{{ isTimesCard(row) ? '取消' : '取消预约' }}</button>
         </view>
+        <text v-else-if="row.status === 'completed'" class="hint">已核销</text>
         <text v-else-if="row.cancel_reason === 'expired_unredeemed'" class="hint">已取消 · 过期未核销</text>
         <text v-else-if="row.cancel_reason === 'slot_closed'" class="hint">已取消 · 关闭时段</text>
         <text v-else-if="row.cancel_reason" class="hint">已取消</text>
@@ -144,6 +164,21 @@ onShow(load)
   font-size: 13px;
   font-weight: 600;
   flex: 1;
+}
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #64748b;
+}
+.tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
 }
 .badge {
   font-size: 11px;

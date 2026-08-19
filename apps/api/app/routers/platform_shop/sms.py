@@ -37,6 +37,7 @@ class SignatureCreate(BaseModel):
 class SignatureResubmit(BaseModel):
     content: str | None = None
     remark: str | None = None
+    qualification_files: dict | None = None
 
 
 class RejectBody(BaseModel):
@@ -230,7 +231,13 @@ def resubmit_signature(
     _: User = Depends(_write),
     db: Session = Depends(get_db),
 ):
-    return p12svc.resubmit_signature(db, sig_id, content=body.content, remark=body.remark)
+    return p12svc.resubmit_signature(
+        db,
+        sig_id,
+        content=body.content,
+        remark=body.remark,
+        qualification_files=body.qualification_files,
+    )
 
 
 @router.get("/templates")

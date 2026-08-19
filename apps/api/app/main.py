@@ -127,7 +127,12 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled error on %s", request.url.path)
     detail = "服务器内部错误，请查看 API 日志"
     msg = str(exc).lower()
-    if "does not exist" in msg or "undefinedtable" in msg or "no such table" in msg:
+    if (
+        "does not exist" in msg
+        or "undefinedtable" in msg
+        or "no such table" in msg
+        or "no such column" in msg
+    ):
         detail = "数据库表未初始化，请在服务器执行 alembic upgrade head"
     elif "type \"vector\"" in msg or "pg_extension" in msg or "vector" in msg and "does not exist" in msg:
         detail = "知识库向量扩展未就绪，已降级为 JSON 索引；请更新 API 或安装 pgvector"

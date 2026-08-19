@@ -10,6 +10,9 @@ import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '../../api/client'
+import { submitShopExport, SHOP_EXPORT_SCOPE_LABELS } from '../../utils/shopExport'
+import CrmColumnSettingsDialog from '../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../composables/useListColumnSettings'
 import { useCurrentShop } from '../../composables/useCurrentShop'
 
 const route = useRoute()
@@ -17,8 +20,6 @@ const router = useRouter()
 const { currentId } = useCurrentShop()
 const loading = ref(false)
 const exporting = ref(false)
-const exportDialog = ref(false)
-const exportTask = ref(null)
 const advOpen = ref(false)
 const items = ref([])
 const total = ref(0)
@@ -40,28 +41,24 @@ const query = reactive({
 const COL_STORAGE = 'shop.a12.columns'
 const ALL_COLS = [
   { key: 'buyer', label: '买家', locked: true, defaultOn: true },
-  { key: 'product_name', label: '商品', locked: true, defaultOn: true },
-  { key: 'product_type', label: '类型', locked: true, defaultOn: true },
-  { key: 'status', label: '状态', locked: true, defaultOn: true },
-  { key: 'times', label: '次数', locked: true, defaultOn: true },
-  { key: 'order_no', label: '订单', locked: true, defaultOn: true },
-  { key: 'activated_at', label: '开通时间', locked: true, defaultOn: true },
-  { key: 'expires_at', label: '到期时间', locked: true, defaultOn: true },
-  { key: 'shop_name', label: '店铺', locked: false, defaultOn: false },
+  { key: 'product_name', label: '商品', defaultOn: true },
+  { key: 'product_type', label: '类型', defaultOn: true },
+  { key: 'status', label: '状态', defaultOn: true },
+  { key: 'times', label: '次数', defaultOn: true },
+  { key: 'order_no', label: '订单', defaultOn: true },
+  { key: 'activated_at', label: '开通时间', defaultOn: true },
+  { key: 'expires_at', label: '到期时间', defaultOn: true },
+  { key: 'shop_name', label: '店铺', defaultOn: false },
   { key: 'ops', label: '操作', locked: true, defaultOn: true },
 ]
-function loadColPrefs() {
-  try {
-    const raw = localStorage.getItem(COL_STORAGE)
-    if (raw) return JSON.parse(raw)
-  } catch {
-    /* ignore */
-  }
-  return Object.fromEntries(ALL_COLS.map((c) => [c.key, c.defaultOn]))
-}
-const colVisible = reactive(loadColPrefs())
-const colDialog = ref(false)
-const colDraft = reactive({ ...colVisible })
+const {
+  visibleKeys,
+  columnDialogVisible: colDialog,
+  columnDraft,
+  openColumnSettings,
+  saveColumnSettings,
+  isColVisible,
+} = useListColumnSettings(ALL_COLS, COL_STORAGE)
 
 const STATUS_LABEL = {
   pending: '待生效',
@@ -88,18 +85,30 @@ function tabCount(key) {
   if (!key) return statusCounts.value.all ?? total.value
   return statusCounts.value[key] ?? 0
 }
+function buyerLabel(row) {
+  const nick = (row.buyer_nickname || '').trim()
+  const mobile = (row.buyer_mobile_masked || '').trim()
+  if (nick && mobile) return `${nick} ${mobile}`
+  return nick || mobile || '—'
+}
 function timesText(row) {
   if (row.remaining_count == null) return '—'
   return `${row.remaining_count}/${row.total_count ?? '—'}`
 }
 function statusText(row) {
-  if (row.status === 'active' && row.remaining_count === 0) return STATUS_LABEL.consumed
+  if (row.status === 'consumed') return STATUS_LABEL.consumed
+  if (row.remaining_count === 0 && row.status !== 'revoked' && row.remaining_count != null) {
+    return STATUS_LABEL.consumed
+  }
   return STATUS_LABEL[row.status] || row.status
 }
 function detailHint(d) {
   if (!d) return ''
   if (d.status === 'pending') return '待支付或待领权后生效，不可核销/学习'
   if (d.status === 'revoked') return d.revoke_reason || '已随退款撤销'
+  if (d.status === 'consumed' || (d.remaining_count === 0 && d.status !== 'revoked' && d.remaining_count != null)) {
+    return '次数已用尽'
+  }
   if (d.status === 'expired') return '已过期，不可使用'
   if (d.status === 'active' && d.remaining_count === 0) return '次数已用尽'
   return '生效中，可履约'
@@ -163,9 +172,13 @@ async function openDetail(row) {
 async function exportCsv() {
   exporting.value = true
   try {
-    const { data } = await api.post('/api/v1/shop/entitlements/export', listParams())
-    exportTask.value = data
-    exportDialog.value = true
+    await submitShopExport(
+      '/api/v1/shop/entitlements/export',
+      listParams(),
+      '/api/v1/shop/entitlements/export-tasks',
+      'shop-entitlements.csv',
+      total.value,
+    )
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
   } finally {
@@ -173,33 +186,6 @@ async function exportCsv() {
   }
 }
 
-async function downloadExportFile() {
-  if (!exportTask.value?.id) return
-  try {
-    const res = await api.get(`/api/v1/shop/entitlements/export-tasks/${exportTask.value.id}/file`, {
-      responseType: 'blob',
-    })
-    const blob = new Blob([res.data], { type: 'text/csv; charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = exportTask.value.file_name || 'shop-entitlements.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    ElMessage.error(e.message || '下载失败')
-  }
-}
-
-function openColSettings() {
-  Object.assign(colDraft, colVisible)
-  colDialog.value = true
-}
-function saveCols() {
-  Object.assign(colVisible, colDraft)
-  localStorage.setItem(COL_STORAGE, JSON.stringify({ ...colVisible }))
-  colDialog.value = false
-}
 
 function goOrder(orderId) {
   if (!orderId) return
@@ -282,11 +268,11 @@ onMounted(async () => {
           <el-button :loading="exporting">导出 ▾</el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="current">当前筛选</el-dropdown-item>
+              <el-dropdown-item command="current">{{ SHOP_EXPORT_SCOPE_LABELS.filtered }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button @click="openColSettings">列设置</el-button>
+        <el-button @click="openColumnSettings">列设置</el-button>
       </div>
     </div>
 
@@ -332,22 +318,23 @@ onMounted(async () => {
     </div>
 
     <el-table :data="items" border stripe size="small" style="margin-top: 12px">
-      <el-table-column v-if="colVisible.buyer" label="买家" min-width="160">
+      <template v-for="colKey in visibleKeys" :key="colKey">
+      <el-table-column v-if="colKey === 'buyer'" label="买家" min-width="160">
         <template #default="{ row }">
-          {{ row.buyer_nickname || '—' }} {{ row.buyer_mobile_masked || '' }}
+          {{ buyerLabel(row) }}
         </template>
       </el-table-column>
-      <el-table-column v-if="colVisible.product_name" prop="product_name" label="商品" min-width="140" />
-      <el-table-column v-if="colVisible.product_type" label="类型" width="80">
+      <el-table-column v-if="colKey === 'product_name'" prop="product_name" label="商品" min-width="140" />
+      <el-table-column v-if="colKey === 'product_type'" label="类型" width="80">
         <template #default="{ row }">{{ TYPE_LABEL[row.product_type] || row.product_type }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.status" label="状态" width="90">
+      <el-table-column v-if="colKey === 'status'" label="状态" width="90">
         <template #default="{ row }">{{ statusText(row) }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.times" label="次数" width="90">
+      <el-table-column v-if="colKey === 'times'" label="次数" width="90">
         <template #default="{ row }">{{ timesText(row) }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.order_no" label="订单" min-width="150">
+      <el-table-column v-if="colKey === 'order_no'" label="订单" min-width="150">
         <template #default="{ row }">
           <el-button
             v-if="row.order_id"
@@ -360,61 +347,40 @@ onMounted(async () => {
           <span v-else>{{ row.order_no || '—' }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="colVisible.activated_at" label="开通时间" min-width="140">
+      <el-table-column v-if="colKey === 'activated_at'" label="开通时间" min-width="140">
         <template #default="{ row }">{{ fmtTime(row.activated_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.expires_at" label="到期时间" min-width="140">
+      <el-table-column v-if="colKey === 'expires_at'" label="到期时间" min-width="140">
         <template #default="{ row }">{{ fmtTime(row.expires_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.shop_name" label="店铺" min-width="120">
+      <el-table-column v-if="colKey === 'shop_name'" label="店铺" min-width="120">
         <template #default="{ row }">{{ row.shop_name || '—' }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.ops" label="操作" width="80" fixed="right">
+      <el-table-column v-if="colKey === 'ops'" label="操作" width="80" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openDetail(row)">详情</el-button>
         </template>
       </el-table-column>
+      </template>
     </el-table>
-    <el-pagination
-      v-model:current-page="query.page"
-      v-model:page-size="query.page_size"
-      :total="total"
-      :page-sizes="[10, 20, 50, 100]"
-      layout="total, sizes, prev, pager, next"
-      style="margin-top: 12px"
-      @current-change="load"
-      @size-change="load"
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="query.page"
+        v-model:page-size="query.page_size"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next"
+        @current-change="load"
+        @size-change="load"
+      />
+    </div>
+
+    <CrmColumnSettingsDialog
+      v-model:visible="colDialog"
+      v-model:columns="columnDraft"
+      @save="() => { saveColumnSettings(); ElMessage.success('列设置已保存') }"
     />
 
-    <el-dialog v-model="exportDialog" title="导出任务" width="420px">
-      <el-form v-if="exportTask" label-width="100px">
-        <el-form-item label="范围">当前筛选</el-form-item>
-        <el-form-item label="条数">{{ exportTask.row_count ?? 0 }} 条</el-form-item>
-        <el-form-item label="状态">{{ exportTask.status === 'done' ? '已完成' : (exportTask.status || '—') }}</el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button type="primary" :disabled="exportTask?.status !== 'done'" @click="downloadExportFile">
-          下载
-        </el-button>
-        <el-button @click="exportDialog = false">关闭</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="colDialog" title="列设置" width="360px">
-      <el-checkbox
-        v-for="c in ALL_COLS"
-        :key="c.key"
-        v-model="colDraft[c.key]"
-        :disabled="c.locked"
-        style="display: block; margin: 6px 0"
-      >
-        {{ c.label }}
-      </el-checkbox>
-      <template #footer>
-        <el-button @click="colDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveCols">保存</el-button>
-      </template>
-    </el-dialog>
 
     <el-drawer v-model="drawer" title="权益详情" size="420px">
       <template v-if="detail">
@@ -422,7 +388,7 @@ onMounted(async () => {
           {{ detail.product_name || '权益' }}
           <el-tag size="small" style="margin-left: 8px">{{ statusText(detail) }}</el-tag>
         </h3>
-        <p>买家：{{ detail.buyer_nickname || '—' }} {{ detail.buyer_mobile_masked || '' }}</p>
+        <p>买家：{{ buyerLabel(detail) }}</p>
         <p>
           订单：
           <el-button

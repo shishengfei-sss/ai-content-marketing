@@ -1,4 +1,5 @@
 from uuid import UUID
+import logging
 import os
 import time
 
@@ -51,6 +52,7 @@ from app.services.platform_llm_service import (
 from app.services.knowledge_service import index_document
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+logger = logging.getLogger(__name__)
 
 
 def _content_out(content: Content) -> AdminContentOut:
@@ -439,8 +441,15 @@ def list_tenants(
     db: Session = Depends(get_db),
 ):
     items, total = list_tenants_admin(db, q=q, page=page, page_size=page_size)
+    safe_items: list[AdminTenantOut] = []
+    for item in items:
+        try:
+            safe_items.append(AdminTenantOut(**item))
+        except Exception:
+            logger.exception("tenant list serialize failed id=%s", item.get("id"))
+            continue
     return AdminTenantListResponse(
-        items=[AdminTenantOut(**item) for item in items],
+        items=safe_items,
         total=total,
         page=page,
         page_size=page_size,

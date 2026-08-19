@@ -1,0 +1,28 @@
+/* 买家端视觉 token。对照 PRD 02-买家端UI.html 现网皮：主色 #1677ff */
+page {
+  --shop-primary: #1677ff;
+  --shop-primary-soft: #e8f3ff;
+  --shop-primary-deep: #0958d9;
+  --shop-bg: #f3f5f9;
+  --shop-card: #ffffff;
+  --shop-text: #0f172a;
+  --shop-muted: #64748b;
+  --shop-faint: #94a3b8;
+  --shop-line: #eef2f6;
+  --shop-danger: #e11d48;
+  --shop-danger-soft: #fff1f2;
+  --shop-success: #059669;
+  --shop-success-soft: #ecfdf5;
+  --shop-warn: #d97706;
+  --shop-warn-soft: #fffbeb;
+  --shop-radius: 16px;
+  --shop-radius-sm: 10px;
+  --shop-shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
+}
+
+.shop-page {
+  min-height: 100vh;
+  background: var(--shop-bg);
+  color: var(--shop-text);
+  box-sizing: border-box;
+}

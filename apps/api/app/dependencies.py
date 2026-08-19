@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy.orm import Session
@@ -16,15 +16,26 @@ from app.services.membership_service import get_membership, is_platform_admin
 security = HTTPBearer(auto_error=False)
 
 
-def get_current_user(
+def resolve_access_token(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    access_token: str | None = Query(default=None, description="供 img/video 等无法带 Header 的资源请求"),
+) -> str | None:
+    if credentials and credentials.credentials:
+        return credentials.credentials
+    if access_token and str(access_token).strip():
+        return str(access_token).strip()
+    return None
+
+
+def get_current_user(
+    token: str | None = Depends(resolve_access_token),
     db: Session = Depends(get_db),
 ) -> User:
-    if not credentials:
+    if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录")
 
     try:
-        payload = decode_access_token(credentials.credentials)
+        payload = decode_access_token(token)
         user_id = UUID(payload.get("sub"))
     except (JWTError, ValueError, TypeError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录已失效")
@@ -38,12 +49,12 @@ def get_current_user(
 
 
 def get_token_payload(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    token: str | None = Depends(resolve_access_token),
 ) -> dict:
-    if not credentials:
+    if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录")
     try:
-        return decode_access_token(credentials.credentials)
+        return decode_access_token(token)
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录已失效")
 

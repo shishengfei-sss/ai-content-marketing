@@ -8,6 +8,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { adminApi, isBenignEmptyError } from '../../../api/client'
+import CrmColumnSettingsDialog from '../../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../../composables/useListColumnSettings'
 import { useAuthStore } from '../../../stores/auth'
 import { formatDateTime } from '../../../utils/datetime'
 
@@ -61,49 +63,17 @@ const ALL_COLUMNS = [
   { key: 'tenant_id', label: 'tenant_id', defaultVisible: false },
   { key: 'ops', label: '操作', locked: true, defaultVisible: true },
 ]
-const visibleColumns = ref(loadColumnSettings())
-const columnDialogVisible = ref(false)
-const columnDraft = ref([])
+const {
+  visibleKeys: visibleColumns,
+  columnDialogVisible,
+  columnDraft,
+  openColumnSettings,
+  saveColumnSettings,
+  isColVisible,
+} = useListColumnSettings(ALL_COLUMNS, COLUMN_STORAGE_KEY)
 
 const sortBy = ref('submitted_at')
 const sortDir = ref('desc')
-
-function loadColumnSettings() {
-  const defaults = ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key)
-  try {
-    const raw = localStorage.getItem(COLUMN_STORAGE_KEY)
-    if (!raw) return defaults
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed) || !parsed.length) return defaults
-    const locked = ALL_COLUMNS.filter((c) => c.locked).map((c) => c.key)
-    return [...new Set([...locked, ...parsed])].filter((k) =>
-      ALL_COLUMNS.some((c) => c.key === k),
-    )
-  } catch {
-    return defaults
-  }
-}
-
-function isColVisible(key) {
-  return visibleColumns.value.includes(key)
-}
-
-function openColumnSettings() {
-  columnDraft.value = ALL_COLUMNS.filter(
-    (c) => !c.locked && visibleColumns.value.includes(c.key),
-  ).map((c) => c.key)
-  columnDialogVisible.value = true
-}
-
-function saveColumnSettings() {
-  const locked = ALL_COLUMNS.filter((c) => c.locked).map((c) => c.key)
-  visibleColumns.value = [...new Set([...locked, ...columnDraft.value])].filter((k) =>
-    ALL_COLUMNS.some((c) => c.key === k),
-  )
-  localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(visibleColumns.value))
-  columnDialogVisible.value = false
-  ElMessage.success('列设置已保存')
-}
 
 function sortIcon(prop) {
   if (sortBy.value !== prop) return '↕'
@@ -474,6 +444,11 @@ async function openReview(row, preferSub = 'detail') {
   }
 }
 
+async function openReviewById(id) {
+  if (!id) return
+  await openReview({ id })
+}
+
 function backToList() {
   viewMode.value = 'list'
   current.value = null
@@ -571,11 +546,13 @@ async function doReject() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   const st = route.query.status
   if (st) syncTabFromStatus(String(st))
   loadRejectReasons()
-  loadList()
+  await loadList()
+  const appId = route.query.id
+  if (appId) await openReviewById(String(appId))
 })
 onBeforeUnmount(() => {
   clearReveal()
@@ -676,7 +653,8 @@ onBeforeUnmount(() => {
       </div>
 
       <el-table v-loading="loading" :data="items" stripe style="margin-top: 4px">
-        <el-table-column v-if="isColVisible('merchant')" min-width="160" fixed="left">
+        <template v-for="colKey in visibleColumns" :key="colKey">
+        <el-table-column v-if="colKey === 'merchant'" min-width="160" fixed="left">
           <template #header>
             <button type="button" class="th-sort" @click="toggleSort('display_name')">
               商家 <span class="sort-ico">{{ sortIcon('display_name') }}</span>
@@ -692,17 +670,17 @@ onBeforeUnmount(() => {
             </div>
           </template>
         </el-table-column>
-        <el-table-column v-if="isColVisible('application_no')" label="申请单号" width="150">
+        <el-table-column v-if="colKey === 'application_no'" label="申请单号" width="150">
           <template #default="{ row }">
             <code>{{ row.application_no || '—' }}</code>
           </template>
         </el-table-column>
-        <el-table-column v-if="isColVisible('entity_type')" label="主体类型" width="120">
+        <el-table-column v-if="colKey === 'entity_type'" label="主体类型" width="120">
           <template #default="{ row }">
             {{ entityLabel[row.entity_type] || row.entity_type }}
           </template>
         </el-table-column>
-        <el-table-column v-if="isColVisible('submitted_at')" width="180">
+        <el-table-column v-if="colKey === 'submitted_at'" width="180">
           <template #header>
             <button type="button" class="th-sort" @click="toggleSort('submitted_at')">
               申请时间 <span class="sort-ico">{{ sortIcon('submitted_at') }}</span>
@@ -710,31 +688,31 @@ onBeforeUnmount(() => {
           </template>
           <template #default="{ row }">{{ formatDateTime(row.submitted_at) }}</template>
         </el-table-column>
-        <el-table-column v-if="isColVisible('initiator')" label="发起方式" width="110">
+        <el-table-column v-if="colKey === 'initiator'" label="发起方式" width="110">
           <template #default="{ row }">
             {{ initiatorLabel[row.initiator] || row.initiator }}
           </template>
         </el-table-column>
-        <el-table-column v-if="isColVisible('status')" label="状态" width="100">
+        <el-table-column v-if="colKey === 'status'" label="状态" width="100">
           <template #default="{ row }">
             <el-tag size="small" :type="statusTagType[row.status] || 'info'">
               {{ statusLabel[row.status] || row.status }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column v-if="isColVisible('reviewer_name')" label="审核人" width="110">
+        <el-table-column v-if="colKey === 'reviewer_name'" label="审核人" width="110">
           <template #default="{ row }">{{ row.reviewer_name || '—' }}</template>
         </el-table-column>
-        <el-table-column v-if="isColVisible('reviewed_at')" label="审核时间" width="170">
+        <el-table-column v-if="colKey === 'reviewed_at'" label="审核时间" width="170">
           <template #default="{ row }">{{ formatDateTime(row.reviewed_at) }}</template>
         </el-table-column>
-        <el-table-column v-if="isColVisible('merchant_code')" label="商家编码" width="140">
+        <el-table-column v-if="colKey === 'merchant_code'" label="商家编码" width="140">
           <template #default="{ row }">{{ row.merchant_code || '—' }}</template>
         </el-table-column>
-        <el-table-column v-if="isColVisible('tenant_id')" label="tenant_id" min-width="220">
+        <el-table-column v-if="colKey === 'tenant_id'" label="tenant_id" min-width="220">
           <template #default="{ row }">{{ row.tenant_id || '—' }}</template>
         </el-table-column>
-        <el-table-column v-if="isColVisible('ops')" label="操作" width="100" fixed="right">
+        <el-table-column v-if="colKey === 'ops'" label="操作" width="100" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="row.status === 'pending' && canApprove"
@@ -750,6 +728,7 @@ onBeforeUnmount(() => {
             </el-button>
           </template>
         </el-table-column>
+        </template>
       </el-table>
 
       <div class="pager">
@@ -777,17 +756,11 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <el-dialog v-model="columnDialogVisible" title="列设置" width="420px">
-      <el-checkbox-group v-model="columnDraft">
-        <div v-for="col in ALL_COLUMNS.filter((c) => !c.locked)" :key="col.key" class="column-item">
-          <el-checkbox :label="col.key">{{ col.label }}</el-checkbox>
-        </div>
-      </el-checkbox-group>
-      <template #footer>
-        <el-button @click="columnDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveColumnSettings">保存</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="columnDialogVisible"
+      v-model:columns="columnDraft"
+      @save="saveColumnSettings"
+    />
 
     <div v-if="viewMode === 'review' && current" class="review-panel">
       <div class="review-head">

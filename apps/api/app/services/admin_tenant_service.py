@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import func, or_
@@ -13,12 +15,28 @@ from app.permissions import SYSTEM_ROLE_ADMIN, SYSTEM_ROLE_EDITOR
 from app.services.membership_service import get_membership
 from app.services.platform_llm_service import get_quota_status
 
+logger = logging.getLogger(__name__)
+
+
+def _tenant_fallback(tenant: Tenant) -> dict:
+    return {
+        "id": tenant.id,
+        "name": tenant.name or "",
+        "credit_code": tenant.credit_code,
+        "industry_code": tenant.industry_code or "finance",
+        "member_count": 0,
+        "admin_summaries": [],
+        "quota_used": 0,
+        "quota_limit": 0,
+        "created_at": tenant.created_at or datetime.now(timezone.utc),
+    }
+
 
 def _tenant_to_dict(db: Session, tenant: Tenant) -> dict:
     member_count = (
         db.query(func.count(TenantMembership.id))
         .filter(
-            TenantMembership.tenant_id == tenant.id,
+            uuid_eq(TenantMembership.tenant_id, tenant.id),
             TenantMembership.is_active.is_(True),
         )
         .scalar()
@@ -29,30 +47,37 @@ def _tenant_to_dict(db: Session, tenant: Tenant) -> dict:
         .options(joinedload(TenantMembership.user))
         .join(TenantRole, TenantMembership.role_id == TenantRole.id)
         .filter(
-            TenantMembership.tenant_id == tenant.id,
+            uuid_eq(TenantMembership.tenant_id, tenant.id),
             TenantMembership.is_active.is_(True),
             TenantRole.code == SYSTEM_ROLE_ADMIN,
         )
         .all()
     )
-    quota = get_quota_status(db, tenant.id)
+    try:
+        quota = get_quota_status(db, tenant.id)
+        quota_used = int(quota.get("used_count") or 0)
+        quota_limit = int(quota.get("quota_limit") or 0)
+    except Exception:
+        logger.exception("tenant quota failed id=%s", tenant.id)
+        quota_used, quota_limit = 0, 0
     return {
         "id": tenant.id,
-        "name": tenant.name,
+        "name": tenant.name or "",
         "credit_code": tenant.credit_code,
-        "industry_code": tenant.industry_code,
+        "industry_code": tenant.industry_code or "finance",
         "member_count": member_count,
         "admin_summaries": [
             {
                 "user_id": row.user_id,
-                "phone": row.user.phone,
-                "display_name": row.user.display_name,
+                "phone": row.user.phone if row.user else None,
+                "display_name": ((row.user.display_name if row.user else None) or ""),
             }
             for row in admin_rows
+            if row.user is not None
         ],
-        "quota_used": quota["used_count"],
-        "quota_limit": quota["quota_limit"],
-        "created_at": tenant.created_at,
+        "quota_used": quota_used,
+        "quota_limit": quota_limit,
+        "created_at": tenant.created_at or datetime.now(timezone.utc),
     }
 
 
@@ -90,7 +115,11 @@ def list_tenants_admin(
 
     items: list[dict] = []
     for tenant in tenants:
-        items.append(_tenant_to_dict(db, tenant))
+        try:
+            items.append(_tenant_to_dict(db, tenant))
+        except Exception:
+            logger.exception("tenant list item failed id=%s", tenant.id)
+            items.append(_tenant_fallback(tenant))
     return items, total
 
 
@@ -98,7 +127,11 @@ def get_tenant_admin(db: Session, tenant_id: UUID) -> dict | None:
     tenant = db.query(Tenant).filter(uuid_eq(Tenant.id, tenant_id)).first()
     if not tenant:
         return None
-    return _tenant_to_dict(db, tenant)
+    try:
+        return _tenant_to_dict(db, tenant)
+    except Exception:
+        logger.exception("tenant detail failed id=%s", tenant_id)
+        return _tenant_fallback(tenant)
 
 
 def list_tenant_members_admin(db: Session, tenant_id: UUID) -> list[dict]:
@@ -108,24 +141,28 @@ def list_tenant_members_admin(db: Session, tenant_id: UUID) -> list[dict]:
             joinedload(TenantMembership.user),
             joinedload(TenantMembership.role),
         )
-        .filter(TenantMembership.tenant_id == tenant_id)
+        .filter(uuid_eq(TenantMembership.tenant_id, tenant_id))
         .order_by(TenantMembership.joined_at.asc())
         .all()
     )
-    return [
-        {
-            "membership_id": row.id,
-            "user_id": row.user_id,
-            "phone": row.user.phone,
-            "display_name": row.user.display_name,
-            "role_code": row.role.code,
-            "role_name": row.role.name,
-            "membership_active": row.is_active,
-            "user_active": row.user.is_active,
-            "joined_at": row.joined_at,
-        }
-        for row in rows
-    ]
+    out: list[dict] = []
+    for row in rows:
+        if not row.user or not row.role:
+            continue
+        out.append(
+            {
+                "membership_id": row.id,
+                "user_id": row.user_id,
+                "phone": row.user.phone,
+                "display_name": row.user.display_name or "",
+                "role_code": row.role.code,
+                "role_name": row.role.name,
+                "membership_active": row.is_active,
+                "user_active": bool(row.user.is_active),
+                "joined_at": row.joined_at,
+            }
+        )
+    return out
 
 
 def transfer_tenant_admin(

@@ -5,15 +5,18 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
+from html import unescape
 from pathlib import Path
 from uuid import UUID
 
 from fastapi import HTTPException, UploadFile
+from fastapi.responses import HTMLResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import uuid_eq
 from app.dependencies import TenantContext
+from app.services.shop.export_limits import SHOP_EXPORT_ROW_LIMIT, assert_export_within_limit
 from app.models.shop import (
     ShopColumn,
     ShopDigitalAsset,
@@ -46,6 +49,15 @@ _PREVIEW_EXT = {".pdf", ".doc", ".docx"}
 _ASSET_EXT = {".pdf", ".doc", ".docx", ".zip"}
 _MAX_ASSET_BYTES = 50 * 1024 * 1024
 _MAX_ASSETS = 20
+_LESSON_VIDEO_EXT = {".mp4", ".mov"}
+_LESSON_AUDIO_EXT = {".mp3", ".m4a", ".aac", ".wav"}
+_ARTICLE_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".gif"}
+_MAX_LESSON_VIDEO_BYTES = 2 * 1024 * 1024 * 1024
+_MAX_LESSON_AUDIO_BYTES = 200 * 1024 * 1024
+_MAX_ARTICLE_IMAGE_BYTES = 5 * 1024 * 1024
+_MAX_CONTENT_BODY_CHARS = 50_000
+_MAX_ARTICLE_IMAGES = 20
+_MAX_LESSON_DURATION_SEC = 180 * 60
 _CONTENT_ROOT = Path(__file__).resolve().parents[3] / "storage" / "shop_content"
 _COLUMN_STATUS_ZH = {"draft": "草稿", "published": "已发布", "off_sale": "已下架"}
 _PACKAGE_STATUS_ZH = _COLUMN_STATUS_ZH
@@ -79,6 +91,63 @@ def _previewable(name: str, mime: str | None) -> bool:
     if lower.endswith(".zip") or "zip" in m:
         return False
     return any(lower.endswith(ext) for ext in _PREVIEW_EXT) or "pdf" in m
+
+
+def _file_ext(name: str) -> str:
+    lower = (name or "").lower()
+    i = lower.rfind(".")
+    return lower[i:] if i >= 0 else ""
+
+
+def _validate_lesson_upload(name: str, size: int, purpose: str | None) -> None:
+    ext = _file_ext(name)
+    if purpose == "lesson_video":
+        if ext not in _LESSON_VIDEO_EXT:
+            raise HTTPException(status_code=422, detail="视频仅支持 mp4、mov 格式")
+        if size > _MAX_LESSON_VIDEO_BYTES:
+            raise HTTPException(status_code=422, detail="视频单文件不能超过 2GB")
+        return
+    if purpose == "lesson_audio":
+        if ext not in _LESSON_AUDIO_EXT:
+            raise HTTPException(status_code=422, detail="音频仅支持 mp3、m4a、aac、wav 格式")
+        if size > _MAX_LESSON_AUDIO_BYTES:
+            raise HTTPException(status_code=422, detail="音频单文件不能超过 200MB")
+        return
+    if purpose == "article_image":
+        if ext not in _ARTICLE_IMAGE_EXT:
+            raise HTTPException(status_code=422, detail="内嵌图仅支持 jpg、png、gif 格式")
+        if size > _MAX_ARTICLE_IMAGE_BYTES:
+            raise HTTPException(status_code=422, detail="单张内嵌图不能超过 5MB")
+        return
+
+
+def _plain_text_len(body: str | None) -> int:
+    text = re.sub(r"<[^>]+>", "", body or "")
+    return len(unescape(text).strip())
+
+
+def _article_image_count(body: str | None) -> int:
+    return len(re.findall(r"<img\b", body or "", flags=re.I))
+
+
+def _validate_article_body(body: str | None) -> None:
+    raw = body or ""
+    if len(raw) > _MAX_CONTENT_BODY_CHARS:
+        raise HTTPException(status_code=422, detail="正文不能超过 50000 字")
+    if _article_image_count(raw) > _MAX_ARTICLE_IMAGES:
+        raise HTTPException(status_code=422, detail="内嵌图不能超过 20 张")
+    if _plain_text_len(raw) < 10:
+        raise HTTPException(status_code=422, detail="图文正文至少 10 字")
+
+
+def _validate_lesson_media(les: ShopLesson) -> None:
+    if les.media_type == "article":
+        _validate_article_body(les.content_body)
+        return
+    if not les.media_id and not les.media_url:
+        raise HTTPException(status_code=422, detail="请上传媒体文件")
+    if les.media_type == "video" and les.duration_sec > _MAX_LESSON_DURATION_SEC:
+        raise HTTPException(status_code=422, detail="视频时长不能超过 180 分钟")
 
 
 def _ref_count(db: Session, ref_type: str, ref_id: UUID) -> int:
@@ -122,6 +191,7 @@ def _lesson_out(l: ShopLesson) -> LessonOut:
         media_type=l.media_type,
         media_id=l.media_id,
         media_url=l.media_url,
+        content_body=l.content_body,
         duration_sec=l.duration_sec,
         is_trial=bool(l.is_trial),
         trial_seconds=l.trial_seconds,
@@ -202,16 +272,17 @@ def _get_package(db: Session, tenant_id: UUID, package_id: UUID) -> ShopDigitalP
 
 
 def upload_content_file(
-    db: Session, ctx: TenantContext, file: UploadFile
+    db: Session, ctx: TenantContext, file: UploadFile, *, purpose: str | None = None
 ) -> ContentFileUploadOut:
     _merchant(db, ctx.tenant_id)
     raw_name = (file.filename or "upload.bin").strip() or "upload.bin"
     safe_name = re.sub(r"[^\w.\u4e00-\u9fff\-]+", "_", raw_name)[:180]
+    data = file.file.read()
+    _validate_lesson_upload(safe_name, len(data), purpose)
     file_id = str(uuid.uuid4())
     root = _CONTENT_ROOT / str(ctx.tenant_id)
     root.mkdir(parents=True, exist_ok=True)
     dest = root / f"{file_id}_{safe_name}"
-    data = file.file.read()
     dest.write_bytes(data)
     mime = file.content_type or "application/octet-stream"
     url = f"/api/v1/shop/content/files/{file_id}"
@@ -234,6 +305,25 @@ def resolve_content_file_path(tenant_id: UUID, file_id: str) -> Path | None:
         if p.name.startswith(f"{fid}_"):
             return p
     return None
+
+
+def content_file_html_preview(tenant_id: UUID, file_id: str, *, file_name: str | None = None) -> HTMLResponse:
+    path = resolve_content_file_path(tenant_id, file_id)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在")
+    name = (file_name or path.name.split("_", 1)[-1]).lower()
+    ext = _file_ext(name)
+    if ext == ".doc":
+        raise HTTPException(status_code=422, detail="旧版 .doc 请下载后用 Word 打开")
+    if ext != ".docx":
+        raise HTTPException(status_code=422, detail="该文件类型不支持 HTML 预览")
+    from app.services.document_text_extract import docx_to_preview_html
+
+    try:
+        html = docx_to_preview_html(path.read_bytes())
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return HTMLResponse(html)
 
 
 # ── Columns ──────────────────────────────────────────────────────
@@ -350,7 +440,7 @@ def export_columns_csv(
         db,
         ctx,
         page=1,
-        page_size=5000,
+        page_size=SHOP_EXPORT_ROW_LIMIT,
         status=status,
         q=q,
         shop_id=shop_id,
@@ -359,8 +449,8 @@ def export_columns_csv(
         updated_from=updated_from,
         updated_to=updated_to,
     )
-    if raise_too_many and total > 5000:
-        raise HTTPException(status_code=422, detail="结果过多，请缩小筛选")
+    if raise_too_many:
+        assert_export_within_limit(total)
     default_headers = ["标题", "课时数", "引用商品", "状态", "更新时间"]
     col_map = {
         "title": ["标题"],
@@ -542,21 +632,33 @@ def create_lesson(
         .count()
     )
     sort = body.sort_order if body.sort_order is not None else max_sort
+    if body.is_trial and body.media_type != "video":
+        raise HTTPException(status_code=422, detail="试看仅支持视频课时")
     if body.is_trial and not body.trial_seconds:
         raise HTTPException(status_code=422, detail="试看须填写试看秒数")
-    if body.media_type != "article" and not body.media_url and not body.media_id:
-        raise HTTPException(status_code=422, detail="请上传或填写媒体")
+    if body.media_type == "article":
+        _validate_article_body(body.content_body)
+    elif not body.media_url and not body.media_id:
+        raise HTTPException(status_code=422, detail="请上传媒体文件")
+    if body.media_type == "video" and body.duration_sec > _MAX_LESSON_DURATION_SEC:
+        raise HTTPException(status_code=422, detail="视频时长不能超过 180 分钟")
     les = ShopLesson(
         id=uuid.uuid4(),
         tenant_id=ctx.tenant_id,
         column_id=c.id,
         title=body.title.strip(),
         media_type=body.media_type,
-        media_id=body.media_id,
-        media_url=body.media_url or (f"/api/v1/shop/content/files/{body.media_id}" if body.media_id else None),
-        duration_sec=body.duration_sec,
-        is_trial=body.is_trial,
-        trial_seconds=body.trial_seconds if body.is_trial else None,
+        media_id=body.media_id if body.media_type != "article" else None,
+        media_url=(
+            body.media_url
+            or (f"/api/v1/shop/content/files/{body.media_id}" if body.media_id else None)
+            if body.media_type != "article"
+            else None
+        ),
+        content_body=(body.content_body or None) if body.media_type == "article" else None,
+        duration_sec=body.duration_sec if body.media_type != "article" else 0,
+        is_trial=body.is_trial if body.media_type == "video" else False,
+        trial_seconds=body.trial_seconds if body.is_trial and body.media_type == "video" else None,
         sort_order=sort,
         status="draft",
     )
@@ -584,17 +686,26 @@ def patch_lesson(
     if not les:
         raise HTTPException(status_code=404, detail="课时不存在")
     data = body.model_dump(exclude_unset=True)
-    for key in ("title", "media_type", "media_id", "media_url", "duration_sec", "sort_order"):
+    for key in ("title", "media_type", "media_id", "media_url", "content_body", "duration_sec", "sort_order"):
         if key in data and data[key] is not None:
             setattr(les, key, data[key].strip() if key == "title" else data[key])
     if "is_trial" in data and data["is_trial"] is not None:
-        les.is_trial = data["is_trial"]
+        if les.media_type != "video":
+            les.is_trial = False
+            les.trial_seconds = None
+        else:
+            les.is_trial = data["is_trial"]
     if "trial_seconds" in data:
         les.trial_seconds = data["trial_seconds"]
-    if les.is_trial and not les.trial_seconds:
+    if les.media_type == "article":
+        les.media_id = None
+        les.media_url = None
+        les.duration_sec = 0
+        les.is_trial = False
+        les.trial_seconds = None
+    if les.is_trial and les.media_type == "video" and not les.trial_seconds:
         raise HTTPException(status_code=422, detail="试看须填写试看秒数")
-    if not les.media_url and not les.media_id:
-        raise HTTPException(status_code=422, detail="请上传或填写媒体")
+    _validate_lesson_media(les)
     db.commit()
     db.refresh(les)
     return _lesson_out(les)
@@ -619,8 +730,7 @@ def publish_lesson(db: Session, ctx: TenantContext, column_id: UUID, lesson_id: 
         return _lesson_out(les)
     if not (les.title or "").strip():
         raise HTTPException(status_code=422, detail="请填写标题")
-    if not les.media_url and not les.media_id:
-        raise HTTPException(status_code=422, detail="请上传媒体")
+    _validate_lesson_media(les)
     les.status = "published"
     db.commit()
     db.refresh(les)
@@ -755,10 +865,10 @@ def export_packages_csv(
     import io
 
     items, total, _ = list_packages(
-        db, ctx, page=1, page_size=5000, status=status, q=q, shop_id=shop_id
+        db, ctx, page=1, page_size=SHOP_EXPORT_ROW_LIMIT, status=status, q=q, shop_id=shop_id
     )
-    if raise_too_many and total > 5000:
-        raise HTTPException(status_code=422, detail="结果过多，请缩小筛选")
+    if raise_too_many:
+        assert_export_within_limit(total)
     default_headers = ["标题", "交付方式", "文件数", "引用商品", "状态", "更新时间"]
     col_map = {
         "title": ["标题"],
@@ -992,6 +1102,8 @@ def published_lessons_for_product(db: Session, product: ShopProduct) -> list[dic
                 "is_trial": bool(les.is_trial),
                 "trial_seconds": les.trial_seconds,
                 "sort": les.sort_order if les.sort_order is not None else i + 1,
+                "media_type": les.media_type or "video",
+                "media_id": str(les.media_id) if les.media_id else None,
                 "media_url": les.media_url
                 or (f"/api/v1/shop/content/files/{les.media_id}" if les.media_id else None),
             }

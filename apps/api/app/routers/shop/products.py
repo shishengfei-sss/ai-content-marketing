@@ -46,7 +46,7 @@ def list_products(
     status: str | None = Query(default=None),
     type: str | None = Query(default=None),
     q: str | None = Query(default=None),
-    channel_mount: str | None = Query(default=None, description="mapped|none|rejected"),
+    channel_mount: str | None = Query(default=None, description="mapped|none|rejected|pending"),
     price_min_cents: int | None = Query(default=None, ge=0),
     price_max_cents: int | None = Query(default=None, ge=0),
     updated_from: str | None = Query(default=None),

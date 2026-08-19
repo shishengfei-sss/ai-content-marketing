@@ -6,23 +6,38 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, isBenignEmptyError } from '../../../api/client'
+import CrmColumnSettingsDialog from '../../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../../composables/useListColumnSettings'
 import { useAuthStore } from '../../../stores/auth'
+import { formatApiError } from '../../../utils/apiError'
 import { formatDateTime } from '../../../utils/datetime'
 import ShopMaterialUpload from '../../../components/shop/ShopMaterialUpload.vue'
+import { SHOP_EXPORT_COLUMN_MODE_LABELS } from '../../../utils/shopExport'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const canChannel = computed(() => auth.hasPlatformShopPermission('platform.shop.channel'))
+const sigDrawerTitle = computed(() => {
+  if (viewSig.value) return '签名详情'
+  if (sigResubmitId.value) return '修改并重新提交'
+  return '新建签名申请'
+})
+const sigMerchantName = computed(() => {
+  if (!sigForm.tenant_id) return ''
+  const m = merchants.value.find((x) => x.tenant_id === sigForm.tenant_id)
+  return m?.name || sigForm.tenant_id
+})
 
 const TAB_KEYS = ['channel', 'signatures', 'templates', 'assign', 'logs']
+const TPL_CODE_RE = /^[A-Za-z0-9_]{4,64}$/
 const activeTab = ref('signatures')
 
 const loading = ref(false)
 const exporting = ref(false)
 const exportDialog = ref(false)
 const exportTask = ref(null)
-const exportScope = ref('当前筛选')
+const exportScope = ref(SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns)
 const channelCfg = ref(null)
 const channelForm = reactive({
   access_key_id: '',
@@ -66,6 +81,8 @@ const logCustomUntil = ref('')
 
 const merchants = ref([])
 const sigDrawer = ref(false)
+const sigResubmitId = ref(null)
+const sigRejectReason = ref('')
 const sigForm = reactive({
   tenant_id: '',
   content: '',
@@ -99,62 +116,74 @@ const asgSubmitting = ref(false)
 
 const logDrawer = ref(false)
 const logDetail = ref(null)
-const sigColDlg = ref(false)
-const sigCols = ref(['content', 'merchant_name', 'status', 'applied_at', 'ops'])
 const SIG_COL_DEFS = [
-  { key: 'content', label: '签名', locked: true },
-  { key: 'merchant_name', label: '关联商家' },
-  { key: 'status', label: '供应商审核' },
-  { key: 'applied_at', label: '申请时间' },
-  { key: 'ops', label: '操作', locked: true },
+  { key: 'content', label: '签名', locked: true, defaultOn: true },
+  { key: 'merchant_name', label: '关联商家', defaultOn: true },
+  { key: 'status', label: '供应商审核', defaultOn: true },
+  { key: 'applied_at', label: '申请时间', defaultOn: true },
+  { key: 'ops', label: '操作', locked: true, defaultOn: true },
 ]
-function sigColOn(key) {
-  return sigCols.value.includes(key)
-}
+const {
+  visibleKeys: sigVisibleKeys,
+  columnDialogVisible: sigColDlg,
+  columnDraft: sigColDraft,
+  openColumnSettings: openSigCol,
+  saveColumnSettings: saveSigCol,
+  isColVisible: sigColOn,
+} = useListColumnSettings(SIG_COL_DEFS, 'shop-sms-sig-columns')
 
-const tplColDlg = ref(false)
-const tplCols = ref(['name', 'code', 'purpose', 'status', 'preview', 'ops'])
 const TPL_COL_DEFS = [
-  { key: 'name', label: '模板名称', locked: true },
-  { key: 'code', label: '供应商 Code' },
-  { key: 'purpose', label: '用途' },
-  { key: 'status', label: '审核状态' },
-  { key: 'preview', label: '内容摘要' },
-  { key: 'ops', label: '操作', locked: true },
+  { key: 'name', label: '模板名称', locked: true, defaultOn: true },
+  { key: 'code', label: '供应商 Code', defaultOn: true },
+  { key: 'purpose', label: '用途', defaultOn: true },
+  { key: 'status', label: '审核状态', defaultOn: true },
+  { key: 'preview', label: '内容摘要', defaultOn: true },
+  { key: 'ops', label: '操作', locked: true, defaultOn: true },
 ]
-function tplColOn(key) {
-  return tplCols.value.includes(key)
-}
+const {
+  visibleKeys: tplVisibleKeys,
+  columnDialogVisible: tplColDlg,
+  columnDraft: tplColDraft,
+  openColumnSettings: openTplCol,
+  saveColumnSettings: saveTplCol,
+  isColVisible: tplColOn,
+} = useListColumnSettings(TPL_COL_DEFS, 'shop-sms-tpl-columns')
 
-const asgColDlg = ref(false)
-const asgCols = ref(['merchant_name', 'sms_signature', 'claim_template', 'month', 'ops'])
 const ASG_COL_DEFS = [
-  { key: 'merchant_name', label: '商家', locked: true },
-  { key: 'sms_signature', label: '领权签名' },
-  { key: 'claim_template', label: '领权模板' },
-  { key: 'month', label: '本月已发' },
-  { key: 'ops', label: '操作', locked: true },
+  { key: 'merchant_name', label: '商家', locked: true, defaultOn: true },
+  { key: 'sms_signature', label: '领权签名', defaultOn: true },
+  { key: 'claim_template', label: '领权模板', defaultOn: true },
+  { key: 'month', label: '本月已发', defaultOn: true },
+  { key: 'ops', label: '操作', locked: true, defaultOn: true },
 ]
-function asgColOn(key) {
-  return asgCols.value.includes(key)
-}
+const {
+  visibleKeys: asgVisibleKeys,
+  columnDialogVisible: asgColDlg,
+  columnDraft: asgColDraft,
+  openColumnSettings: openAsgCol,
+  saveColumnSettings: saveAsgCol,
+  isColVisible: asgColOn,
+} = useListColumnSettings(ASG_COL_DEFS, 'shop-sms-asg-columns')
 
-const logColDlg = ref(false)
-const logCols = ref(['sent_at', 'merchant_name', 'purpose', 'sms_signature', 'template_name', 'mobile', 'status', 'order_no', 'ops'])
 const LOG_COL_DEFS = [
-  { key: 'sent_at', label: '发送时间', locked: true },
-  { key: 'merchant_name', label: '商家' },
-  { key: 'purpose', label: '用途' },
-  { key: 'sms_signature', label: '签名' },
-  { key: 'template_name', label: '模板' },
-  { key: 'mobile', label: '接收手机' },
-  { key: 'status', label: '状态' },
-  { key: 'order_no', label: '关联单号' },
-  { key: 'ops', label: '操作', locked: true },
+  { key: 'sent_at', label: '发送时间', locked: true, defaultOn: true },
+  { key: 'merchant_name', label: '商家', defaultOn: true },
+  { key: 'purpose', label: '用途', defaultOn: true },
+  { key: 'sms_signature', label: '签名', defaultOn: true },
+  { key: 'template_name', label: '模板', defaultOn: true },
+  { key: 'mobile', label: '接收手机', defaultOn: true },
+  { key: 'status', label: '状态', defaultOn: true },
+  { key: 'order_no', label: '关联单号', defaultOn: true },
+  { key: 'ops', label: '操作', locked: true, defaultOn: true },
 ]
-function logColOn(key) {
-  return logCols.value.includes(key)
-}
+const {
+  visibleKeys: logVisibleKeys,
+  columnDialogVisible: logColDlg,
+  columnDraft: logColDraft,
+  openColumnSettings: openLogCol,
+  saveColumnSettings: saveLogCol,
+  isColVisible: logColOn,
+} = useListColumnSettings(LOG_COL_DEFS, 'shop-sms-log-columns')
 
 const sigStatusTag = {
   pending: 'warning',
@@ -322,13 +351,35 @@ async function loadLogs() {
   }
 }
 
+function closeSigDrawer() {
+  sigDrawer.value = false
+  sigResubmitId.value = null
+  sigRejectReason.value = ''
+  viewSig.value = null
+}
+
 function openSigCreate() {
+  sigResubmitId.value = null
+  sigRejectReason.value = ''
   sigForm.tenant_id = ''
   sigForm.content = ''
   sigForm.remark = ''
   sigForm.qualification_files = {}
   sigForm.file_names = {}
   viewSig.value = null
+  sigDrawer.value = true
+}
+
+async function openSigResubmit(row) {
+  const { data } = await adminApi.getShopSmsSignature(row.id)
+  sigResubmitId.value = row.id
+  sigRejectReason.value = data.reject_reason || ''
+  viewSig.value = null
+  sigForm.tenant_id = data.tenant_id || ''
+  sigForm.content = data.content || ''
+  sigForm.remark = data.remark || ''
+  sigForm.qualification_files = { ...(data.qualification_files || {}) }
+  sigForm.file_names = {}
   sigDrawer.value = true
 }
 
@@ -343,14 +394,24 @@ async function submitSignature() {
   }
   sigSubmitting.value = true
   try {
-    await adminApi.createShopSmsSignature({
-      tenant_id: sigForm.tenant_id,
-      content: sigForm.content,
-      remark: sigForm.remark || undefined,
-      qualification_files: sigForm.qualification_files,
-    })
-    ElMessage.success('已提交供应商审核')
+    if (sigResubmitId.value) {
+      await adminApi.resubmitShopSmsSignature(sigResubmitId.value, {
+        content: sigForm.content,
+        remark: sigForm.remark || undefined,
+        qualification_files: sigForm.qualification_files,
+      })
+      ElMessage.success('已重新提交供应商审核')
+    } else {
+      await adminApi.createShopSmsSignature({
+        tenant_id: sigForm.tenant_id,
+        content: sigForm.content,
+        remark: sigForm.remark || undefined,
+        qualification_files: sigForm.qualification_files,
+      })
+      ElMessage.success('已提交供应商审核')
+    }
     sigDrawer.value = false
+    closeSigDrawer()
     await loadSignatures()
   } catch (e) {
     ElMessage.error(e.message || '提交失败')
@@ -360,6 +421,8 @@ async function submitSignature() {
 }
 
 async function viewSignature(row) {
+  sigResubmitId.value = null
+  sigRejectReason.value = ''
   const { data } = await adminApi.getShopSmsSignature(row.id)
   viewSig.value = data
   sigDrawer.value = true
@@ -385,8 +448,8 @@ async function actSig(row, action) {
       await adminApi.rejectShopSmsSignature(row.id, { reason: value })
       ElMessage.success('已驳回')
     } else if (action === 'resubmit') {
-      await adminApi.resubmitShopSmsSignature(row.id, {})
-      ElMessage.success('已重新提交')
+      await openSigResubmit(row)
+      return
     } else if (action === 'assign') {
       activeTab.value = 'assign'
       asgQ.value = row.merchant_name || ''
@@ -419,18 +482,34 @@ function openTplEdit(row) {
 }
 
 async function submitTemplate() {
+  const name = (tplForm.name || '').trim()
+  const code = (tplForm.template_code || '').trim()
+  if (!name) {
+    ElMessage.error('请填写模板名称')
+    return
+  }
+  if (!tplEditingId.value) {
+    if (!TPL_CODE_RE.test(code)) {
+      ElMessage.error('供应商 Template Code 格式无效')
+      return
+    }
+    if (tplItems.value.some((t) => String(t.template_code || '').toUpperCase() === code.toUpperCase())) {
+      ElMessage.error('Code 已存在，请更换 Template Code 或编辑已有模板')
+      return
+    }
+  }
   tplSubmitting.value = true
   try {
     if (tplEditingId.value) {
       await adminApi.updateShopSmsTemplate(tplEditingId.value, {
-        name: tplForm.name,
+        name,
         content_preview: tplForm.content_preview,
       })
       ElMessage.success('已保存')
     } else {
       await adminApi.createShopSmsTemplate({
-        name: tplForm.name,
-        template_code: tplForm.template_code,
+        name,
+        template_code: code,
         purpose: tplForm.purpose,
         content_preview: tplForm.content_preview || undefined,
         is_default_claim: tplForm.is_default_claim,
@@ -440,7 +519,7 @@ async function submitTemplate() {
     tplDrawer.value = false
     await loadTemplates()
   } catch (e) {
-    ElMessage.error(e.message || '保存失败')
+    ElMessage.error(formatApiError(e, '保存失败'))
   } finally {
     tplSubmitting.value = false
   }
@@ -557,7 +636,7 @@ async function exportSig(mode) {
     }
     const { data } = await adminApi.createShopSmsSignatureExport(body)
     exportTask.value = data
-    exportScope.value = mode === 'columns' ? '列配置' : '当前筛选'
+    exportScope.value = mode === 'columns' ? SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns : SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns
     exportDialog.value = true
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
@@ -578,7 +657,7 @@ async function exportTpl(mode) {
     }
     const { data } = await adminApi.createShopSmsTemplateExport(body)
     exportTask.value = data
-    exportScope.value = mode === 'columns' ? '列配置' : '当前筛选'
+    exportScope.value = mode === 'columns' ? SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns : SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns
     exportDialog.value = true
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
@@ -599,7 +678,7 @@ async function exportAsg(mode) {
     }
     const { data } = await adminApi.createShopSmsAssignmentExport(body)
     exportTask.value = data
-    exportScope.value = mode === 'columns' ? '列配置' : '当前筛选'
+    exportScope.value = mode === 'columns' ? SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns : SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns
     exportDialog.value = true
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
@@ -613,7 +692,7 @@ async function exportLogs() {
   try {
     const { data } = await adminApi.createShopSmsLogExport(logQuery())
     exportTask.value = data
-    exportScope.value = '当前筛选'
+    exportScope.value = SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns
     exportDialog.value = true
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
@@ -739,25 +818,26 @@ onMounted(async () => {
             <el-button :loading="exporting">导出 ▾</el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="current">当前筛选</el-dropdown-item>
-                <el-dropdown-item command="columns">列配置</el-dropdown-item>
+                <el-dropdown-item command="current">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns }}</el-dropdown-item>
+                <el-dropdown-item command="columns">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <el-button @click="sigColDlg = true">列设置</el-button>
+          <el-button @click="openSigCol">列设置</el-button>
         </div>
         <el-table v-loading="loading" :data="sigItems" border stripe size="small">
-          <el-table-column v-if="sigColOn('content')" prop="content" label="签名" min-width="140" />
-          <el-table-column v-if="sigColOn('merchant_name')" prop="merchant_name" label="关联商家" min-width="140" />
-          <el-table-column v-if="sigColOn('status')" label="供应商审核" width="110">
+          <template v-for="colKey in sigVisibleKeys" :key="colKey">
+          <el-table-column v-if="colKey === 'content'" prop="content" label="签名" min-width="140" />
+          <el-table-column v-if="colKey === 'merchant_name'" prop="merchant_name" label="关联商家" min-width="140" />
+          <el-table-column v-if="colKey === 'status'" label="供应商审核" width="110">
             <template #default="{ row }">
               <el-tag :type="sigStatusTag[row.status] || 'info'" size="small">{{ row.status_label }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="sigColOn('applied_at')" label="申请时间" width="170">
+          <el-table-column v-if="colKey === 'applied_at'" label="申请时间" width="170">
             <template #default="{ row }">{{ formatDateTime(row.applied_at, { withSeconds: false }) }}</template>
           </el-table-column>
-          <el-table-column v-if="sigColOn('ops')" label="操作" width="260" fixed="right">
+          <el-table-column v-if="colKey === 'ops'" label="操作" width="260" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="viewSignature(row)">查看</el-button>
               <el-button v-if="row.actions.includes('sync')" link type="warning" @click="actSig(row, 'sync')">刷新状态</el-button>
@@ -768,6 +848,7 @@ onMounted(async () => {
               <el-button v-if="row.actions.includes('assign')" link type="primary" @click="actSig(row, 'assign')">重新分配</el-button>
             </template>
           </el-table-column>
+          </template>
         </el-table>
         <div class="pager">
           <el-pagination
@@ -800,32 +881,34 @@ onMounted(async () => {
             <el-button :loading="exporting">导出 ▾</el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="current">当前筛选</el-dropdown-item>
-                <el-dropdown-item command="columns">列配置</el-dropdown-item>
+                <el-dropdown-item command="current">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns }}</el-dropdown-item>
+                <el-dropdown-item command="columns">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <el-button @click="tplColDlg = true">列设置</el-button>
+          <el-button @click="openTplCol">列设置</el-button>
         </div>
         <el-table v-loading="loading" :data="tplItems" border stripe size="small">
-          <el-table-column v-if="tplColOn('name')" prop="name" label="模板名称" min-width="140" />
-          <el-table-column v-if="tplColOn('code')" label="供应商 Code" width="150">
+          <template v-for="colKey in tplVisibleKeys" :key="colKey">
+          <el-table-column v-if="colKey === 'name'" prop="name" label="模板名称" min-width="140" />
+          <el-table-column v-if="colKey === 'code'" label="供应商 Code" width="150">
             <template #default="{ row }"><code>{{ row.template_code }}</code></template>
           </el-table-column>
-          <el-table-column v-if="tplColOn('purpose')" prop="purpose_label" label="用途" width="100" />
-          <el-table-column v-if="tplColOn('status')" label="审核状态" width="140">
+          <el-table-column v-if="colKey === 'purpose'" prop="purpose_label" label="用途" width="100" />
+          <el-table-column v-if="colKey === 'status'" label="审核状态" width="140">
             <template #default="{ row }">
               <el-tag :type="sigStatusTag[row.status] || 'info'" size="small">{{ row.status_label }}</el-tag>
               <el-tag v-if="row.is_default_claim" size="small" type="primary" style="margin-left: 4px">默认</el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="tplColOn('preview')" prop="content_preview" label="内容摘要" min-width="180" show-overflow-tooltip />
-          <el-table-column v-if="tplColOn('ops')" label="操作" width="180" fixed="right">
+          <el-table-column v-if="colKey === 'preview'" prop="content_preview" label="内容摘要" min-width="180" show-overflow-tooltip />
+          <el-table-column v-if="colKey === 'ops'" label="操作" width="180" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openTplEdit(row)">编辑</el-button>
               <el-button v-if="row.actions.includes('set_default')" link @click="setDefaultTpl(row)">设为默认</el-button>
             </template>
           </el-table-column>
+          </template>
         </el-table>
         <div class="pager">
           <el-pagination
@@ -861,16 +944,17 @@ onMounted(async () => {
             <el-button :loading="exporting">导出 ▾</el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="current">当前筛选</el-dropdown-item>
-                <el-dropdown-item command="columns">列配置</el-dropdown-item>
+                <el-dropdown-item command="current">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns }}</el-dropdown-item>
+                <el-dropdown-item command="columns">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <el-button @click="asgColDlg = true">列设置</el-button>
+          <el-button @click="openAsgCol">列设置</el-button>
         </div>
         <el-table v-loading="loading" :data="asgItems" border stripe size="small">
-          <el-table-column v-if="asgColOn('merchant_name')" prop="merchant_name" label="商家" min-width="140" />
-          <el-table-column v-if="asgColOn('sms_signature')" label="领权签名" min-width="140">
+          <template v-for="colKey in asgVisibleKeys" :key="colKey">
+          <el-table-column v-if="colKey === 'merchant_name'" prop="merchant_name" label="商家" min-width="140" />
+          <el-table-column v-if="colKey === 'sms_signature'" label="领权签名" min-width="140">
             <template #default="{ row }">
               <span v-if="row.sms_signature">
                 {{ row.sms_signature }}
@@ -879,13 +963,13 @@ onMounted(async () => {
               <el-tag v-else size="small" type="info">未分配</el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="asgColOn('claim_template')" label="领权模板" min-width="140">
+          <el-table-column v-if="colKey === 'claim_template'" label="领权模板" min-width="140">
             <template #default="{ row }">{{ row.claim_template_name || '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="asgColOn('month')" label="本月已发" width="120">
+          <el-table-column v-if="colKey === 'month'" label="本月已发" width="120">
             <template #default="{ row }">{{ row.month_used }} / {{ row.month_limit }}</template>
           </el-table-column>
-          <el-table-column v-if="asgColOn('ops')" label="操作" width="200" fixed="right">
+          <el-table-column v-if="colKey === 'ops'" label="操作" width="200" fixed="right">
             <template #default="{ row }">
               <template v-if="row.assign_status === 'signature_pending'">待签名通过</template>
               <template v-else>
@@ -896,6 +980,7 @@ onMounted(async () => {
               </template>
             </template>
           </el-table-column>
+          </template>
         </el-table>
         <div class="pager">
           <el-pagination
@@ -956,34 +1041,36 @@ onMounted(async () => {
           />
           <div class="spacer" />
           <el-button :loading="exporting" @click="exportLogs">导出 CSV</el-button>
-          <el-button @click="logColDlg = true">列设置</el-button>
+          <el-button @click="openLogCol">列设置</el-button>
         </div>
         <el-table v-loading="loading" :data="logItems" border stripe size="small">
-          <el-table-column v-if="logColOn('sent_at')" label="发送时间" width="170">
+          <template v-for="colKey in logVisibleKeys" :key="colKey">
+          <el-table-column v-if="colKey === 'sent_at'" label="发送时间" width="170">
             <template #default="{ row }">{{ formatDateTime(row.sent_at, { withSeconds: false }) }}</template>
           </el-table-column>
-          <el-table-column v-if="logColOn('merchant_name')" prop="merchant_name" label="商家" min-width="120" />
-          <el-table-column v-if="logColOn('purpose')" prop="purpose_label" label="用途" width="90" />
-          <el-table-column v-if="logColOn('sms_signature')" prop="sms_signature" label="签名" width="120" />
-          <el-table-column v-if="logColOn('template_name')" prop="template_name" label="模板" min-width="120" />
-          <el-table-column v-if="logColOn('mobile')" prop="mobile_masked" label="接收手机" width="130" />
-          <el-table-column v-if="logColOn('status')" label="状态" width="90">
+          <el-table-column v-if="colKey === 'merchant_name'" prop="merchant_name" label="商家" min-width="120" />
+          <el-table-column v-if="colKey === 'purpose'" prop="purpose_label" label="用途" width="90" />
+          <el-table-column v-if="colKey === 'sms_signature'" prop="sms_signature" label="签名" width="120" />
+          <el-table-column v-if="colKey === 'template_name'" prop="template_name" label="模板" min-width="120" />
+          <el-table-column v-if="colKey === 'mobile'" prop="mobile_masked" label="接收手机" width="130" />
+          <el-table-column v-if="colKey === 'status'" label="状态" width="90">
             <template #default="{ row }">
               <el-tag :type="logStatusTag[row.status] || 'info'" size="small">{{ row.status_label }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="logColOn('order_no')" label="关联单号" width="120">
+          <el-table-column v-if="colKey === 'order_no'" label="关联单号" width="120">
             <template #default="{ row }">
               <code v-if="row.related_order_no">{{ row.related_order_no }}</code>
               <span v-else>—</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="logColOn('ops')" label="操作" width="140" fixed="right">
+          <el-table-column v-if="colKey === 'ops'" label="操作" width="140" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openLog(row)">详情</el-button>
               <el-button v-if="row.actions.includes('retry')" link type="warning" @click="retryLog(row)">重试</el-button>
             </template>
           </el-table-column>
+          </template>
         </el-table>
         <div class="pager">
           <el-pagination
@@ -1017,55 +1104,115 @@ onMounted(async () => {
       </template>
     </el-dialog>
 
-    <el-drawer v-model="sigDrawer" size="560px" :title="viewSig ? '签名详情' : '新建签名申请'">
-      <template v-if="viewSig">
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="关联商家">{{ viewSig.merchant_name }}</el-descriptions-item>
-          <el-descriptions-item label="短信签名">{{ viewSig.content }}</el-descriptions-item>
-          <el-descriptions-item label="供应商审核">{{ viewSig.status_label }}</el-descriptions-item>
-          <el-descriptions-item v-if="viewSig.reject_reason" label="驳回原因">{{ viewSig.reject_reason }}</el-descriptions-item>
-          <el-descriptions-item label="签名用途说明">{{ viewSig.remark || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="资质材料">
-            {{ Object.keys(viewSig.qualification_files || {}).length ? '已上传，可在入驻材料中预览' : '未上传' }}
-          </el-descriptions-item>
-        </el-descriptions>
-      </template>
-      <el-form v-else label-position="top">
-        <el-form-item label="关联商家" required>
-          <el-select v-model="sigForm.tenant_id" filterable placeholder="请选择" style="width: 100%">
-            <el-option v-for="m in merchants" :key="m.tenant_id" :label="m.name" :value="m.tenant_id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="短信签名" required>
-          <el-input v-model="sigForm.content" placeholder="【智学课堂】" maxlength="14" />
-        </el-form-item>
-        <el-form-item label="签名用途说明">
-          <el-input v-model="sigForm.remark" type="textarea" rows="2" />
-        </el-form-item>
-        <el-form-item label="资质材料">
-          <ShopMaterialUpload
-            doc-type="business_license"
-            title="营业执照"
-            :optional="true"
-            :file-id="sigForm.qualification_files.business_license || ''"
-            :file-name="sigForm.file_names.business_license || ''"
-            :upload-fn="platformUpload"
-            @uploaded="onMatUploaded"
-            @cleared="onMatCleared"
-          />
-          <ShopMaterialUpload
-            doc-type="trademark"
-            title="商标授权（如有）"
-            :optional="true"
-            :file-id="sigForm.qualification_files.trademark || ''"
-            :file-name="sigForm.file_names.trademark || ''"
-            :upload-fn="platformUpload"
-            @uploaded="onMatUploaded"
-            @cleared="onMatCleared"
-          />
-        </el-form-item>
-        <el-button type="primary" :loading="sigSubmitting" @click="submitSignature">提交供应商审核</el-button>
-      </el-form>
+    <el-drawer v-model="sigDrawer" size="520px" :title="sigDrawerTitle" @close="closeSigDrawer">
+      <div class="sig-drawer">
+        <div v-if="viewSig" class="sig-drawer__body">
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="关联商家">{{ viewSig.merchant_name }}</el-descriptions-item>
+            <el-descriptions-item label="短信签名">{{ viewSig.content }}</el-descriptions-item>
+            <el-descriptions-item label="供应商审核">
+              <el-tag :type="sigStatusType(viewSig.status)" size="small">{{ viewSig.status_label }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item v-if="viewSig.reject_reason" label="驳回原因">
+              <span class="reject-text">{{ viewSig.reject_reason }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="签名用途说明">{{ viewSig.remark || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="资质材料">
+              <div v-if="Object.keys(viewSig.qualification_files || {}).length" class="materials-panel materials-panel--readonly">
+                <div class="materials-list">
+                  <div v-if="viewSig.qualification_files.business_license" class="material-readonly-row">
+                    <span>营业执照</span>
+                    <el-tag type="success" size="small">已上传</el-tag>
+                  </div>
+                  <div v-if="viewSig.qualification_files.trademark" class="material-readonly-row">
+                    <span>商标授权（如有）</span>
+                    <el-tag type="success" size="small">已上传</el-tag>
+                  </div>
+                </div>
+              </div>
+              <span v-else class="muted">未上传</span>
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
+        <template v-else>
+          <div class="sig-drawer__body">
+            <el-alert
+              v-if="sigResubmitId && sigRejectReason"
+              type="error"
+              :closable="false"
+              show-icon
+              class="sig-reject-alert"
+              title="上次驳回原因"
+              :description="sigRejectReason"
+            />
+            <el-form label-position="top" class="sig-drawer__form">
+              <el-form-item v-if="sigResubmitId" label="关联商家" required>
+                <el-input :model-value="sigMerchantName" disabled />
+              </el-form-item>
+              <el-form-item v-else label="关联商家" required>
+                <el-select
+                  v-model="sigForm.tenant_id"
+                  filterable
+                  placeholder="请选择商家"
+                  style="width: 100%"
+                >
+                  <el-option v-for="m in merchants" :key="m.tenant_id" :label="m.name" :value="m.tenant_id" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="短信签名" required>
+                <el-input v-model="sigForm.content" placeholder="【智学课堂】" maxlength="14" />
+                <p class="form-tip">2–12 字，须含【】；与营业执照主体或商标一致</p>
+              </el-form-item>
+              <el-form-item label="签名用途说明">
+                <el-input
+                  v-model="sigForm.remark"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="如：抖店公域领权短信 · 与营业执照主体一致"
+                />
+              </el-form-item>
+              <el-form-item label="资质材料">
+                <p class="form-tip">
+                  支持图片或 PDF，单文件不超过 10MB。
+                  {{ sigResubmitId ? '驳回后请补全或更新材料后再提交。' : '新建时请先选择关联商家再上传。' }}
+                </p>
+                <div class="materials-panel">
+                  <div class="materials-list">
+                    <ShopMaterialUpload
+                      doc-type="business_license"
+                      title="营业执照"
+                      :optional="true"
+                      :disabled="!sigForm.tenant_id"
+                      :file-id="sigForm.qualification_files.business_license || ''"
+                      :file-name="sigForm.file_names.business_license || ''"
+                      :upload-fn="platformUpload"
+                      @uploaded="onMatUploaded"
+                      @cleared="onMatCleared"
+                    />
+                    <ShopMaterialUpload
+                      doc-type="trademark"
+                      title="商标授权（如有）"
+                      :optional="true"
+                      :disabled="!sigForm.tenant_id"
+                      :file-id="sigForm.qualification_files.trademark || ''"
+                      :file-name="sigForm.file_names.trademark || ''"
+                      :upload-fn="platformUpload"
+                      @uploaded="onMatUploaded"
+                      @cleared="onMatCleared"
+                    />
+                  </div>
+                </div>
+              </el-form-item>
+            </el-form>
+          </div>
+          <div class="sig-drawer__footer">
+            <el-button @click="closeSigDrawer">取消</el-button>
+            <el-button type="primary" :loading="sigSubmitting" @click="submitSignature">
+              {{ sigResubmitId ? '重新提交供应商审核' : '提交供应商审核' }}
+            </el-button>
+          </div>
+        </template>
+      </div>
     </el-drawer>
 
     <el-drawer v-model="tplDrawer" size="560px" :title="tplEditingId ? '编辑模板' : '登记新模板'">
@@ -1154,66 +1301,26 @@ onMounted(async () => {
       </el-descriptions>
     </el-drawer>
 
-    <el-dialog v-model="sigColDlg" title="列设置" width="420px">
-      <el-checkbox-group v-model="sigCols">
-        <el-checkbox
-          v-for="col in SIG_COL_DEFS.filter((c) => !c.locked)"
-          :key="col.key"
-          :label="col.key"
-        >
-          {{ col.label }}
-        </el-checkbox>
-      </el-checkbox-group>
-      <p class="gap-note">签名、操作列为锁定列，不可关闭。</p>
-      <template #footer>
-        <el-button type="primary" @click="sigColDlg = false">保存</el-button>
-      </template>
-    </el-dialog>
-    <el-dialog v-model="tplColDlg" title="列设置" width="420px">
-      <el-checkbox-group v-model="tplCols">
-        <el-checkbox
-          v-for="col in TPL_COL_DEFS.filter((c) => !c.locked)"
-          :key="col.key"
-          :label="col.key"
-        >
-          {{ col.label }}
-        </el-checkbox>
-      </el-checkbox-group>
-      <p class="gap-note">模板名称、操作列为锁定列，不可关闭。</p>
-      <template #footer>
-        <el-button type="primary" @click="tplColDlg = false">保存</el-button>
-      </template>
-    </el-dialog>
-    <el-dialog v-model="asgColDlg" title="列设置" width="420px">
-      <el-checkbox-group v-model="asgCols">
-        <el-checkbox
-          v-for="col in ASG_COL_DEFS.filter((c) => !c.locked)"
-          :key="col.key"
-          :label="col.key"
-        >
-          {{ col.label }}
-        </el-checkbox>
-      </el-checkbox-group>
-      <p class="gap-note">商家、操作列为锁定列，不可关闭。</p>
-      <template #footer>
-        <el-button type="primary" @click="asgColDlg = false">保存</el-button>
-      </template>
-    </el-dialog>
-    <el-dialog v-model="logColDlg" title="列设置" width="420px">
-      <el-checkbox-group v-model="logCols">
-        <el-checkbox
-          v-for="col in LOG_COL_DEFS.filter((c) => !c.locked)"
-          :key="col.key"
-          :label="col.key"
-        >
-          {{ col.label }}
-        </el-checkbox>
-      </el-checkbox-group>
-      <p class="gap-note">发送时间、操作列为锁定列，不可关闭。</p>
-      <template #footer>
-        <el-button type="primary" @click="logColDlg = false">保存</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="sigColDlg"
+      v-model:columns="sigColDraft"
+      @save="saveSigCol"
+    />
+    <CrmColumnSettingsDialog
+      v-model:visible="tplColDlg"
+      v-model:columns="tplColDraft"
+      @save="saveTplCol"
+    />
+    <CrmColumnSettingsDialog
+      v-model:visible="asgColDlg"
+      v-model:columns="asgColDraft"
+      @save="saveAsgCol"
+    />
+    <CrmColumnSettingsDialog
+      v-model:visible="logColDlg"
+      v-model:columns="logColDraft"
+      @save="saveLogCol"
+    />
 
     <el-dialog v-model="exportDialog" title="导出任务" width="420px">
       <el-form v-if="exportTask" label-width="100px">

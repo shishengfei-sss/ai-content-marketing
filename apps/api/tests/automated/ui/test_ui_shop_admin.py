@@ -412,7 +412,7 @@ def test_ui_shop_admin_roles_codes(page):
     assert "#p08" not in chrome.lower()
     ui_goto(page, "/admin/users")
     page.locator('[data-testid="admin-users"]').wait_for(timeout=15000)
-    assert page.get_by_text("获客商城角色").count() >= 1
+    assert page.get_by_text("账号角色").count() >= 1
     page.get_by_placeholder("手机号 / 昵称 / 租户名").fill("13800000000")
     page.locator("button:has-text('查询')").click()
     page.wait_for_timeout(1000)
@@ -422,7 +422,7 @@ def test_ui_shop_admin_roles_codes(page):
     page.locator('[data-testid="shop-edit-shop-perms"]').wait_for(timeout=8000)
     assert page.get_by_text("账号").count() >= 1
     assert page.get_by_text("（只读）").count() >= 1
-    assert page.locator('[data-testid="shop-edit-shop-perms"]').get_by_text("角色").count() >= 1
+    page.locator('[data-testid="shop-edit-shop-perms"]').get_by_text("账号角色").wait_for(timeout=8000)
     page.locator('[data-testid="shop-perm-audit-timeline"]').wait_for(timeout=5000)
     assert page.get_by_text("变更记录").count() >= 1
     assert page.get_by_text("时间").count() >= 1 or page.get_by_text("暂无变更记录").count() >= 1

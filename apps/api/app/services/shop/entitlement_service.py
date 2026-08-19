@@ -31,8 +31,15 @@ def date_to_expires_at_exclusive(d: date) -> datetime:
 
 
 def exclusive_to_inclusive_date(dt: datetime) -> date:
-    local = dt.astimezone(TZ_SH)
+    local = _as_sh(dt)
     return local.date() - timedelta(days=1)
+
+
+def _as_sh(dt: datetime) -> datetime:
+    """SQLite 历史行可能无 tz，与新写入的 Asia/Shanghai 混比会 TypeError。"""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=TZ_SH)
+    return dt.astimezone(TZ_SH)
 
 
 def now_sh() -> datetime:
@@ -300,7 +307,7 @@ def refresh_merchant_plan_fields(db: Session, merchant: ShopMerchantAccount) -> 
             main = s
             break
     if main is None and active:
-        main = max(active, key=lambda x: x.expires_at)
+        main = max(active, key=lambda x: _as_sh(x.expires_at))
 
     if main:
         merchant.current_subscription_id = main.id
@@ -316,7 +323,7 @@ def refresh_merchant_plan_fields(db: Session, merchant: ShopMerchantAccount) -> 
             merchant.plan_status = "active"
     elif active:
         # 仅加购仍有效
-        latest = max(active, key=lambda x: x.expires_at)
+        latest = max(active, key=lambda x: _as_sh(x.expires_at))
         merchant.current_subscription_id = latest.id
         merchant.plan_label = (latest.plan_snapshot or {}).get("plan_name")
         merchant.benefits_until = exclusive_to_inclusive_date(latest.expires_at)

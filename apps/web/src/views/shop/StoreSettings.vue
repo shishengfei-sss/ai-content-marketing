@@ -79,9 +79,22 @@ async function load() {
   }
 }
 
+const LOGO_ACCEPT = 'image/jpeg,image/png,image/webp'
+const LOGO_MAX_BYTES = 2 * 1024 * 1024
+
 async function uploadLogo(ev) {
   const file = ev.target?.files?.[0]
   if (!file) return
+  if (file.size > LOGO_MAX_BYTES) {
+    ElMessage.warning('Logo 不能超过 2MB')
+    if (logoInput.value) logoInput.value.value = ''
+    return
+  }
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    ElMessage.warning('请上传 jpg / png / webp 格式图片')
+    if (logoInput.value) logoInput.value.value = ''
+    return
+  }
   logoUploading.value = true
   try {
     const fd = new FormData()
@@ -174,15 +187,33 @@ watch(currentId, () => {
           </el-form-item>
           <el-form-item label="店铺 Logo">
             <div class="logo-row">
-              <div class="logo-box">
+              <button
+                type="button"
+                class="logo-box"
+                :disabled="logoUploading"
+                @click="logoInput?.click()"
+              >
                 <img v-if="form.logo_url" :src="form.logo_url" alt="Logo" />
                 <span v-else>上传</span>
-              </div>
+              </button>
               <div>
-                <input ref="logoInput" type="file" accept="image/*" hidden @change="uploadLogo" />
-                <el-button :loading="logoUploading" @click="logoInput?.click()">选择文件</el-button>
-                <el-button v-if="form.logo_url" link type="danger" @click="form.logo_url = ''">清除</el-button>
+                <input
+                  ref="logoInput"
+                  type="file"
+                  :accept="LOGO_ACCEPT"
+                  hidden
+                  @change="uploadLogo"
+                />
+                <el-button :loading="logoUploading" @click="logoInput?.click()">
+                  选择文件
+                </el-button>
+                <el-button v-if="form.logo_url" link type="danger" @click="form.logo_url = ''">
+                  清除
+                </el-button>
               </div>
+            </div>
+            <div class="hint">
+              支持 jpg / png / webp，单张不超过 2MB；建议 200×200 像素以上正方形，买家端按 1:1 展示。
             </div>
           </el-form-item>
           <el-form-item label="店铺简介">
@@ -289,6 +320,12 @@ watch(currentId, () => {
   color: #999;
   overflow: hidden;
   background: #fafafa;
+  padding: 0;
+  cursor: pointer;
+}
+.logo-box:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 .logo-box img {
   width: 100%;

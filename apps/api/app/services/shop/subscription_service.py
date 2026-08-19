@@ -143,14 +143,33 @@ def _default_expires(plan: ShopSubscriptionPlan, effective: date) -> date:
         return date(effective.year + 1, 2, 28)
 
 
+def _normalize_plan_snapshot(db: Session, row: ShopMerchantSubscription) -> tuple[dict, str | None]:
+    snap = dict(row.plan_snapshot or {})
+    if not snap.get("plan_code") and snap.get("code"):
+        snap["plan_code"] = snap["code"]
+    if not snap.get("plan_name") and snap.get("name"):
+        snap["plan_name"] = snap["name"]
+    plan_type = snap.get("plan_type")
+    if row.plan_id and (not plan_type or not snap.get("plan_code") or not snap.get("replace_group")):
+        plan = db.query(ShopSubscriptionPlan).filter(uuid_eq(ShopSubscriptionPlan.id, row.plan_id)).first()
+        if plan is not None:
+            full = build_plan_snapshot(plan)
+            for key, val in full.items():
+                snap.setdefault(key, val)
+            plan_type = snap.get("plan_type")
+    if not plan_type:
+        plan_type = "addon" if row.purchase_mode == "stack" else "main"
+        snap.setdefault("plan_type", plan_type)
+    return snap, plan_type
+
+
 def subscription_to_out(db: Session, row: ShopMerchantSubscription) -> SubscriptionOut:
     merchant = (
         db.query(ShopMerchantAccount).filter(uuid_eq(ShopMerchantAccount.tenant_id, row.tenant_id)).first()
     )
     from app.services.shop.entitlement_service import TZ_SH
 
-    snap = row.plan_snapshot or {}
-    plan_type = snap.get("plan_type")
+    snap, plan_type = _normalize_plan_snapshot(db, row)
     eff = row.effective_at.astimezone(TZ_SH).date() if row.effective_at.tzinfo else row.effective_at.date()
     expires_inc = exclusive_to_inclusive_date(row.expires_at)
     today = now_sh().date()

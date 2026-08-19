@@ -372,6 +372,29 @@ def main() -> int:
             f"{code} {(ents.get('items') or [{}])[0]}",
         )
     )
+    used_up = [
+        x
+        for x in (ents.get("items") or [])
+        if x.get("remaining_count") == 0 and x.get("status") != "revoked"
+    ]
+    results.append(
+        check(
+            "VA12-1b 次数用尽为已用尽",
+            all(x.get("status") == "consumed" for x in used_up),
+            f"{[(x.get('status'), x.get('remaining_count')) for x in used_up]}",
+        )
+    )
+    code, expired_tab = req("GET", "/shop/entitlements?status=expired&page_size=50", token=merchant)
+    expired_used = [
+        x for x in (expired_tab.get("items") or []) if x.get("remaining_count") == 0
+    ]
+    results.append(
+        check(
+            "VA12-1c 已过期不含次数用尽",
+            code == 200 and not expired_used,
+            f"{code} {len(expired_used)}",
+        )
+    )
     eid = (ents.get("items") or [{}])[0].get("id")
     code, ed = req("GET", f"/shop/entitlements/{eid}", token=merchant) if eid else (0, {})
     results.append(

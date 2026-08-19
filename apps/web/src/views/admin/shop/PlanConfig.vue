@@ -8,6 +8,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi } from '../../../api/client'
+import CrmColumnSettingsDialog from '../../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../../composables/useListColumnSettings'
 import { useAuthStore } from '../../../stores/auth'
 import { formatDateTime } from '../../../utils/datetime'
 
@@ -74,11 +76,20 @@ const PLAN_COLS = [
   { key: 'created_by', label: '创建人', defaultVisible: false },
   { key: 'updated_by', label: '最后修改人', defaultVisible: false },
 ]
-const featVisible = ref(FEAT_COLS.filter((c) => c.defaultVisible).map((c) => c.key))
-const planVisible = ref(PLAN_COLS.filter((c) => c.defaultVisible).map((c) => c.key))
-const colDialog = ref(false)
-const colKind = ref('feat')
-const colDraft = ref([])
+const {
+  visibleKeys: featVisibleKeys,
+  columnDialogVisible: featColDialog,
+  columnDraft: featColDraft,
+  openColumnSettings: openFeatCol,
+  saveColumnSettings: saveFeatCol,
+} = useListColumnSettings(FEAT_COLS, 'shop-plan-feat-columns')
+const {
+  visibleKeys: planVisibleKeys,
+  columnDialogVisible: planColDialog,
+  columnDraft: planColDraft,
+  openColumnSettings: openPlanCol,
+  saveColumnSettings: savePlanCol,
+} = useListColumnSettings(PLAN_COLS, 'shop-plan-plan-columns')
 
 const NODE_LABEL = { group: '分组', leaf: '子功能' }
 const CAT_LABEL = { quota: '配额', usage: '用量', feature: '功能' }
@@ -155,13 +166,6 @@ const pickerQ = ref('')
 const pickerCat = ref('')
 const pickerGroup = ref('')
 const pickerSelectedOnly = ref(false)
-
-function isFeatCol(k) {
-  return featVisible.value.includes(k)
-}
-function isPlanCol(k) {
-  return planVisible.value.includes(k)
-}
 
 function flattenTree(nodes, acc = []) {
   for (const n of nodes || []) {
@@ -275,20 +279,6 @@ async function load() {
   } finally {
     loading.value = false
   }
-}
-
-function openCol(kind) {
-  colKind.value = kind
-  const cols = kind === 'feat' ? FEAT_COLS : PLAN_COLS
-  const vis = kind === 'feat' ? featVisible.value : planVisible.value
-  colDraft.value = cols.map((c) => ({ ...c, visible: vis.includes(c.key) }))
-  colDialog.value = true
-}
-function saveCols() {
-  const keys = colDraft.value.filter((c) => c.visible || c.locked).map((c) => c.key)
-  if (colKind.value === 'feat') featVisible.value = keys
-  else planVisible.value = keys
-  colDialog.value = false
 }
 
 function downloadCsv(filename, header, rows) {
@@ -739,7 +729,7 @@ onMounted(load)
             <el-option label="停用" value="0" />
           </el-select>
           <span class="spacer" />
-          <el-button @click="openCol('feat')">列设置</el-button>
+          <el-button @click="openFeatCol">列设置</el-button>
           <el-select v-model="featView" style="width: 100px">
             <el-option label="树形" value="tree" />
             <el-option label="平铺" value="flat" />
@@ -756,44 +746,45 @@ onMounted(load)
           default-expand-all
           :tree-props="featView === 'tree' ? { children: 'children' } : { children: 'none' }"
         >
-          <el-table-column v-if="isFeatCol('name')" label="名称 / 编码" min-width="220">
+          <template v-for="colKey in featVisibleKeys" :key="colKey">
+          <el-table-column v-if="colKey === 'name'" label="名称 / 编码" min-width="220">
             <template #default="{ row }">
               <b>{{ row.name }}</b>
               <span class="code"> {{ row.code }}</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="isFeatCol('node_type')" label="节点" width="90">
+          <el-table-column v-if="colKey === 'node_type'" label="节点" width="90">
             <template #default="{ row }">{{ NODE_LABEL[row.node_type] || row.node_type }}</template>
           </el-table-column>
-          <el-table-column v-if="isFeatCol('category')" label="分类" width="90">
+          <el-table-column v-if="colKey === 'category'" label="分类" width="90">
             <template #default="{ row }">{{ CAT_LABEL[row.category] || row.category || '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="isFeatCol('value_type')" label="类型" width="110">
+          <el-table-column v-if="colKey === 'value_type'" label="类型" width="110">
             <template #default="{ row }">{{ VAL_LABEL[row.value_type] || row.value_type || '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="isFeatCol('aggregate_mode')" label="叠加模式" width="110">
+          <el-table-column v-if="colKey === 'aggregate_mode'" label="叠加模式" width="110">
             <template #default="{ row }">{{ AGG_LABEL[row.aggregate_mode] || row.aggregate_mode || '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="isFeatCol('usage_period')" label="周期" width="110">
+          <el-table-column v-if="colKey === 'usage_period'" label="周期" width="110">
             <template #default="{ row }">{{ PERIOD_LABEL[row.usage_period] || row.usage_period || '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="isFeatCol('meter_key')" prop="meter_key" label="埋点标识" min-width="140" />
-          <el-table-column v-if="isFeatCol('status')" label="状态" width="80">
+          <el-table-column v-if="colKey === 'meter_key'" prop="meter_key" label="埋点标识" min-width="140" />
+          <el-table-column v-if="colKey === 'status'" label="状态" width="80">
             <template #default="{ row }">
               <el-tag size="small" :type="row.is_active ? 'success' : 'info'">{{ row.is_active ? '启用' : '停用' }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="isFeatCol('updated_at')" label="更新时间" width="170">
+          <el-table-column v-if="colKey === 'updated_at'" label="更新时间" width="170">
             <template #default="{ row }">{{ formatDateTime(row.updated_at) }}</template>
           </el-table-column>
-          <el-table-column v-if="isFeatCol('created_by')" label="创建人" width="110">
+          <el-table-column v-if="colKey === 'created_by'" label="创建人" width="110">
             <template #default="{ row }">{{ row.created_by_name || '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="isFeatCol('sort_order')" prop="sort_order" label="排序号" width="80" />
-          <el-table-column v-if="isFeatCol('parent_path')" label="父分组路径" min-width="140">
+          <el-table-column v-if="colKey === 'sort_order'" prop="sort_order" label="排序号" width="80" />
+          <el-table-column v-if="colKey === 'parent_path'" label="父分组路径" min-width="140">
             <template #default="{ row }">{{ row.parent_path || '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="isFeatCol('ops')" label="操作" width="200" fixed="right">
+          <el-table-column v-if="colKey === 'ops'" label="操作" width="200" fixed="right">
             <template #default="{ row }">
               <template v-if="row.node_type === 'group'">
                 <el-button v-if="canManage" link type="primary" @click="openGroup(row)">编辑分组</el-button>
@@ -809,15 +800,15 @@ onMounted(load)
               </template>
             </template>
           </el-table-column>
+          </template>
         </el-table>
         <div v-if="featView === 'flat'" class="pager">
-          <span>共 {{ featTotal }} 条</span>
           <el-pagination
             v-model:current-page="featPage"
             v-model:page-size="featPageSize"
             :total="featTotal"
             :page-sizes="[10, 20, 50, 100]"
-            layout="sizes, prev, pager, next"
+            layout="total, sizes, prev, pager, next"
             small
           />
         </div>
@@ -844,13 +835,14 @@ onMounted(load)
             @keyup.enter="loadPlans"
           />
           <span class="spacer" />
-          <el-button @click="openCol('plan')">列设置</el-button>
+          <el-button @click="openPlanCol">列设置</el-button>
           <el-button @click="exportPlans">导出</el-button>
           <el-button v-if="canManage" type="primary" @click="openPlan('main')">+ 新建主套餐</el-button>
           <el-button v-if="canManage" @click="openPlan('addon')">+ 新建加购包</el-button>
         </div>
         <el-table :data="plans" border stripe>
-          <el-table-column v-if="isPlanCol('name')" label="套餐" min-width="180">
+          <template v-for="colKey in planVisibleKeys" :key="colKey">
+          <el-table-column v-if="colKey === 'name'" label="套餐" min-width="180">
             <template #default="{ row }">
               <el-button link type="primary" @click="openPlan(row.plan_type, row, true)">{{ row.name }}</el-button>
               <el-tag size="small" :type="row.plan_type === 'addon' ? '' : 'info'" class="ml">
@@ -858,49 +850,49 @@ onMounted(load)
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('stackable')" label="可叠加" width="80">
+          <el-table-column v-if="colKey === 'stackable'" label="可叠加" width="80">
             <template #default="{ row }">{{ row.plan_type === 'addon' ? '是' : '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('replace_group')" label="互斥组" width="90">
+          <el-table-column v-if="colKey === 'replace_group'" label="互斥组" width="90">
             <template #default="{ row }">{{ row.replace_group || '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('billing_period')" label="周期" width="70">
+          <el-table-column v-if="colKey === 'billing_period'" label="周期" width="70">
             <template #default="{ row }">{{ BILL_LABEL[row.billing_period] || row.billing_period }}</template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('price')" label="售价" width="100">
+          <el-table-column v-if="colKey === 'price'" label="售价" width="100">
             <template #default="{ row }">¥{{ centsYuan(row.price_cents) }}</template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('shops')" label="店铺" width="70">
+          <el-table-column v-if="colKey === 'shops'" label="店铺" width="70">
             <template #default="{ row }">{{ fmtVal(planBag(row, 'quota.max_shops')) }}</template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('products')" label="商品" width="70">
+          <el-table-column v-if="colKey === 'products'" label="商品" width="70">
             <template #default="{ row }">{{ fmtVal(planBag(row, 'quota.max_products')) }}</template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('review')" label="每日提审" width="90">
+          <el-table-column v-if="colKey === 'review'" label="每日提审" width="90">
             <template #default="{ row }">{{ fmtVal(planBag(row, 'usage.product_review_submit')) }}</template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('doudian')" label="抖店" width="70">
+          <el-table-column v-if="colKey === 'doudian'" label="抖店" width="70">
             <template #default="{ row }">{{ fmtVal(planBag(row, 'channel.doudian')) }}</template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('entity')" label="适用主体" min-width="120">
+          <el-table-column v-if="colKey === 'entity'" label="适用主体" min-width="120">
             <template #default="{ row }">{{ entityText(row) }}</template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('public')" label="上架" width="70">
+          <el-table-column v-if="colKey === 'public'" label="上架" width="70">
             <template #default="{ row }">
               <el-tag size="small" :type="row.is_public ? 'success' : 'info'">{{ row.is_public ? '是' : '否' }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('updated_at')" label="更新时间" width="170">
+          <el-table-column v-if="colKey === 'updated_at'" label="更新时间" width="170">
             <template #default="{ row }">{{ formatDateTime(row.updated_at) }}</template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('code')" prop="code" label="套餐编码" width="120" />
-          <el-table-column v-if="isPlanCol('created_by')" label="创建人" width="110">
+          <el-table-column v-if="colKey === 'code'" prop="code" label="套餐编码" width="120" />
+          <el-table-column v-if="colKey === 'created_by'" label="创建人" width="110">
             <template #default="{ row }">{{ row.created_by_name || '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('updated_by')" label="最后修改人" width="110">
+          <el-table-column v-if="colKey === 'updated_by'" label="最后修改人" width="110">
             <template #default="{ row }">{{ row.updated_by_name || '—' }}</template>
           </el-table-column>
-          <el-table-column v-if="isPlanCol('ops')" label="操作" width="180" fixed="right">
+          <el-table-column v-if="colKey === 'ops'" label="操作" width="180" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openPlan(row.plan_type, row, true)">详情</el-button>
               <el-button v-if="canManage" link type="primary" @click="openPlan(row.plan_type, row)">编辑</el-button>
@@ -909,36 +901,31 @@ onMounted(load)
               </el-button>
             </template>
           </el-table-column>
+          </template>
         </el-table>
         <div class="pager">
-          <span>共 {{ planTotal }} 条</span>
           <el-pagination
             v-model:current-page="planPage"
             v-model:page-size="planPageSize"
             :total="planTotal"
             :page-sizes="[10, 20, 50, 100]"
-            layout="sizes, prev, pager, next"
+            layout="total, sizes, prev, pager, next"
             small
           />
         </div>
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="colDialog" title="列设置" width="400px">
-      <el-checkbox
-        v-for="c in colDraft"
-        :key="c.key"
-        v-model="c.visible"
-        :disabled="c.locked"
-        style="display: block; margin: 6px 0"
-      >
-        {{ c.label }}
-      </el-checkbox>
-      <template #footer>
-        <el-button @click="colDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveCols">确定</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="featColDialog"
+      v-model:columns="featColDraft"
+      @save="saveFeatCol"
+    />
+    <CrmColumnSettingsDialog
+      v-model:visible="planColDialog"
+      v-model:columns="planColDraft"
+      @save="savePlanCol"
+    />
 
     <el-dialog v-model="groupDlg" :title="currentFeat ? '编辑功能分组' : '新增功能分组'" width="480px">
       <el-form label-width="100px">
@@ -1264,12 +1251,7 @@ onMounted(load)
   flex: 1;
 }
 .pager {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-top: 12px;
-  color: #8c8c8c;
-  font-size: 13px;
 }
 .code {
   color: #8c8c8c;

@@ -1,4 +1,9 @@
 <script setup>
+/**
+ * 主站账号管理。对照 06-平台端UI.html #p08-admin-users · #p08b
+ * 账号角色五档合一：普通用户 / 平台超管 / 日常运营 / 商家管家 / 财务结算。
+ * 「编辑商城权限」只微调岗位默认权限，不改角色。
+ */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -12,10 +17,10 @@ const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const searchQ = ref('')
-const filterRole = ref('')
-const filterShopRole = ref('')
+const filterAccountRole = ref('')
 const filterActive = ref('')
 const savingId = ref(null)
+const roleSelectEpoch = ref({})
 const resetVisible = ref(false)
 const resetTarget = ref(null)
 const resetPassword = ref('')
@@ -30,22 +35,17 @@ const permAudits = ref([])
 const permAuditsLoading = ref(false)
 const catalog = ref({ permissions: [], roles: [] })
 
-const roleOptions = [
+const ACCOUNT_ROLE_OPTIONS = [
   { label: '普通用户', value: 'user' },
-  { label: '平台管理员', value: 'platform_admin' },
-]
-const shopRoleOptions = [
-  { label: '（未绑 · 等同超管）', value: 'superadmin' },
+  { label: '平台超管', value: 'superadmin' },
   { label: '日常运营', value: 'platform_shop_ops' },
   { label: '商家管家', value: 'platform_shop_cs' },
   { label: '财务结算', value: 'platform_shop_finance' },
 ]
 
-const SHOP_ROLE_LABEL = {
-  platform_shop_ops: '日常运营',
-  platform_shop_cs: '商家管家',
-  platform_shop_finance: '财务结算',
-}
+const ACCOUNT_ROLE_LABEL = Object.fromEntries(ACCOUNT_ROLE_OPTIONS.map((o) => [o.value, o.label]))
+
+const isPermSuperadmin = computed(() => !permRole.value)
 
 const permChoices = computed(() => {
   if (!permRole.value) {
@@ -60,10 +60,22 @@ const permChoices = computed(() => {
     .map((r) => ({ code: r.code, label: r.label }))
 })
 
-function shopRoleLabel(row) {
-  if (row.role !== 'platform_admin') return '—'
-  if (!row.platform_shop_role) return '（未绑 · 等同超管）'
-  return SHOP_ROLE_LABEL[row.platform_shop_role] || row.platform_shop_role
+function accountRoleOf(row) {
+  if (row.role !== 'platform_admin') return 'user'
+  if (!row.platform_shop_role) return 'superadmin'
+  return row.platform_shop_role
+}
+
+function accountRoleLabel(value) {
+  return ACCOUNT_ROLE_LABEL[value] || value
+}
+
+function patchForAccountRole(value) {
+  if (value === 'user') return { role: 'user' }
+  if (value === 'superadmin') {
+    return { role: 'platform_admin', platform_shop_role: null, platform_shop_permissions: null }
+  }
+  return { role: 'platform_admin', platform_shop_role: value, platform_shop_permissions: null }
 }
 
 async function loadCatalog() {
@@ -75,13 +87,26 @@ async function loadCatalog() {
   }
 }
 
+function applyAccountRoleFilter(params) {
+  const v = filterAccountRole.value
+  if (!v) return
+  if (v === 'user') {
+    params.role = 'user'
+    return
+  }
+  if (v === 'platform_admin') {
+    params.role = 'platform_admin'
+    return
+  }
+  params.platform_shop_role = v
+}
+
 async function loadUsers() {
   loading.value = true
   try {
     const params = { page: currentPage.value, page_size: pageSize.value }
     if (searchQ.value.trim()) params.q = searchQ.value.trim()
-    if (filterRole.value) params.role = filterRole.value
-    if (filterShopRole.value) params.platform_shop_role = filterShopRole.value
+    applyAccountRoleFilter(params)
     if (filterActive.value !== '') params.is_active = filterActive.value
     const { data } = await adminApi.listUsers(params)
     if (Array.isArray(data)) {
@@ -117,8 +142,7 @@ function handleSizeChange(size) {
 
 function resetFilters() {
   searchQ.value = ''
-  filterRole.value = ''
-  filterShopRole.value = ''
+  filterAccountRole.value = ''
   filterActive.value = ''
   currentPage.value = 1
   loadUsers()
@@ -130,11 +154,48 @@ async function updateUser(row, patch) {
     const { data } = await adminApi.updateUser(row.id, patch)
     Object.assign(row, data)
     ElMessage.success('已更新')
+    return true
   } catch (e) {
     ElMessage.error(e.message || '更新失败')
+    return false
   } finally {
     savingId.value = null
   }
+}
+
+function bumpRoleSelect(row) {
+  roleSelectEpoch.value = {
+    ...roleSelectEpoch.value,
+    [row.id]: (roleSelectEpoch.value[row.id] || 0) + 1,
+  }
+}
+
+async function changeAccountRole(row, value) {
+  const from = accountRoleOf(row)
+  if (from === value) return
+  const name = row.display_name || row.phone
+  const toLabel = accountRoleLabel(value)
+  let message = `将「${name}」的账号角色改为「${toLabel}」后，权限会按该角色默认集重置（已微调的权限会清除）。确定？`
+  let boxType = 'info'
+  if (value === 'user') {
+    message = `将「${name}」降为普通用户后，将无法登录平台后台，商城岗位与权限一并收回。确定？`
+    boxType = 'warning'
+  } else if (value === 'superadmin') {
+    message = `将「${name}」设为平台超管后，将拥有全部商城权限及账号管理权限。确定？`
+    boxType = 'warning'
+  }
+  try {
+    await ElMessageBox.confirm(message, '调整账号角色', {
+      type: boxType,
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    bumpRoleSelect(row)
+    return
+  }
+  const ok = await updateUser(row, patchForAccountRole(value))
+  if (!ok) bumpRoleSelect(row)
 }
 
 function openResetDialog(row) {
@@ -187,7 +248,7 @@ function defaultPermsFor(roleCode) {
 
 function openPermDrawer(row) {
   if (row.role !== 'platform_admin') {
-    ElMessage.warning('仅平台管理员可绑定商城角色')
+    ElMessage.warning('仅平台岗位账号可编辑商城权限')
     return
   }
   if (!row.is_active) {
@@ -218,17 +279,17 @@ async function loadPermAudits() {
   }
 }
 
-function onPermRoleChange(code) {
-  permChecked.value = defaultPermsFor(code)
-}
-
 async function savePerm() {
   if (!permTarget.value) return
+  if (!permRole.value) {
+    ElMessage.warning('平台超管拥有全部商城权限，不能单项收回。如需限制，请先在列表将账号角色改为岗位角色。')
+    return
+  }
   permSaving.value = true
   try {
     const { data } = await adminApi.updateUser(permTarget.value.id, {
-      platform_shop_role: permRole.value || null,
-      platform_shop_permissions: permRole.value ? permChecked.value : null,
+      platform_shop_role: permRole.value,
+      platform_shop_permissions: permChecked.value,
     })
     Object.assign(permTarget.value, data)
     ElMessage.success('已保存')
@@ -244,8 +305,7 @@ watch(
   () => route.query.shop_role,
   (v) => {
     if (typeof v === 'string' && v) {
-      filterShopRole.value = v
-      filterRole.value = 'platform_admin'
+      filterAccountRole.value = v
     }
   },
   { immediate: true },
@@ -268,17 +328,9 @@ onMounted(async () => {
         @keyup.enter="loadUsers"
         @clear="loadUsers"
       />
-      <el-select v-model="filterRole" placeholder="平台角色" clearable style="width: 140px">
+      <el-select v-model="filterAccountRole" placeholder="账号角色" clearable style="width: 160px">
         <el-option
-          v-for="opt in roleOptions"
-          :key="opt.value"
-          :label="opt.label"
-          :value="opt.value"
-        />
-      </el-select>
-      <el-select v-model="filterShopRole" placeholder="获客商城角色" clearable style="width: 180px">
-        <el-option
-          v-for="opt in shopRoleOptions"
+          v-for="opt in ACCOUNT_ROLE_OPTIONS"
           :key="opt.value"
           :label="opt.label"
           :value="opt.value"
@@ -291,8 +343,11 @@ onMounted(async () => {
       <el-button type="primary" @click="loadUsers">查询</el-button>
       <el-button @click="resetFilters">重置</el-button>
     </div>
+    <p class="page-hint">
+      账号角色决定能否进入平台后台及商城岗位。「编辑商城权限」只微调该岗位的默认权限，不改变角色。
+    </p>
 
-    <el-table v-loading="loading" :data="users" stripe style="margin-top: 16px">
+    <el-table v-loading="loading" :data="users" stripe style="margin-top: 8px">
       <el-table-column prop="phone" label="手机号" width="130" />
       <el-table-column prop="display_name" label="昵称" width="120" />
       <el-table-column label="所属公司" min-width="200">
@@ -310,29 +365,22 @@ onMounted(async () => {
           <span v-else>{{ row.tenant_name || '—' }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="平台角色" width="160">
+      <el-table-column label="账号角色" width="168">
         <template #default="{ row }">
           <el-select
-            :model-value="row.role"
+            :key="`${row.id}-${roleSelectEpoch[row.id] || 0}`"
+            :model-value="accountRoleOf(row)"
             size="small"
             :disabled="savingId === row.id"
-            @change="(v) => updateUser(row, { role: v })"
+            @change="(v) => changeAccountRole(row, v)"
           >
             <el-option
-              v-for="opt in roleOptions"
+              v-for="opt in ACCOUNT_ROLE_OPTIONS"
               :key="opt.value"
               :label="opt.label"
               :value="opt.value"
             />
           </el-select>
-        </template>
-      </el-table-column>
-      <el-table-column label="获客商城角色" width="160">
-        <template #default="{ row }">
-          <span v-if="row.role !== 'platform_admin'">—</span>
-          <el-tag v-else size="small" :type="row.platform_shop_role ? 'primary' : 'info'">
-            {{ shopRoleLabel(row) }}
-          </el-tag>
         </template>
       </el-table-column>
       <el-table-column label="状态" width="100">
@@ -405,7 +453,7 @@ onMounted(async () => {
 
     <el-drawer
       v-model="permVisible"
-      :title="permTarget ? `编辑权限 · ${permTarget.display_name || permTarget.phone}` : '编辑权限'"
+      :title="permTarget ? `编辑商城权限 · ${permTarget.display_name || permTarget.phone}` : '编辑商城权限'"
       size="520px"
     >
       <div v-if="permTarget" data-testid="shop-edit-shop-perms">
@@ -414,18 +462,16 @@ onMounted(async () => {
           <div class="val">{{ permTarget.phone || permTarget.display_name }}（只读）</div>
         </div>
         <div class="field">
-          <label>角色 <span class="req">*</span></label>
-          <el-select v-model="permRole" style="width: 100%" @change="onPermRoleChange">
-            <el-option label="平台超管（未绑）" value="" />
-            <el-option label="日常运营 (platform_shop_ops)" value="platform_shop_ops" />
-            <el-option label="商家管家 (platform_shop_cs)" value="platform_shop_cs" />
-            <el-option label="财务结算 (platform_shop_finance)" value="platform_shop_finance" />
-          </el-select>
+          <label>账号角色</label>
+          <div class="val">{{ accountRoleLabel(accountRoleOf(permTarget)) }}（只读）</div>
         </div>
-        <p class="hint">在角色默认权限上微调（取消勾选即收回）：</p>
-        <el-checkbox-group v-model="permChecked" class="perm-list">
-          <el-checkbox v-for="p in permChoices" :key="p.code" :label="p.code">
-            {{ p.code }}　{{ p.label }}
+        <p v-if="isPermSuperadmin" class="hint">
+          平台超管拥有全部商城权限，不能单项收回。如需限制权限，请先在列表将账号角色改为日常运营、商家管家或财务结算。
+        </p>
+        <p v-else class="hint">在该角色默认权限上微调（取消勾选即收回）。改角色请在列表「账号角色」中选择。</p>
+        <el-checkbox-group v-model="permChecked" class="perm-list" :disabled="isPermSuperadmin">
+          <el-checkbox v-for="p in permChoices" :key="p.code" :label="p.code" :disabled="isPermSuperadmin">
+            {{ p.label }}
           </el-checkbox>
         </el-checkbox-group>
         <div class="audit-block" data-testid="shop-perm-audit-timeline">
@@ -442,7 +488,14 @@ onMounted(async () => {
         </div>
         <div class="drawer-ft">
           <el-button @click="permVisible = false">取消</el-button>
-          <el-button type="primary" :loading="permSaving" @click="savePerm">保存</el-button>
+          <el-button
+            v-if="!isPermSuperadmin"
+            type="primary"
+            :loading="permSaving"
+            @click="savePerm"
+          >
+            保存
+          </el-button>
         </div>
       </div>
     </el-drawer>
@@ -455,6 +508,13 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.page-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary, #909399);
+  line-height: 1.6;
 }
 
 .reset-tip {
@@ -481,9 +541,6 @@ onMounted(async () => {
 .val {
   font-size: 13px;
   color: #303133;
-}
-.req {
-  color: #f56c6c;
 }
 .hint {
   font-size: 12px;

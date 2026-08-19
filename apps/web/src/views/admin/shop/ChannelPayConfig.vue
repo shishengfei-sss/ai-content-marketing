@@ -6,9 +6,12 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, isBenignEmptyError } from '../../../api/client'
+import CrmColumnSettingsDialog from '../../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../../composables/useListColumnSettings'
 import { useAuthStore } from '../../../stores/auth'
 import { formatDateTime } from '../../../utils/datetime'
 import ShopPaymentOnboardingPanel from '../../../components/shop/ShopPaymentOnboardingPanel.vue'
+import { SHOP_EXPORT_COLUMN_MODE_LABELS } from '../../../utils/shopExport'
 
 const route = useRoute()
 const router = useRouter()
@@ -32,7 +35,7 @@ const loading = ref(false)
 const exporting = ref(false)
 const exportDialog = ref(false)
 const exportTask = ref(null)
-const exportScope = ref('当前筛选')
+const exportScope = ref(SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns)
 const acting = ref(false)
 const items = ref([])
 const total = ref(0)
@@ -49,9 +52,14 @@ const sortDir = ref('desc')
 const channelCfg = ref(null)
 const drawerVisible = ref(false)
 const drawerDetail = ref(null)
-const columnDialogVisible = ref(false)
-const columnDraft = ref([])
-const visibleColumns = ref(loadColumnSettings())
+const {
+  visibleKeys: visibleColumns,
+  columnDialogVisible,
+  columnDraft,
+  openColumnSettings,
+  saveColumnSettings,
+  isColVisible,
+} = useListColumnSettings(ALL_COLUMNS, COLUMN_STORAGE_KEY)
 
 const canChannel = computed(() => auth.hasPlatformShopPermission('platform.shop.channel'))
 
@@ -335,41 +343,6 @@ const chips = computed(() => [
   { key: 'approved', label: '已开通', count: statusCounts.value.approved },
 ])
 
-function loadColumnSettings() {
-  const defaults = ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key)
-  try {
-    const raw = localStorage.getItem(COLUMN_STORAGE_KEY)
-    if (!raw) return defaults
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed) || !parsed.length) return defaults
-    const locked = ALL_COLUMNS.filter((c) => c.locked).map((c) => c.key)
-    const merged = [...new Set([...locked, ...parsed])]
-    return merged.filter((key) => ALL_COLUMNS.some((c) => c.key === key))
-  } catch {
-    return defaults
-  }
-}
-
-function saveColumnSettings() {
-  const locked = ALL_COLUMNS.filter((c) => c.locked).map((c) => c.key)
-  const next = [...new Set([...locked, ...columnDraft.value])]
-  visibleColumns.value = next.filter((key) => ALL_COLUMNS.some((c) => c.key === key))
-  localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(visibleColumns.value))
-  columnDialogVisible.value = false
-  ElMessage.success('列设置已保存')
-}
-
-function openColumnSettings() {
-  columnDraft.value = ALL_COLUMNS.filter(
-    (c) => !c.locked && visibleColumns.value.includes(c.key),
-  ).map((c) => c.key)
-  columnDialogVisible.value = true
-}
-
-function isColVisible(key) {
-  return visibleColumns.value.includes(key)
-}
-
 function sortIcon(prop) {
   if (sortBy.value !== prop) return '↕'
   return sortDir.value === 'asc' ? '↑' : '↓'
@@ -464,7 +437,7 @@ async function exportList(mode) {
     }
     const { data } = await adminApi.createShopPaymentOnboardingExport(body)
     exportTask.value = data
-    exportScope.value = mode === 'columns' ? '列配置' : '当前筛选'
+    exportScope.value = mode === 'columns' ? SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns : SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns
     exportDialog.value = true
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
@@ -786,8 +759,8 @@ onMounted(async () => {
               <el-button :loading="exporting">导出 ▾</el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="current">当前筛选</el-dropdown-item>
-                  <el-dropdown-item command="columns">列配置</el-dropdown-item>
+                  <el-dropdown-item command="current">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns }}</el-dropdown-item>
+                  <el-dropdown-item command="columns">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns }}</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -795,29 +768,30 @@ onMounted(async () => {
           </div>
         </div>
         <el-table v-loading="loading" :data="items" border stripe size="small">
-          <el-table-column v-if="isColVisible('merchant_name')" min-width="160">
+          <template v-for="colKey in visibleColumns" :key="colKey">
+          <el-table-column v-if="colKey === 'merchant_name'" min-width="160">
             <template #header>
               <span class="sortable" @click="toggleSort('merchant')">商家 {{ sortIcon('merchant') }}</span>
             </template>
             <template #default="{ row }">{{ row.merchant_name }}</template>
           </el-table-column>
-          <el-table-column v-if="isColVisible('entity_type')" label="主体" width="80">
+          <el-table-column v-if="colKey === 'entity_type'" label="主体" width="80">
             <template #default="{ row }">{{ row.entity_type_label }}</template>
           </el-table-column>
-          <el-table-column v-if="isColVisible('onboarding_status')" label="进件状态" width="110">
+          <el-table-column v-if="colKey === 'onboarding_status'" label="进件状态" width="110">
             <template #default="{ row }">
               <el-tag :type="statusTag[row.onboarding_status] || 'info'" size="small">
                 {{ row.onboarding_status_label }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column v-if="isColVisible('wx_sub_mch_id')" label="子商户号" width="140">
+          <el-table-column v-if="colKey === 'wx_sub_mch_id'" label="子商户号" width="140">
             <template #default="{ row }">
               <code v-if="row.wx_sub_mch_id_masked">{{ row.wx_sub_mch_id_masked }}</code>
               <span v-else>—</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="isColVisible('settlement')" label="结算账户" min-width="160">
+          <el-table-column v-if="colKey === 'settlement'" label="结算账户" min-width="160">
             <template #default="{ row }">
               <span v-if="row.settlement_bank || row.settlement_account_masked">
                 {{ row.settlement_bank }} {{ row.settlement_account_masked }}
@@ -825,7 +799,7 @@ onMounted(async () => {
               <span v-else>—</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="isColVisible('submitted_at')" width="170">
+          <el-table-column v-if="colKey === 'submitted_at'" width="170">
             <template #header>
               <span class="sortable" @click="toggleSort('submitted_at')">最近提交 {{ sortIcon('submitted_at') }}</span>
             </template>
@@ -834,13 +808,13 @@ onMounted(async () => {
             </template>
           </el-table-column>
           <el-table-column
-            v-if="isColVisible('account_manager_name')"
+            v-if="colKey === 'account_manager_name'"
             label="商家管家"
             width="120"
           >
             <template #default="{ row }">{{ row.account_manager_name || '未分配' }}</template>
           </el-table-column>
-          <el-table-column v-if="isColVisible('ops')" label="操作" width="220" fixed="right">
+          <el-table-column v-if="colKey === 'ops'" label="操作" width="220" fixed="right">
             <template #default="{ row }">
               <el-button v-if="row.actions.includes('view_materials')" link type="primary" @click="openDrawer(row)">
                 查看材料
@@ -858,6 +832,7 @@ onMounted(async () => {
               <el-button v-if="row.actions.includes('remind')" link @click="openDrawer(row)">提醒商家</el-button>
             </template>
           </el-table-column>
+          </template>
         </el-table>
         <div class="pager">
           <el-pagination
@@ -975,22 +950,11 @@ onMounted(async () => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="columnDialogVisible" title="列设置" width="420px">
-      <el-checkbox-group v-model="columnDraft">
-        <el-checkbox
-          v-for="col in ALL_COLUMNS.filter((c) => !c.locked)"
-          :key="col.key"
-          :label="col.key"
-        >
-          {{ col.label }}
-        </el-checkbox>
-      </el-checkbox-group>
-      <p class="gap-note">商家、操作列为锁定列，不可关闭。</p>
-      <template #footer>
-        <el-button @click="columnDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveColumnSettings">保存</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="columnDialogVisible"
+      v-model:columns="columnDraft"
+      @save="saveColumnSettings"
+    />
 
     <el-dialog v-model="exportDialog" title="导出任务" width="420px">
       <el-form v-if="exportTask" label-width="100px">

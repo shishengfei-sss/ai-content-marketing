@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { shopApi } from '../../api/client'
@@ -14,6 +14,8 @@ const submitting = ref(false)
 const status = ref(null)
 /** 展示用文件名：docType -> name */
 const fileNames = ref({})
+/** fileId -> blob object URL */
+const previewUrls = ref({})
 
 const ENTITY_CARDS = [
   {
@@ -63,6 +65,43 @@ function fileIdOf(docType) {
 
 function fileNameOf(docType) {
   return fileNames.value[docType] || ''
+}
+
+function previewUrlOf(docType) {
+  const id = fileIdOf(docType)
+  return id ? previewUrls.value[id] || '' : ''
+}
+
+function revokePreviews() {
+  Object.values(previewUrls.value).forEach((url) => {
+    try {
+      URL.revokeObjectURL(url)
+    } catch {
+      /* ignore */
+    }
+  })
+  previewUrls.value = {}
+}
+
+async function loadMaterialPreviews() {
+  revokePreviews()
+  const ids = Object.values(form.value.qualification_files || {})
+    .map((v) => (typeof v === 'string' ? v : v?.file_id || ''))
+    .filter(Boolean)
+  if (!ids.length) return
+  const next = {}
+  await Promise.all(
+    ids.map(async (fileId) => {
+      try {
+        const { data } = await shopApi.downloadOnboardingFile(fileId)
+        const blob = data instanceof Blob ? data : new Blob([data])
+        next[fileId] = URL.createObjectURL(blob)
+      } catch {
+        /* 预览失败仍保留已上传状态 */
+      }
+    }),
+  )
+  previewUrls.value = next
 }
 
 function looksMasked(value) {
@@ -122,6 +161,11 @@ async function load() {
     const { data } = await shopApi.getOnboardingStatus()
     status.value = data
     applyPrefill(data)
+    if (data.state === 'reviewing' || data.state === 'rejected') {
+      await loadMaterialPreviews()
+    } else {
+      revokePreviews()
+    }
   } catch (e) {
     ElMessage.error(e.message || '加载入驻状态失败')
   } finally {
@@ -264,6 +308,7 @@ async function submit() {
 }
 
 onMounted(load)
+onBeforeUnmount(revokePreviews)
 </script>
 
 <template>
@@ -374,7 +419,9 @@ onMounted(load)
         </el-row>
 
         <el-form-item label="资质材料" required>
-          <p class="form-tip">请先选择文件上传；支持识别的材料可自动填入上方信息，请核对后再提交</p>
+          <p class="form-tip">
+            {{ readonly ? '审核期间仅可查看已上传材料，不可修改。' : '请先选择文件上传；支持识别的材料可自动填入上方信息，请核对后再提交' }}
+          </p>
           <div class="materials-list">
             <template v-if="form.entity_type === 'personal'">
               <ShopMaterialUpload
@@ -385,6 +432,7 @@ onMounted(load)
                 :disabled="readonly"
                 :file-id="fileIdOf('id_card_front')"
                 :file-name="fileNameOf('id_card_front')"
+                :preview-url="previewUrlOf('id_card_front')"
                 @uploaded="onMaterialUploaded"
                 @ocr-filled="onOcrFilled"
                 @cleared="onMaterialCleared"
@@ -397,6 +445,7 @@ onMounted(load)
                 :disabled="readonly"
                 :file-id="fileIdOf('id_card_back')"
                 :file-name="fileNameOf('id_card_back')"
+                :preview-url="previewUrlOf('id_card_back')"
                 @uploaded="onMaterialUploaded"
                 @ocr-filled="onOcrFilled"
                 @cleared="onMaterialCleared"
@@ -408,6 +457,7 @@ onMounted(load)
                 :disabled="readonly"
                 :file-id="fileIdOf('handheld')"
                 :file-name="fileNameOf('handheld')"
+                :preview-url="previewUrlOf('handheld')"
                 @uploaded="onMaterialUploaded"
                 @cleared="onMaterialCleared"
               />
@@ -421,6 +471,7 @@ onMounted(load)
                 :disabled="readonly"
                 :file-id="fileIdOf('business_license')"
                 :file-name="fileNameOf('business_license')"
+                :preview-url="previewUrlOf('business_license')"
                 @uploaded="onMaterialUploaded"
                 @ocr-filled="onOcrFilled"
                 @cleared="onMaterialCleared"
@@ -433,6 +484,7 @@ onMounted(load)
                 :disabled="readonly"
                 :file-id="fileIdOf('legal_id_front')"
                 :file-name="fileNameOf('legal_id_front')"
+                :preview-url="previewUrlOf('legal_id_front')"
                 @uploaded="onMaterialUploaded"
                 @ocr-filled="onOcrFilled"
                 @cleared="onMaterialCleared"
@@ -445,6 +497,7 @@ onMounted(load)
                 :disabled="readonly"
                 :file-id="fileIdOf('legal_id_back')"
                 :file-name="fileNameOf('legal_id_back')"
+                :preview-url="previewUrlOf('legal_id_back')"
                 @uploaded="onMaterialUploaded"
                 @ocr-filled="onOcrFilled"
                 @cleared="onMaterialCleared"
@@ -457,6 +510,7 @@ onMounted(load)
                 :disabled="readonly"
                 :file-id="fileIdOf('bank_permit')"
                 :file-name="fileNameOf('bank_permit')"
+                :preview-url="previewUrlOf('bank_permit')"
                 @uploaded="onMaterialUploaded"
                 @cleared="onMaterialCleared"
               />
@@ -468,6 +522,7 @@ onMounted(load)
                 :disabled="readonly"
                 :file-id="fileIdOf('icp')"
                 :file-name="fileNameOf('icp')"
+                :preview-url="previewUrlOf('icp')"
                 @uploaded="onMaterialUploaded"
                 @cleared="onMaterialCleared"
               />

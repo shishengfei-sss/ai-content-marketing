@@ -5,7 +5,7 @@
  */
 import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { ensureShopBuyerSession, getShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
+import { ensureShopBuyerSession, getShopBuyerTenantId, setShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
 
 const orderId = ref('')
 const pendingAction = ref('') // refund | progress | ''
@@ -14,6 +14,7 @@ const busy = ref(false)
 const order = ref(null)
 const refunds = ref([])
 const invoice = ref(null)
+const openidHint = ref('')
 
 const showRefund = ref(false)
 const showProgress = ref(false)
@@ -50,7 +51,18 @@ const REFUND_STATUS = {
   failed: '失败',
 }
 
+function typeLabel(t) {
+  return { course: '课程', digital: '资料', service: '服务' }[t] || '商品'
+}
+
 const statusLabel = computed(() => STATUS_LABEL[order.value?.status] || order.value?.status || '—')
+const statusTone = computed(() => {
+  const st = order.value?.status
+  if (st === 'pending_payment') return 'warn'
+  if (st === 'paid' || st === 'claim_pending') return 'ok'
+  if (st === 'refunded' || st === 'closed') return 'off'
+  return 'muted'
+})
 const entLabel = computed(() => {
   if (!order.value?.entitlement_status) {
     if (order.value?.status === 'claim_pending') return '待领权'
@@ -95,7 +107,7 @@ async function load() {
   if (!orderId.value) return
   loading.value = true
   try {
-    await ensureShopBuyerSession(getShopBuyerTenantId())
+    await ensureShopBuyerSession(getShopBuyerTenantId(), openidHint.value || undefined)
     order.value = await shopBuyerApi.getOrder(orderId.value)
     try {
       const rf = await shopBuyerApi.listOrderRefunds(orderId.value)
@@ -136,7 +148,12 @@ function copyNo() {
 
 function goLearn() {
   if (order.value?.status === 'claim_pending') {
-    uni.navigateTo({ url: '/pages/shop/claim' })
+    const tok = (order.value.claim_token || '').trim()
+    const tid = order.value.tenant_id || getShopBuyerTenantId()
+    const qs = tok
+      ? `?token=${encodeURIComponent(tok)}${tid ? `&tenant_id=${encodeURIComponent(tid)}` : ''}`
+      : ''
+    uni.navigateTo({ url: `/pages/shop/claim${qs}` })
     return
   }
   if (order.value?.entitlement_status !== 'active') {
@@ -260,6 +277,9 @@ function onReasonPick(e) {
 onLoad((q) => {
   orderId.value = q?.id || ''
   pendingAction.value = q?.action || ''
+  const tid = (q?.tenant_id || '').trim()
+  if (tid) setShopBuyerTenantId(tid)
+  openidHint.value = (q?.openid || '').trim()
 })
 onShow(load)
 </script>
@@ -268,16 +288,24 @@ onShow(load)
   <view class="page">
     <view v-if="loading" class="empty">加载中…</view>
     <template v-else-if="order">
-      <view class="badges">
-        <text class="badge">{{ statusLabel }}</text>
-        <text v-if="order.entitlement_status || order.status === 'claim_pending'" class="badge blue">
-          {{ entLabel }}
-        </text>
-        <text v-if="order.invoice_status === 'issued'" class="badge">已开票</text>
+      <view class="hero" :class="statusTone">
+        <text class="hero-st">{{ statusLabel }}</text>
+        <view class="hero-tags">
+          <text v-if="order.entitlement_status || order.status === 'claim_pending'" class="badge blue">
+            {{ entLabel }}
+          </text>
+          <text v-if="order.invoice_status === 'issued'" class="badge">已开票</text>
+        </view>
       </view>
 
       <view class="card">
-        <text class="pname">{{ order.product_name || '商品' }}</text>
+        <view class="prod">
+          <view class="thumb" :class="order.type || 'course'">{{ typeLabel(order.type).slice(0, 1) }}</view>
+          <view class="prod-info">
+            <text class="pname">{{ order.product_name || '商品' }}</text>
+            <text class="tag">{{ typeLabel(order.type) }}</text>
+          </view>
+        </view>
         <view class="amt-row">
           <text class="muted">实付</text>
           <text class="amt">{{ amountText }}</text>
@@ -422,15 +450,36 @@ onShow(load)
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #f5f7fb;
-  padding: 16px;
-  padding-bottom: 48px;
+  background: #f3f5f9;
+  padding: 0 14px 48px;
 }
-.badges {
+.hero {
+  margin: 0 -14px 14px;
+  padding: 20px 18px 18px;
+  background: linear-gradient(135deg, #64748b, #94a3b8);
+  color: #fff;
+}
+.hero.ok {
+  background: linear-gradient(135deg, #059669, #34d399);
+}
+.hero.warn {
+  background: linear-gradient(135deg, #d97706, #fbbf24);
+}
+.hero.off {
+  background: linear-gradient(135deg, #64748b, #94a3b8);
+}
+.hero.muted {
+  background: linear-gradient(135deg, #475569, #94a3b8);
+}
+.hero-st {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+}
+.hero-tags {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-top: 8px;
 }
 .badge {
   font-size: 12px;
@@ -443,17 +492,61 @@ onShow(load)
   background: #e6f4ff;
   color: #1677ff;
 }
+.hero .badge,
+.hero .badge.blue {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
 .card {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 14px;
   margin-bottom: 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+.prod {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  background: #e8f3ff;
+  color: #1677ff;
+  flex-shrink: 0;
+}
+.thumb.digital {
+  background: #fff7e6;
+  color: #d48806;
+}
+.thumb.service {
+  background: #ecfdf5;
+  color: #059669;
+}
+.prod-info {
+  flex: 1;
+  min-width: 0;
 }
 .pname {
   display: block;
   font-size: 16px;
   font-weight: 700;
   color: #0f172a;
+}
+.tag {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #1677ff;
+  background: #e8f3ff;
+  padding: 1px 6px;
+  border-radius: 4px;
 }
 .amt-row {
   display: flex;
@@ -492,8 +585,9 @@ onShow(load)
 .btn {
   margin: 0;
   border: none;
-  border-radius: 10px;
+  border-radius: 999px;
   font-size: 14px;
+  font-weight: 600;
   background: #f1f5f9;
   color: #334155;
 }

@@ -37,6 +37,8 @@ export const useAuthStore = defineStore('auth', {
       const hit = (state.user?.tenants || []).find((t) => String(t.id) === String(tid))
       return (hit?.role_code || '') === 'shop_clerk'
     },
+    /** 企业管理员：智营 CRM + 商城全菜单 */
+    isTenantAdmin: (state) => state.user?.active_tenant?.role_code === 'admin',
   },
   actions: {
     setToken(token, needSelect = false) {

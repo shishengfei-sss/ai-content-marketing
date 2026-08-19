@@ -22,10 +22,53 @@ from app.schemas.shop_platform import (
     MpProductLessonPreview,
     MpStoreBriefOut,
     MpStoreProductCard,
+    MpStoreResolveOut,
     MpStorefrontResponse,
 )
 from app.services.shop import content_cms_service
 from app.services.shop.content_fulfillment_service import _default_lessons
+
+
+def _extract_content_file_id(url: str | None) -> str | None:
+    s = (url or "").strip()
+    if not s or "/shop/content/files/" not in s:
+        return None
+    part = s.split("/shop/content/files/", 1)[-1]
+    return part.split("?", 1)[0].split("/", 1)[0] or None
+
+
+def public_cover_url(shop_id: UUID, cover_url: str | None) -> str | None:
+    file_id = _extract_content_file_id(cover_url)
+    if not file_id:
+        return cover_url
+    return f"/api/v1/mp/shop/store/covers/{file_id}?shop_id={shop_id}"
+
+
+def stream_public_cover(db: Session, shop_id: UUID, file_id: str):
+    from pathlib import Path
+
+    shop, merchant = _get_store(db, shop_id)
+    _assert_trade_open(shop, merchant)
+    fid = (file_id or "").strip()
+    if not fid:
+        raise HTTPException(status_code=404, detail="封面不存在")
+    hit = (
+        db.query(ShopProduct)
+        .filter(
+            uuid_eq(ShopProduct.shop_id, shop_id),
+            uuid_eq(ShopProduct.tenant_id, shop.tenant_id),
+            ShopProduct.deleted_at.is_(None),
+            ShopProduct.cover_url.like(f"%{fid}%"),
+        )
+        .first()
+    )
+    if not hit:
+        raise HTTPException(status_code=404, detail="封面不存在")
+    path = content_cms_service.resolve_content_file_path(shop.tenant_id, fid)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="封面文件不存在")
+    filename = path.name.split("_", 1)[-1]
+    return Path(path), filename
 
 
 def _merchant_for_store(db: Session, shop: ShopStore) -> ShopMerchantAccount | None:
@@ -45,7 +88,7 @@ def _merchant_for_store(db: Session, shop: ShopStore) -> ShopMerchantAccount | N
 def _assert_trade_open(shop: ShopStore, merchant: ShopMerchantAccount | None) -> None:
     if merchant is None or merchant.status != "active":
         raise HTTPException(status_code=403, detail="店铺暂停营业")
-    if shop.status != "active":
+    if shop.status not in ("active", "draft"):
         raise HTTPException(status_code=403, detail="店铺暂停营业")
 
 
@@ -55,6 +98,36 @@ def _get_store(db: Session, shop_id: UUID) -> tuple[ShopStore, ShopMerchantAccou
         raise HTTPException(status_code=404, detail="店铺不存在")
     merchant = _merchant_for_store(db, shop)
     return shop, merchant
+
+
+def resolve_shop_for_tenant(db: Session, tenant_id: UUID) -> UUID | None:
+    """按租户解析默认可浏览店铺（优先营业中，其次草稿）。"""
+    shops = (
+        db.query(ShopStore)
+        .filter(uuid_eq(ShopStore.tenant_id, tenant_id))
+        .order_by(ShopStore.updated_at.desc())
+        .all()
+    )
+    if not shops:
+        return None
+    for prefer in ("active", "draft"):
+        for shop in shops:
+            if shop.status == prefer:
+                return shop.id
+    return shops[0].id
+
+
+def resolve_shop_brief(db: Session, tenant_id: UUID) -> MpStoreResolveOut:
+    shop_id = resolve_shop_for_tenant(db, tenant_id)
+    if not shop_id:
+        raise HTTPException(status_code=404, detail="未找到可浏览店铺")
+    shop, _merchant = _get_store(db, shop_id)
+    return MpStoreResolveOut(
+        shop_id=shop.id,
+        tenant_id=shop.tenant_id,
+        name=shop.name or "店铺",
+        status=shop.status,
+    )
 
 
 def _shop_brief(db: Session, shop: ShopStore, merchant: ShopMerchantAccount | None) -> MpStoreBriefOut:
@@ -69,6 +142,7 @@ def _shop_brief(db: Session, shop: ShopStore, merchant: ShopMerchantAccount | No
         status=shop.status,
         merchant_status=merchant.status if merchant else "not_onboarded",
         intro=(settings.intro if settings else None),
+        service_phone=(settings.service_phone if settings else None),
     )
 
 
@@ -78,7 +152,7 @@ def _product_card(p: ShopProduct) -> MpStoreProductCard:
         type=p.type,
         name=p.name,
         subtitle=p.subtitle,
-        cover_url=p.cover_url,
+        cover_url=public_cover_url(p.shop_id, p.cover_url),
         price_cents=int(p.price_cents or 0),
         line_price_cents=p.line_price_cents,
         status=p.status,
@@ -241,7 +315,7 @@ def get_product_detail(
         type=product.type,
         name=product.name,
         subtitle=product.subtitle,
-        cover_url=product.cover_url,
+        cover_url=public_cover_url(product.shop_id, product.cover_url),
         price_cents=int(product.price_cents or 0),
         line_price_cents=product.line_price_cents,
         status=product.status,

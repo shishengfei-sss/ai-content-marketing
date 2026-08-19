@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import uuid_eq
@@ -269,6 +270,7 @@ def resubmit_signature(
     *,
     content: str | None,
     remark: str | None,
+    qualification_files: dict | None = None,
 ) -> dict[str, Any]:
     row = db.query(PlatformSmsSignature).filter(uuid_eq(PlatformSmsSignature.id, sig_id)).first()
     if not row:
@@ -291,8 +293,11 @@ def resubmit_signature(
         row.name = row.content
     if remark is not None:
         row.remark = remark.strip() or None
+    if qualification_files is not None:
+        row.qualification_files = qualification_files or {}
     row.status = "pending"
     row.reject_reason = None
+    row.provider_sig_id = f"mock_{uuid.uuid4().hex[:10]}"
     db.commit()
     db.refresh(row)
     return _sig_item(db, row)
@@ -382,10 +387,14 @@ def create_template(
         is_default_claim=False,
     )
     db.add(row)
-    db.flush()
-    if is_default_claim:
-        _set_default_claim(db, row)
-    db.commit()
+    try:
+        db.flush()
+        if is_default_claim:
+            _set_default_claim(db, row)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=422, detail="Code 已存在") from None
     db.refresh(row)
     return _tpl_item(row)
 

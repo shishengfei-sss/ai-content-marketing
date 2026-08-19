@@ -10,6 +10,7 @@ from pathlib import Path
 
 os.environ.setdefault("FORCE_FAKE_PLATFORM_LLM", "1")
 os.environ.setdefault("VERIFY_LIVE_API", "0")
+os.environ.setdefault("SHOP_CHANNEL_MOCK_AUDIT", "0")
 
 API_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = API_ROOT.parents[1]

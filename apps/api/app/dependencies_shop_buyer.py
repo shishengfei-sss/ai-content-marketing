@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy.orm import Session
@@ -24,14 +24,25 @@ class BuyerContext:
     tenant_id: UUID
 
 
+def resolve_buyer_access_token(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    access_token: str | None = Query(default=None, description="供 video/audio 等无法带 Header 的资源请求"),
+) -> str | None:
+    if credentials and credentials.credentials:
+        return credentials.credentials
+    if access_token and str(access_token).strip():
+        return str(access_token).strip()
+    return None
+
+
 def _parse_buyer_token(
-    credentials: HTTPAuthorizationCredentials | None,
+    token: str | None,
     db: Session,
 ) -> BuyerContext | None:
-    if not credentials:
+    if not token:
         return None
     try:
-        payload = decode_access_token(credentials.credentials)
+        payload = decode_access_token(token)
     except JWTError:
         return None
     if payload.get("typ") != "shop_buyer":
@@ -49,17 +60,17 @@ def _parse_buyer_token(
 
 
 def get_buyer_context(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    token: str | None = Depends(resolve_buyer_access_token),
     db: Session = Depends(get_db),
 ) -> BuyerContext:
-    bctx = _parse_buyer_token(credentials, db)
+    bctx = _parse_buyer_token(token, db)
     if not bctx:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录")
     return bctx
 
 
 def get_optional_buyer_context(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    token: str | None = Depends(resolve_buyer_access_token),
     db: Session = Depends(get_db),
 ) -> BuyerContext | None:
-    return _parse_buyer_token(credentials, db)
+    return _parse_buyer_token(token, db)

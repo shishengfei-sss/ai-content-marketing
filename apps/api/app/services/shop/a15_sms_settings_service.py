@@ -344,12 +344,13 @@ def get_claim_landing_base(db: Session, tenant_id: UUID) -> str | None:
 
 
 def build_claim_h5_link(db: Session, tenant_id: UUID, token: str) -> str:
-    """M14 领权页。对照 H5 `#/pages/shop/claim`；有落地域名时拼到域名后。"""
+    """M14 领权页。对照 H5 `#/pages/shop/claim`；无落地域名时回退本地 H5。"""
+    from app.config import settings
+
     path = f"/pages/shop/claim?token={token}&tenant_id={tenant_id}"
     landing = (get_claim_landing_base(db, tenant_id) or "").rstrip("/")
-    if landing:
-        return f"{landing}/#{path}"
-    return path
+    base = landing or (settings.SHOP_H5_DEMO_BASE or "http://localhost:5174").rstrip("/")
+    return f"{base}/#{path}"
 
 
 def force_assign_sms_for_tests(

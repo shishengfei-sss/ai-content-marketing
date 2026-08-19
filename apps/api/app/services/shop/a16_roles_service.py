@@ -16,6 +16,7 @@ from app.models.shop import ShopStore, ShopStoreMembership
 from app.permissions import (
     SHOP_BUILTIN_ROLE_CODES,
     SHOP_BUILTIN_ROLE_DEFAULT_PERMISSIONS,
+    SHOP_MERCHANT_PERMISSIONS,
     SYSTEM_ROLE_ADMIN,
     SYSTEM_ROLE_EDITOR,
 )
@@ -115,6 +116,14 @@ def _member_count(db: Session, tenant_id: UUID, role_id: UUID) -> int:
     )
 
 
+def _role_shop_permissions(code: str, role: TenantRole) -> list[str]:
+    if code == SYSTEM_ROLE_ADMIN:
+        return sorted(SHOP_MERCHANT_PERMISSIONS)
+    return sorted(
+        {p.permission_code for p in role.permissions if p.permission_code.startswith("shop.")}
+    )
+
+
 def list_a16_roles(db: Session, ctx: TenantContext) -> list[dict[str, Any]]:
     _ensure_shop_roles(db, ctx.tenant_id)
     disabled = _disabled_codes(db, ctx.tenant_id)
@@ -124,10 +133,7 @@ def list_a16_roles(db: Session, ctx: TenantContext) -> list[dict[str, Any]]:
         if not role:
             continue
         enabled = code == SYSTEM_ROLE_ADMIN or code not in disabled
-        perms = sorted({p.permission_code for p in role.permissions})
-        if code == SYSTEM_ROLE_ADMIN and not perms:
-            # admin 通常隐式全权限；展示用 shop.* 摘要
-            perms = ["*"]
+        perms = _role_shop_permissions(code, role)
         out.append(
             {
                 "id": str(role.id),

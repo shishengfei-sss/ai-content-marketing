@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import HTTPException
+from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.database import uuid_eq
 from app.dependencies import TenantContext
+from app.services.shop.export_limits import SHOP_EXPORT_ROW_LIMIT, assert_export_within_limit
 from app.models import User
 from app.models.shop import (
     ShopChannelMapping,
@@ -38,6 +43,8 @@ _MOUNT_LABEL = {
     "mapped": "已挂载",
     "none": "未挂载",
     "rejected": "挂载被拒",
+    "pending": "挂载审核中",
+    "syncing": "同步中",
 }
 
 PRODUCT_TYPES = frozenset({"course", "digital", "service"})
@@ -133,13 +140,17 @@ def ensure_default_shop(db: Session, tenant_id: UUID, merchant: ShopMerchantAcco
 def _resolve_channel_mount(
     product_status: str, mapping_statuses: list[str]
 ) -> tuple[str | None, str]:
-    """A02 公域列：已挂载 / 未挂载 / 挂载被拒 / —。"""
+    """A02 公域列：已挂载 / 挂载审核中 / 同步中 / 未挂载 / 挂载被拒 / —。"""
     if product_status in _MOUNT_NA_STATUSES and not mapping_statuses:
         return None, "—"
     if any(s == "blocked" for s in mapping_statuses):
         return "rejected", _MOUNT_LABEL["rejected"]
     if any(s in ("mapped", "paused") for s in mapping_statuses):
         return "mapped", _MOUNT_LABEL["mapped"]
+    if any(s == "pending" for s in mapping_statuses):
+        return "pending", _MOUNT_LABEL["pending"]
+    if any(s == "syncing" for s in mapping_statuses):
+        return "syncing", _MOUNT_LABEL["syncing"]
     if product_status in _MOUNT_NA_STATUSES:
         return None, "—"
     return "none", _MOUNT_LABEL["none"]
@@ -291,7 +302,7 @@ def _product_base_query(
         query = query.filter(ShopProduct.updated_at >= updated_from)
     if updated_to is not None:
         query = query.filter(ShopProduct.updated_at <= updated_to)
-    if channel_mount in ("mapped", "none", "rejected"):
+    if channel_mount in ("mapped", "none", "rejected", "pending"):
         mapped_ids = (
             db.query(ShopChannelMapping.product_id)
             .filter(
@@ -308,6 +319,14 @@ def _product_base_query(
             )
             .distinct()
         )
+        in_progress_ids = (
+            db.query(ShopChannelMapping.product_id)
+            .filter(
+                uuid_eq(ShopChannelMapping.tenant_id, ctx.tenant_id),
+                ShopChannelMapping.status.in_(("pending", "syncing")),
+            )
+            .distinct()
+        )
         if channel_mount == "mapped":
             # 阻断优先：同时有 mapped+blocked 时归 rejected，不进已挂载筛
             query = query.filter(
@@ -316,12 +335,18 @@ def _product_base_query(
             )
         elif channel_mount == "rejected":
             query = query.filter(ShopProduct.id.in_(blocked_ids))
+        elif channel_mount == "pending":
+            query = query.filter(
+                ShopProduct.id.in_(in_progress_ids),
+                ~ShopProduct.id.in_(blocked_ids),
+            )
         else:
-            # 未挂载：非 draft/off_sale 且无已挂载/暂停，且无阻断（阻断优先归 rejected）
+            # 未挂载：无已挂载/暂停/审核中/同步中，且无阻断
             query = query.filter(
                 ~ShopProduct.status.in_(list(_MOUNT_NA_STATUSES)),
                 ~ShopProduct.id.in_(mapped_ids),
                 ~ShopProduct.id.in_(blocked_ids),
+                ~ShopProduct.id.in_(in_progress_ids),
             )
     return query
 
@@ -458,6 +483,456 @@ def run_auto_review(name: str, subtitle: str | None) -> tuple[str, list[dict]]:
     return "pass", []
 
 
+REF_TYPE_LABEL = {
+    "column": "专栏",
+    "digital_package": "资料包",
+    "service_offer": "服务定义",
+}
+MEDIA_TYPE_LABEL = {"video": "视频", "audio": "音频", "article": "图文"}
+LESSON_STATUS_LABEL = {"draft": "草稿", "published": "已发布"}
+COLUMN_STATUS_LABEL = {"draft": "草稿", "published": "已发布", "off_sale": "已下架"}
+AUTO_RULE_CATALOG = (
+    ("sensitive_word", "敏感词库"),
+    ("exaggerated_claim", "夸大承诺"),
+    ("prohibited_category", "禁售类目"),
+    ("category_qualification", "类目资质"),
+    ("media_compliance", "封面素材"),
+    ("external_link", "外链引流"),
+)
+
+
+def _parse_uuid(val) -> UUID | None:
+    if not val:
+        return None
+    try:
+        return UUID(str(val))
+    except (TypeError, ValueError):
+        return None
+
+
+def _content_disposition_headers(filename: str, *, attachment: bool = True) -> dict[str, str]:
+    """HTTP 头仅 latin-1；中文文件名用 RFC 5987 filename*。"""
+    name = (filename or "download").replace('"', "").replace("\r", "").replace("\n", "")
+    ascii_name = name.encode("ascii", "ignore").decode("ascii").strip() or "download"
+    kind = "attachment" if attachment else "inline"
+    return {
+        "Content-Disposition": f'{kind}; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(name)}'
+    }
+
+
+def _file_id_from_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    m = re.search(r"/content/files/([0-9a-f-]{36})", str(url), re.I)
+    return m.group(1) if m else None
+
+
+def _review_cover_preview_url(review_id: UUID, cover_url: str | None) -> str | None:
+    if _file_id_from_url(cover_url):
+        return f"/api/v1/admin/shop/product-reviews/{review_id}/snapshot-cover"
+    return cover_url or None
+
+
+def _format_duration(sec: int) -> str:
+    n = max(0, int(sec or 0))
+    if n < 60:
+        return f"{n} 秒"
+    m, s = divmod(n, 60)
+    if m < 60:
+        return f"{m} 分{s} 秒" if s else f"{m} 分"
+    h, m = divmod(m, 60)
+    return f"{h} 时{m} 分" if m else f"{h} 时"
+
+
+def _format_bytes(n: int) -> str:
+    size = max(0, int(n or 0))
+    if size < 1024:
+        return f"{size} B"
+    if size < 1024 * 1024:
+        return f"{size / 1024:.1f} KB"
+    return f"{size / (1024 * 1024):.1f} MB"
+
+
+def _build_ref_summary(
+    db: Session, tenant_id: UUID, ref_type: str | None, ref_id_raw
+) -> dict | None:
+    ref_id = _parse_uuid(ref_id_raw)
+    if not ref_type or not ref_id:
+        return None
+    type_label = REF_TYPE_LABEL.get(ref_type, ref_type)
+    if ref_type == "column":
+        from app.models.shop import ShopColumn, ShopLesson
+
+        col = (
+            db.query(ShopColumn)
+            .filter(
+                uuid_eq(ShopColumn.id, ref_id),
+                uuid_eq(ShopColumn.tenant_id, tenant_id),
+                ShopColumn.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not col:
+            return {
+                "ref_type": ref_type,
+                "ref_type_label": type_label,
+                "ref_id": str(ref_id),
+                "title": None,
+                "summary": "关联专栏不存在或已删除",
+                "lessons": [],
+                "files": [],
+            }
+        lessons = (
+            db.query(ShopLesson)
+            .filter(
+                uuid_eq(ShopLesson.column_id, col.id),
+                ShopLesson.deleted_at.is_(None),
+            )
+            .order_by(ShopLesson.sort_order.asc(), ShopLesson.created_at.asc())
+            .all()
+        )
+        pub = sum(1 for les in lessons if les.status == "published")
+        lesson_rows = []
+        for i, les in enumerate(lessons):
+            file_id = les.media_id or _file_id_from_url(les.media_url)
+            can_preview = (
+                bool((les.content_body or "").strip())
+                if les.media_type == "article"
+                else bool(file_id)
+            )
+            lesson_rows.append(
+                {
+                    "id": str(les.id),
+                    "sort": les.sort_order if les.sort_order is not None else i + 1,
+                    "title": les.title,
+                    "media_type": les.media_type,
+                    "media_type_label": MEDIA_TYPE_LABEL.get(les.media_type, les.media_type),
+                    "duration_sec": int(les.duration_sec or 0),
+                    "duration_label": _format_duration(int(les.duration_sec or 0)),
+                    "status": les.status,
+                    "status_label": LESSON_STATUS_LABEL.get(les.status, les.status),
+                    "is_trial": bool(les.is_trial),
+                    "file_id": file_id,
+                    "previewable": can_preview,
+                }
+            )
+        return {
+            "ref_type": ref_type,
+            "ref_type_label": type_label,
+            "ref_id": str(ref_id),
+            "title": col.title,
+            "status": col.status,
+            "status_label": COLUMN_STATUS_LABEL.get(col.status, col.status),
+            "summary": f"专栏「{col.title}」· 共 {len(lessons)} 课时（{pub} 节已发布）",
+            "intro": col.intro,
+            "lessons": lesson_rows,
+            "files": [],
+        }
+    if ref_type == "digital_package":
+        from app.models.shop import ShopDigitalAsset, ShopDigitalPackage
+
+        pkg = (
+            db.query(ShopDigitalPackage)
+            .filter(
+                uuid_eq(ShopDigitalPackage.id, ref_id),
+                uuid_eq(ShopDigitalPackage.tenant_id, tenant_id),
+                ShopDigitalPackage.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not pkg:
+            return {
+                "ref_type": ref_type,
+                "ref_type_label": type_label,
+                "ref_id": str(ref_id),
+                "title": None,
+                "summary": "关联资料包不存在或已删除",
+                "lessons": [],
+                "files": [],
+            }
+        assets = (
+            db.query(ShopDigitalAsset)
+            .filter(uuid_eq(ShopDigitalAsset.package_id, pkg.id))
+            .order_by(ShopDigitalAsset.sort_order.asc())
+            .all()
+        )
+        mode_label = "在线查看" if pkg.deliver_mode == "online_view" else "下载"
+        total_bytes = sum(int(a.size_bytes or 0) for a in assets)
+        size_mb = total_bytes / (1024 * 1024) if total_bytes else 0
+        file_rows = [
+            {
+                "id": str(a.id),
+                "file_id": a.file_id,
+                "name": a.file_name,
+                "mime": a.mime,
+                "size_bytes": int(a.size_bytes or 0),
+                "size_label": _format_bytes(int(a.size_bytes or 0)),
+                "previewable": bool(a.previewable),
+            }
+            for a in assets
+        ]
+        return {
+            "ref_type": ref_type,
+            "ref_type_label": type_label,
+            "ref_id": str(ref_id),
+            "title": pkg.title,
+            "status": pkg.status,
+            "status_label": COLUMN_STATUS_LABEL.get(pkg.status, pkg.status),
+            "summary": f"资料包「{pkg.title}」· 交付={mode_label} · 文件 {len(assets)} 个 · 约 {size_mb:.1f} MB",
+            "intro": None,
+            "lessons": [],
+            "files": file_rows,
+        }
+    if ref_type == "service_offer":
+        from app.models.shop import ShopServiceOffer, ShopServiceSlot
+
+        offer = (
+            db.query(ShopServiceOffer)
+            .filter(
+                uuid_eq(ShopServiceOffer.id, ref_id),
+                uuid_eq(ShopServiceOffer.tenant_id, tenant_id),
+                ShopServiceOffer.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not offer:
+            return {
+                "ref_type": ref_type,
+                "ref_type_label": type_label,
+                "ref_id": str(ref_id),
+                "title": None,
+                "summary": "关联服务不存在或已删除",
+                "lessons": [],
+                "files": [],
+            }
+        slot_count = (
+            db.query(ShopServiceSlot)
+            .filter(uuid_eq(ShopServiceSlot.service_offer_id, offer.id))
+            .count()
+        )
+        if offer.mode == "times_card":
+            summary = (
+                f"服务「{offer.title}」· 次数卡 · {offer.total_times or '-'} 次 / "
+                f"{offer.valid_days or '-'} 天 · 单次 {offer.duration_minutes or 60} 分"
+            )
+        else:
+            summary = (
+                f"服务「{offer.title}」· 预约 · 单次 {offer.duration_minutes or 60} 分"
+                f"{f' · 可约时段 {slot_count} 个' if slot_count else ''}"
+            )
+        return {
+            "ref_type": ref_type,
+            "ref_type_label": type_label,
+            "ref_id": str(ref_id),
+            "title": offer.title,
+            "status": offer.status,
+            "status_label": COLUMN_STATUS_LABEL.get(offer.status, offer.status),
+            "summary": summary,
+            "intro": None,
+            "lessons": [],
+            "files": [],
+            "service_mode": offer.mode,
+            "slot_count": slot_count,
+        }
+    return {
+        "ref_type": ref_type,
+        "ref_type_label": type_label,
+        "ref_id": str(ref_id),
+        "title": None,
+        "summary": f"关联 {type_label}",
+        "lessons": [],
+        "files": [],
+    }
+
+
+def build_auto_rule_rows(auto_result: str, auto_flags: list | None) -> list[dict]:
+    """P09 机审明细：命中项 + pass 时展示未命中规则清单。"""
+    flags = list(auto_flags or [])
+    hit_by_rule = {str(f.get("rule")): f for f in flags if f.get("rule")}
+    rows: list[dict] = []
+    for rule_key, rule_label in AUTO_RULE_CATALOG:
+        hit = hit_by_rule.get(rule_key)
+        if hit:
+            rows.append(
+                {
+                    "rule": rule_key,
+                    "rule_label": rule_label,
+                    "level": hit.get("level") or auto_result,
+                    "snippet": hit.get("snippet") or "—",
+                    "message": hit.get("message") or "—",
+                }
+            )
+        elif auto_result == "pass":
+            rows.append(
+                {
+                    "rule": rule_key,
+                    "rule_label": rule_label,
+                    "level": "pass",
+                    "snippet": "—",
+                    "message": "未命中",
+                }
+            )
+    for hit in flags:
+        rk = str(hit.get("rule") or "")
+        if rk and rk not in {k for k, _ in AUTO_RULE_CATALOG}:
+            rows.append(
+                {
+                    "rule": rk,
+                    "rule_label": rk,
+                    "level": hit.get("level") or auto_result,
+                    "snippet": hit.get("snippet") or "—",
+                    "message": hit.get("message") or "—",
+                }
+            )
+    return rows
+
+
+def review_snapshot_cover(db: Session, review_id: UUID) -> FileResponse:
+    r = db.query(ShopProductReview).filter(uuid_eq(ShopProductReview.id, review_id)).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="审核单不存在")
+    snap = dict(r.snapshot_json or {})
+    file_id = _file_id_from_url(snap.get("cover_url"))
+    if not file_id:
+        raise HTTPException(status_code=404, detail="无封面")
+    from app.services.shop import content_cms_service
+
+    path: Path | None = content_cms_service.resolve_content_file_path(r.tenant_id, file_id)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="封面文件不存在")
+    filename = path.name.split("_", 1)[-1]
+    return FileResponse(path, headers=_content_disposition_headers(filename, attachment=False))
+
+
+def _review_ref_binding(
+    db: Session, review_id: UUID
+) -> tuple[ShopProductReview, UUID, str | None, UUID | None]:
+    r = db.query(ShopProductReview).filter(uuid_eq(ShopProductReview.id, review_id)).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="审核单不存在")
+    snap = dict(r.snapshot_json or {})
+    return r, r.tenant_id, snap.get("ref_type"), _parse_uuid(snap.get("ref_id"))
+
+
+def _review_lesson_row(db: Session, review_id: UUID, lesson_id: UUID):
+    from app.models.shop import ShopLesson
+
+    _, tenant_id, ref_type, ref_id = _review_ref_binding(db, review_id)
+    if ref_type != "column" or not ref_id:
+        raise HTTPException(status_code=404, detail="非课程商品")
+    les = (
+        db.query(ShopLesson)
+        .filter(
+            uuid_eq(ShopLesson.id, lesson_id),
+            uuid_eq(ShopLesson.column_id, ref_id),
+            uuid_eq(ShopLesson.tenant_id, tenant_id),
+            ShopLesson.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not les:
+        raise HTTPException(status_code=404, detail="课时不存在")
+    return tenant_id, les
+
+
+def review_lesson_detail(db: Session, review_id: UUID, lesson_id: UUID) -> dict:
+    _, les = _review_lesson_row(db, review_id, lesson_id)
+    file_id = les.media_id or _file_id_from_url(les.media_url)
+    can_preview = (
+        bool((les.content_body or "").strip()) if les.media_type == "article" else bool(file_id)
+    )
+    return {
+        "lesson_id": str(les.id),
+        "title": les.title,
+        "media_type": les.media_type,
+        "media_type_label": MEDIA_TYPE_LABEL.get(les.media_type, les.media_type),
+        "content_body": les.content_body if les.media_type == "article" else None,
+        "has_media": bool(file_id),
+        "previewable": can_preview,
+        "media_download_url": (
+            f"/api/v1/admin/shop/product-reviews/{review_id}/lessons/{lesson_id}/media"
+            if file_id
+            else None
+        ),
+    }
+
+
+def review_lesson_media(
+    db: Session, review_id: UUID, lesson_id: UUID, *, download: bool = False
+) -> FileResponse:
+    tenant_id, les = _review_lesson_row(db, review_id, lesson_id)
+    if les.media_type == "article":
+        raise HTTPException(status_code=422, detail="图文课时请使用预览查看正文")
+    file_id = les.media_id or _file_id_from_url(les.media_url)
+    if not file_id:
+        raise HTTPException(status_code=404, detail="课时未上传媒体文件")
+    from app.services.shop import content_cms_service
+
+    path: Path | None = content_cms_service.resolve_content_file_path(tenant_id, file_id)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="媒体文件不存在")
+    filename = les.title + (path.suffix or "")
+    headers = _content_disposition_headers(filename, attachment=download) if download else {}
+    return FileResponse(path, headers=headers)
+
+
+def review_ref_asset(
+    db: Session, review_id: UUID, file_id: str, *, download: bool = False
+) -> FileResponse:
+    from app.models.shop import ShopDigitalAsset, ShopDigitalPackage
+
+    _, tenant_id, ref_type, ref_id = _review_ref_binding(db, review_id)
+    if ref_type != "digital_package" or not ref_id:
+        raise HTTPException(status_code=404, detail="非资料商品")
+    asset = (
+        db.query(ShopDigitalAsset)
+        .filter(
+            uuid_eq(ShopDigitalAsset.package_id, ref_id),
+            uuid_eq(ShopDigitalAsset.tenant_id, tenant_id),
+            ShopDigitalAsset.file_id == str(file_id).strip(),
+        )
+        .first()
+    )
+    if not asset:
+        raise HTTPException(status_code=404, detail="资料文件不存在")
+    from app.services.shop import content_cms_service
+
+    path: Path | None = content_cms_service.resolve_content_file_path(tenant_id, asset.file_id)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="资料文件不存在")
+    filename = asset.file_name or path.name.split("_", 1)[-1]
+    headers = (
+        _content_disposition_headers(filename, attachment=True)
+        if download or not asset.previewable
+        else {}
+    )
+    return FileResponse(path, media_type=asset.mime or None, headers=headers)
+
+
+def review_ref_asset_html_preview(db: Session, review_id: UUID, file_id: str) -> HTMLResponse:
+    from app.models.shop import ShopDigitalAsset
+
+    _, tenant_id, ref_type, ref_id = _review_ref_binding(db, review_id)
+    if ref_type != "digital_package" or not ref_id:
+        raise HTTPException(status_code=404, detail="非资料商品")
+    asset = (
+        db.query(ShopDigitalAsset)
+        .filter(
+            uuid_eq(ShopDigitalAsset.package_id, ref_id),
+            uuid_eq(ShopDigitalAsset.tenant_id, tenant_id),
+            ShopDigitalAsset.file_id == str(file_id).strip(),
+        )
+        .first()
+    )
+    if not asset:
+        raise HTTPException(status_code=404, detail="资料文件不存在")
+    from app.services.shop import content_cms_service
+
+    return content_cms_service.content_file_html_preview(
+        tenant_id, asset.file_id, file_name=asset.file_name
+    )
+
+
 def list_products(
     db: Session,
     ctx: TenantContext,
@@ -530,9 +1005,9 @@ def export_products_csv(
         updated_to=updated_to,
     )
     total = query.count()
-    if raise_too_many and total > 5000:
-        raise HTTPException(status_code=422, detail="结果过多，请缩小筛选")
-    rows = query.order_by(ShopProduct.updated_at.desc()).limit(5000).all()
+    if raise_too_many:
+        assert_export_within_limit(total)
+    rows = query.order_by(ShopProduct.updated_at.desc()).limit(SHOP_EXPORT_ROW_LIMIT).all()
     items = _enrich_products(db, ctx, rows)
     type_label = {"course": "课程", "digital": "资料", "service": "服务"}
     status_label = {
@@ -723,7 +1198,15 @@ def create_product(db: Session, ctx: TenantContext, payload: ProductCreateReques
 def get_product(db: Session, ctx: TenantContext, product_id: UUID) -> ProductOut:
     p = _get_owned(db, ctx.tenant_id, product_id)
     cname, cpath = _category_labels(db, getattr(p, "category_id", None))
-    return _product_out(p, category_name=cname, category_path_label=cpath)
+    mounts = _mount_map_for_products(db, ctx.tenant_id, [p.id])
+    mount, label = _resolve_channel_mount(p.status, mounts.get(p.id, []))
+    return _product_out(
+        p,
+        channel_mount=mount,
+        channel_mount_label=label,
+        category_name=cname,
+        category_path_label=cpath,
+    )
 
 
 def patch_product(db: Session, ctx: TenantContext, product_id: UUID, payload: ProductPatchRequest) -> ProductOut:
@@ -1075,6 +1558,7 @@ def _review_out(db: Session, r: ShopProductReview, product: ShopProduct | None =
     meta = _p09_meta(snap)
     submitted_name = _user_name(db, r.submitted_by)
     reviewer_name = _user_name(db, r.reviewer_id)
+    ref_summary = _build_ref_summary(db, r.tenant_id, snap.get("ref_type"), snap.get("ref_id"))
     return ProductReviewOut(
         id=r.id,
         product_id=r.product_id,
@@ -1106,6 +1590,8 @@ def _review_out(db: Session, r: ShopProductReview, product: ShopProduct | None =
         paid_order_count=_paid_order_count(db, r.product_id) if r.product_id else 0,
         first_public_domain=_has_public_mapping(db, r.product_id) if r.product_id else False,
         audit_log=_audit_log(r, submitted_name, reviewer_name),
+        cover_preview_url=_review_cover_preview_url(r.id, snap.get("cover_url")),
+        ref_summary=ref_summary,
     )
 
 
@@ -1241,19 +1727,21 @@ def buyer_preview(db: Session, review_id: UUID) -> dict:
     """P09 预览买家页：快照 + 未上架水印。对照 #p09-review-panel。"""
     out = get_product_review(db, review_id)
     snap = dict(out.snapshot_json or {})
+    cover_url = _review_cover_preview_url(out.id, snap.get("cover_url")) or snap.get("cover_url")
     return {
         "review_id": str(out.id),
         "product_id": str(out.product_id),
         "product_name": out.product_name,
         "subtitle": snap.get("subtitle"),
         "price_cents": snap.get("price_cents"),
-        "cover_url": snap.get("cover_url"),
+        "cover_url": cover_url,
         "intro": snap.get("intro"),
         "product_type": out.product_type,
         "shop_name": out.shop_name,
         "merchant_name": out.merchant_name,
         "watermark": "未上架",
         "product_status": out.product_status,
+        "ref_summary": out.ref_summary,
     }
 
 

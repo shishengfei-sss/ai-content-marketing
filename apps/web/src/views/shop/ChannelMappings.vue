@@ -4,11 +4,17 @@
  * 列表/新建商品下拉按顶栏当前店铺过滤（04：A01–A14 按当前 shop_id）
  * 缺口：导出完成站内信本批不接。
  */
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api/client'
+import { submitShopExport, SHOP_EXPORT_COLUMN_MODE_LABELS } from '../../utils/shopExport'
+import CrmColumnSettingsDialog from '../../components/crm/CrmColumnSettingsDialog.vue'
+import ShopProductPickerPanel from '../../components/shop/ShopProductPickerPanel.vue'
+import { useListColumnSettings } from '../../composables/useListColumnSettings'
 import { useCurrentShop } from '../../composables/useCurrentShop'
+import { authShopFileUrl } from '../../utils/shopContentUrl'
+import { channelApiError, mappingBlockTip } from '../../utils/shopChannelMap'
 
 const router = useRouter()
 const route = useRoute()
@@ -18,9 +24,31 @@ const loading = ref(false)
 const items = ref([])
 const total = ref(0)
 const statusCounts = ref({})
-const products = ref([])
 const configured = ref(true)
-const settings = ref({ douyin_shop_id: '', enabled_combos: ['1A'] })
+const selectedProductData = ref(null)
+const productPickerRef = ref(null)
+const PRODUCT_TYPE_LABEL = { course: '课程', digital: '资料', service: '服务' }
+const settings = ref({
+  douyin_shop_id: '',
+  enabled_combos: ['1A'],
+  has_webhook_secret: false,
+  webhook_verified: false,
+  demo_tools_enabled: false,
+})
+const demoToolsEnabled = computed(() => !!settings.value.demo_tools_enabled)
+const demoOrderVisible = ref(false)
+const demoOrderResult = ref(null)
+const demoOrderBusyId = ref('')
+
+const setupHint = computed(() => {
+  if (!settings.value.douyin_shop_id) {
+    return '请填写外部店铺 ID 并保存绑店'
+  }
+  if (!settings.value.has_webhook_secret) {
+    return '绑店 ID 已保存，还需填写 Webhook 密钥并再次保存绑店'
+  }
+  return '请完成绑店与回调配置'
+})
 const query = reactive({
   page: 1,
   page_size: 20,
@@ -33,9 +61,6 @@ const query = reactive({
 })
 const advOpen = ref(false)
 const exporting = ref(false)
-const exportDialog = ref(false)
-const exportTask = ref(null)
-const exportScope = ref('当前筛选')
 
 const createVisible = ref(false)
 const wizardStep = ref(1)
@@ -54,9 +79,7 @@ const form = reactive({
   channel_product_id: '',
 })
 
-const selectedProduct = computed(() =>
-  products.value.find((p) => p.id === form.product_id)
-)
+const selectedProduct = computed(() => selectedProductData.value)
 const pathOptions = computed(() => {
   const combos = settings.value.enabled_combos || ['1A']
   return combos.map((c) => ({
@@ -86,28 +109,24 @@ const resubmitting = ref(false)
 const COL_STORAGE = 'shop.a14.columns'
 const ALL_COLS = [
   { key: 'product_name', label: '本地商品', locked: true, defaultOn: true },
-  { key: 'product_review_status', label: '商品审核', locked: true, defaultOn: true },
-  { key: 'channel_product_id', label: '外部商品 ID', locked: true, defaultOn: true },
-  { key: 'path_label', label: '路径', locked: true, defaultOn: true },
-  { key: 'status_label', label: '挂载状态', locked: true, defaultOn: true },
-  { key: 'external_audit_status', label: '外部审核', locked: true, defaultOn: true },
-  { key: 'created_at', label: '映射时间', locked: true, defaultOn: true },
-  { key: 'synced_at', label: '最近同步时间', locked: false, defaultOn: false },
-  { key: 'channel_label', label: '渠道', locked: false, defaultOn: false },
+  { key: 'product_review_status', label: '商品审核', defaultOn: true },
+  { key: 'channel_product_id', label: '外部商品 ID', defaultOn: true },
+  { key: 'path_label', label: '路径', defaultOn: true },
+  { key: 'status_label', label: '挂载状态', defaultOn: true },
+  { key: 'external_audit_status', label: '外部审核', defaultOn: true },
+  { key: 'created_at', label: '映射时间', defaultOn: true },
+  { key: 'synced_at', label: '最近同步时间', defaultOn: false },
+  { key: 'channel_label', label: '渠道', defaultOn: false },
   { key: 'ops', label: '操作', locked: true, defaultOn: true },
 ]
-function loadColPrefs() {
-  try {
-    const raw = localStorage.getItem(COL_STORAGE)
-    if (raw) return JSON.parse(raw)
-  } catch {
-    /* ignore */
-  }
-  return Object.fromEntries(ALL_COLS.map((c) => [c.key, c.defaultOn]))
-}
-const colVisible = reactive(loadColPrefs())
-const colDialog = ref(false)
-const colDraft = reactive({ ...colVisible })
+const {
+  visibleKeys,
+  columnDialogVisible: colDialog,
+  columnDraft,
+  openColumnSettings,
+  saveColumnSettings,
+  isColVisible,
+} = useListColumnSettings(ALL_COLS, COL_STORAGE)
 
 const TABS = [
   { key: '', label: '全部映射' },
@@ -173,28 +192,49 @@ async function loadSettings() {
     settings.value = {
       douyin_shop_id: data.douyin_shop_id || '',
       enabled_combos: data.enabled_combos?.length ? data.enabled_combos : ['1A'],
+      has_webhook_secret: !!data.has_webhook_secret,
+      webhook_verified: !!data.webhook_verified,
+      demo_tools_enabled: !!data.demo_tools_enabled,
     }
-  } catch {
+  } catch (e) {
     configured.value = false
+    if (e?.response?.status === 403) {
+      ElMessage.warning('无公域对接查看权限，无法确认对接状态')
+    }
   }
+}
+
+function clearPickedProduct() {
+  form.product_id = ''
+  nextTick(() => productPickerRef.value?.refresh())
+}
+
+function onPickProduct(row) {
+  selectedProductData.value = row
+  form.external_title = row?.name || ''
+  form.channel_product_id = ''
+  form.external_category = DY_CATEGORIES[0]
+  form.sync_mode = 'create_new'
+  if (wizardStep.value > 1) wizardStep.value = 1
 }
 
 function openWizard() {
   wizardStep.value = 1
   form.product_id = ''
+  selectedProductData.value = null
   form.combo = (settings.value.enabled_combos || ['1A'])[0] || '1A'
   form.external_title = ''
   form.external_category = DY_CATEGORIES[0]
   form.sync_mode = 'create_new'
   form.channel_product_id = ''
   createVisible.value = true
+  nextTick(() => productPickerRef.value?.refresh())
 }
 
 watch(
   () => form.product_id,
   (id) => {
-    const p = products.value.find((x) => x.id === id)
-    form.external_title = p?.name || ''
+    if (!id) selectedProductData.value = null
     form.channel_product_id = ''
     form.external_category = DY_CATEGORIES[0]
     form.sync_mode = 'create_new'
@@ -217,6 +257,11 @@ function fmtMoney(cents) {
 function wizardNext1() {
   if (!form.product_id) {
     ElMessage.warning('请选择本地商品')
+    return
+  }
+  const blockTip = mappingBlockTip(selectedProduct.value)
+  if (blockTip) {
+    ElMessage.warning(blockTip)
     return
   }
   if (!form.combo) {
@@ -254,7 +299,7 @@ async function wizardSyncNext() {
     form.external_title = data.external_title
     wizardStep.value = 3
   } catch (e) {
-    ElMessage.error(e.message || '同步失败')
+    ElMessage.error(channelApiError(e, '同步失败'))
   } finally {
     wizardBusy.value = false
   }
@@ -286,19 +331,21 @@ async function load() {
   }
 }
 
-async function loadProducts() {
+async function preloadWizardProduct(productId) {
+  if (!productId) return false
   try {
-    const { data } = await api.get('/api/v1/shop/products', {
-      params: {
-        page: 1,
-        page_size: 100,
-        status: 'on_sale',
-        shop_id: currentId.value || undefined,
-      },
-    })
-    products.value = data.items || []
+    const { data } = await api.get(`/api/v1/shop/products/${productId}`)
+    const blockTip = mappingBlockTip(data)
+    if (blockTip) {
+      ElMessage.warning(blockTip)
+      return false
+    }
+    selectedProductData.value = data
+    form.external_title = data.name || ''
+    return true
   } catch {
-    products.value = []
+    ElMessage.warning('无法加载预选商品，请手动选择')
+    return false
   }
 }
 
@@ -318,7 +365,7 @@ function resetAdv() {
 }
 
 function visibleExportColumns() {
-  return ALL_COLS.filter((c) => c.key !== 'ops' && colVisible[c.key]).map((c) => c.key)
+  return visibleKeys.value.filter((k) => k !== 'ops')
 }
 
 async function exportCsv(mode) {
@@ -336,10 +383,13 @@ async function exportCsv(mode) {
     if (mode === 'columns') {
       body.columns = visibleExportColumns()
     }
-    const { data } = await api.post('/api/v1/shop/channel-mappings/export', body)
-    exportTask.value = data
-    exportScope.value = mode === 'columns' ? '列配置' : '当前筛选'
-    exportDialog.value = true
+    await submitShopExport(
+      '/api/v1/shop/channel-mappings/export',
+      body,
+      '/api/v1/shop/channel-mappings/export-tasks',
+      'shop-channel-mappings.csv',
+      total.value,
+    )
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
   } finally {
@@ -347,23 +397,6 @@ async function exportCsv(mode) {
   }
 }
 
-async function downloadExportFile() {
-  if (!exportTask.value?.id) return
-  try {
-    const res = await api.get(`/api/v1/shop/channel-mappings/export-tasks/${exportTask.value.id}/file`, {
-      responseType: 'blob',
-    })
-    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = exportTask.value.file_name || 'shop-channel-mappings.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    ElMessage.error(e.message || '下载失败')
-  }
-}
 
 async function createMapping() {
   if (!form.channel_product_id) {
@@ -382,15 +415,13 @@ async function createMapping() {
       sync_mode: form.sync_mode,
       submit_mode: 'audit',
     })
-    ElMessage.success('已提交外部审核')
+    ElMessage.success(
+      data.status === 'mapped' ? '已提交并完成外部审核（Mock 自动过审）' : '已提交外部审核'
+    )
     createVisible.value = false
-    // Phase1 Mock：可选手动过审；列表先显示未挂载/审核中
-    if (data.status === 'pending') {
-      /* 保持 pending，运营可用「模拟过审」或外部审核接口 */
-    }
     await load()
   } catch (e) {
-    ElMessage.error(e.message || '提交失败')
+    ElMessage.error(channelApiError(e, '提交失败'))
   } finally {
     wizardBusy.value = false
   }
@@ -418,6 +449,54 @@ async function resume(row) {
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message || '恢复失败')
   }
+}
+
+async function demoApprove(row) {
+  try {
+    await api.post(`/api/v1/shop/channel-mappings/${row.id}/external-audit`, { result: 'approved' })
+    ElMessage.success('外部审核已通过，商品已挂载')
+    await load()
+  } catch (e) {
+    ElMessage.error(e.message || '操作失败')
+  }
+}
+
+async function demoSimulateOrder(row) {
+  demoOrderBusyId.value = row.id
+  try {
+    const { data } = await api.post(`/api/v1/shop/channel-mappings/${row.id}/demo-order`, {
+      buyer_mobile: '13700000001',
+    })
+    demoOrderResult.value = data
+    demoOrderVisible.value = true
+    ElMessage.success('已模拟抖店下单，请完成领权')
+  } catch (e) {
+    ElMessage.error(e.message || '模拟下单失败')
+  } finally {
+    demoOrderBusyId.value = ''
+  }
+}
+
+function openClaimPage() {
+  const url = demoOrderResult.value?.claim_url
+  if (!url) return
+  window.open(url, '_blank')
+}
+
+async function copyClaimLink() {
+  const url = demoOrderResult.value?.claim_url
+  if (!url) return
+  try {
+    await navigator.clipboard.writeText(url)
+    ElMessage.success('领权链接已复制')
+  } catch {
+    ElMessage.info(url)
+  }
+}
+
+function goOrders() {
+  demoOrderVisible.value = false
+  router.push('/shop/orders')
 }
 
 async function unmount(row) {
@@ -460,15 +539,10 @@ async function resubmit() {
       `/api/v1/shop/channel-mappings/${reasonRow.value.id}/resubmit`,
       { note: '已按驳回原因修改' }
     )
-    ElMessage.success('已重新提交外部审核')
+    ElMessage.success(
+      data.status === 'mapped' ? '已重新提交并完成外部审核（Mock 自动过审）' : '已重新提交外部审核'
+    )
     reasonVisible.value = false
-    // Phase1：Mock 自动再过审，便于联调收口
-    if (data.status === 'pending') {
-      await api.post(`/api/v1/shop/channel-mappings/${reasonRow.value.id}/external-audit`, {
-        result: 'approved',
-      })
-      ElMessage.success('外部审核已通过（Mock）')
-    }
     await load()
   } catch (e) {
     ElMessage.error(e.message || '重新提交失败')
@@ -510,30 +584,30 @@ async function resync() {
   }
 }
 
-function openColSettings() {
-  Object.assign(colDraft, colVisible)
-  colDialog.value = true
-}
-function saveCols() {
-  Object.assign(colVisible, colDraft)
-  localStorage.setItem(COL_STORAGE, JSON.stringify({ ...colVisible }))
-  colDialog.value = false
-}
-
 onMounted(async () => {
   await loadSettings()
-  await loadProducts()
   await load()
   const prePid = route.query.product_id
   if (prePid && configured.value) {
+    const ok = await preloadWizardProduct(String(prePid))
+    if (!ok) return
+    const picked = selectedProductData.value
     openWizard()
     form.product_id = String(prePid)
+    selectedProductData.value = picked
+    form.external_title = picked?.name || ''
   }
 })
 
+watch(
+  () => route.name,
+  (name) => {
+    if (name === 'ShopChannelMappings') loadSettings()
+  }
+)
+
 watch(currentId, () => {
   query.page = 1
-  loadProducts()
   load()
 })
 </script>
@@ -548,12 +622,26 @@ watch(currentId, () => {
       style="margin-bottom: 12px"
     >
       <template #title>
-        公域对接未完成 → 请先到
+        公域对接未完成 — {{ setupHint }}。请先到
         <el-button link type="primary" @click="router.push('/shop/channel-settings')">
-          公域对接
+          设置 · 公域对接
         </el-button>
-        完成绑店与回调配置；新建映射已禁用
+        完成配置；新建映射已禁用
       </template>
+    </el-alert>
+
+    <el-alert
+      v-if="configured && demoToolsEnabled"
+      type="info"
+      show-icon
+      :closable="false"
+      class="demo-flow-alert"
+    >
+      <template #title>本地演示捷径（链路 ①）</template>
+      <p class="demo-flow-text">
+        ① 审核中的映射点「通过审核」→ ② 已挂载点「模拟下单」→ ③ 打开领权链接绑手机
+        <code>13700000001</code> → ④ 商家端「订单」查看待领权单
+      </p>
     </el-alert>
 
     <div class="status-tabs">
@@ -611,12 +699,12 @@ watch(currentId, () => {
           <el-button :loading="exporting">导出 ▾</el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="current">当前筛选</el-dropdown-item>
-              <el-dropdown-item command="columns">列配置</el-dropdown-item>
+              <el-dropdown-item command="current">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns }}</el-dropdown-item>
+              <el-dropdown-item command="columns">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button @click="openColSettings">列设置</el-button>
+        <el-button @click="openColumnSettings">列设置</el-button>
         <el-button type="primary" :disabled="!configured" @click="openWizard">+ 新建映射</el-button>
       </div>
     </div>
@@ -657,36 +745,46 @@ watch(currentId, () => {
     </div>
 
     <el-table :data="items" border stripe size="small">
-      <el-table-column v-if="colVisible.product_name" prop="product_name" label="本地商品" min-width="140" />
+      <template v-for="colKey in visibleKeys" :key="colKey">
+      <el-table-column v-if="colKey === 'product_name'" prop="product_name" label="本地商品" min-width="140" />
       <el-table-column
-        v-if="colVisible.product_review_status"
+        v-if="colKey === 'product_review_status'"
         prop="product_review_status"
         label="商品审核"
         width="100"
       />
       <el-table-column
-        v-if="colVisible.channel_product_id"
+        v-if="colKey === 'channel_product_id'"
         prop="channel_product_id"
         label="外部商品 ID"
         width="140"
       />
-      <el-table-column v-if="colVisible.path_label" prop="path_label" label="路径" width="70" />
-      <el-table-column v-if="colVisible.status_label" prop="status_label" label="挂载状态" width="100" />
-      <el-table-column v-if="colVisible.external_audit_status" label="外部审核" width="100">
+      <el-table-column v-if="colKey === 'path_label'" prop="path_label" label="路径" width="70" />
+      <el-table-column v-if="colKey === 'status_label'" prop="status_label" label="挂载状态" width="100" />
+      <el-table-column v-if="colKey === 'external_audit_status'" label="外部审核" width="100">
         <template #default="{ row }">
           {{ row.external_audit_label || row.external_audit_status || '—' }}
         </template>
       </el-table-column>
-      <el-table-column v-if="colVisible.created_at" label="映射时间" width="140">
+      <el-table-column v-if="colKey === 'created_at'" label="映射时间" width="140">
         <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.synced_at" label="最近同步时间" width="140">
+      <el-table-column v-if="colKey === 'synced_at'" label="最近同步时间" width="140">
         <template #default="{ row }">{{ fmtTime(row.synced_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.channel_label" prop="channel_label" label="渠道" width="80" />
-      <el-table-column v-if="colVisible.ops" label="操作" width="200" fixed="right">
+      <el-table-column v-if="colKey === 'channel_label'" prop="channel_label" label="渠道" width="80" />
+      <el-table-column v-if="colKey === 'ops'" label="操作" width="demoToolsEnabled ? 300 : 200" fixed="right">
         <template #default="{ row }">
           <template v-if="row.status === 'mapped'">
+            <el-button
+              v-if="demoToolsEnabled"
+              link
+              type="success"
+              :loading="demoOrderBusyId === row.id"
+              @click="demoSimulateOrder(row)"
+            >
+              模拟下单
+            </el-button>
             <el-button link type="warning" @click="pause(row)">暂停</el-button>
             <el-button link type="primary" @click="openLogs(row)">日志</el-button>
             <el-button link type="danger" @click="unmount(row)">解除</el-button>
@@ -700,11 +798,15 @@ watch(currentId, () => {
             <el-button link type="primary" @click="openReason(row)">重新提交</el-button>
           </template>
           <template v-else-if="row.status === 'pending'">
+            <el-button v-if="demoToolsEnabled" link type="success" @click="demoApprove(row)">
+              通过审核
+            </el-button>
             <el-button link type="primary" @click="openLogs(row)">日志</el-button>
           </template>
           <span v-else>—</span>
         </template>
       </el-table-column>
+      </template>
     </el-table>
 
     <div class="pager">
@@ -723,8 +825,9 @@ watch(currentId, () => {
     <el-drawer
       v-model="createVisible"
       title="新建抖店商品映射"
-      size="520px"
+      size="680px"
       destroy-on-close
+      class="a14-wizard-drawer"
     >
       <div class="steps">
         <span :class="{ on: wizardStep === 1, done: wizardStep > 1 }">1 选品与店</span>
@@ -736,14 +839,40 @@ watch(currentId, () => {
         <div class="step-t">新建抖店商品映射 · 步骤 1/3</div>
         <el-form label-position="top">
           <el-form-item label="本地商品" required>
-            <el-select v-model="form.product_id" filterable placeholder="选择在售商品" style="width: 100%">
-              <el-option
-                v-for="p in products"
-                :key="p.id"
-                :label="`${p.name} · ¥${((p.price_cents || 0) / 100).toFixed(2)}`"
-                :value="p.id"
-              />
-            </el-select>
+            <div v-if="selectedProduct" class="picked-product">
+              <div class="picked-product__cover">
+                <img
+                  v-if="selectedProduct.cover_url"
+                  :src="authShopFileUrl(selectedProduct.cover_url)"
+                  alt=""
+                />
+                <span v-else>无封面</span>
+              </div>
+              <div class="picked-product__body">
+                <div class="picked-product__name">{{ selectedProduct.name }}</div>
+                <div class="picked-product__meta">
+                  {{ PRODUCT_TYPE_LABEL[selectedProduct.type] || '商品' }}
+                  · {{ fmtMoney(selectedProduct.price_cents) }}
+                  <el-tag
+                    v-if="selectedProduct.channel_mount_label"
+                    size="small"
+                    effect="plain"
+                    style="margin-left: 6px"
+                  >
+                    {{ selectedProduct.channel_mount_label }}
+                  </el-tag>
+                </div>
+              </div>
+              <el-button link type="primary" @click="clearPickedProduct">更换</el-button>
+            </div>
+            <ShopProductPickerPanel
+              v-show="!selectedProduct"
+              ref="productPickerRef"
+              v-model="form.product_id"
+              :shop-id="currentId || ''"
+              @pick="onPickProduct"
+            />
+            <p v-if="!selectedProduct" class="picker-tip">点击表格行选择商品，支持搜索与分页</p>
           </el-form-item>
           <el-form-item label="对接路径" required>
             <el-select v-model="form.combo" style="width: 100%">
@@ -789,7 +918,7 @@ watch(currentId, () => {
           </el-form-item>
           <el-form-item label="主图">
             <div class="cover">
-              <img v-if="selectedProduct?.cover_url" :src="selectedProduct.cover_url" alt="封面" />
+              <img v-if="selectedProduct?.cover_url" :src="authShopFileUrl(selectedProduct.cover_url)" alt="封面" />
               <span v-else>沿用商品封面</span>
             </div>
           </el-form-item>
@@ -902,33 +1031,32 @@ watch(currentId, () => {
       </template>
     </el-drawer>
 
-    <el-dialog v-model="colDialog" title="列设置" width="360px">
-      <el-checkbox
-        v-for="c in ALL_COLS"
-        :key="c.key"
-        v-model="colDraft[c.key]"
-        :disabled="c.locked"
-        style="display: block; margin: 6px 0"
-      >
-        {{ c.label }}
-      </el-checkbox>
-      <template #footer>
-        <el-button @click="colDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveCols">保存</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="colDialog"
+      v-model:columns="columnDraft"
+      @save="() => { saveColumnSettings(); ElMessage.success('列设置已保存') }"
+    />
 
-    <el-dialog v-model="exportDialog" title="导出任务" width="420px">
-      <el-form v-if="exportTask" label-width="100px">
-        <el-form-item label="范围">{{ exportScope }}</el-form-item>
-        <el-form-item label="条数">{{ exportTask.row_count ?? 0 }} 条</el-form-item>
-        <el-form-item label="状态">{{ exportTask.status === 'done' ? '已完成' : (exportTask.status || '—') }}</el-form-item>
-      </el-form>
+    <el-dialog v-model="demoOrderVisible" title="模拟抖店下单成功" width="520px">
+      <template v-if="demoOrderResult">
+        <p class="demo-result-msg">{{ demoOrderResult.message }}</p>
+        <el-descriptions :column="1" border size="small">
+          <el-descriptions-item label="商品">{{ demoOrderResult.product_name || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="抖店单号">
+            <code>{{ demoOrderResult.external_order_no }}</code>
+          </el-descriptions-item>
+          <el-descriptions-item label="买家手机">{{ demoOrderResult.buyer_mobile }}</el-descriptions-item>
+          <el-descriptions-item label="订单状态">{{ demoOrderResult.order_status || 'claim_pending' }}</el-descriptions-item>
+        </el-descriptions>
+        <div class="demo-claim-box">
+          <div class="demo-claim-label">领权链接（H5）</div>
+          <code class="demo-claim-url">{{ demoOrderResult.claim_url }}</code>
+        </div>
+      </template>
       <template #footer>
-        <el-button type="primary" :disabled="exportTask?.status !== 'done'" @click="downloadExportFile">
-          下载
-        </el-button>
-        <el-button @click="exportDialog = false">关闭</el-button>
+        <el-button @click="copyClaimLink">复制领权链接</el-button>
+        <el-button type="primary" @click="openClaimPage">打开领权页</el-button>
+        <el-button @click="goOrders">查看订单</el-button>
       </template>
     </el-dialog>
   </div>
@@ -1091,6 +1219,93 @@ watch(currentId, () => {
   gap: 8px;
   margin-top: 16px;
   flex-wrap: wrap;
+}
+.picked-product {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border: 1px solid #91caff;
+  border-radius: 8px;
+  background: #f0f7ff;
+}
+.picked-product__cover {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e2e8f0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.picked-product__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.picked-product__body {
+  flex: 1;
+  min-width: 0;
+}
+.picked-product__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picked-product__meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+.picker-tip {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.demo-flow-alert {
+  margin-bottom: 12px;
+}
+.demo-flow-text {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #64748b;
+}
+.demo-flow-text code {
+  padding: 0 4px;
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+.demo-result-msg {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #334155;
+}
+.demo-claim-box {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.demo-claim-label {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+.demo-claim-url {
+  display: block;
+  font-size: 11px;
+  word-break: break-all;
+  color: #0f172a;
 }
 .hint {
   margin-top: 12px;

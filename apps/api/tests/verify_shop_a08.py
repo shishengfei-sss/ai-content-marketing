@@ -248,6 +248,23 @@ def main() -> int:
     )
     vid = executed.get("id")
 
+    code, blist = req("GET", "/mp/shop/bookings?page=1&page_size=50", token=buyer)
+    done = next(
+        (
+            i
+            for i in (blist.get("items") or [])
+            if i.get("entitlement_id") == (ent or {}).get("id") and i.get("status") == "completed"
+        ),
+        None,
+    )
+    results.append(
+        check(
+            "VA08-2b 核销后 M10c 已完成可见",
+            code == 200 and done is not None and done.get("booked_time_slot") == "次数卡",
+            f"{code} {done}",
+        )
+    )
+
     code, future = req("GET", "/shop/verifications?created_from=2099-01-01", token=merchant)
     results.append(
         check(

@@ -5,7 +5,7 @@
  */
 import { computed, onUnmounted, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { ensureShopBuyerSession, getShopBuyerTenantId, setShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
+import { ensureShopBuyerSession, getShopBuyerTenantId, getShopBuyerToken, setShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
 
 const entitlementId = ref('')
 const lessonId = ref('')
@@ -43,6 +43,24 @@ const trialLimit = computed(() => {
 const isTrialSession = computed(() => !entitlementId.value && !!productId.value)
 const buyProductId = computed(() => productId.value || outline.value?.product_id || '')
 const buyPrice = computed(() => product.value?.price_cents)
+
+const mediaSrc = computed(() => {
+  const url = lesson.value?.media_url
+  if (!url || url.includes('example.com/mock')) return ''
+  const token = getShopBuyerToken()
+  const base = import.meta.env.VITE_API_BASE_URL || ''
+  const full = url.startsWith('http') ? url : `${base}${url}`
+  if (!token) return full
+  const sep = full.includes('?') ? '&' : '?'
+  return `${full}${sep}access_token=${encodeURIComponent(token)}`
+})
+
+const useRealMedia = computed(() => !!mediaSrc.value)
+const isAudio = computed(() => lesson.value?.media_type === 'audio')
+const stageHint = computed(() => {
+  if (!useRealMedia.value) return '演示播放（无视频源）'
+  return isAudio.value ? '音频播放' : '视频播放'
+})
 
 function fmtMoney(cents) {
   return `¥${((cents || 0) / 100).toFixed(2)}`
@@ -88,6 +106,35 @@ async function report(force = false) {
   }
 }
 
+function onMediaLoaded(e) {
+  const el = e?.target || e?.detail
+  const dur = el?.duration
+  if (dur && Number.isFinite(dur) && dur > 0) {
+    duration.value = Math.floor(dur)
+  }
+  if (position.value > 0 && el?.currentTime != null && position.value < duration.value) {
+    try {
+      el.currentTime = position.value
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function onMediaTimeUpdate(e) {
+  const el = e?.target || e?.detail
+  const cur = el?.currentTime
+  if (cur == null) return
+  position.value = Math.floor(cur)
+  report(false)
+}
+
+function onMediaEnded() {
+  playing.value = false
+  position.value = duration.value
+  report(true)
+}
+
 function tick() {
   if (!playing.value) return
   position.value = Math.min(duration.value, position.value + rate.value)
@@ -112,6 +159,13 @@ function tick() {
 
 function togglePlay() {
   if (showTrialEnd.value) return
+  if (useRealMedia.value) {
+    const ctx = uni.createVideoContext('lessonPlayer')
+    if (playing.value) ctx.pause()
+    else ctx.play()
+    playing.value = !playing.value
+    return
+  }
   playing.value = !playing.value
   if (playing.value) {
     if (timer) clearInterval(timer)
@@ -125,6 +179,14 @@ function togglePlay() {
 
 function setRate(r) {
   rate.value = r
+  if (useRealMedia.value) {
+    try {
+      const ctx = uni.createVideoContext('lessonPlayer')
+      if (ctx?.playbackRate) ctx.playbackRate(r)
+    } catch {
+      /* H5 部分端不支持 programmatic playbackRate */
+    }
+  }
 }
 
 function goBuy() {
@@ -174,10 +236,41 @@ onUnmounted(() => {
 
 <template>
   <view class="page">
-    <view class="stage" @click="togglePlay">
-      <view class="play-btn">{{ playing ? '❚❚' : '▶' }}</view>
+    <view class="stage" :class="{ real: useRealMedia }" @click="!useRealMedia && togglePlay()">
+      <video
+        v-if="useRealMedia && !isAudio"
+        id="lessonPlayer"
+        class="player-media"
+        :src="mediaSrc"
+        :initial-time="position"
+        :playback-rate="rate"
+        controls
+        object-fit="contain"
+        @loadedmetadata="onMediaLoaded"
+        @timeupdate="onMediaTimeUpdate"
+        @play="playing = true"
+        @pause="playing = false"
+        @ended="onMediaEnded"
+      />
+      <video
+        v-else-if="useRealMedia && isAudio"
+        id="lessonPlayer"
+        class="player-media audio"
+        :src="mediaSrc"
+        :initial-time="position"
+        :playback-rate="rate"
+        controls
+        @loadedmetadata="onMediaLoaded"
+        @timeupdate="onMediaTimeUpdate"
+        @play="playing = true"
+        @pause="playing = false"
+        @ended="onMediaEnded"
+      />
+      <template v-else>
+        <view class="play-btn">{{ playing ? '❚❚' : '▶' }}</view>
+      </template>
       <text class="stage-title">{{ lesson?.title || '播放中' }}</text>
-      <text class="stage-sub">{{ product?.name || outline?.product_name || '' }} · Mock 播放</text>
+      <text class="stage-sub">{{ product?.name || outline?.product_name || '' }} · {{ stageHint }}</text>
     </view>
     <view class="panel">
       <view class="time-row">
@@ -196,7 +289,7 @@ onUnmounted(() => {
           {{ r }}x
         </text>
       </view>
-      <button class="btn" @click="togglePlay">{{ playing ? '暂停' : '播放' }}</button>
+      <button v-if="!useRealMedia" class="btn" @click="togglePlay">{{ playing ? '暂停' : '播放' }}</button>
       <button class="btn ghost" @click="backCatalog">返回目录</button>
     </view>
 
@@ -220,12 +313,25 @@ onUnmounted(() => {
   color: #fff;
 }
 .stage {
-  height: 220px;
+  min-height: 220px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   background: linear-gradient(180deg, #0f172a, #1e293b);
+  padding-bottom: 12px;
+  position: relative;
+}
+.stage.real {
+  justify-content: flex-end;
+}
+.player-media {
+  width: 100%;
+  height: 200px;
+  background: #000;
+}
+.player-media.audio {
+  height: 56px;
 }
 .play-btn {
   width: 56px;

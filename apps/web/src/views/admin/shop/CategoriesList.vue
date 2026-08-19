@@ -8,6 +8,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../../api/client'
+import CrmColumnSettingsDialog from '../../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../../composables/useListColumnSettings'
 import { useAuthStore } from '../../../stores/auth'
 
 const auth = useAuthStore()
@@ -29,6 +31,7 @@ const query = reactive({
 })
 const adv = ref(false)
 
+const COL_STORAGE = 'shop-p04-category-columns'
 const COLS = [
   { key: 'name', label: '类目', locked: true, defaultVisible: true },
   { key: 'code', label: '类目编码', locked: true, defaultVisible: true },
@@ -40,9 +43,14 @@ const COLS = [
   { key: 'updated_by', label: '更新人', defaultVisible: false },
   { key: 'settlement', label: '分账规则', defaultVisible: false },
 ]
-const visibleCols = ref(COLS.filter((c) => c.defaultVisible).map((c) => c.key))
-const colDialog = ref(false)
-const colDraft = ref([])
+const {
+  visibleKeys: visibleCols,
+  columnDialogVisible: colDialog,
+  columnDraft: colDraft,
+  openColumnSettings: openCol,
+  saveColumnSettings: saveCol,
+  isColVisible: isCol,
+} = useListColumnSettings(COLS, COL_STORAGE)
 
 const disableVisible = ref(false)
 const disableSaving = ref(false)
@@ -479,19 +487,6 @@ function goFullCodeRules() {
   router.push({ name: 'AdminShopRolesAndCodes', query: { tab: 'codes' } })
 }
 
-function isCol(key) {
-  return visibleCols.value.includes(key)
-}
-function openCol() {
-  colDraft.value = [...visibleCols.value]
-  colDialog.value = true
-}
-function saveCol() {
-  const locked = COLS.filter((c) => c.locked).map((c) => c.key)
-  visibleCols.value = [...new Set([...locked, ...colDraft.value])]
-  colDialog.value = false
-  ElMessage.success('列设置已保存')
-}
 function sortIcon(key) {
   if (query.sort_by !== key) return '↕'
   return query.sort_dir === 'asc' ? '↑' : '↓'
@@ -624,36 +619,37 @@ onMounted(() => {
     </div>
 
     <el-table :data="items" border stripe size="small" style="margin-top: 12px">
-      <el-table-column v-if="isCol('name')" min-width="140">
+      <template v-for="colKey in visibleCols" :key="colKey">
+      <el-table-column v-if="colKey === 'name'" min-width="140">
         <template #header>
           <span class="sortable" @click.stop="toggleSort('name')">类目 {{ sortIcon('name') }}</span>
         </template>
         <template #default="{ row }">{{ row.name }}</template>
       </el-table-column>
-      <el-table-column v-if="isCol('code')" label="类目编码" min-width="160">
+      <el-table-column v-if="colKey === 'code'" label="类目编码" min-width="160">
         <template #default="{ row }"><code>{{ row.code }}</code></template>
       </el-table-column>
-      <el-table-column v-if="isCol('fee')" label="平台费率" width="100">
+      <el-table-column v-if="colKey === 'fee'" label="平台费率" width="100">
         <template #default="{ row }">
           {{ row.status === 'blocked' && !row.platform_fee_bps ? '—' : row.platform_fee_label }}
         </template>
       </el-table-column>
-      <el-table-column v-if="isCol('quals')" label="需资质" min-width="140">
+      <el-table-column v-if="colKey === 'quals'" label="需资质" min-width="140">
         <template #default="{ row }">{{ row.require_qualifications_label }}</template>
       </el-table-column>
-      <el-table-column v-if="isCol('updated_at')" width="130">
+      <el-table-column v-if="colKey === 'updated_at'" width="130">
         <template #header>
           <span class="sortable" @click.stop="toggleSort('updated_at')">更新时间 {{ sortIcon('updated_at') }}</span>
         </template>
         <template #default="{ row }">{{ fmtTime(row.updated_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="isCol('updated_by')" label="更新人" width="110">
+      <el-table-column v-if="colKey === 'updated_by'" label="更新人" width="110">
         <template #default="{ row }">{{ row.updated_by_name || '—' }}</template>
       </el-table-column>
-      <el-table-column v-if="isCol('settlement')" label="分账规则" width="150">
+      <el-table-column v-if="colKey === 'settlement'" label="分账规则" width="150">
         <template #default="{ row }">{{ RULE_LABEL[row.settlement_rule] || row.settlement_rule }}</template>
       </el-table-column>
-      <el-table-column v-if="isCol('status')" label="状态" width="110">
+      <el-table-column v-if="colKey === 'status'" label="状态" width="110">
         <template #default="{ row }">
           <el-tag
             size="small"
@@ -663,7 +659,7 @@ onMounted(() => {
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column v-if="isCol('ops')" label="操作" width="260" fixed="right">
+      <el-table-column v-if="colKey === 'ops'" label="操作" width="260" fixed="right">
         <template #default="{ row }">
           <template v-if="row.status === 'enabled'">
             <el-button link type="primary" @click="openEdit(row, 'edit')">编辑</el-button>
@@ -679,19 +675,20 @@ onMounted(() => {
           </template>
         </template>
       </el-table-column>
+      </template>
     </el-table>
-    <el-empty v-if="!loading && !items.length" description="暂无类目" />
 
-    <el-pagination
-      v-model:current-page="query.page"
-      v-model:page-size="query.page_size"
-      :total="total"
-      :page-sizes="[10, 20, 50, 100]"
-      layout="total, sizes, prev, pager, next"
-      style="margin-top: 12px"
-      @current-change="load"
-      @size-change="() => { query.page = 1; load() }"
-    />
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="query.page"
+        v-model:page-size="query.page_size"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next"
+        @current-change="load"
+        @size-change="() => { query.page = 1; load() }"
+      />
+    </div>
 
     <el-drawer
       v-model="drawer"
@@ -917,17 +914,11 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="colDialog" title="列设置" width="360px">
-      <el-checkbox-group v-model="colDraft">
-        <div v-for="c in COLS" :key="c.key" class="col-row">
-          <el-checkbox :label="c.key" :disabled="c.locked">{{ c.label }}</el-checkbox>
-        </div>
-      </el-checkbox-group>
-      <template #footer>
-        <el-button @click="colDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveCol">保存</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="colDialog"
+      v-model:columns="colDraft"
+      @save="saveCol"
+    />
   </div>
 </template>
 

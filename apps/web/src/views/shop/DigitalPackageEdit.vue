@@ -9,6 +9,8 @@ import { ElMessage } from 'element-plus'
 import api from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { hasPermission } from '../../config/permissions'
+import CrmColumnSettingsDialog from '../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../composables/useListColumnSettings'
 
 const route = useRoute()
 const router = useRouter()
@@ -45,23 +47,18 @@ const MAX_FILES = 20
 const COL_STORAGE = 'shop.a06.files'
 const ALL_COLS = [
   { key: 'file_name', label: '文件', locked: true, defaultOn: true },
-  { key: 'size_bytes', label: '大小', locked: true, defaultOn: true },
-  { key: 'created_at', label: '上传时间', locked: true, defaultOn: true },
+  { key: 'size_bytes', label: '大小', defaultOn: true },
+  { key: 'created_at', label: '上传时间', defaultOn: true },
   { key: 'ops', label: '操作', locked: true, defaultOn: true },
 ]
-function loadColPrefs() {
-  try {
-    const raw = localStorage.getItem(COL_STORAGE)
-    if (raw) return JSON.parse(raw)
-  } catch {
-    /* ignore */
-  }
-  return Object.fromEntries(ALL_COLS.map((c) => [c.key, c.defaultOn]))
-}
-const colVisible = reactive(loadColPrefs())
-const colDialog = ref(false)
-const colDraft = reactive({ ...colVisible })
-const visibleCols = computed(() => ALL_COLS.filter((c) => colVisible[c.key] || c.locked))
+const {
+  visibleKeys,
+  columnDialogVisible: colDialog,
+  columnDraft,
+  openColumnSettings,
+  saveColumnSettings,
+  isColVisible,
+} = useListColumnSettings(ALL_COLS, COL_STORAGE)
 
 const assets = computed(() => pkg.value?.assets || [])
 const filteredAssets = computed(() => {
@@ -86,6 +83,7 @@ const uploadDlg = reactive({
 const fileInput = ref(null)
 const publishDlg = reactive({ visible: false, busy: false })
 const removeDlg = reactive({ visible: false, busy: false, row: null })
+const docPreviewDlg = reactive({ visible: false, title: '', html: '' })
 
 function extOf(name) {
   const n = String(name || '').toLowerCase()
@@ -121,19 +119,31 @@ function publishBlockedReason() {
   return ''
 }
 
-async function load() {
+async function load(options = {}) {
+  const { keepForm = false } = options
   loading.value = true
   try {
     const { data } = await api.get(`/api/v1/shop/digital-packages/${route.params.id}`)
     pkg.value = data
-    form.title = data.title
-    form.deliver_mode = data.deliver_mode
-    form.max_downloads = data.max_downloads ?? null
+    if (!keepForm) {
+      form.title = data.title
+      form.deliver_mode = data.deliver_mode
+      form.max_downloads = data.max_downloads ?? null
+    }
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   } finally {
     loading.value = false
   }
+}
+
+function formDirty() {
+  if (!pkg.value) return false
+  return (
+    form.title.trim() !== (pkg.value.title || '') ||
+    form.deliver_mode !== pkg.value.deliver_mode ||
+    (form.max_downloads ?? null) !== (pkg.value.max_downloads ?? null)
+  )
 }
 
 async function save() {
@@ -176,7 +186,7 @@ async function confirmPublish() {
   }
   publishDlg.busy = true
   try {
-    if (form.title.trim() !== (pkg.value?.title || '')) {
+    if (formDirty()) {
       const ok = await save()
       if (!ok) return
     }
@@ -184,6 +194,7 @@ async function confirmPublish() {
     pkg.value = data
     publishDlg.visible = false
     ElMessage.success('已发布')
+    router.push({ name: 'ShopDigitalPackages', query: { status: 'published' } })
   } catch (e) {
     ElMessage.error(e.message || '发布失败')
   } finally {
@@ -290,7 +301,7 @@ async function startUpload() {
       }
     }
     const failed = uploadDlg.items.filter((x) => x.status === 'fail')
-    await load()
+    await load({ keepForm: true })
     if (!failed.length) {
       uploadDlg.visible = false
       ElMessage.success('文件已添加')
@@ -303,7 +314,7 @@ async function startUpload() {
 async function retryOne(item) {
   try {
     await uploadOne(item)
-    await load()
+    await load({ keepForm: true })
   } catch (e) {
     item.status = 'fail'
     item.error = e.message || '上传失败'
@@ -329,7 +340,7 @@ async function confirmRemove() {
     await api.delete(`/api/v1/shop/digital-packages/${route.params.id}/assets/${row.id}`)
     ElMessage.success('已移除')
     removeDlg.visible = false
-    await load()
+    await load({ keepForm: true })
   } catch (e) {
     ElMessage.error(e.message || '移除失败')
   } finally {
@@ -342,19 +353,30 @@ async function preview(row) {
     ElMessage.info('zip 请下载后本地解压')
     return
   }
+  const ext = extOf(row.file_name)
+  if (ext === '.doc') {
+    ElMessage.info('旧版 .doc 请下载后用 Word 打开')
+    return
+  }
   try {
+    if (ext === '.docx') {
+      const { data: html } = await api.get(`/api/v1/shop/content/files/${row.file_id}/html-preview`, {
+        responseType: 'text',
+      })
+      docPreviewDlg.title = row.file_name || 'Word 文档'
+      docPreviewDlg.html = html || ''
+      docPreviewDlg.visible = true
+      return
+    }
     const res = await api.get(`/api/v1/shop/content/files/${row.file_id}`, { responseType: 'blob' })
-    const url = URL.createObjectURL(res.data)
+    const type = ext === '.pdf' ? 'application/pdf' : res.data?.type || 'application/octet-stream'
+    const url = URL.createObjectURL(
+      res.data instanceof Blob ? res.data : new Blob([res.data], { type }),
+    )
     window.open(url, '_blank')
   } catch (e) {
     ElMessage.error(e.message || '预览失败')
   }
-}
-
-function saveCols() {
-  Object.assign(colVisible, colDraft)
-  localStorage.setItem(COL_STORAGE, JSON.stringify({ ...colVisible }))
-  colDialog.value = false
 }
 
 onMounted(load)
@@ -425,29 +447,31 @@ onMounted(load)
         />
       </div>
       <div class="right">
-        <el-button @click="colDialog = true">列设置</el-button>
+        <el-button @click="openColumnSettings">列设置</el-button>
         <el-button v-if="canAddFiles" type="primary" @click="openUpload">+ 添加文件</el-button>
       </div>
     </div>
     <el-table :data="filteredAssets" border stripe size="small" style="margin-top: 8px">
+      <template v-for="colKey in visibleKeys" :key="colKey">
       <el-table-column
-        v-if="visibleCols.some((c) => c.key === 'file_name')"
+        v-if="colKey === 'file_name'"
         prop="file_name"
         label="文件"
         min-width="180"
       />
-      <el-table-column v-if="visibleCols.some((c) => c.key === 'size_bytes')" label="大小" width="100">
+      <el-table-column v-if="colKey === 'size_bytes'" label="大小" width="100">
         <template #default="{ row }">{{ fmtSize(row.size_bytes) }}</template>
       </el-table-column>
-      <el-table-column v-if="visibleCols.some((c) => c.key === 'created_at')" label="上传时间" width="130">
+      <el-table-column v-if="colKey === 'created_at'" label="上传时间" width="130">
         <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="visibleCols.some((c) => c.key === 'ops')" label="操作" width="140" fixed="right">
+      <el-table-column v-if="colKey === 'ops'" label="操作" width="140" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="preview(row)">预览</el-button>
           <el-button v-if="canDeleteFile" link type="danger" @click="openRemove(row)">删除</el-button>
         </template>
       </el-table-column>
+      </template>
     </el-table>
 
     <el-dialog
@@ -542,21 +566,23 @@ onMounted(load)
       </template>
     </el-dialog>
 
-    <el-dialog v-model="colDialog" title="列设置" width="360px">
-      <el-checkbox
-        v-for="c in ALL_COLS"
-        :key="c.key"
-        v-model="colDraft[c.key]"
-        :disabled="c.locked"
-        style="display: block; margin: 6px 0"
-      >
-        {{ c.label }}
-      </el-checkbox>
+    <el-dialog
+      v-model="docPreviewDlg.visible"
+      :title="docPreviewDlg.title || '文档预览'"
+      width="720px"
+    >
+      <div class="doc-preview-body" v-html="docPreviewDlg.html" />
       <template #footer>
-        <el-button @click="colDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveCols">保存</el-button>
+        <el-button @click="docPreviewDlg.visible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <CrmColumnSettingsDialog
+      v-model:visible="colDialog"
+      v-model:columns="columnDraft"
+      @save="() => { saveColumnSettings(); ElMessage.success('列设置已保存') }"
+    />
+
   </div>
 </template>
 
@@ -623,5 +649,13 @@ onMounted(load)
 .dlg-val {
   line-height: 1.6;
   font-size: 13px;
+}
+.doc-preview-body {
+  max-height: 60vh;
+  overflow: auto;
+  padding: 4px 8px;
+  background: #fff;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
 }
 </style>

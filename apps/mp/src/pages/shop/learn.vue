@@ -5,11 +5,12 @@
  */
 import { ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { ensureShopBuyerSession, getShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
+import { ensureShopBuyerSession, getShopBuyerTenantId, setShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
 
 const entitlementId = ref('')
 const loading = ref(true)
 const outline = ref(null)
+const openidHint = ref('')
 
 const STATUS_BADGE = {
   done: '已学完',
@@ -20,7 +21,7 @@ const STATUS_BADGE = {
 async function load() {
   loading.value = true
   try {
-    await ensureShopBuyerSession(getShopBuyerTenantId())
+    await ensureShopBuyerSession(getShopBuyerTenantId(), openidHint.value || undefined)
     outline.value = await shopBuyerApi.getOutline(entitlementId.value)
     if (outline.value.entitlement_status !== 'active') {
       uni.showToast({ title: '暂无学习权限', icon: 'none' })
@@ -48,6 +49,9 @@ function openLesson(les) {
 
 onLoad((q) => {
   entitlementId.value = (q?.entitlement_id || '').trim()
+  const tid = (q?.tenant_id || '').trim()
+  if (tid) setShopBuyerTenantId(tid)
+  openidHint.value = (q?.openid || '').trim()
 })
 onShow(() => {
   if (entitlementId.value) load()
@@ -93,16 +97,20 @@ onShow(() => {
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #f5f7fb;
+  background: #f3f5f9;
   padding: 16px;
 }
 .head {
   margin-bottom: 14px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
 }
 .title {
   display: block;
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 800;
 }
 .sub {
   display: block;
@@ -129,13 +137,14 @@ onShow(() => {
 }
 .lesson {
   background: #fff;
-  border-radius: 10px;
+  border-radius: 14px;
   padding: 12px;
   margin-bottom: 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-left: 3px solid transparent;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
 }
 .lesson.on {
   border-left-color: #1677ff;

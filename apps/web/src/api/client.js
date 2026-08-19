@@ -937,6 +937,24 @@ export const adminApi = {
     api.post(`/api/v1/admin/shop/moderation-cases/${id}/close`, data || {}),
   listShopProductReviews: (params) => api.get('/api/v1/admin/shop/product-reviews', { params }),
   getShopProductReview: (id) => api.get(`/api/v1/admin/shop/product-reviews/${id}`),
+  getShopProductReviewCover: (id) =>
+    api.get(`/api/v1/admin/shop/product-reviews/${id}/snapshot-cover`, { responseType: 'blob' }),
+  getShopProductReviewLesson: (reviewId, lessonId) =>
+    api.get(`/api/v1/admin/shop/product-reviews/${reviewId}/lessons/${lessonId}`),
+  getShopProductReviewLessonMedia: (reviewId, lessonId, params) =>
+    api.get(`/api/v1/admin/shop/product-reviews/${reviewId}/lessons/${lessonId}/media`, {
+      params,
+      responseType: 'blob',
+    }),
+  getShopProductReviewRefAsset: (reviewId, fileId, params) =>
+    api.get(`/api/v1/admin/shop/product-reviews/${reviewId}/ref-assets/${fileId}`, {
+      params,
+      responseType: 'blob',
+    }),
+  getShopProductReviewRefAssetHtmlPreview: (reviewId, fileId) =>
+    api.get(`/api/v1/admin/shop/product-reviews/${reviewId}/ref-assets/${fileId}/html-preview`, {
+      responseType: 'text',
+    }),
   getShopProductReviewBuyerPreview: (id) =>
     api.get(`/api/v1/admin/shop/product-reviews/${id}/buyer-preview`),
   approveShopProductReview: (id, data) =>
@@ -966,5 +984,7 @@ export const shopApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
+  downloadOnboardingFile: (fileId) =>
+    api.get(`/api/v1/shop/onboarding/files/${fileId}`, { responseType: 'blob' }),
   onboardingOcr: (data) => api.post('/api/v1/shop/onboarding/ocr', data),
 }

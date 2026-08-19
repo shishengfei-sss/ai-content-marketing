@@ -10,6 +10,7 @@ from pathlib import Path
 
 os.environ.setdefault("FORCE_FAKE_PLATFORM_LLM", "1")
 os.environ.setdefault("VERIFY_LIVE_API", "0")
+os.environ.setdefault("SHOP_CHANNEL_MOCK_AUDIT", "0")
 
 API_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = API_ROOT.parents[1]
@@ -19,6 +20,8 @@ from tests.http_client import check, req  # noqa: E402
 from tests.verify_shop_a14 import _ensure_merchant, _on_sale_product  # noqa: E402
 
 WEB = REPO_ROOT / "apps" / "web" / "src" / "views" / "shop" / "ChannelMappings.vue"
+PROD = REPO_ROOT / "apps" / "web" / "src" / "views" / "shop" / "ProductsList.vue"
+MAP_TIPS = REPO_ROOT / "apps" / "web" / "src" / "utils" / "shopChannelMap.js"
 
 
 def _page_has(path: Path, *needles: str) -> bool:
@@ -85,8 +88,24 @@ def main() -> int:
                 "抖店展示标题",
                 "抖店类目",
                 "openWizard",
+                "mappingBlockTip",
+                "channelApiError",
             ),
             str(WEB),
+        )
+    )
+    results.append(
+        check(
+            "VA14A-UI 商品列表已映射提前拦截",
+            _page_has(PROD, "mappingBlockTip", "goMap"),
+            str(PROD),
+        )
+    )
+    results.append(
+        check(
+            "VA14A-UI 已映射中文提示",
+            _page_has(MAP_TIPS, "同一渠道只能映射一次", "product_already_mapped"),
+            str(MAP_TIPS),
         )
     )
 
@@ -189,6 +208,15 @@ def main() -> int:
         )
     )
     mid = mapping.get("id") if code == 200 else None
+
+    code, prod = req("GET", f"/shop/products/{pid}", token=merchant)
+    results.append(
+        check(
+            "VA14A-4b 商品详情带回公域挂载态",
+            code == 200 and prod.get("channel_mount") in ("pending", "mapped", "syncing"),
+            f"{code} mount={prod.get('channel_mount') if isinstance(prod, dict) else prod}",
+        )
+    )
 
     # 同品不可再映射
     code, dup = req(

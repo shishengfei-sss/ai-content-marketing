@@ -25,8 +25,11 @@ from sqlalchemy import text  # noqa: E402
 
 from app.database import SessionLocal, uuid_eq  # noqa: E402
 from app.models import Tenant, TenantMembership, TenantRole, User  # noqa: E402
+from tests.shop_demo_urls import h5_link, web_link  # noqa: E402
+
 from app.models.shop import (  # noqa: E402
     ShopBuyer,
+    ShopClaimToken,
     ShopColumn,
     ShopDigitalAsset,
     ShopDigitalPackage,
@@ -53,6 +56,7 @@ from app.services.auth_service import hash_password  # noqa: E402
 from app.services.crypto import encrypt_api_key  # noqa: E402
 from app.services.membership_service import create_tenant_with_admin  # noqa: E402
 from app.services.shop.a16_roles_service import _ensure_shop_roles  # noqa: E402
+from app.services.shop.entitlement_service import build_plan_snapshot  # noqa: E402
 from app.services.shop.platform_number_service import generate_platform_number  # noqa: E402
 
 DEMO_PREFIX = "演示"
@@ -184,10 +188,15 @@ def _bind_admin(db, user: User, tenant_id) -> None:
     )
     role = (
         db.query(TenantRole)
-        .filter(uuid_eq(TenantRole.tenant_id, tenant_id), TenantRole.code.in_(("admin", "shop_admin")))
-        .order_by(TenantRole.created_at.asc())
+        .filter(uuid_eq(TenantRole.tenant_id, tenant_id), TenantRole.code == "admin")
         .first()
     )
+    if role is None:
+        role = (
+            db.query(TenantRole)
+            .filter(uuid_eq(TenantRole.tenant_id, tenant_id), TenantRole.code == "shop_admin")
+            .first()
+        )
     if role is None:
         return
     if mem is None:
@@ -564,7 +573,21 @@ def _order(
     source: str = "private",
     claim_token: str | None = None,
 ) -> ShopOrder:
-    row = db.query(ShopOrder).filter(ShopOrder.order_no == no).first()
+    suffix = str(tenant_id).replace("-", "")[:8]
+    row = (
+        db.query(ShopOrder)
+        .filter(
+            uuid_eq(ShopOrder.tenant_id, tenant_id),
+            ShopOrder.order_no.in_([no, f"{no}-{suffix}"]),
+        )
+        .first()
+    )
+    if row is None:
+        row = (
+            db.query(ShopOrder)
+            .filter(uuid_eq(ShopOrder.tenant_id, tenant_id), ShopOrder.order_no.like(f"{no}%"))
+            .first()
+        )
     now = _now()
     snap = {
         "id": str(product.id),
@@ -576,6 +599,14 @@ def _order(
         "extra": product.extra or {},
     }
     if row is None:
+        # order_no 全局唯一；其它租户已占用 DEMO 单号时给本租户加后缀
+        actual_no = no
+        if db.query(ShopOrder).filter(ShopOrder.order_no == actual_no).first() is not None:
+            for _ in range(8):
+                candidate = f"{no}-{uuid.uuid4().hex[:6]}"[:32]
+                if db.query(ShopOrder).filter(ShopOrder.order_no == candidate).first() is None:
+                    actual_no = candidate
+                    break
         row = ShopOrder(
             id=uuid.uuid4(),
             tenant_id=tenant_id,
@@ -583,7 +614,7 @@ def _order(
             buyer_id=buyer.id,
             product_id=product.id,
             product_snapshot_json=snap,
-            order_no=no,
+            order_no=actual_no,
             type=product.type,
             amount_cents=product.price_cents,
             status=status,
@@ -601,9 +632,59 @@ def _order(
     if status == "paid":
         from app.services.shop.order_service import _activate_entitlement_for_order
 
+        if row.status != "paid":
+            row.status = "paid"
+            row.paid_amount_cents = product.price_cents
+            row.paid_at = now
+            row.paid_channel = "stub"
         _activate_entitlement_for_order(db, row)
+        ent = db.query(ShopEntitlement).filter(uuid_eq(ShopEntitlement.order_id, row.id)).first()
+        if ent is not None and ent.status != "active":
+            ent.status = "active"
+            ent.revoked_at = None
+            ent.revoke_reason = None
         db.flush()
     return row
+
+
+def _ensure_claim_token(db, order: ShopOrder) -> None:
+    """claim_pending 订单须有 shop_claim_tokens 行，否则 M14 GET 404。"""
+    if not order.claim_token:
+        return
+    now = _now()
+    hit = (
+        db.query(ShopClaimToken)
+        .filter(ShopClaimToken.token == order.claim_token)
+        .first()
+    )
+    if hit:
+        if order.status == "claim_pending" and hit.status != "pending":
+            hit.status = "pending"
+            hit.expires_at = order.claim_expires_at or (now + timedelta(days=7))
+            hit.claimed_buyer_id = None
+            hit.claimed_at = None
+        return
+    db.add(
+        ShopClaimToken(
+            id=uuid.uuid4(),
+            tenant_id=order.tenant_id,
+            order_id=order.id,
+            buyer_mobile=order.buyer_mobile_snapshot or BUYER_MOBILE,
+            token=order.claim_token,
+            status="pending",
+            expires_at=order.claim_expires_at or (now + timedelta(days=7)),
+        )
+    )
+    db.flush()
+
+
+def _sync_demo_claim_tokens(db) -> None:
+    for order in (
+        db.query(ShopOrder)
+        .filter(ShopOrder.claim_token.isnot(None), ShopOrder.status == "claim_pending")
+        .all()
+    ):
+        _ensure_claim_token(db, order)
 
 
 def _plan_and_sub(db, merchant: ShopMerchantAccount, operator_id) -> None:
@@ -632,6 +713,7 @@ def _plan_and_sub(db, merchant: ShopMerchantAccount, operator_id) -> None:
         .filter(uuid_eq(ShopMerchantSubscription.tenant_id, merchant.tenant_id))
         .first()
     )
+    snap = build_plan_snapshot(plan)
     if sub is None:
         now = _now()
         sub = ShopMerchantSubscription(
@@ -645,7 +727,7 @@ def _plan_and_sub(db, merchant: ShopMerchantAccount, operator_id) -> None:
             paid_at=now,
             purchase_mode="replace",
             source="manual",
-            plan_snapshot={"code": plan.code, "name": plan.name, "quotas": plan.quotas},
+            plan_snapshot=snap,
             catalog_price_cents=plan.price_cents,
             paid_amount_cents=plan.price_cents,
             operator_id=operator_id,
@@ -656,6 +738,9 @@ def _plan_and_sub(db, merchant: ShopMerchantAccount, operator_id) -> None:
         merchant.current_subscription_id = sub.id
         merchant.plan_label = plan.name
         merchant.plan_status = "active"
+    elif not (sub.plan_snapshot or {}).get("plan_type"):
+        sub.plan_snapshot = snap
+        db.flush()
 
 
 def _reset_demo(db) -> None:
@@ -811,7 +896,7 @@ def seed(reset: bool = False) -> dict:
             product=catalog["digital"],
             status="pending_payment",
         )
-        _order(
+        claim_order = _order(
             db,
             no=ORDER_CLAIM,
             tenant_id=merchant.tenant_id,
@@ -822,6 +907,8 @@ def seed(reset: bool = False) -> dict:
             source="public_douyin",
             claim_token=CLAIM_TOKEN,
         )
+        _ensure_claim_token(db, claim_order)
+        _sync_demo_claim_tokens(db)
 
         for key, status, plan_status, tname in (
             ("merchant_suspended", "suspended", "active", f"{TENANT_PREFIX}已暂停"),
@@ -901,9 +988,17 @@ def print_table(info: dict) -> None:
         print(f"  {label:12} {acc['phone']}  {acc['password']:12}  {hint}")
     print("")
     print(f"经营中 tenant_id = {info['tenant_id']}")
-    print(f"店首页（H5）  = http://localhost:5174/#/pages/shop/home?shop_id={info['shop_id']}&tenant_id={info['tenant_id']}&openid={info['buyer_openid']}")
-    print(f"买家已购（H5）= http://localhost:5174/#/pages/shop/entitlements?tenant_id={info['tenant_id']}&openid={info['buyer_openid']}")
-    print(f"领权（H5）    = http://localhost:5174/#/pages/shop/claim?token={info['claim_token']}&tenant_id={info['tenant_id']}")
+    print(f"平台登录      = {web_link('/admin/login')}")
+    print(f"商家登录      = {web_link('/login')}")
+    print(
+        f"店首页（H5）  = {h5_link(f'#/pages/shop/home?shop_id={info['shop_id']}&tenant_id={info['tenant_id']}&openid={info['buyer_openid']}')}"
+    )
+    print(
+        f"买家已购（H5）= {h5_link(f'#/pages/shop/entitlements?tenant_id={info['tenant_id']}&openid={info['buyer_openid']}')}"
+    )
+    print(
+        f"领权（H5）    = {h5_link(f'#/pages/shop/claim?token={info['claim_token']}&tenant_id={info['tenant_id']}')}"
+    )
     print("买家无独立密码：H5 Mock 登录（openid）。短信验证码固定 1111。")
 
 

@@ -25,7 +25,9 @@ def list_roles(
 @router.post("/{role_code}/enable")
 def enable_role(
     role_code: str,
-    ctx: TenantContext = Depends(require_permission("shop.role.manage")),
+    ctx: TenantContext = Depends(
+        require_permission("shop.role.manage", forbidden_detail="无角色管理权限")
+    ),
     db: Session = Depends(get_db),
 ):
     return svc.set_role_enabled(db, ctx, role_code, enabled=True)
@@ -34,7 +36,9 @@ def enable_role(
 @router.post("/{role_code}/disable")
 def disable_role(
     role_code: str,
-    ctx: TenantContext = Depends(require_permission("shop.role.manage")),
+    ctx: TenantContext = Depends(
+        require_permission("shop.role.manage", forbidden_detail="无角色管理权限")
+    ),
     db: Session = Depends(get_db),
 ):
     return svc.set_role_enabled(db, ctx, role_code, enabled=False)

@@ -5,7 +5,7 @@
  */
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { ensureShopBuyerSession, getShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
+import { ensureShopBuyerSession, getShopBuyerTenantId, setShopBuyerTenantId, shopBuyerApi } from '@/utils/shopApi'
 
 const orderId = ref('')
 const viewOnly = ref(false)
@@ -13,6 +13,7 @@ const loading = ref(true)
 const submitting = ref(false)
 const order = ref(null)
 const existing = ref(null)
+const openidHint = ref('')
 const titleType = ref('person') // person | company
 const title = ref('')
 const taxNo = ref('')
@@ -30,7 +31,7 @@ const STATUS_LABEL = {
 async function load() {
   loading.value = true
   try {
-    await ensureShopBuyerSession(getShopBuyerTenantId())
+    await ensureShopBuyerSession(getShopBuyerTenantId(), openidHint.value || undefined)
     order.value = await shopBuyerApi.getOrder(orderId.value)
     const invs = await shopBuyerApi.listInvoices({ page: 1, page_size: 50 })
     existing.value = (invs.items || []).find((i) => i.order_id === orderId.value) || null
@@ -113,6 +114,9 @@ function openUrl() {
 onLoad((q) => {
   orderId.value = (q?.order_id || '').trim()
   viewOnly.value = q?.view === '1'
+  const tid = (q?.tenant_id || '').trim()
+  if (tid) setShopBuyerTenantId(tid)
+  openidHint.value = (q?.openid || '').trim()
   if (!orderId.value) {
     uni.showToast({ title: '缺少订单', icon: 'none' })
     loading.value = false
@@ -177,7 +181,7 @@ onLoad((q) => {
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #f5f7fb;
+  background: #f3f5f9;
   padding: 16px 16px 100px;
   box-sizing: border-box;
 }
@@ -211,9 +215,10 @@ onLoad((q) => {
 }
 .field {
   background: #fff;
-  border-radius: 10px;
+  border-radius: 16px;
   padding: 12px;
   margin-bottom: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 .label {
   display: block;
@@ -274,8 +279,8 @@ onLoad((q) => {
   background: #1677ff;
   color: #fff;
   border: none;
-  border-radius: 10px;
-  font-weight: 600;
+  border-radius: 999px;
+  font-weight: 700;
 }
 .btn-ghost {
   background: #fff;

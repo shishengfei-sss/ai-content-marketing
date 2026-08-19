@@ -246,6 +246,62 @@ def main() -> int:
     )
     inv_id = inv.get("id")
 
+    from app.database import SessionLocal, uuid_eq
+    from app.models.shop import ShopBuyer, ShopOrder
+    from app.services.shop.wechat_pay_service import stub_sign
+    from uuid import UUID as UUIDType
+
+    code, created2 = req(
+        "POST", "/mp/shop/orders", token=buyer_tok, body={"product_id": order["product_id"]}
+    )
+    order2 = (created2 or {}).get("order") or created2
+    tx2 = f"TX{uuid.uuid4().hex[:16]}"
+    sign2 = stub_sign(order2["order_no"], tx2, int(order2["amount_cents"]), "mock_api_key_a13")
+    req(
+        "POST",
+        "/mp/shop/payments/notify",
+        body={
+            "order_no": order2["order_no"],
+            "transaction_id": tx2,
+            "paid_amount_cents": int(order2["amount_cents"]),
+            "sign": sign2,
+        },
+    )
+    db = SessionLocal()
+    try:
+        o2 = db.query(ShopOrder).filter(uuid_eq(ShopOrder.id, UUIDType(order2["id"]))).first()
+        ghost = ShopBuyer(
+            id=uuid.uuid4(),
+            tenant_id=o2.tenant_id,
+            nickname="ghost-a13",
+            wx_openid=f"ghost_{uuid.uuid4().hex[:12]}",
+        )
+        db.add(ghost)
+        db.flush()
+        o2.buyer_id = ghost.id
+        o2.claimed_buyer_id = ghost.id
+        db.commit()
+    finally:
+        db.close()
+    code, inv_ghost = req(
+        "POST",
+        "/mp/shop/invoices",
+        token=buyer_tok,
+        body={
+            "order_id": order2["id"],
+            "title_type": "person",
+            "title": "领权合并买家",
+            "email": "a13-ghost@example.com",
+        },
+    )
+    results.append(
+        check(
+            "VA13-2b 领权后空买家订单可开票",
+            code in (200, 201) and inv_ghost.get("order_id") == order2["id"],
+            f"{code} {inv_ghost}",
+        )
+    )
+
     code, companies = req("GET", "/shop/invoices?title_type=company&page_size=100", token=merchant)
     company_rows = companies.get("items") or []
     results.append(

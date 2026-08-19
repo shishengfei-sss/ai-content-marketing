@@ -48,6 +48,7 @@ from app.schemas.shop_platform import (
     VerificationOut,
 )
 from app.services.shop.buyer_service import mask_mobile
+from app.services.shop.order_service import display_entitlement_status
 
 
 def _now() -> datetime:
@@ -182,7 +183,7 @@ def _verification_out(
         remaining_before=remaining_before,
         remaining_after=remaining_after,
         verification_no=verification_no(v.id),
-        entitlement_status=ent.status if ent else None,
+        entitlement_status=display_entitlement_status(ent),
         buyer_mobile_masked=mask_mobile(buyer.mobile) if buyer and buyer.mobile else None,
         product_name=product.name if product else None,
         booking_slot=slot,
@@ -378,7 +379,7 @@ def _lesson_out(row: ShopLessonProgress) -> LessonProgressOut:
 
 
 def _lookup_item(
-    db: Session, ent: ShopEntitlement, buyer: ShopBuyer, product: ShopProduct | None
+    db: Session, ent: ShopEntitlement, buyer: ShopBuyer | None, product: ShopProduct | None
 ) -> VerificationLookupItem:
     booking = (
         db.query(ShopBooking)
@@ -402,10 +403,14 @@ def _lookup_item(
     slot = None
     if booking:
         slot = f"{booking.booked_date} {booking.booked_time_slot}"
+    mobile = buyer.mobile if buyer else None
+    if not mobile:
+        order = db.query(ShopOrder).filter(uuid_eq(ShopOrder.id, ent.order_id)).first()
+        mobile = order.buyer_mobile_snapshot if order else None
     return VerificationLookupItem(
         entitlement_id=ent.id,
-        buyer_id=buyer.id,
-        buyer_mobile_masked=mask_mobile(buyer.mobile) if buyer.mobile else None,
+        buyer_id=buyer.id if buyer else ent.buyer_id,
+        buyer_mobile_masked=mask_mobile(mobile) if mobile else None,
         product_id=ent.product_id,
         product_name=product.name if product else None,
         product_type=product.type if product else None,
@@ -435,7 +440,7 @@ def lookup_verifications(
 
     q = (
         db.query(ShopEntitlement, ShopBuyer, ShopProduct)
-        .join(ShopBuyer, ShopBuyer.id == ShopEntitlement.buyer_id)
+        .outerjoin(ShopBuyer, ShopBuyer.id == ShopEntitlement.buyer_id)
         .outerjoin(ShopProduct, ShopProduct.id == ShopEntitlement.product_id)
         .filter(uuid_eq(ShopEntitlement.tenant_id, ctx.tenant_id))
     )
@@ -529,10 +534,12 @@ def execute_verification(
         raise HTTPException(status_code=404, detail="权益不存在")
     if ent.status == "revoked":
         raise HTTPException(status_code=409, detail="权益已撤销，不可核销")
-    if ent.status != "active":
-        raise HTTPException(status_code=409, detail="权益不可核销")
     if ent.remaining_count is not None and ent.remaining_count <= 0:
         raise HTTPException(status_code=409, detail="次数已用尽")
+    if ent.status == "consumed":
+        raise HTTPException(status_code=409, detail="次数已用尽")
+    if ent.status != "active":
+        raise HTTPException(status_code=409, detail="权益不可核销")
     if ent.remaining_count is not None and body.deducted_count > ent.remaining_count:
         raise HTTPException(status_code=409, detail="扣减次数超过剩余")
 
@@ -561,12 +568,40 @@ def execute_verification(
             raise HTTPException(status_code=404, detail="预约不存在")
         if booking.status != "booked":
             raise HTTPException(status_code=409, detail="预约状态不可核销")
+    else:
+        booking = (
+            db.query(ShopBooking)
+            .filter(
+                uuid_eq(ShopBooking.entitlement_id, ent.id),
+                ShopBooking.status == "booked",
+                ShopBooking.slot_id.is_(None),
+            )
+            .order_by(ShopBooking.created_at.desc())
+            .first()
+        )
+        if booking is None:
+            buyer_id = _valid_booking_buyer_id(db, ent)
+            if buyer_id:
+                booking = ShopBooking(
+                    id=uuid.uuid4(),
+                    tenant_id=ent.tenant_id,
+                    shop_id=shop.id,
+                    buyer_id=buyer_id,
+                    entitlement_id=ent.id,
+                    service_product_id=ent.product_id,
+                    slot_id=None,
+                    status="completed",
+                    booked_date=_now().date(),
+                    booked_time_slot="次数卡",
+                )
+                db.add(booking)
+                db.flush()
 
     if ent.remaining_count is not None:
         ent.remaining_count = int(ent.remaining_count) - int(body.deducted_count)
         if ent.remaining_count <= 0:
             ent.remaining_count = 0
-            ent.status = "expired"
+            ent.status = "consumed"
 
     v = ShopVerification(
         id=uuid.uuid4(),
@@ -585,6 +620,7 @@ def execute_verification(
     db.add(v)
     if booking:
         booking.status = "completed"
+        v.booking_id = booking.id
     db.commit()
     db.refresh(v)
     db.refresh(ent)
@@ -795,14 +831,17 @@ def create_booking(db: Session, buyer: ShopBuyer, body: BookingCreateRequest) ->
 
     ent = (
         db.query(ShopEntitlement)
-        .filter(
-            uuid_eq(ShopEntitlement.id, body.entitlement_id),
-            uuid_eq(ShopEntitlement.buyer_id, buyer.id),
-        )
+        .filter(uuid_eq(ShopEntitlement.id, body.entitlement_id))
         .first()
     )
     if not ent:
         raise HTTPException(status_code=404, detail="权益不存在")
+    if ent.buyer_id != buyer.id:
+        order = db.query(ShopOrder).filter(uuid_eq(ShopOrder.id, ent.order_id)).first()
+        same_mobile = bool(buyer.mobile and order and order.buyer_mobile_snapshot == buyer.mobile)
+        claimed = bool(order and order.claimed_buyer_id == buyer.id)
+        if not same_mobile and not claimed:
+            raise HTTPException(status_code=404, detail="权益不存在")
     if ent.status != "active":
         raise HTTPException(status_code=403, detail="无可用权益，不可预约")
     product = db.query(ShopProduct).filter(uuid_eq(ShopProduct.id, ent.product_id)).first()
@@ -814,6 +853,7 @@ def create_booking(db: Session, buyer: ShopBuyer, body: BookingCreateRequest) ->
     slot_label = (body.booked_time_slot or "").strip() if body.booked_time_slot else ""
 
     # 关联 A07 服务且为预约模式时，须走真实时段
+    offer = None
     if product.ref_type == "service_offer" and product.ref_id:
         offer = (
             db.query(ShopServiceOffer)
@@ -827,6 +867,7 @@ def create_booking(db: Session, buyer: ShopBuyer, body: BookingCreateRequest) ->
                 raise HTTPException(status_code=409, detail="服务已下架，不可新约")
 
     occupied = None
+    times_card = slot_id is None and not booked_date and not slot_label
     if slot_id:
         occupied = service_offer_service.try_occupy_slot(db, slot_id)
         # 本地日历展示字段
@@ -848,6 +889,21 @@ def create_booking(db: Session, buyer: ShopBuyer, body: BookingCreateRequest) ->
         if conflict:
             service_offer_service.release_slot(db, slot_id)
             raise HTTPException(status_code=409, detail="重复预约")
+    elif times_card:
+        existing = (
+            db.query(ShopBooking)
+            .filter(
+                uuid_eq(ShopBooking.entitlement_id, ent.id),
+                ShopBooking.status == "booked",
+                ShopBooking.slot_id.is_(None),
+            )
+            .order_by(ShopBooking.created_at.desc())
+            .first()
+        )
+        if existing:
+            return _pack_bookings(db, [existing])[0]
+        booked_date = _now().date()
+        slot_label = "次数卡"
     else:
         if not booked_date or not slot_label:
             raise HTTPException(status_code=422, detail="请选择时段")
@@ -901,12 +957,11 @@ def cancel_booking(
 ) -> BookingOut:
     from app.services.shop import service_offer_service
 
-    b = (
-        db.query(ShopBooking)
-        .filter(uuid_eq(ShopBooking.id, booking_id), uuid_eq(ShopBooking.buyer_id, buyer.id))
-        .first()
-    )
+    b = db.query(ShopBooking).filter(uuid_eq(ShopBooking.id, booking_id)).first()
     if not b:
+        raise HTTPException(status_code=404, detail="预约不存在")
+    ent_ids = _buyer_entitlement_ids(db, buyer)
+    if b.buyer_id != buyer.id and b.entitlement_id not in ent_ids:
         raise HTTPException(status_code=404, detail="预约不存在")
     if b.status != "booked":
         raise HTTPException(status_code=409, detail="当前状态不可取消")
@@ -925,13 +980,126 @@ def cancel_booking(
     return _pack_bookings(db, [b])[0]
 
 
+def _buyer_row_exists(db: Session, buyer_id: UUID | None) -> bool:
+    if not buyer_id:
+        return False
+    return db.query(ShopBuyer.id).filter(uuid_eq(ShopBuyer.id, buyer_id)).first() is not None
+
+
+def _valid_booking_buyer_id(
+    db: Session, ent: ShopEntitlement, *, fallback: UUID | None = None
+) -> UUID | None:
+    if _buyer_row_exists(db, ent.buyer_id):
+        return ent.buyer_id
+    order = (
+        db.query(ShopOrder).filter(uuid_eq(ShopOrder.id, ent.order_id)).first()
+        if ent.order_id
+        else None
+    )
+    if order and _buyer_row_exists(db, order.claimed_buyer_id):
+        return order.claimed_buyer_id
+    if _buyer_row_exists(db, fallback):
+        return fallback
+    if order and order.buyer_mobile_snapshot:
+        found = (
+            db.query(ShopBuyer)
+            .filter(
+                uuid_eq(ShopBuyer.tenant_id, ent.tenant_id),
+                ShopBuyer.mobile == order.buyer_mobile_snapshot,
+            )
+            .first()
+        )
+        if found:
+            return found.id
+    return None
+
+
+def _buyer_entitlement_ids(db: Session, buyer: ShopBuyer) -> list[UUID]:
+    if buyer.mobile:
+        rows = (
+            db.query(ShopEntitlement.id)
+            .outerjoin(ShopOrder, ShopOrder.id == ShopEntitlement.order_id)
+            .filter(uuid_eq(ShopEntitlement.tenant_id, buyer.tenant_id))
+            .filter(
+                or_(
+                    uuid_eq(ShopEntitlement.buyer_id, buyer.id),
+                    ShopOrder.buyer_mobile_snapshot == buyer.mobile,
+                    uuid_eq(ShopOrder.claimed_buyer_id, buyer.id),
+                )
+            )
+            .all()
+        )
+        return [r[0] for r in rows]
+    return [
+        r[0]
+        for r in db.query(ShopEntitlement.id)
+        .filter(uuid_eq(ShopEntitlement.buyer_id, buyer.id))
+        .all()
+    ]
+
+
+def _backfill_completed_bookings_from_verifications(db: Session, buyer: ShopBuyer) -> None:
+    """次数卡核销未写预约时，补一条已完成记录，便于 M10c「已完成/取消」可见。"""
+    ent_ids = _buyer_entitlement_ids(db, buyer)
+    if not ent_ids:
+        return
+    orphans = (
+        db.query(ShopVerification)
+        .filter(
+            uuid_eq(ShopVerification.tenant_id, buyer.tenant_id),
+            ShopVerification.status == "success",
+            ShopVerification.booking_id.is_(None),
+            ShopVerification.entitlement_id.in_(ent_ids),
+        )
+        .all()
+    )
+    if not orphans:
+        return
+    changed = False
+    for v in orphans:
+        ent = db.query(ShopEntitlement).filter(uuid_eq(ShopEntitlement.id, v.entitlement_id)).first()
+        if not ent:
+            continue
+        buyer_id = _valid_booking_buyer_id(db, ent, fallback=buyer.id)
+        if not buyer_id:
+            continue
+        when = v.created_at or _now()
+        booked_date = when.date() if hasattr(when, "date") else _now().date()
+        b = ShopBooking(
+            id=uuid.uuid4(),
+            tenant_id=ent.tenant_id,
+            shop_id=v.shop_id or ent.shop_id,
+            buyer_id=buyer_id,
+            entitlement_id=ent.id,
+            service_product_id=ent.product_id,
+            slot_id=None,
+            status="completed",
+            booked_date=booked_date,
+            booked_time_slot="次数卡",
+        )
+        db.add(b)
+        db.flush()
+        v.booking_id = b.id
+        changed = True
+    if changed:
+        db.commit()
+
+
 def list_bookings_buyer(
     db: Session, buyer: ShopBuyer, *, page: int, page_size: int
 ) -> tuple[list[BookingOut], int]:
-    q = db.query(ShopBooking).filter(uuid_eq(ShopBooking.buyer_id, buyer.id))
+    _backfill_completed_bookings_from_verifications(db, buyer)
+    ent_ids = _buyer_entitlement_ids(db, buyer)
+    conds = [uuid_eq(ShopBooking.buyer_id, buyer.id)]
+    if ent_ids:
+        conds.append(ShopBooking.entitlement_id.in_(ent_ids))
+    q = db.query(ShopBooking).filter(
+        uuid_eq(ShopBooking.tenant_id, buyer.tenant_id),
+        or_(*conds),
+    )
     total = q.count()
     rows = (
-        q.order_by(ShopBooking.booked_date.desc(), ShopBooking.created_at.desc())
+        q.order_by(ShopBooking.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
@@ -1206,13 +1374,9 @@ def get_booking_merchant(db: Session, ctx: TenantContext, booking_id: UUID) -> B
 
 
 def create_invoice(db: Session, buyer: ShopBuyer, body: InvoiceCreateRequest) -> InvoiceOut:
-    order = (
-        db.query(ShopOrder)
-        .filter(uuid_eq(ShopOrder.id, body.order_id), uuid_eq(ShopOrder.buyer_id, buyer.id))
-        .first()
-    )
-    if not order:
-        raise HTTPException(status_code=404, detail="订单不存在")
+    from app.services.shop.order_service import get_order_for_buyer
+
+    order = get_order_for_buyer(db, buyer, body.order_id, commit_heal=False)
     if order.status == "refunded":
         raise HTTPException(status_code=409, detail="已退款订单不可申请发票")
     if order.status != "paid":
@@ -1333,7 +1497,19 @@ def _pack_invoice_rows(db: Session, rows: list) -> list[InvoiceOut]:
 def list_invoices_buyer(
     db: Session, buyer: ShopBuyer, *, page: int, page_size: int
 ) -> tuple[list[InvoiceOut], int]:
-    q = db.query(ShopInvoiceRequest).filter(uuid_eq(ShopInvoiceRequest.buyer_id, buyer.id))
+    from app.services.shop.order_service import buyer_order_clause
+
+    q = (
+        db.query(ShopInvoiceRequest)
+        .join(ShopOrder, ShopOrder.id == ShopInvoiceRequest.order_id)
+        .filter(
+            uuid_eq(ShopInvoiceRequest.tenant_id, buyer.tenant_id),
+            or_(
+                uuid_eq(ShopInvoiceRequest.buyer_id, buyer.id),
+                buyer_order_clause(buyer),
+            ),
+        )
+    )
     total = q.count()
     rows = (
         q.order_by(ShopInvoiceRequest.created_at.desc())

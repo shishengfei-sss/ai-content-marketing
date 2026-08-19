@@ -7,9 +7,12 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '../../api/client'
+import { useCurrentShop } from '../../composables/useCurrentShop'
+import { authShopFileUrl } from '../../utils/shopContentUrl'
 
 const route = useRoute()
 const router = useRouter()
+const { currentId } = useCurrentShop()
 const loading = ref(false)
 const saving = ref(false)
 const product = ref(null)
@@ -20,6 +23,7 @@ const readonly = computed(() => {
   const s = product.value?.status
   return s === 'pending_review' || s === 'approved' || s === 'on_sale'
 })
+const coverPreviewUrl = computed(() => authShopFileUrl(form.cover_url))
 
 const form = reactive({
   type: 'course',
@@ -107,10 +111,11 @@ async function loadCategories() {
 }
 
 async function loadOptions() {
+  const shopParams = { status: 'published', page_size: 100, shop_id: currentId.value || undefined }
   const [c, p, o] = await Promise.all([
-    api.get('/api/v1/shop/columns', { params: { status: 'published', page_size: 100 } }),
-    api.get('/api/v1/shop/digital-packages', { params: { status: 'published', page_size: 100 } }),
-    api.get('/api/v1/shop/service-offers', { params: { status: 'published', page_size: 100 } }),
+    api.get('/api/v1/shop/columns', { params: shopParams }),
+    api.get('/api/v1/shop/digital-packages', { params: shopParams }),
+    api.get('/api/v1/shop/service-offers', { params: shopParams }),
   ])
   columns.value = c.data.items || []
   packages.value = p.data.items || []
@@ -193,7 +198,14 @@ async function saveDraft({ silent = false } = {}) {
   try {
     const body = buildBody()
     if (isNew.value && !product.value) {
-      const { data } = await api.post('/api/v1/shop/products', { type: form.type, ...body })
+      if (!currentId.value) {
+        throw new Error('请先在顶栏选择当前店铺')
+      }
+      const { data } = await api.post('/api/v1/shop/products', {
+        type: form.type,
+        shop_id: currentId.value,
+        ...body,
+      })
       product.value = data
       if (!silent) ElMessage.success('已存草稿')
       await router.replace({ name: 'ShopProductEdit', params: { id: data.id }, query: { mode: 'edit' } })
@@ -233,7 +245,7 @@ async function submitReview() {
     if (!id) return
     await api.post(`/api/v1/shop/products/${id}/submit-review`, {})
     ElMessage.success('已提交，预计 1 工作日')
-    await load()
+    router.push({ name: 'ShopProducts', query: { status: 'pending_review' } })
   } catch (e) {
     if (e?.message && !String(e.message).includes('保存')) {
       ElMessage.error(e.message || '提交审核失败')
@@ -425,16 +437,20 @@ onMounted(load)
       </el-form-item>
 
       <el-form-item label="封面" required>
-        <div class="upload-row">
-          <el-button :disabled="readonly" :loading="uploading" @click="fileInput?.click()">
-            上传 jpg/png · ≤2MB
-          </el-button>
-          <span v-if="form.cover_name || form.cover_url" class="file-name">
-            {{ form.cover_name || form.cover_url }}
-          </span>
-          <span v-else class="hint">提交审核时必填 · 未选择文件</span>
+        <div class="cover-field">
+          <div v-if="form.cover_url" class="cover-preview">
+            <img :src="coverPreviewUrl" alt="封面预览" />
+          </div>
+          <div class="upload-row">
+            <el-button :disabled="readonly" :loading="uploading" @click="fileInput?.click()">
+              {{ form.cover_url ? '更换封面' : '上传 jpg/png · ≤2MB' }}
+            </el-button>
+            <span v-if="form.cover_name" class="file-name">{{ form.cover_name }}</span>
+            <span v-else-if="form.cover_url" class="file-name">已上传封面</span>
+            <span v-else class="hint">提交审核时必填 · 未选择文件</span>
+          </div>
+          <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="onCover" />
         </div>
-        <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="onCover" />
       </el-form-item>
     </el-form>
 
@@ -488,6 +504,21 @@ onMounted(load)
   font-size: 12px; color: #334155; line-height: 1.5;
 }
 .upload-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cover-field { display: flex; flex-direction: column; gap: 10px; }
+.cover-preview {
+  width: 120px;
+  height: 120px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+.cover-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .file-name { color: var(--el-color-success); font-size: 13px; }
 .hidden { display: none; }
 .reject-box {

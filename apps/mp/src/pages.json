@@ -307,6 +307,24 @@
       "style": {
         "navigationBarTitleText": "资料领取"
       }
+    },
+    {
+      "path": "pages/shop/mine",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    },
+    {
+      "path": "pages/shop/cs",
+      "style": {
+        "navigationBarTitleText": "联系客服"
+      }
+    },
+    {
+      "path": "pages/shop/legal",
+      "style": {
+        "navigationBarTitleText": "用户协议 / 隐私"
+      }
     }
   ],
   "globalStyle": {

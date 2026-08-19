@@ -89,6 +89,15 @@ onLoad((q) => {
     <view v-else-if="error" class="error">{{ error }}</view>
     <template v-else-if="detail">
       <view class="card">
+        <view class="prod">
+          <view class="thumb" :class="detail.type">{{
+            detail.type === 'course' ? '课' : detail.type === 'digital' ? '资' : '服'
+          }}</view>
+          <view class="prod-info">
+            <text class="prod-name">{{ detail.name }}</text>
+            <text class="prod-type">{{ detail.type === 'course' ? '课程' : detail.type === 'digital' ? '资料' : '服务' }}</text>
+          </view>
+        </view>
         <view class="row">
           <text class="label">商品</text>
           <text class="value">{{ detail.name }}</text>
@@ -129,7 +138,7 @@ onLoad((q) => {
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: #f3f5f9;
   padding: 16px;
   padding-bottom: 88px;
 }
@@ -144,9 +153,47 @@ onLoad((q) => {
 }
 .card {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 16px;
   margin-bottom: 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+.prod {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  background: #e8f3ff;
+  color: #1677ff;
+}
+.thumb.digital {
+  background: #fff7e6;
+  color: #d48806;
+}
+.thumb.service {
+  background: #ecfdf5;
+  color: #059669;
+}
+.prod-name {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.prod-type {
+  font-size: 11px;
+  color: #64748b;
 }
 .row {
   display: flex;
@@ -163,19 +210,19 @@ onLoad((q) => {
   text-align: right;
 }
 .amount {
-  color: #cf1322;
-  font-weight: 600;
+  color: #e11d48;
+  font-weight: 700;
 }
 .section-title {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 10px;
 }
 .mobile-input {
   height: 40px;
   padding: 0 12px;
   background: #f8fafc;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 14px;
 }
 .tip {
@@ -191,9 +238,10 @@ onLoad((q) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: #fff;
-  border-top: 1px solid #e2e8f0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 1px solid #eef2f6;
+  box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.04);
 }
 .total {
   font-size: 14px;
@@ -207,5 +255,6 @@ onLoad((q) => {
   color: #fff;
   border-radius: 22px;
   font-size: 15px;
+  font-weight: 700;
 }
 </style>

@@ -17,6 +17,7 @@ const props = defineProps({
   ocrEnabled: { type: Boolean, default: false },
   fileId: { type: String, default: '' },
   fileName: { type: String, default: '' },
+  previewUrl: { type: String, default: '' },
   /**
    * 自定义上传：(docType, file) => Promise<{ file_id, file_name, size? }>
    * 默认走商家端 /shop/onboarding/files
@@ -36,6 +37,18 @@ const recognizing = ref(false)
 const inputRef = ref(null)
 
 const hasFile = computed(() => !!props.fileId)
+
+const isImagePreview = computed(() => {
+  if (!props.previewUrl) return false
+  const name = (props.fileName || '').toLowerCase()
+  if (name.endsWith('.pdf')) return false
+  return true
+})
+
+function openPreview() {
+  if (!props.previewUrl) return
+  window.open(props.previewUrl, '_blank', 'noopener,noreferrer')
+}
 
 function pickFile() {
   if (props.disabled || uploading.value) return
@@ -136,44 +149,63 @@ function clearFile() {
       <div v-if="hasFile" class="material-item__file" :title="fileName">
         {{ fileName || '已上传文件' }}
       </div>
+      <div v-if="hasFile && previewUrl" class="material-item__preview">
+        <img
+          v-if="isImagePreview"
+          :src="previewUrl"
+          :alt="fileName || title"
+          class="material-item__thumb"
+          @click="openPreview"
+        />
+        <el-button v-else link type="primary" @click="openPreview">查看附件</el-button>
+      </div>
     </div>
     <div class="material-item__actions">
       <el-tag v-if="hasFile" type="success" size="small">已上传</el-tag>
-      <input
-        ref="inputRef"
-        type="file"
-        class="material-item__input"
-        accept="image/*,.pdf,application/pdf"
-        :disabled="disabled || uploading"
-        @change="onFileChange"
-      />
+      <template v-if="!disabled">
+        <input
+          ref="inputRef"
+          type="file"
+          class="material-item__input"
+          accept="image/*,.pdf,application/pdf"
+          :disabled="uploading"
+          @change="onFileChange"
+        />
+        <el-button
+          size="small"
+          type="primary"
+          plain
+          :loading="uploading"
+          @click="pickFile"
+        >
+          {{ hasFile ? '重新上传' : '选择文件' }}
+        </el-button>
+        <el-button
+          v-if="ocrEnabled && hasFile"
+          size="small"
+          :loading="recognizing"
+          @click="runOcr()"
+        >
+          识别填入
+        </el-button>
+        <el-button
+          v-if="hasFile"
+          size="small"
+          text
+          type="danger"
+          @click="clearFile"
+        >
+          清除
+        </el-button>
+      </template>
       <el-button
+        v-else-if="hasFile && previewUrl"
         size="small"
+        link
         type="primary"
-        plain
-        :loading="uploading"
-        :disabled="disabled"
-        @click="pickFile"
+        @click="openPreview"
       >
-        {{ hasFile ? '重新上传' : '选择文件' }}
-      </el-button>
-      <el-button
-        v-if="ocrEnabled && hasFile"
-        size="small"
-        :loading="recognizing"
-        :disabled="disabled"
-        @click="runOcr()"
-      >
-        识别填入
-      </el-button>
-      <el-button
-        v-if="hasFile && !disabled"
-        size="small"
-        text
-        type="danger"
-        @click="clearFile"
-      >
-        清除
+        查看附件
       </el-button>
     </div>
   </div>
@@ -227,6 +259,21 @@ function clearFile() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.material-item__preview {
+  margin-top: 8px;
+}
+
+.material-item__thumb {
+  display: block;
+  max-width: 200px;
+  max-height: 120px;
+  border: 1px solid var(--el-border-color-lighter, #ebeef5);
+  border-radius: 6px;
+  cursor: pointer;
+  object-fit: contain;
+  background: #fafafa;
 }
 
 .material-item__actions {

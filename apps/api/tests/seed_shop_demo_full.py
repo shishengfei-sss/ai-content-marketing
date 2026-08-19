@@ -51,6 +51,7 @@ from app.models.shop import (  # noqa: E402
     ShopModerationCase,
     ShopPaymentOnboarding,
     ShopPlatformCategory,
+    ShopOnboardingApplication,
     ShopOrder,
     ShopPayment,
     ShopPaymentLog,
@@ -67,9 +68,11 @@ from app.models.shop import (  # noqa: E402
     ShopAuditLog,
     ShopChannelSetting,
 )
+from tests.shop_demo_urls import h5_link, web_link  # noqa: E402
 from tests.seed_shop_demo import (  # noqa: E402
     ACCOUNTS,
     _bind_admin,
+    _code,
     _ensure_payment_config,
     _ensure_stores,
     _ensure_user,
@@ -1144,6 +1147,44 @@ def _fill_progress_and_downloads(db, *, merchant) -> None:
     db.flush()
 
 
+def _ensure_approved_onboarding(db, *, merchant: ShopMerchantAccount, user: User) -> uuid.UUID | None:
+    if merchant.onboarding_application_id:
+        return merchant.onboarding_application_id
+    app = (
+        db.query(ShopOnboardingApplication)
+        .filter(
+            uuid_eq(ShopOnboardingApplication.tenant_id, merchant.tenant_id),
+            ShopOnboardingApplication.status == "approved",
+        )
+        .order_by(ShopOnboardingApplication.reviewed_at.desc())
+        .first()
+    )
+    if app is None:
+        now = _now()
+        app = ShopOnboardingApplication(
+            id=uuid.uuid4(),
+            application_no=_code(db, "shop_onboarding", f"DEMVOL{str(merchant.merchant_no or '000000')[-6:]}"),
+            tenant_id=merchant.tenant_id,
+            entity_type=merchant.entity_type or "enterprise",
+            initiator="ops_assisted",
+            status="approved",
+            legal_name=merchant.legal_name or merchant.display_name,
+            display_name=merchant.display_name,
+            contact_name=merchant.contact_name,
+            contact_mobile=merchant.contact_mobile,
+            qualification_files={},
+            reviewed_at=now,
+            submitted_at=now - timedelta(days=7),
+        )
+        db.add(app)
+        db.flush()
+    merchant.onboarding_application_id = app.id
+    if not merchant.onboarding_approved_at:
+        merchant.onboarding_approved_at = app.reviewed_at or _now()
+    db.flush()
+    return app.id
+
+
 def _fill_service_logs(db, *, merchant, operator_id, spec: dict) -> None:
     if not operator_id:
         return
@@ -1155,17 +1196,37 @@ def _fill_service_logs(db, *, merchant, operator_id, spec: dict) -> None:
     )
     types = ["call", "visit", "wechat", "note", "training", "onboarding_assist", "email", "complaint"]
     statuses = ["logged", "logged", "pending", "done"]
+    app_id = merchant.onboarding_application_id
+    if not app_id:
+        app = (
+            db.query(ShopOnboardingApplication)
+            .filter(
+                uuid_eq(ShopOnboardingApplication.tenant_id, merchant.tenant_id),
+                ShopOnboardingApplication.status == "approved",
+            )
+            .order_by(ShopOnboardingApplication.reviewed_at.desc())
+            .first()
+        )
+        app_id = app.id if app else None
     for i in range(n + 1, LIST_TARGET + 1):
+        log_type = types[(i - 1) % len(types)]
+        related_oid = None
+        if log_type == "onboarding_assist":
+            if app_id:
+                related_oid = app_id
+            else:
+                log_type = "note"
         db.add(
             ShopMerchantServiceLog(
                 id=uuid.uuid4(),
                 merchant_id=merchant.id,
                 tenant_id=merchant.tenant_id,
-                type=types[(i - 1) % len(types)],
+                type=log_type,
                 status=statuses[(i - 1) % len(statuses)],
                 content=f"验收演示跟进{spec['tag']}·{i:02d}：电话沟通套餐与上架进度。",
                 payload_json={"demo": True, "seq": i},
                 operator_user_id=operator_id,
+                related_onboarding_id=related_oid,
                 created_at=_now() - timedelta(days=i),
             )
         )
@@ -1518,6 +1579,7 @@ def _seed_one(db, spec: dict, cs_id, operator_id) -> dict:
     _fill_extra_content(db, merchant=merchant, shop=shop, user=user, spec=spec)
     _fill_bookings_and_verify(db, merchant=merchant, shop=shop, user=user, rng=rng)
     _fill_progress_and_downloads(db, merchant=merchant)
+    _ensure_approved_onboarding(db, merchant=merchant, user=user)
     _fill_service_logs(db, merchant=merchant, operator_id=cs_id or operator_id, spec=spec)
     _fill_audit_logs(db, merchant=merchant, operator_id=cs_id or operator_id, spec=spec)
     _fill_sms_logs(db, merchant=merchant, shop=shop, buyers=buyers)
@@ -1608,14 +1670,27 @@ def print_table(info: dict) -> None:
             f"映射 {m.get('mappings', 0):3}  权益 {m.get('entitlements', 0):3}"
         )
     print("")
-    print("平台超管  13800000000 / admin123456  → /admin/login（商家列表可见 4 家经营中）")
-    print("主商家    13900000099 / test123456   → /login → 商城看板 / 商品 / 订单")
+    print(f"平台超管  13800000000 / admin123456  → {web_link('/admin/login')}（商家列表可见 4 家经营中）")
+    print(f"主商家    13900000099 / test123456   → {web_link('/login')} → 商城看板 / 商品 / 订单")
     print("短信验证码固定 1111。买家 H5 仍用开箱 openid=demo_buyer_paid（最小集已购链路）。")
+    min_info = info["min"]
     first = info["merchants"][0]
+    print(f"主商家 tenant_id = {first['tenant_id']}")
     print(
-        f"旗舰店首页 = http://localhost:5174/#/pages/shop/home"
-        f"?shop_id={first['shop_id']}&tenant_id={first['tenant_id']}&openid=demo_buyer_paid"
+        f"旗舰店首页 = {h5_link(f'#/pages/shop/home?shop_id={first['shop_id']}&tenant_id={first['tenant_id']}&openid=demo_buyer_paid')}"
     )
+    print(
+        f"买家已购   = {h5_link(f'#/pages/shop/entitlements?tenant_id={min_info['tenant_id']}&openid={min_info['buyer_openid']}')}"
+    )
+    print(
+        f"领权       = {h5_link(f'#/pages/shop/claim?token={min_info['claim_token']}&tenant_id={min_info['tenant_id']}')}"
+    )
+    print("")
+    print("=== 另外三家店首页（翻列表用）===")
+    for m in info["merchants"][1:]:
+        print(
+            f"  {m['name']:16} {h5_link(f'#/pages/shop/home?shop_id={m['shop_id']}&tenant_id={m['tenant_id']}&openid=demo_buyer_paid')}"
+        )
 
 
 def main() -> int:

@@ -570,7 +570,17 @@ function storeStatusLabel(s) {
 }
 
 function planTypeLabel(row) {
-  return row?.plan_type_label || (row?.plan_type === 'addon' ? '叠加' : '主套餐')
+  if (row?.plan_type_label) return row.plan_type_label
+  return subPlanType(row) === 'addon' ? '叠加' : '主套餐'
+}
+
+function subPlanType(row) {
+  if (row?.plan_type) return row.plan_type
+  return row?.purchase_mode === 'stack' ? 'addon' : 'main'
+}
+
+function canReplaceSub(row) {
+  return canManage.value && !isClosed.value && subPlanType(row) === 'main' && row?.status === 'active'
 }
 
 function subStatusLabel(row) {
@@ -637,13 +647,25 @@ function recordedText(row) {
   return `录入 ${created}`
 }
 
+function resolveRowOnboardingId(row) {
+  return row?.related_onboarding_id || row?.payload_json?.application_id || null
+}
+
+function resolveMerchantOnboardingId() {
+  return detail.value?.onboarding_application_id || detail.value?.onboarding_materials?.application_id || null
+}
+
+function canViewOnboarding(row) {
+  return row?.type === 'onboarding_assist' && !!resolveRowOnboardingId(row)
+}
+
 function openViewLog(row) {
   viewLog.value = row
   viewLogVisible.value = true
 }
 
 function goOnboarding(row) {
-  const id = row?.related_onboarding_id || detail.value?.onboarding_application_id
+  const id = resolveRowOnboardingId(row) || resolveMerchantOnboardingId()
   if (!id) {
     ElMessage.info('无关联入驻申请')
     return
@@ -769,8 +791,29 @@ async function submitRenewal() {
 }
 
 function goSubscriptions(extra = {}) {
+  const tenantId = detail.value?.tenant_id || route.params.tenantId
   const q = detail.value?.display_name || ''
-  router.push({ path: '/admin/shop/subscriptions', query: { q, ...extra } })
+  router.push({ path: '/admin/shop/subscriptions', query: { q, tenant_id: tenantId, ...extra } })
+}
+
+function goReplaceSubscription(row) {
+  if (!row?.id) {
+    ElMessage.warning('未找到订阅单')
+    return
+  }
+  goSubscriptions({ action: 'replace', subscription_id: row.id })
+}
+
+function goStackAddon() {
+  goSubscriptions({ action: 'stack' })
+}
+
+function goSubscriptionAction(action, row) {
+  if (!row?.id) {
+    ElMessage.warning('未找到订阅单')
+    return
+  }
+  goSubscriptions({ action, subscription_id: row.id })
 }
 
 function processRenewal() {
@@ -904,8 +947,8 @@ onMounted(async () => {
               <el-button link type="primary" @click="activeTab = 'entitlements'">查看全部订阅</el-button>
             </div>
             <div v-if="canManage && !isClosed" class="ent-summary__ops">
-              <el-button type="primary" @click="goSubscriptions({})">换档升级</el-button>
-              <el-button @click="goSubscriptions({})">叠加加购</el-button>
+              <el-button type="primary" @click="goReplaceSubscription(mainSub)">换档升级</el-button>
+              <el-button @click="goStackAddon">叠加加购</el-button>
             </div>
             <div v-else-if="canWriteFollow && !canManage" class="ent-summary__ops">
               <el-button type="warning" :disabled="detail.has_pending_renewal" @click="openRenewal">
@@ -950,13 +993,15 @@ onMounted(async () => {
             </el-table-column>
             <el-table-column v-if="canManage && !isClosed" label="操作" width="160" fixed="right">
               <template #default="{ row }">
-                <template v-if="row.plan_type !== 'addon'">
-                  <el-button link type="primary" @click="goSubscriptions({})">换档</el-button>
-                  <el-button link type="primary" @click="goSubscriptions({})">详情</el-button>
+                <template v-if="subPlanType(row) !== 'addon'">
+                  <el-button v-if="canReplaceSub(row)" link type="primary" @click="goReplaceSubscription(row)">
+                    换档
+                  </el-button>
+                  <el-button link type="primary" @click="goSubscriptionAction('detail', row)">详情</el-button>
                 </template>
                 <template v-else>
-                  <el-button link type="primary" @click="goSubscriptions({})">续费</el-button>
-                  <el-button link type="primary" @click="goSubscriptions({})">取消</el-button>
+                  <el-button link type="primary" @click="goSubscriptionAction('renew', row)">续费</el-button>
+                  <el-button link type="primary" @click="goSubscriptionAction('cancel', row)">取消</el-button>
                 </template>
               </template>
             </el-table-column>
@@ -1174,7 +1219,7 @@ onMounted(async () => {
                   处理续费
                 </el-button>
                 <el-button
-                  v-if="row.type === 'onboarding_assist'"
+                  v-if="canViewOnboarding(row)"
                   link
                   type="primary"
                   @click="goOnboarding(row)"
@@ -1193,13 +1238,12 @@ onMounted(async () => {
             </el-table-column>
           </el-table>
           <div class="pager">
-            <span class="pager-info">共 {{ logTotal }} 条</span>
             <el-pagination
               v-model:current-page="logPage"
               v-model:page-size="logPageSize"
               :total="logTotal"
               :page-sizes="[10, 20, 50]"
-              layout="sizes, prev, pager, next"
+              layout="total, sizes, prev, pager, next"
               small
             />
           </div>
@@ -1326,8 +1370,18 @@ onMounted(async () => {
           <el-descriptions-item label="内容">{{ viewLog.content }}</el-descriptions-item>
           <el-descriptions-item label="下次跟进">{{ formatDateTime(viewLog.follow_up_at) }}</el-descriptions-item>
           <el-descriptions-item label="录入时间">{{ formatDateTime(viewLog.created_at) }}</el-descriptions-item>
+          <el-descriptions-item v-if="canViewOnboarding(viewLog)" label="关联入驻申请">
+            <el-button link type="primary" @click="goOnboarding(viewLog)">查看入驻申请</el-button>
+          </el-descriptions-item>
         </el-descriptions>
         <template #footer>
+          <el-button
+            v-if="canViewOnboarding(viewLog)"
+            type="primary"
+            @click="goOnboarding(viewLog)"
+          >
+            查看入驻申请
+          </el-button>
           <el-button
             v-if="canManage && viewLog?.type === 'renewal_request' && viewLog?.status === 'pending'"
             type="primary"
@@ -1495,14 +1549,6 @@ onMounted(async () => {
   margin-bottom: 12px;
 }
 .pager {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   margin-top: 12px;
-  gap: 12px;
-}
-.pager-info {
-  font-size: 13px;
-  color: #8c8c8c;
 }
 </style>

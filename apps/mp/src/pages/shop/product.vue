@@ -134,11 +134,14 @@ onLoad((q) => {
       <view class="cover-wrap">
         <image v-if="detail.cover_url" :src="detail.cover_url" mode="aspectFill" class="cover" />
         <view v-else class="cover cover-placeholder">{{ typeLabel(detail.type) }}</view>
+        <text class="type-tag" :class="detail.type">{{ typeLabel(detail.type) }}</text>
       </view>
 
       <view class="panel">
-        <view class="price">{{ fmtMoney(detail.price_cents) }}</view>
-        <view v-if="detail.line_price_cents" class="line-price">{{ fmtMoney(detail.line_price_cents) }}</view>
+        <view class="price-row">
+          <view class="price">{{ fmtMoney(detail.price_cents) }}</view>
+          <view v-if="detail.line_price_cents" class="line-price">{{ fmtMoney(detail.line_price_cents) }}</view>
+        </view>
         <view class="name">{{ detail.name }}</view>
         <view v-if="detail.subtitle" class="subtitle">{{ detail.subtitle }}</view>
         <view class="meta">
@@ -180,7 +183,7 @@ onLoad((q) => {
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: #f3f5f9;
   padding-bottom: 80px;
 }
 .hint,
@@ -194,41 +197,63 @@ onLoad((q) => {
 }
 .cover-wrap {
   background: #fff;
+  position: relative;
 }
 .cover {
   width: 100%;
-  height: 200px;
+  height: 220px;
 }
 .cover-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #e2e8f0;
+  background: linear-gradient(135deg, #e8f3ff, #f1f5f9);
   color: #64748b;
   font-size: 16px;
+}
+.type-tag {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(22, 119, 255, 0.92);
+  color: #fff;
+}
+.type-tag.digital {
+  background: rgba(212, 136, 6, 0.92);
+}
+.type-tag.service {
+  background: rgba(5, 150, 105, 0.92);
 }
 .panel {
   margin: 12px 16px;
   padding: 16px;
   background: #fff;
-  border-radius: 12px;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+.price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 .price {
-  color: #cf1322;
-  font-size: 22px;
-  font-weight: 600;
+  color: #e11d48;
+  font-size: 24px;
+  font-weight: 800;
 }
 .line-price {
   color: #94a3b8;
   font-size: 13px;
   text-decoration: line-through;
-  margin-left: 8px;
 }
 .name {
   margin-top: 8px;
   font-size: 18px;
-  font-weight: 600;
-  color: #1e293b;
+  font-weight: 700;
+  color: #0f172a;
 }
 .subtitle {
   margin-top: 6px;
@@ -242,11 +267,11 @@ onLoad((q) => {
 }
 .section-title {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 10px;
 }
 .lesson-row {
-  padding: 10px 0;
+  padding: 12px 0;
   border-bottom: 1px solid #f1f5f9;
 }
 .lesson-row:last-child {
@@ -255,12 +280,13 @@ onLoad((q) => {
 .lesson-title {
   font-size: 14px;
   color: #334155;
+  font-weight: 600;
 }
 .trial-tag {
   margin-left: 6px;
   font-size: 11px;
   color: #1677ff;
-  background: #e6f4ff;
+  background: #e8f3ff;
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -279,9 +305,10 @@ onLoad((q) => {
   bottom: 0;
   display: flex;
   gap: 12px;
-  padding: 12px 16px;
-  background: #fff;
-  border-top: 1px solid #e2e8f0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 1px solid #eef2f6;
+  box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.04);
 }
 .ghost,
 .primary {
@@ -290,6 +317,7 @@ onLoad((q) => {
   line-height: 44px;
   border-radius: 22px;
   font-size: 15px;
+  font-weight: 700;
 }
 .ghost {
   background: #f1f5f9;

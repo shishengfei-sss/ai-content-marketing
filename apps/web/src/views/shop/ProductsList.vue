@@ -8,22 +8,23 @@ import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '../../api/client'
+import { submitShopExport, SHOP_EXPORT_COLUMN_MODE_LABELS } from '../../utils/shopExport'
+import CrmColumnSettingsDialog from '../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../composables/useListColumnSettings'
 import { useCurrentShop } from '../../composables/useCurrentShop'
+import { authShopFileUrl } from '../../utils/shopContentUrl'
+import { mappingBlockTip } from '../../utils/shopChannelMap'
 
 const router = useRouter()
 const route = useRoute()
 const { currentId } = useCurrentShop()
 const loading = ref(false)
 const exporting = ref(false)
-const exportDialog = ref(false)
-const exportTask = ref(null)
-const exportScope = ref('当前筛选')
 const batchBusy = ref(false)
 const items = ref([])
 const total = ref(0)
 const statusCounts = ref({})
 const advOpen = ref(false)
-const colDialog = ref(false)
 const selectedRows = ref([])
 
 const dlg = reactive({
@@ -53,6 +54,8 @@ const MOUNT_TAG = {
   mapped: 'success',
   none: 'info',
   rejected: 'danger',
+  pending: 'warning',
+  syncing: 'warning',
 }
 
 const STATUS_TABS = [
@@ -67,30 +70,25 @@ const COL_STORAGE = 'shop.a02.columns'
 const ALL_COLS = [
   { key: 'cover', label: '封面', locked: true, defaultOn: true },
   { key: 'name', label: '名称', locked: true, defaultOn: true },
-  { key: 'type', label: '类型', locked: true, defaultOn: true },
-  { key: 'price', label: '售价', locked: true, defaultOn: true },
-  { key: 'sales_count', label: '销量', locked: true, defaultOn: true },
-  { key: 'status', label: '状态', locked: true, defaultOn: true },
-  { key: 'updated_at', label: '更新时间', locked: true, defaultOn: true },
-  { key: 'ref', label: '关联', locked: true, defaultOn: true },
-  { key: 'channel_mount', label: '公域', locked: true, defaultOn: true },
-  { key: 'created_at', label: '创建时间', locked: false, defaultOn: false },
-  { key: 'created_by', label: '创建人', locked: false, defaultOn: false },
+  { key: 'type', label: '类型', defaultOn: true },
+  { key: 'price', label: '售价', defaultOn: true },
+  { key: 'sales_count', label: '销量', defaultOn: true },
+  { key: 'status', label: '状态', defaultOn: true },
+  { key: 'updated_at', label: '更新时间', defaultOn: true },
+  { key: 'ref', label: '关联', defaultOn: true },
+  { key: 'channel_mount', label: '公域', defaultOn: true },
+  { key: 'created_at', label: '创建时间', defaultOn: false },
+  { key: 'created_by', label: '创建人', defaultOn: false },
   { key: 'ops', label: '操作', locked: true, defaultOn: true },
 ]
-
-function loadColPrefs() {
-  try {
-    const raw = localStorage.getItem(COL_STORAGE)
-    if (raw) return JSON.parse(raw)
-  } catch {
-    /* ignore */
-  }
-  return Object.fromEntries(ALL_COLS.map((c) => [c.key, c.defaultOn]))
-}
-
-const colVisible = reactive(loadColPrefs())
-const colDraft = reactive({ ...colVisible })
+const {
+  visibleKeys,
+  columnDialogVisible: colDialog,
+  columnDraft,
+  openColumnSettings,
+  saveColumnSettings,
+  isColVisible,
+} = useListColumnSettings(ALL_COLS, COL_STORAGE)
 
 const query = reactive({
   page: 1,
@@ -137,6 +135,20 @@ function tabCount(key) {
 function setTab(key) {
   query.status = key
   query.page = 1
+  syncStatusToRoute(key)
+  load()
+}
+
+function syncStatusToRoute(status) {
+  const next = { ...route.query }
+  if (status) next.status = status
+  else delete next.status
+  router.replace({ path: route.path, query: next })
+}
+
+function onStatusFilterChange() {
+  query.page = 1
+  syncStatusToRoute(query.status || '')
   load()
 }
 
@@ -166,7 +178,7 @@ function resetAdv() {
 }
 
 function visibleExportColumns() {
-  return ALL_COLS.filter((c) => c.key !== 'ops' && c.key !== 'cover' && colVisible[c.key]).map((c) => c.key)
+  return visibleKeys.value.filter((k) => k !== 'ops' && k !== 'cover')
 }
 
 async function exportCsv(mode) {
@@ -178,10 +190,13 @@ async function exportCsv(mode) {
     if (mode === 'columns') {
       body.columns = visibleExportColumns()
     }
-    const { data } = await api.post('/api/v1/shop/products/export', body)
-    exportTask.value = data
-    exportScope.value = mode === 'columns' ? '列配置' : '当前筛选'
-    exportDialog.value = true
+    await submitShopExport(
+      '/api/v1/shop/products/export',
+      body,
+      '/api/v1/shop/products/export-tasks',
+      'shop-products.csv',
+      total.value,
+    )
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
   } finally {
@@ -189,35 +204,6 @@ async function exportCsv(mode) {
   }
 }
 
-async function downloadExportFile() {
-  if (!exportTask.value?.id) return
-  try {
-    const res = await api.get(`/api/v1/shop/products/export-tasks/${exportTask.value.id}/file`, {
-      responseType: 'blob',
-    })
-    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = exportTask.value.file_name || 'shop-products.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    ElMessage.error(e.message || '下载失败')
-  }
-}
-
-function openColSettings() {
-  Object.assign(colDraft, colVisible)
-  colDialog.value = true
-}
-
-function saveColSettings() {
-  Object.assign(colVisible, colDraft)
-  localStorage.setItem(COL_STORAGE, JSON.stringify({ ...colVisible }))
-  colDialog.value = false
-  ElMessage.success('列设置已保存')
-}
 
 function goNew() {
   router.push({ name: 'ShopProductNew' })
@@ -229,6 +215,12 @@ function goEdit(row) {
   router.push({ name: 'ShopProductEdit', params: { id: row.id }, query: { mode: 'edit' } })
 }
 function goMap(row) {
+  const tip = mappingBlockTip(row)
+  if (tip) {
+    ElMessage.warning(tip)
+    router.push({ name: 'ShopChannelMappings' })
+    return
+  }
   router.push({ name: 'ShopChannelMappings', query: { product_id: row.id } })
 }
 
@@ -389,9 +381,7 @@ function fmtTime(v) {
 }
 
 function coverSrc(url) {
-  if (!url) return ''
-  if (url.startsWith('http') || url.startsWith('/api/')) return url
-  return url
+  return authShopFileUrl(url)
 }
 
 function mountStatusLabel(st) {
@@ -406,6 +396,17 @@ onMounted(() => {
   if (route.query.status) query.status = String(route.query.status)
   load()
 })
+
+watch(
+  () => route.query.status,
+  (st) => {
+    const next = st ? String(st) : ''
+    if (query.status === next) return
+    query.status = next
+    query.page = 1
+    load()
+  },
+)
 
 watch(currentId, () => {
   query.page = 1
@@ -454,7 +455,7 @@ watch(currentId, () => {
           clearable
           placeholder="状态"
           style="width: 140px"
-          @change="() => { query.page = 1; load() }"
+          @change="onStatusFilterChange"
         >
           <el-option label="草稿" value="draft" />
           <el-option label="审核中" value="pending_review" />
@@ -478,12 +479,12 @@ watch(currentId, () => {
           <el-button :loading="exporting">导出 ▾</el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="current">当前筛选</el-dropdown-item>
-              <el-dropdown-item command="columns">列配置</el-dropdown-item>
+              <el-dropdown-item command="current">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns }}</el-dropdown-item>
+              <el-dropdown-item command="columns">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button @click="openColSettings">列设置</el-button>
+        <el-button @click="openColumnSettings">列设置</el-button>
         <el-button type="primary" @click="goNew">+ 新建商品</el-button>
       </div>
     </div>
@@ -494,6 +495,7 @@ watch(currentId, () => {
         <el-select v-model="query.channel_mount" clearable placeholder="公域挂载" style="width: 140px">
           <el-option label="已挂载" value="mapped" />
           <el-option label="未挂载" value="none" />
+          <el-option label="挂载审核中" value="pending" />
           <el-option label="挂载被拒" value="rejected" />
         </el-select>
         <el-input-number
@@ -544,33 +546,34 @@ watch(currentId, () => {
       @selection-change="onSelectionChange"
     >
       <el-table-column type="selection" width="42" :selectable="() => true" />
-      <el-table-column v-if="colVisible.cover" label="封面" width="64">
+      <template v-for="colKey in visibleKeys" :key="colKey">
+      <el-table-column v-if="colKey === 'cover'" label="封面" width="64">
         <template #default="{ row }">
           <div class="cover">
             <img v-if="row.cover_url" :src="coverSrc(row.cover_url)" alt="" />
           </div>
         </template>
       </el-table-column>
-      <el-table-column v-if="colVisible.name" prop="name" label="名称" min-width="160" />
-      <el-table-column v-if="colVisible.type" label="类型" width="80">
+      <el-table-column v-if="colKey === 'name'" prop="name" label="名称" min-width="160" />
+      <el-table-column v-if="colKey === 'type'" label="类型" width="80">
         <template #default="{ row }">{{ TYPE_LABEL[row.type] || row.type }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.price" label="售价" width="100">
+      <el-table-column v-if="colKey === 'price'" label="售价" width="100">
         <template #default="{ row }">{{ fmtMoney(row.price_cents) }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.sales_count" label="销量" width="80" prop="sales_count" />
-      <el-table-column v-if="colVisible.status" label="状态" width="90">
+      <el-table-column v-if="colKey === 'sales_count'" label="销量" width="80" prop="sales_count" />
+      <el-table-column v-if="colKey === 'status'" label="状态" width="90">
         <template #default="{ row }">{{ STATUS_LABEL[row.status] || row.status }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.updated_at" label="更新时间" min-width="140">
+      <el-table-column v-if="colKey === 'updated_at'" label="更新时间" min-width="140">
         <template #default="{ row }">{{ fmtTime(row.updated_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.ref" label="关联" width="100">
+      <el-table-column v-if="colKey === 'ref'" label="关联" width="100">
         <template #default="{ row }">
           <el-tag size="small" :type="row.ref_id ? 'success' : 'danger'">{{ contentLabel(row) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column v-if="colVisible.channel_mount" label="公域" width="100">
+      <el-table-column v-if="colKey === 'channel_mount'" label="公域" width="100">
         <template #default="{ row }">
           <template v-if="!row.channel_mount">—</template>
           <el-tag
@@ -582,13 +585,13 @@ watch(currentId, () => {
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column v-if="colVisible.created_at" label="创建时间" min-width="140">
+      <el-table-column v-if="colKey === 'created_at'" label="创建时间" min-width="140">
         <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.created_by" label="创建人" width="100">
+      <el-table-column v-if="colKey === 'created_by'" label="创建人" width="100">
         <template #default="{ row }">{{ row.created_by_name || '—' }}</template>
       </el-table-column>
-      <el-table-column v-if="colVisible.ops" label="操作" width="300" fixed="right">
+      <el-table-column v-if="colKey === 'ops'" label="操作" width="300" fixed="right">
         <template #default="{ row }">
           <el-button
             v-if="['pending_review', 'approved', 'on_sale'].includes(row.status)"
@@ -646,43 +649,26 @@ watch(currentId, () => {
           </el-button>
         </template>
       </el-table-column>
+      </template>
     </el-table>
 
-    <el-pagination
-      v-model:current-page="query.page"
-      v-model:page-size="query.page_size"
-      :total="total"
-      :page-sizes="[10, 20, 50, 100]"
-      layout="total, sizes, prev, pager, next"
-      style="margin-top: 12px"
-      @current-change="load"
-      @size-change="() => { query.page = 1; load() }"
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="query.page"
+        v-model:page-size="query.page_size"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next"
+        @current-change="load"
+        @size-change="() => { query.page = 1; load() }"
+      />
+    </div>
+
+    <CrmColumnSettingsDialog
+      v-model:visible="colDialog"
+      v-model:columns="columnDraft"
+      @save="() => { saveColumnSettings(); ElMessage.success('列设置已保存') }"
     />
-
-    <el-dialog v-model="colDialog" title="列设置" width="360px">
-      <div v-for="c in ALL_COLS" :key="c.key" class="col-row">
-        <el-checkbox v-model="colDraft[c.key]" :disabled="c.locked">{{ c.label }}</el-checkbox>
-        <span v-if="c.locked" class="locked">锁定</span>
-      </div>
-      <template #footer>
-        <el-button @click="colDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveColSettings">保存</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="exportDialog" title="导出任务" width="420px">
-      <el-form v-if="exportTask" label-width="100px">
-        <el-form-item label="范围">{{ exportScope }}</el-form-item>
-        <el-form-item label="条数">{{ exportTask.row_count ?? 0 }} 条</el-form-item>
-        <el-form-item label="状态">{{ exportTask.status === 'done' ? '已完成' : (exportTask.status || '—') }}</el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button type="primary" :disabled="exportTask?.status !== 'done'" @click="downloadExportFile">
-          下载
-        </el-button>
-        <el-button @click="exportDialog = false">关闭</el-button>
-      </template>
-    </el-dialog>
 
     <!-- A02-A 提交审核 -->
     <el-dialog

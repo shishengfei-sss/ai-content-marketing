@@ -4,14 +4,23 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.shop_platform import MpStorefrontResponse
+from app.schemas.shop_platform import MpStoreResolveOut, MpStorefrontResponse
 from app.services.shop import storefront_service
 
 router = APIRouter(tags=["mp-shop-storefront"])
+
+
+@router.get("/store/resolve", response_model=MpStoreResolveOut)
+def resolve_store(
+    tenant_id: UUID = Query(..., description="租户 ID"),
+    db: Session = Depends(get_db),
+):
+    return storefront_service.resolve_shop_brief(db, tenant_id)
 
 
 @router.get("/store", response_model=MpStorefrontResponse)
@@ -33,3 +42,21 @@ def get_store(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/store/covers/{file_id}")
+def get_store_cover(
+    file_id: str,
+    shop_id: UUID = Query(..., description="店铺 ID"),
+    db: Session = Depends(get_db),
+):
+    path, filename = storefront_service.stream_public_cover(db, shop_id, file_id)
+    ext = filename.lower().split(".")[-1] if "." in filename else ""
+    media = {
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "webp": "image/webp",
+        "gif": "image/gif",
+    }.get(ext, "application/octet-stream")
+    return FileResponse(path, filename=filename, media_type=media)

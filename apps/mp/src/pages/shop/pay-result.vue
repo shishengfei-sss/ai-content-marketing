@@ -65,28 +65,29 @@ onLoad((q) => {
 <style scoped>
 .page {
   min-height: 100vh;
-  background: #fff;
-  padding: 48px 24px;
+  background: linear-gradient(180deg, #e8f3ff 0%, #f3f5f9 42%, #f3f5f9 100%);
+  padding: 56px 24px 40px;
   text-align: center;
 }
 .icon {
-  width: 72px;
-  height: 72px;
+  width: 80px;
+  height: 80px;
   margin: 0 auto 16px;
   border-radius: 50%;
-  background: #f1f5f9;
+  background: #fff;
   color: #94a3b8;
   font-size: 36px;
-  line-height: 72px;
+  line-height: 80px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
 }
 .icon.ok {
-  background: #f6ffed;
-  color: #52c41a;
+  background: linear-gradient(135deg, #52c41a, #73d13d);
+  color: #fff;
 }
 .title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #1e293b;
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
 }
 .sub {
   margin-top: 8px;
@@ -94,7 +95,7 @@ onLoad((q) => {
   color: #64748b;
 }
 .actions {
-  margin-top: 32px;
+  margin-top: 36px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -105,13 +106,14 @@ onLoad((q) => {
   line-height: 44px;
   border-radius: 22px;
   font-size: 15px;
+  font-weight: 700;
 }
 .primary {
   background: #1677ff;
   color: #fff;
 }
 .ghost {
-  background: #f1f5f9;
+  background: #fff;
   color: #334155;
 }
 </style>

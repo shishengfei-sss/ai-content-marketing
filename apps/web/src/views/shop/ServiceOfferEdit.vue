@@ -9,6 +9,8 @@ import { ElMessage } from 'element-plus'
 import api from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { hasPermission } from '../../config/permissions'
+import CrmColumnSettingsDialog from '../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../composables/useListColumnSettings'
 
 const route = useRoute()
 const router = useRouter()
@@ -45,23 +47,20 @@ const BOOKING_SOURCE = {
 const COL_STORAGE = 'shop.a07.slots'
 const ALL_COLS = [
   { key: 'start_at', label: '开始', locked: true, defaultOn: true },
-  { key: 'end_at', label: '结束', locked: true, defaultOn: true },
-  { key: 'capacity', label: '容量', locked: true, defaultOn: true },
-  { key: 'booked_count', label: '已约', locked: true, defaultOn: true },
-  { key: 'status', label: '状态', locked: true, defaultOn: true },
+  { key: 'end_at', label: '结束', defaultOn: true },
+  { key: 'capacity', label: '容量', defaultOn: true },
+  { key: 'booked_count', label: '已约', defaultOn: true },
+  { key: 'status', label: '状态', defaultOn: true },
   { key: 'ops', label: '操作', locked: true, defaultOn: true },
 ]
-function loadColPrefs() {
-  try {
-    const raw = localStorage.getItem(COL_STORAGE)
-    if (raw) return JSON.parse(raw)
-  } catch { /* ignore */ }
-  return Object.fromEntries(ALL_COLS.map((c) => [c.key, c.defaultOn]))
-}
-const colVisible = reactive(loadColPrefs())
-const colDialog = ref(false)
-const colDraft = reactive({ ...colVisible })
-const visibleCols = computed(() => ALL_COLS.filter((c) => colVisible[c.key] || c.locked))
+const {
+  visibleKeys,
+  columnDialogVisible: colDialog,
+  columnDraft,
+  openColumnSettings,
+  saveColumnSettings,
+  isColVisible,
+} = useListColumnSettings(ALL_COLS, COL_STORAGE)
 
 const batchVisible = ref(false)
 const batchBusy = ref(false)
@@ -167,13 +166,42 @@ function openBatch() {
   batchVisible.value = true
 }
 
+function defaultNextStart() {
+  const candidates = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '19:00']
+  const used = new Set(batch.windows.map((w) => w.start).filter(Boolean))
+  const free = candidates.find((t) => !used.has(t))
+  if (free) return free
+  const last = batch.windows[batch.windows.length - 1]
+  if (last?.start) return addMinutes(last.start, form.duration_minutes)
+  return '10:00'
+}
+
 function addWindow(start) {
-  if (batch.windows.some((w) => w.start === start)) return
-  batch.windows.push({ start, end: addMinutes(start, form.duration_minutes) })
+  const s = (start || defaultNextStart()).trim()
+  if (!s) {
+    ElMessage.warning('请选择开始时间')
+    return
+  }
+  if (batch.windows.some((w) => w.start === s)) {
+    ElMessage.warning('该开始时间已在列表中')
+    return
+  }
+  batch.windows.push({ start: s, end: addMinutes(s, form.duration_minutes) })
+  preview.value = null
+}
+
+function removeWindow(index) {
+  if (batch.windows.length <= 1) {
+    ElMessage.warning('至少保留 1 个时段')
+    return
+  }
+  batch.windows.splice(index, 1)
+  preview.value = null
 }
 
 function onStartChange(w) {
   w.end = addMinutes(w.start, form.duration_minutes)
+  preview.value = null
 }
 
 function rangeDays() {
@@ -276,12 +304,6 @@ async function openRoster(row) {
   }
 }
 
-function saveCols() {
-  Object.assign(colVisible, colDraft)
-  localStorage.setItem(COL_STORAGE, JSON.stringify(colVisible))
-  colDialog.value = false
-}
-
 watch([slotStatus, slotView], () => {
   if (form.mode === 'booking') loadSlots()
 })
@@ -339,23 +361,24 @@ onMounted(load)
           </el-select>
         </div>
         <div class="right">
-          <el-button @click="colDialog = true">列设置</el-button>
+          <el-button @click="openColumnSettings">列设置</el-button>
           <el-button v-if="!readonly" type="primary" @click="openBatch">批量生成</el-button>
         </div>
       </div>
       <el-table :data="slots" border stripe size="small" style="margin-top: 8px">
-        <el-table-column v-if="visibleCols.some((c) => c.key === 'start_at')" label="开始" min-width="140">
+        <template v-for="colKey in visibleKeys" :key="colKey">
+        <el-table-column v-if="colKey === 'start_at'" label="开始" min-width="140">
           <template #default="{ row }">{{ fmtDt(row.start_at) }}</template>
         </el-table-column>
-        <el-table-column v-if="visibleCols.some((c) => c.key === 'end_at')" label="结束" width="100">
+        <el-table-column v-if="colKey === 'end_at'" label="结束" width="100">
           <template #default="{ row }">{{ fmtDt(row.end_at).slice(6) }}</template>
         </el-table-column>
-        <el-table-column v-if="visibleCols.some((c) => c.key === 'capacity')" prop="capacity" label="容量" width="80" />
-        <el-table-column v-if="visibleCols.some((c) => c.key === 'booked_count')" prop="booked_count" label="已约" width="80" />
-        <el-table-column v-if="visibleCols.some((c) => c.key === 'status')" label="状态" width="90">
+        <el-table-column v-if="colKey === 'capacity'" prop="capacity" label="容量" width="80" />
+        <el-table-column v-if="colKey === 'booked_count'" prop="booked_count" label="已约" width="80" />
+        <el-table-column v-if="colKey === 'status'" label="状态" width="90">
           <template #default="{ row }">{{ SLOT_STATUS[row.status] || row.status }}</template>
         </el-table-column>
-        <el-table-column v-if="visibleCols.some((c) => c.key === 'ops')" label="操作" width="180">
+        <el-table-column v-if="colKey === 'ops'" label="操作" width="180">
           <template #default="{ row }">
             <el-button link type="primary" @click="openRoster(row)">预约名单</el-button>
             <el-button
@@ -368,6 +391,7 @@ onMounted(load)
             </el-button>
           </template>
         </el-table-column>
+        </template>
       </el-table>
     </template>
     <div v-else class="times-hint">次数卡 · 无「可预约时段」区块</div>
@@ -390,10 +414,10 @@ onMounted(load)
             <el-time-select v-model="w.start" start="08:00" step="00:30" end="22:00" placeholder="开始" @change="onStartChange(w)" />
             <span>—</span>
             <el-time-select v-model="w.end" start="08:00" step="00:30" end="23:00" placeholder="结束" />
-            <el-button link type="danger" @click="batch.windows.splice(i, 1)">删除</el-button>
+            <el-button link type="danger" @click="removeWindow(i)">删除</el-button>
           </div>
           <div style="margin-top: 8px">
-            <el-button size="small" @click="addWindow('10:00')">+ 添加时段</el-button>
+            <el-button size="small" @click="addWindow()">+ 添加时段</el-button>
             <span class="hint" style="margin: 0 6px">快捷：</span>
             <el-button size="small" @click="addWindow('10:00')">上午 10:00</el-button>
             <el-button size="small" @click="addWindow('14:00')">下午 14:00</el-button>
@@ -463,21 +487,12 @@ onMounted(load)
       <p class="hint">名单只读，无商家代取消、无到店标记</p>
     </el-drawer>
 
-    <el-dialog v-model="colDialog" title="列设置" width="360px">
-      <el-checkbox
-        v-for="c in ALL_COLS"
-        :key="c.key"
-        v-model="colDraft[c.key]"
-        :disabled="c.locked"
-        style="display: block; margin: 6px 0"
-      >
-        {{ c.label }}
-      </el-checkbox>
-      <template #footer>
-        <el-button @click="colDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveCols">确定</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="colDialog"
+      v-model:columns="columnDraft"
+      @save="() => { saveColumnSettings(); ElMessage.success('列设置已保存') }"
+    />
+
   </div>
 </template>
 

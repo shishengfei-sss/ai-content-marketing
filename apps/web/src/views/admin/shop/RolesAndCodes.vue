@@ -9,6 +9,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi } from '../../../api/client'
+import CrmColumnSettingsDialog from '../../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../../composables/useListColumnSettings'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +22,7 @@ const roles = ref([])
 const permDrawer = ref(false)
 const permRole = ref(null)
 
+const CODE_COL_STORAGE = 'shop-p08-code-columns'
 const CODE_COLS = [
   { key: 'entity_label', label: '实体', locked: true, defaultVisible: true },
   { key: 'entity_type', label: 'entity_type', locked: true, defaultVisible: true },
@@ -32,9 +35,13 @@ const CODE_COLS = [
   { key: 'preview', label: '预览', defaultVisible: true },
   { key: 'ops', label: '操作', locked: true, defaultVisible: true },
 ]
-const visibleCols = ref(CODE_COLS.filter((c) => c.defaultVisible).map((c) => c.key))
-const colDialog = ref(false)
-const colDraft = ref([])
+const {
+  visibleKeys: visibleCols,
+  columnDialogVisible: colDialog,
+  columnDraft: colDraft,
+  openColumnSettings: openCol,
+  saveColumnSettings: saveCol,
+} = useListColumnSettings(CODE_COLS, CODE_COL_STORAGE)
 const page = ref(1)
 const pageSize = ref(20)
 
@@ -58,19 +65,6 @@ const pagedRules = computed(() => {
   return rules.value.slice(start, start + pageSize.value)
 })
 
-function isCol(key) {
-  return visibleCols.value.includes(key)
-}
-function openCol() {
-  colDraft.value = [...visibleCols.value]
-  colDialog.value = true
-}
-function saveCol() {
-  const locked = CODE_COLS.filter((c) => c.locked).map((c) => c.key)
-  visibleCols.value = [...new Set([...locked, ...colDraft.value])]
-  colDialog.value = false
-  ElMessage.success('列设置已保存')
-}
 function downloadCsv(filename, header, rows) {
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const blob = new Blob(['\ufeff' + [header.map(esc).join(','), ...rows.map((r) => r.map(esc).join(','))].join('\n')], {
@@ -296,16 +290,17 @@ onMounted(() => {
           <el-button @click="exportList">导出</el-button>
         </div>
         <el-table :data="pagedRules" border size="small">
-          <el-table-column v-if="isCol('entity_label')" prop="entity_label" label="实体" width="110" />
-          <el-table-column v-if="isCol('entity_type')" prop="entity_type" label="entity_type" min-width="150">
+          <template v-for="colKey in visibleCols" :key="colKey">
+          <el-table-column v-if="colKey === 'entity_label'" prop="entity_label" label="实体" width="110" />
+          <el-table-column v-if="colKey === 'entity_type'" prop="entity_type" label="entity_type" min-width="150">
             <template #default="{ row }"><code>{{ row.entity_type }}</code></template>
           </el-table-column>
-          <el-table-column v-if="isCol('prefix')" label="前缀" width="100">
+          <el-table-column v-if="colKey === 'prefix'" label="前缀" width="100">
             <template #default="{ row }">
               <el-input v-model="row.prefix" size="small" @change="touchPreview(row)" />
             </template>
           </el-table-column>
-          <el-table-column v-if="isCol('date_format')" label="日期段" width="130">
+          <el-table-column v-if="colKey === 'date_format'" label="日期段" width="130">
             <template #default="{ row }">
               <el-select v-model="row.date_format" size="small" style="width: 100%" @change="touchPreview(row)">
                 <el-option
@@ -317,12 +312,12 @@ onMounted(() => {
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column v-if="isCol('seq_width')" label="序号宽度" width="90">
+          <el-table-column v-if="colKey === 'seq_width'" label="序号宽度" width="90">
             <template #default="{ row }">
               <el-input-number v-model="row.seq_width" :min="1" :max="8" size="small" controls-position="right" @change="touchPreview(row)" />
             </template>
           </el-table-column>
-          <el-table-column v-if="isCol('reset_period')" label="重置周期" width="120">
+          <el-table-column v-if="colKey === 'reset_period'" label="重置周期" width="120">
             <template #default="{ row }">
               <el-select v-model="row.reset_period" size="small" style="width: 100%" @change="touchPreview(row)">
                 <el-option
@@ -334,7 +329,7 @@ onMounted(() => {
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column v-if="isCol('inherit_parent_code')" label="继承父 code" width="110" align="center">
+          <el-table-column v-if="colKey === 'inherit_parent_code'" label="继承父 code" width="110" align="center">
             <template #default="{ row }">
               <el-checkbox
                 v-if="row.entity_type === 'shop_category'"
@@ -343,15 +338,15 @@ onMounted(() => {
               <span v-else>—</span>
             </template>
           </el-table-column>
-          <el-table-column v-if="isCol('enabled')" label="启用" width="70" align="center">
+          <el-table-column v-if="colKey === 'enabled'" label="启用" width="70" align="center">
             <template #default="{ row }">
               <el-checkbox v-model="row.enabled" />
             </template>
           </el-table-column>
-          <el-table-column v-if="isCol('preview')" label="预览" min-width="140">
+          <el-table-column v-if="colKey === 'preview'" label="预览" min-width="140">
             <template #default="{ row }"><code>{{ row.preview }}</code></template>
           </el-table-column>
-          <el-table-column v-if="isCol('ops')" label="操作" width="150" fixed="right">
+          <el-table-column v-if="colKey === 'ops'" label="操作" width="150" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="refreshPreview(row)">刷新预览</el-button>
               <el-button
@@ -364,6 +359,7 @@ onMounted(() => {
               </el-button>
             </template>
           </el-table-column>
+          </template>
         </el-table>
         <div class="ft">
           <el-button @click="resetDefaults">恢复全部默认</el-button>
@@ -394,17 +390,11 @@ onMounted(() => {
       </template>
     </el-drawer>
 
-    <el-dialog v-model="colDialog" title="列设置" width="360px">
-      <el-checkbox-group v-model="colDraft">
-        <div v-for="c in CODE_COLS" :key="c.key" class="col-row">
-          <el-checkbox :label="c.key" :disabled="c.locked">{{ c.label }}</el-checkbox>
-        </div>
-      </el-checkbox-group>
-      <template #footer>
-        <el-button @click="colDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveCol">保存</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="colDialog"
+      v-model:columns="colDraft"
+      @save="saveCol"
+    />
   </div>
 </template>
 

@@ -13,6 +13,14 @@ from app.services.shop import channel_service
 router = APIRouter(prefix="/claim", tags=["mp-shop-claim"])
 
 
+@router.get("/pending", response_model=ClaimInfoOut)
+def get_pending_claim(
+    bctx: BuyerContext = Depends(get_buyer_context),
+    db: Session = Depends(get_db),
+):
+    return channel_service.get_pending_claim_for_buyer(db, bctx.buyer)
+
+
 @router.get("/{token}", response_model=ClaimInfoOut)
 def get_claim(token: str, db: Session = Depends(get_db)):
     return channel_service.get_claim_info(db, token)

@@ -144,9 +144,8 @@ def main() -> int:
             "VP08-UI-AU 账号管理商城列",
             _page_has(
                 USERS,
-                "获客商城角色",
+                "账号角色",
                 "编辑商城权限",
-                "平台角色",
                 "data-testid=\"shop-edit-shop-perms\"",
                 "变更记录",
                 "data-testid=\"shop-perm-audit-timeline\"",

@@ -35,6 +35,14 @@ const badgeType = computed(() => {
   return 'info'
 })
 
+const webhookSecretRequired = computed(
+  () => !!(data.value?.douyin_shop_id && !data.value?.has_webhook_secret)
+)
+
+const bindIncomplete = computed(
+  () => !!(data.value?.douyin_shop_id && !data.value?.douyin_configured)
+)
+
 function applyData(res) {
   data.value = res
   form.deal_link = res.deal_link || '1'
@@ -61,6 +69,10 @@ async function bindShop() {
     ElMessage.warning('请填写外部店铺 ID')
     return
   }
+  if (webhookSecretRequired.value && !form.douyin_webhook_secret.trim()) {
+    ElMessage.warning('首次绑店须填写 Webhook 密钥，否则商品映射页无法新建映射')
+    return
+  }
   binding.value = true
   try {
     const body = {
@@ -72,7 +84,11 @@ async function bindShop() {
     }
     const { data: res } = await api.post('/api/v1/shop/channel-settings/bind', body)
     applyData(res)
-    ElMessage.success('绑定状态已更新为可用')
+    if (res.douyin_configured) {
+      ElMessage.success('绑店完成，可前往商品映射新建映射')
+    } else {
+      ElMessage.warning('店铺 ID 已保存，还需填写 Webhook 密钥后才能新建商品映射')
+    }
   } catch (e) {
     ElMessage.error(e.message || '保存绑店失败')
   } finally {
@@ -162,6 +178,20 @@ onMounted(load)
       style="margin-bottom: 16px"
     />
 
+    <el-alert
+      v-if="bindIncomplete"
+      type="error"
+      :closable="false"
+      show-icon
+      title="绑店未完成"
+      :description="
+        webhookSecretRequired
+          ? '外部店铺 ID 已保存，但 Webhook 密钥未配置。请在下方填写密钥后再次点击「保存绑店」，商品映射页才会开放「新建映射」。'
+          : '对接配置不完整，商品映射页「新建映射」仍不可用。'
+      "
+      style="margin-bottom: 16px"
+    />
+
     <section class="card-block">
       <h4>步骤 1–2 · 选链路 / 选路径</h4>
       <p class="sec-title">成交链路 · 买家在哪付钱</p>
@@ -206,13 +236,17 @@ onMounted(load)
             placeholder="请填写外部店铺 ID"
           />
         </el-form-item>
-        <el-form-item label="Webhook 密钥">
+        <el-form-item :label="webhookSecretRequired ? 'Webhook 密钥（必填）' : 'Webhook 密钥'">
           <el-input
             v-model="form.douyin_webhook_secret"
             type="password"
             show-password
             :disabled="!canWrite"
-            placeholder="留空则不修改已有密钥"
+            :placeholder="
+              webhookSecretRequired
+                ? '首次绑店必填，保存后商品映射才可新建'
+                : '留空则不修改已有密钥'
+            "
           />
         </el-form-item>
         <el-form-item label="绑定状态">

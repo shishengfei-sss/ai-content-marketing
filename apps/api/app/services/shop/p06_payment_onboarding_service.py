@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import csv
 import io
+import json
+import logging
 import re
 import uuid
 from typing import Any
@@ -29,6 +31,8 @@ from app.services.shop.a15_payment_onboarding_service import (
     _now,
 )
 
+logger = logging.getLogger(__name__)
+
 SUB_MCH_RE = re.compile(r"^\d{8,12}$")
 ENTITY_LABELS = {
     "personal": "个人",
@@ -37,13 +41,34 @@ ENTITY_LABELS = {
 }
 
 
+def _json_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return dict(parsed) if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _iso(value: Any) -> str | None:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    text = str(value).strip()
+    return text or None
+
+
 def _meta(row: ShopPaymentOnboarding) -> dict[str, Any]:
-    snap = dict(row.entity_snapshot_json or {})
-    return dict(snap.get("_meta") or {})
+    snap = _json_dict(row.entity_snapshot_json)
+    return _json_dict(snap.get("_meta"))
 
 
 def _write_meta(row: ShopPaymentOnboarding, meta: dict[str, Any]) -> None:
-    snap = dict(row.entity_snapshot_json or {})
+    snap = _json_dict(row.entity_snapshot_json)
     snap["_meta"] = meta
     row.entity_snapshot_json = snap
 
@@ -59,7 +84,7 @@ def _append_event(row: ShopPaymentOnboarding, event: str) -> None:
 
 def _public_entity(row: ShopPaymentOnboarding | None, merchant: ShopMerchantAccount) -> dict[str, Any]:
     if row and row.entity_snapshot_json:
-        ent = dict(row.entity_snapshot_json)
+        ent = _json_dict(row.entity_snapshot_json)
         ent.pop("_meta", None)
         if ent.get("legal_name") or ent.get("entity_type"):
             return ent
@@ -104,8 +129,8 @@ def _item(
         "settlement_account_masked": _mask_account(row.settlement_account) if row else None,
         "settlement_account": (row.settlement_account if reveal and row else None),
         "settlement_account_name": row.settlement_account_name if row else None,
-        "submitted_at": row.submitted_at.isoformat() if row and row.submitted_at else None,
-        "approved_at": row.approved_at.isoformat() if row and row.approved_at else None,
+        "submitted_at": _iso(row.submitted_at) if row else None,
+        "approved_at": _iso(row.approved_at) if row else None,
         "account_manager_user_id": str(merchant.account_manager_user_id)
         if merchant.account_manager_user_id
         else None,
@@ -243,7 +268,41 @@ def list_onboardings(
             manager = (
                 db.query(User).filter(uuid_eq(User.id, m.account_manager_user_id)).first()
             )
-        items.append(_item(m, o, t, manager))
+        try:
+            items.append(_item(m, o, t, manager))
+        except Exception:
+            logger.exception("payment onboarding list item failed tenant=%s", m.tenant_id)
+            items.append(
+                {
+                    "tenant_id": str(m.tenant_id),
+                    "merchant_id": str(m.id),
+                    "merchant_name": m.display_name or m.legal_name or (t.name if t else ""),
+                    "tenant_name": t.name if t else "",
+                    "entity_type": m.entity_type,
+                    "entity_type_label": ENTITY_LABELS.get(m.entity_type, m.entity_type),
+                    "onboarding_status": STATUS_NOT_SUBMITTED,
+                    "onboarding_status_label": STATUS_LABELS.get(STATUS_NOT_SUBMITTED, STATUS_NOT_SUBMITTED),
+                    "wx_sub_mch_id_masked": None,
+                    "settlement_bank": None,
+                    "settlement_account_masked": None,
+                    "settlement_account": None,
+                    "settlement_account_name": None,
+                    "submitted_at": None,
+                    "approved_at": None,
+                    "account_manager_user_id": str(m.account_manager_user_id)
+                    if m.account_manager_user_id
+                    else None,
+                    "account_manager_name": (manager.display_name or manager.phone) if manager else None,
+                    "reject_reason": None,
+                    "remark": None,
+                    "mch_name": None,
+                    "wx_apply_no": None,
+                    "last_refresh_at": None,
+                    "timeline": [],
+                    "entity": {},
+                    "actions": ["view_materials"],
+                }
+            )
     return {
         "items": items,
         "total": total,
@@ -278,7 +337,7 @@ def get_detail(db: Session, tenant_id: UUID, *, reveal: bool = False) -> dict[st
             .first()
         )
         if app_row:
-            files = dict(app_row.qualification_files or {})
+            files = _json_dict(app_row.qualification_files)
     item["qualification_files"] = files
     return item
 

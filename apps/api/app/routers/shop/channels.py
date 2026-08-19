@@ -13,6 +13,8 @@ from app.database import get_db
 from app.dependencies import TenantContext
 from app.schemas.shop_platform import (
     ChannelAuditListResponse,
+    ChannelDemoOrderOut,
+    ChannelDemoOrderRequest,
     ChannelExternalAuditRequest,
     ChannelMappingCreateRequest,
     ChannelMappingExportRequest,
@@ -289,6 +291,18 @@ def list_mapping_logs(
         db, ctx, mapping_id, category=category or "all"
     )
     return ChannelAuditListResponse(items=items, total=len(items))
+
+
+@router.post("/{mapping_id}/demo-order", response_model=ChannelDemoOrderOut)
+def demo_simulate_order(
+    mapping_id: UUID,
+    body: ChannelDemoOrderRequest | None = None,
+    ctx: TenantContext = Depends(require_permission("shop.channel.map")),
+    db: Session = Depends(get_db),
+):
+    """本地演示：模拟抖店买家付款 → 生成待领权订单与领权链接。"""
+    mobile = body.buyer_mobile if body else None
+    return channel_service.simulate_demo_douyin_order(db, ctx, mapping_id, buyer_mobile=mobile)
 
 
 @router.delete("/{mapping_id}")

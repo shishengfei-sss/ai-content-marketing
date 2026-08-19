@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     SMS_CODE_EXPIRE_SEC: int = 300
     SMS_SEND_INTERVAL_SEC: int = 60
 
+    # 公域映射：Phase1 本地/联调提交后自动模拟外部审核通过
+    SHOP_CHANNEL_MOCK_AUDIT: str = "1"
+    # 本地演示：模拟抖店单后拼领权 H5 链接
+    SHOP_H5_DEMO_BASE: str = "http://localhost:5174"
+
     # 微信支付：stub | production（真机依赖 B-M3）
     WECHAT_PAY_MODE: str = "stub"
     WECHAT_PAY_MOCK: str = "1"

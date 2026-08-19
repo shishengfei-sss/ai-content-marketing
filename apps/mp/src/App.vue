@@ -7,6 +7,8 @@ export default {
 </script>
 
 <style>
+@import './styles/shop-buyer.css';
+
 html,
 body,
 #app {

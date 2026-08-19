@@ -9,8 +9,11 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '../../../api/client'
+import CrmColumnSettingsDialog from '../../../components/crm/CrmColumnSettingsDialog.vue'
+import { useListColumnSettings } from '../../../composables/useListColumnSettings'
 import { useAuthStore } from '../../../stores/auth'
 import { formatDateTime } from '../../../utils/datetime'
+import { SHOP_EXPORT_COLUMN_MODE_LABELS } from '../../../utils/shopExport'
 
 const COLUMN_KEY = 'shop-moderation-list-columns'
 const ALL_COLUMNS = [
@@ -30,7 +33,7 @@ const loading = ref(false)
 const exporting = ref(false)
 const exportDialog = ref(false)
 const exportTask = ref(null)
-const exportScope = ref('当前筛选')
+const exportScope = ref(SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns)
 const items = ref([])
 const total = ref(0)
 const stats = ref({})
@@ -44,9 +47,14 @@ const filterStatus = ref('')
 const filterSource = ref('')
 const sortBy = ref('reported_at')
 const sortDir = ref('desc')
-const columnDialogVisible = ref(false)
-const columnDraft = ref([])
-const visibleKeys = ref(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key))
+const {
+  visibleKeys,
+  columnDialogVisible,
+  columnDraft,
+  openColumnSettings,
+  saveColumnSettings,
+  isColVisible,
+} = useListColumnSettings(ALL_COLUMNS, COLUMN_KEY)
 
 const detail = ref(null)
 const detailVisible = ref(false)
@@ -76,10 +84,6 @@ const VIEW_OPTIONS = [
   { value: 'processing', label: '处理中' },
   { value: 'closed', label: '已结案' },
 ]
-
-function isColVisible(key) {
-  return visibleKeys.value.includes(key)
-}
 
 function sortIcon(prop) {
   if (sortBy.value !== prop) return '↕'
@@ -318,7 +322,7 @@ async function exportList(mode) {
     }
     const { data } = await adminApi.createShopModerationExport(body)
     exportTask.value = data
-    exportScope.value = mode === 'columns' ? '列配置' : '当前筛选'
+    exportScope.value = mode === 'columns' ? SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns : SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns
     exportDialog.value = true
   } catch (e) {
     ElMessage.error(e.message || '导出失败')
@@ -337,20 +341,6 @@ async function downloadExportFile() {
   }
 }
 
-function openColumnDialog() {
-  columnDraft.value = ALL_COLUMNS.map((c) => ({
-    ...c,
-    visible: visibleKeys.value.includes(c.key),
-  }))
-  columnDialogVisible.value = true
-}
-
-function saveColumns() {
-  visibleKeys.value = columnDraft.value.filter((c) => c.visible || c.locked).map((c) => c.key)
-  localStorage.setItem(COLUMN_KEY, JSON.stringify(visibleKeys.value))
-  columnDialogVisible.value = false
-}
-
 function showForceOff(row) {
   return row.status === 'pending' && row.is_product_case && canForceOff.value
 }
@@ -364,12 +354,6 @@ function showClose(row) {
 }
 
 onMounted(() => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(COLUMN_KEY) || 'null')
-    if (Array.isArray(saved) && saved.length) visibleKeys.value = saved
-  } catch {
-    /* ignore */
-  }
   const st = String(route.query.status || '')
   const view = String(route.query.view || '')
   if (view === 'open' || view === 'pending' || view === 'processing' || view === 'closed' || view === 'closed_month') {
@@ -449,12 +433,12 @@ watch(pageSize, () => {
           <el-button :loading="exporting">导出 ▾</el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="current">当前筛选</el-dropdown-item>
-              <el-dropdown-item command="columns">列配置</el-dropdown-item>
+              <el-dropdown-item command="current">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.allColumns }}</el-dropdown-item>
+              <el-dropdown-item command="columns">{{ SHOP_EXPORT_COLUMN_MODE_LABELS.visibleColumns }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button @click="openColumnDialog">列设置</el-button>
+        <el-button @click="openColumnSettings">列设置</el-button>
       </div>
     </div>
     <div v-if="advExpanded" class="adv-row">
@@ -468,29 +452,30 @@ watch(pageSize, () => {
     </div>
 
     <el-table v-loading="loading" :data="items" border stripe size="small">
-      <el-table-column v-if="isColVisible('case_type')" label="类型" width="120">
+      <template v-for="colKey in visibleKeys" :key="colKey">
+      <el-table-column v-if="colKey === 'case_type'" label="类型" width="120">
         <template #default="{ row }">{{ row.case_type_label }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('object_ref')" prop="object_ref" label="对象" min-width="160" />
-      <el-table-column v-if="isColVisible('merchant_name')" prop="merchant_name" label="商家" min-width="120" />
-      <el-table-column v-if="isColVisible('reported_at')" min-width="160">
+      <el-table-column v-if="colKey === 'object_ref'" prop="object_ref" label="对象" min-width="160" />
+      <el-table-column v-if="colKey === 'merchant_name'" prop="merchant_name" label="商家" min-width="120" />
+      <el-table-column v-if="colKey === 'reported_at'" min-width="160">
         <template #header>
           <span class="th-sort" @click="toggleSort('reported_at')">上报时间 {{ sortIcon('reported_at') }}</span>
         </template>
         <template #default="{ row }">{{ formatDateTime(row.reported_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('assignee_name')" label="处理人" width="110">
+      <el-table-column v-if="colKey === 'assignee_name'" label="处理人" width="110">
         <template #default="{ row }">{{ row.assignee_name || '—' }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('status')" label="状态" width="100">
+      <el-table-column v-if="colKey === 'status'" label="状态" width="100">
         <template #default="{ row }">
           <el-tag size="small" :type="STATUS_TAG[row.status] || 'info'">{{ row.status_label }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('closed_at')" label="结案时间" width="160">
+      <el-table-column v-if="colKey === 'closed_at'" label="结案时间" width="160">
         <template #default="{ row }">{{ formatDateTime(row.closed_at) }}</template>
       </el-table-column>
-      <el-table-column v-if="isColVisible('ops')" label="操作" width="180" fixed="right">
+      <el-table-column v-if="colKey === 'ops'" label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button v-if="showForceOff(row)" link type="primary" @click="openOff(row)">下架</el-button>
           <el-button v-if="showTake(row)" link type="primary" :disabled="submitting" @click="submitTake(row)">接单</el-button>
@@ -498,16 +483,16 @@ watch(pageSize, () => {
           <el-button link @click="openDetail(row)">查看</el-button>
         </template>
       </el-table-column>
+      </template>
     </el-table>
 
     <div class="pager">
-      <span>共 {{ total }} 条</span>
       <el-pagination
         v-model:current-page="page"
         v-model:page-size="pageSize"
         :total="total"
         :page-sizes="[10, 20, 50, 100]"
-        layout="sizes, prev, pager, next"
+        layout="total, sizes, prev, pager, next"
         @current-change="load"
       />
     </div>
@@ -605,15 +590,11 @@ watch(pageSize, () => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="columnDialogVisible" title="列设置" width="360px">
-      <div v-for="col in columnDraft" :key="col.key" class="column-item">
-        <el-checkbox v-model="col.visible" :disabled="col.locked">{{ col.label }}</el-checkbox>
-      </div>
-      <template #footer>
-        <el-button @click="columnDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveColumns">确定</el-button>
-      </template>
-    </el-dialog>
+    <CrmColumnSettingsDialog
+      v-model:visible="columnDialogVisible"
+      v-model:columns="columnDraft"
+      @save="saveColumnSettings"
+    />
 
     <el-dialog v-model="exportDialog" title="导出任务" width="420px">
       <el-form v-if="exportTask" label-width="100px">
@@ -649,7 +630,7 @@ watch(pageSize, () => {
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
 .toolbar-right { margin-left: auto; display: flex; gap: 8px; }
 .adv-row { margin: -4px 0 12px; }
-.pager { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+.pager { margin-top: 12px; }
 .th-sort { cursor: pointer; user-select: none; }
 .detail-hd { margin-bottom: 8px; }
 .detail-ops { display: flex; gap: 8px; margin-bottom: 12px; }

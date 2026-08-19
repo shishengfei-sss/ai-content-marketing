@@ -29,6 +29,7 @@ from app.models.shop import (
     ShopStore,
     ShopWebhookEvent,
 )
+from app.config import settings
 from app.schemas.shop_platform import (
     ChannelAuditLogOut,
     ChannelMappingCreateRequest,
@@ -45,9 +46,18 @@ from app.schemas.shop_platform import (
     ShopExportTaskOut,
 )
 from app.services.shop.order_service import _activate_entitlement_for_order, _gen_order_no, _now
+from app.services.shop.buyer_service import is_claim_stub_openid
 
 
 COMBO_CHANNEL = {"1A": "douyin", "1B": "douyin", "2A": "course_lib", "2B": "course_lib"}
+
+
+def _channel_mock_audit_enabled() -> bool:
+    return str(getattr(settings, "SHOP_CHANNEL_MOCK_AUDIT", "1")).lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
 
 def stub_douyin_sign(payload: dict, secret: str) -> str:
@@ -214,6 +224,7 @@ def settings_out(db: Session, tenant_id: UUID) -> ChannelSettingOut:
         config_state=state,
         config_state_label=state_label,
         combo_label=combo_label,
+        demo_tools_enabled=_channel_mock_audit_enabled(),
     )
 
 
@@ -544,6 +555,8 @@ def create_mapping(
     )
     db.commit()
     db.refresh(m)
+    if submit_mode == "audit" and _channel_mock_audit_enabled():
+        return apply_external_audit(db, ctx, m.id, result="approved")
     out = _mapping_out(m, product)
     # 列表路径展示：按 combo 末位
     out.path_label = _path_label(body.combo)
@@ -1078,6 +1091,8 @@ def resubmit_mapping(
     )
     db.commit()
     db.refresh(m)
+    if _channel_mock_audit_enabled():
+        return apply_external_audit(db, ctx, mapping_id, result="approved")
     return _mapping_out(m, product)
 
 
@@ -1274,6 +1289,68 @@ def _verify_sign(settings: ShopChannelSetting, payload: dict, sign: str | None) 
     expected = stub_douyin_sign(payload, secret)
     if not sign or not hmac.compare_digest(str(sign), expected):
         raise HTTPException(status_code=400, detail="签名无效")
+
+
+def simulate_demo_douyin_order(
+    db: Session,
+    ctx: TenantContext,
+    mapping_id: UUID,
+    *,
+    buyer_mobile: str | None = None,
+) -> dict:
+    """本地演示：模拟抖店付款 Webhook → 待领权订单 + 领权链接。"""
+    if not _channel_mock_audit_enabled():
+        raise HTTPException(status_code=403, detail="演示工具未开启（SHOP_CHANNEL_MOCK_AUDIT）")
+    m = _get_tenant_mapping(db, ctx, mapping_id)
+    if m.status == "pending":
+        raise HTTPException(status_code=422, detail="外部审核未完成，请先点「通过审核」")
+    if m.status != "mapped":
+        raise HTTPException(status_code=422, detail="仅已挂载商品可模拟下单")
+    product = db.query(ShopProduct).filter(uuid_eq(ShopProduct.id, m.product_id)).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="商品不存在")
+    ch_settings = get_or_create_settings(db, ctx.tenant_id)
+    if not ch_settings.douyin_webhook_secret:
+        raise HTTPException(status_code=422, detail="请先完成公域对接 Webhook 配置")
+    mobile = (buyer_mobile or "13700000001").strip()
+    if len(mobile) != 11:
+        raise HTTPException(status_code=422, detail="buyer_mobile 无效")
+    event_id = f"demo_{uuid.uuid4().hex[:16]}"
+    ext_no = f"DY_DEMO_{uuid.uuid4().hex[:10].upper()}"
+    paid = int(product.price_cents or 0) or 100
+    body = DouyinOrderWebhookRequest(
+        event_id=event_id,
+        tenant_id=ctx.tenant_id,
+        channel_product_id=m.channel_product_id,
+        external_order_no=ext_no,
+        buyer_mobile=mobile,
+        paid_amount_cents=paid,
+        combo=(m.combo or "1A").strip().upper() or "1A",
+    )
+    sign_payload = {
+        "event_id": body.event_id,
+        "external_order_no": body.external_order_no,
+        "channel_product_id": body.channel_product_id,
+        "paid_amount_cents": body.paid_amount_cents,
+    }
+    body.sign = stub_douyin_sign(sign_payload, ch_settings.douyin_webhook_secret)
+    result = handle_douyin_order(db, body)
+    token = result.get("claim_token") or ""
+    from app.services.shop.a15_sms_settings_service import get_claim_landing_base
+
+    base = (
+        get_claim_landing_base(db, ctx.tenant_id) or settings.SHOP_H5_DEMO_BASE or "http://localhost:5174"
+    ).rstrip("/")
+    claim_url = f"{base}/#/pages/shop/claim?token={token}&tenant_id={ctx.tenant_id}"
+    return {
+        **result,
+        "claim_url": claim_url,
+        "orders_path": "/shop/orders",
+        "buyer_mobile": mobile,
+        "external_order_no": ext_no,
+        "product_name": product.name,
+        "message": "已模拟抖店付款，请打开领权链接完成绑手机",
+    }
 
 
 def handle_douyin_order(db: Session, body: DouyinOrderWebhookRequest) -> dict:
@@ -1601,6 +1678,45 @@ def _mask_mobile(mobile: str | None) -> str | None:
     return f"{mobile[:3]}****{mobile[-4:]}"
 
 
+def get_pending_claim_for_buyer(db: Session, buyer: ShopBuyer) -> ClaimInfoOut:
+    """M15 领权兑换：按当前买家手机号找回待领取 token。对照 #m15。"""
+    conds = [uuid_eq(ShopOrder.buyer_id, buyer.id)]
+    if buyer.mobile:
+        conds.extend(
+            [
+                ShopOrder.buyer_mobile_snapshot == buyer.mobile,
+                uuid_eq(ShopOrder.claimed_buyer_id, buyer.id),
+            ]
+        )
+    order = (
+        db.query(ShopOrder)
+        .filter(
+            uuid_eq(ShopOrder.tenant_id, buyer.tenant_id),
+            ShopOrder.status == "claim_pending",
+            ShopOrder.claim_token.isnot(None),
+            or_(*conds),
+        )
+        .order_by(ShopOrder.created_at.desc())
+        .first()
+    )
+    if order and order.claim_token:
+        return get_claim_info(db, order.claim_token)
+    if buyer.mobile:
+        row = (
+            db.query(ShopClaimToken)
+            .filter(
+                uuid_eq(ShopClaimToken.tenant_id, buyer.tenant_id),
+                ShopClaimToken.buyer_mobile == buyer.mobile,
+                ShopClaimToken.status == "pending",
+            )
+            .order_by(ShopClaimToken.created_at.desc())
+            .first()
+        )
+        if row:
+            return get_claim_info(db, row.token)
+    raise HTTPException(status_code=404, detail="暂无待领取权益，请使用短信中的领取链接")
+
+
 def get_claim_info(db: Session, token: str) -> ClaimInfoOut:
     row = db.query(ShopClaimToken).filter(ShopClaimToken.token == token).first()
     if not row:
@@ -1631,6 +1747,7 @@ def get_claim_info(db: Session, token: str) -> ClaimInfoOut:
         token=token,
         status=status,
         tenant_id=row.tenant_id,
+        shop_id=order.shop_id if order else None,
         product_name=product_name,
         mobile_tail=(row.buyer_mobile[-4:] if row.buyer_mobile else None),
         mobile_masked=_mask_mobile(row.buyer_mobile),
@@ -1688,7 +1805,10 @@ def confirm_claim(db: Session, token: str, buyer: ShopBuyer) -> ClaimConfirmResp
     if buyer.mobile and buyer.mobile != row.buyer_mobile:
         raise HTTPException(status_code=409, detail="当前账号已绑定其他手机号")
     if mobile_buyer and mobile_buyer.wx_openid and mobile_buyer.wx_openid != buyer.wx_openid:
-        raise HTTPException(status_code=409, detail="该手机号已绑定其他微信账号")
+        if is_claim_stub_openid(mobile_buyer.wx_openid):
+            mobile_buyer.wx_openid = None
+        else:
+            raise HTTPException(status_code=409, detail="该手机号已绑定其他微信账号")
 
     if mobile_buyer:
         # 先释放手机号唯一约束，再挂到领取者
@@ -1704,6 +1824,9 @@ def confirm_claim(db: Session, token: str, buyer: ShopBuyer) -> ClaimConfirmResp
         mobile_buyer.mobile = None
         db.flush()
         if not mobile_buyer.wx_openid:
+            from app.services.shop.buyer_service import reassign_buyer_owned_rows
+
+            reassign_buyer_owned_rows(db, mobile_buyer.id, buyer.id)
             db.delete(mobile_buyer)
             db.flush()
 
