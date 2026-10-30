@@ -18,8 +18,8 @@ if (-not (Test-Path $py)) {
 
 if ($DemoServer) {
     $env:SHOP_DEMO_ENV = "demo201"
-    $env:SHOP_DEMO_H5_ORIGIN = "http://192.168.20.201:8089"
-    $env:SHOP_DEMO_WEB_ORIGIN = "http://192.168.20.201:8088"
+    $env:SHOP_DEMO_H5_ORIGIN = "http://192.168.10.201:8089"
+    $env:SHOP_DEMO_WEB_ORIGIN = "http://192.168.10.201:8088"
     Write-Host "演示机链接模式：H5 $env:SHOP_DEMO_H5_ORIGIN · Web $env:SHOP_DEMO_WEB_ORIGIN"
 }
 

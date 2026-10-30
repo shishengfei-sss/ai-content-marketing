@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import os
 
-_DEMO201_H5 = "http://192.168.20.201:8089"
-_DEMO201_WEB = "http://192.168.20.201:8088"
+# 内网演示机（2026-10 起 10.201；SHOP_DEMO_ENV=demo201 为历史预设名，仍指向该主机）
+_DEMO201_H5 = "http://192.168.10.201:8089"
+_DEMO201_WEB = "http://192.168.10.201:8088"
 
 
 def demo_origins() -> tuple[str, str]:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 内网演示机（192.168.20.201）灌商城演示数据：升库 → 种子 → 重启 API。
+# 内网演示机（192.168.10.201）灌商城演示数据：升库 → 种子 → 重启 API。
 # 在演示机 API 目录或仓库根执行均可。
 #
 # 用法（演示机 shell）：
@@ -20,8 +20,8 @@ FULL_VOLUME="${FULL_VOLUME:-1}"
 RESET="${RESET:-0}"
 
 export SHOP_DEMO_ENV="${SHOP_DEMO_ENV:-demo201}"
-export SHOP_DEMO_H5_ORIGIN="${SHOP_DEMO_H5_ORIGIN:-http://192.168.20.201:8089}"
-export SHOP_DEMO_WEB_ORIGIN="${SHOP_DEMO_WEB_ORIGIN:-http://192.168.20.201:8088}"
+export SHOP_DEMO_H5_ORIGIN="${SHOP_DEMO_H5_ORIGIN:-http://192.168.10.201:8089}"
+export SHOP_DEMO_WEB_ORIGIN="${SHOP_DEMO_WEB_ORIGIN:-http://192.168.10.201:8088}"
 
 if [ ! -d "$API_DIR" ]; then
   echo "[prepare-demo] ERROR: API_DIR not found: $API_DIR" >&2

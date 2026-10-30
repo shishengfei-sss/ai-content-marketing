@@ -5,23 +5,23 @@ alwaysApply: true
 
 # 「推送 git」= 演示发布 + GitHub 备份
 
-**当前状态（2026-08）**：暂无生产环境（原 `192.168.20.200` 已下线）。现有两套可用环境：
+**当前状态（2026-10）**：暂无生产环境（原 `192.168.20.200` 已下线；演示机由 `192.168.20.201` 迁至 **`192.168.10.201`**，GitLab / `git push deploy` 同机）。现有两套可用环境：
 
 | 环境 | 地址 | 用途 |
 |------|------|------|
 | 本机测试 | API 8003 · Web 5173 · H5 5174 | 研发 / 验收 |
-| 内网演示 | `192.168.20.201:8088/8089` | 对外演示 |
+| 内网演示 | `192.168.10.201:8088/8089` | 对外演示 |
 
 当用户说 **推送 git**、**推 git**、**提交并推送** 时，**两个远程都要推**（不是只推 GitHub）：
 
 ## 标准流程（按顺序）
 
 1. **确认工作区已 commit**（用户若只说推送、未 commit，先 `git status`，必要时先提交）
-2. **推送到演示发布远程**（更新 `192.168.20.201`）：
+2. **推送到演示发布远程**（更新 `192.168.10.201`）：
    ```bash
    git push deploy master
    ```
-   - 远程：`deploy` → `shengfei@192.168.20.201:/opt/git/ai-content-marketing.git`
+   - 远程：`deploy` → `shengfei@192.168.10.201:/opt/git/ai-content-marketing.git`
    - 若服务器配置了 `post-receive` 钩子：自动 checkout → `alembic upgrade head` → build Web/H5 → 重启 API → reload Nginx
 3. **同步 GitHub 备份**：
    ```bash
@@ -35,7 +35,7 @@ alwaysApply: true
 
 ## 推送失败时
 
-- **`deploy` Permission denied**：本机公钥需加入 `192.168.20.201` 上 `shengfei` 用户的 `authorized_keys`
+- **`deploy` Permission denied**：本机公钥需加入 `192.168.10.201` 上 `shengfei` 用户的 `authorized_keys`
 - **`origin` 超时/认证失败**：提示用户在本机终端重试或配置 GitHub SSH/Token
 - **推送成功但演示页仍旧**：提醒强刷浏览器；确认 201 上钩子已跑完 build（仅 `git pull` 源码不够，必须 build dist）
 
