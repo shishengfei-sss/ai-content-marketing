@@ -3,7 +3,7 @@
 #   powershell -ExecutionPolicy Bypass -File scripts/prepare-shop-demo-remote.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts/prepare-shop-demo-remote.ps1 -SshUser admin -ResetDemo
 param(
-    [string]$DemoHost = "192.168.20.201",
+    [string]$DemoHost = "192.168.10.201",
     [string]$SshUser = "root",
     [string]$RemoteApiDir = "/opt/shengfei/apps/api",
     [string]$RemoteScript = "/opt/shengfei/ai-content-marketing/scripts/prepare-shop-demo-server.sh",
@@ -29,8 +29,8 @@ if [ -f '$RemoteScript' ]; then
   bash '$RemoteScript'
 else
   cd "`$API_DIR" && \
-  export SHOP_DEMO_H5_ORIGIN=http://192.168.20.201:8089 && \
-  export SHOP_DEMO_WEB_ORIGIN=http://192.168.20.201:8088 && \
+  export SHOP_DEMO_H5_ORIGIN=http://192.168.10.201:8089 && \
+  export SHOP_DEMO_WEB_ORIGIN=http://192.168.10.201:8088 && \
   source .venv/bin/activate 2>/dev/null || source venv/bin/activate && \
   python -m alembic upgrade head && \
   if [ "`$FULL_VOLUME" = "1" ]; then \

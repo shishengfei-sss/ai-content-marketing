@@ -157,7 +157,7 @@ def build_prs() -> Presentation:
     set_run_font(r2, size=22, color=RGBColor(0xDB, 0xEA, 0xFE))
     meta = s.shapes.add_textbox(Inches(0.8), Inches(5.1), Inches(11.5), Inches(1.2))
     mtf = meta.text_frame
-    for line in [f"汇报日期：{today}", "演示环境：本机测试 / 内网 192.168.20.201", "Phase 1 · 商城交易 MVP"]:
+    for line in [f"汇报日期：{today}", "演示环境：本机测试 / 内网 192.168.10.201", "Phase 1 · 商城交易 MVP"]:
         p = mtf.paragraphs[0] if line == f"汇报日期：{today}" else mtf.add_paragraph()
         rr = p.add_run()
         rr.text = line
@@ -310,7 +310,7 @@ def build_prs() -> Presentation:
         s,
         [
             "环境（二选一）：本机 Web 5173 · 买家 H5 5174 · API 8003",
-            "　　　　　　　或 内网 192.168.20.201:8088 / :8089",
+            "　　　　　　　或 内网 192.168.10.201:8088 / :8089",
             "平台超管：13800000000 / admin123456",
             "主商家：13900000099 / test123456",
             "验证码：1111 · 支付 Mock 点确认即成功",
